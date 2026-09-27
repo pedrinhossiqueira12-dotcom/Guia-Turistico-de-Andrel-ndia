@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <meta
+    name="theme-color"
+    content="#091D1C"
+  >
+
+  <title>Andrelândia — Guia Turístico</title>
+
+
+  <!-- ==================================================
+       FONTE
+  =================================================== -->
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+
+  <link
+    rel="preconnect"
+    href="https://fonts.gstatic.com"
+    crossorigin
+  >
+
+  <link
+    href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600;700&display=swap"
+    rel="stylesheet"
+  >
+
+
+  <!-- ==================================================
+       LEAFLET
+  =================================================== -->
+
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  >
+
+
+  <!-- ==================================================
+       CSS DO SITE
+  =================================================== -->
+
+  <link
+    rel="stylesheet"
+    href="style.css"
+  >
+
+</head>
+
+
+<body>
+
+
+  <main class="page">
+
+
+    <!-- ==================================================
+         HERO
+    =================================================== -->
+
+    <section
+      class="hero"
+      id="inicio"
+    >
+
+      <div class="hero-content">
+
+        <!-- Logo futuro -->
+
+        <!--
+        <img
+          src="img/logo-andrelandia.png"
+          class="hero-logo"
+          alt="Andrelândia"
+        >
+        -->
+
+      </div>
+
+    </section>
+
+
+    <!-- ==================================================
+         O QUE FAZER HOJE
+    =================================================== -->
+
+    <a
+      class="route-card"
+      href="#mapa"
+    >
+
+      <div class="route-icon">
+        <span>✦</span>
+      </div>
+
+      <div class="route-text">
+
+        <strong>
+          O que fazer hoje?
+        </strong>
+
+        <span>
+          Roteiros personalizados pra você
+        </span>
+
+      </div>
+
+      <span class="route-arrow">
+        ›
+      </span>
+
+    </a>
+
+
+    <!-- ==================================================
+         CATEGORIAS PRINCIPAIS
+    =================================================== -->
+
+    <section class="section">
+
+      <div class="quick-grid">
+
+
+        <!-- MAPA -->
+
+        <a
+          class="quick-item"
+          href="#mapa"
+        >
+
+          <div class="quick-box">
+
+            <img
+              src="img/icones/mapa.png"
+              alt="Mapa Turístico"
+            >
+
+            <span>
+              Mapa Turístico
+            </span>
+
+          </div>
+
+        </a>
+
+
+        <!-- O QUE VISITAR -->
+
+        <a
+          class="quick-item"
+          href="#visitar"
+        >
+
+          <div class="quick-box">
+
+            <img
+              src="img/icones/igreja.png"
+              alt="O que visitar"
+            >
+
+            <span>
+              O que visitar
+            </span>
+
+          </div>
+
+        </a>
+
+
+        <!-- ONDE COMER -->
+
+        <a
+          class="quick-item"
+          href="#comer"
+        >
+
+          <div class="quick-box">
+
+            <img
+              src="img/icones/alimentacao.png"
+              alt="Onde comer"
+            >
+
+            <span>
+              Onde comer
+            </span>
+
+          </div>
+
+        </a>
+
+
+        <!-- CAFÉS -->
+
+        <a
+          class="quick-item"
+          href="#cafes"
+        >
+
+          <div class="quick-box">
+
+            <img
+              src="img/icones/cafe.png"
+              alt="Cafés e lanchonetes"
+            >
+
+            <span>
+              Cafés e lanchonetes
+            </span>
+
+          </div>
+
+        </a>
+
+
+        <!-- ONDE FICAR -->
+
+        <a
+          class="quick-item"
+          href="#ficar"
+        >
+
+          <div class="quick-box">
+
+            <img
+              src="img/icones/hotel.png"
+              alt="Onde ficar"
+            >
+
+            <span>
+              Onde ficar
+            </span>
+
+          </div>
+
+        </a>
+
+
+        <!-- COMÉRCIO -->
+
+        <a
+          class="quick-item"
+          href="#comercio"
+        >
+
+          <div class="quick-box">
+
+            <img
+              src="img/icones/comercio.png"
+              alt="Comércio local"
+            >
+
+            <span>
+              Comércio local
+            </span>
+
+          </div>
+
+        </a>
+
+
+      </div>
+
+    </section>
+
+
+    <!-- ==================================================
+         MAPA TURÍSTICO
+    =================================================== -->
+
+    <section
+      class="home-map-section"
+      id="mapa"
+    >
+
+      <div class="home-map-header">
+
+        <div>
+
+          <span>
+            EXPLORE ANDRELÂNDIA
+          </span>
+
+          <h2>
+            Mapa Turístico
+          </h2>
+
+          <p>
+            Explore os pontos turísticos,
+            comércios e serviços da cidade.
+          </p>
+
+        </div>
+
+        <a
+          href="mapa.html"
+          class="map-full-button"
+        >
+          Abrir mapa
+        </a>
+
+      </div>
+
+
+      <!-- MAPA -->
+
+      <div
+        id="homeMap"
+        class="home-map"
+      ></div>
+
+
+      <!-- FILTROS DO MAPA -->
+
+      <div class="map-filters">
+
+
+        <button
+          class="map-filter active"
+          data-filter="Todos"
+        >
+
+          <span class="filter-icon">
+            <img
+              src="img/icones/mapa.png"
+              alt=""
+            >
+          </span>
+
+          <span>
+            Todos
+          </span>
+
+        </button>
+
+
+        <button
+          class="map-filter"
+          data-filter="Igreja"
+        >
+
+          <span class="filter-icon">
+            <img
+              src="img/icones/igreja.png"
+              alt=""
+            >
+          </span>
+
+          <span>
+            Igrejas
+          </span>
+
+        </button>
+
+
+        <button
+          class="map-filter"
+          data-filter="Histórico"
+        >
+
+          <span class="filter-icon">
+            <img
+              src="img/icones/historico.png"
+              alt=""
+            >
+          </span>
+
+          <span>
+            História
+          </span>
+
+        </button>
+
+
+        <button
+          class="map-filter"
+          data-filter="Natureza"
+        >
+
+          <span class="filter-icon">
+            <img
+              src="img/icones/natureza.png"
+              alt=""
+            >
+          </span>
+
+          <span>
+            Natureza
+          </span>
+
+        </button>
+
+
+        <button
+          class="map-filter"
+          data-filter="Alimentação"
+        >
+
+          <span class="filter-icon">
+            <img
+              src="img/icones/alimentacao.png"
+              alt=""
+            >
+          </span>
+
+          <span>
+            Alimentação
+          </span>
+
+        </button>
+
+
+        <button
+          class="map-filter"
+          data-filter="Cafeteria"
+        >
+
+          <span class="filter-icon">
+            <img
+              src="img/icones/cafe.png"
+              alt=""
+            >
+          </span>
+
+          <span>
+            Café
+          </span>
+
+        </button>
+
+
+        <button
+          class="map-filter"
+          data-filter="Hospedagem"
+        >
+
+          <span class="filter-icon">
+            <img
+              src="img/icones/hotel.png"
+              alt=""
+            >
+          </span>
+
+          <span>
+            Hospedagem
+          </span>
+
+        </button>
+
+
+        <button
+          class="map-filter"
+          data-filter="Comércio"
+        >
+
+          <span class="filter-icon">
+            <img
+              src="img/icones/comercio.png"
+              alt=""
+            >
+          </span>
+
+          <span>
+            Comércio
+          </span>
+
+        </button>
+
+
+        <button
+          class="map-filter"
+          data-filter="Esporte"
+        >
+
+          <span class="filter-icon">
+            <img
+              src="img/icones/esporte.png"
+              alt=""
+            >
+          </span>
+
+          <span>
+            Esportes
+          </span>
+
+        </button>
+
+
+      </div>
+
+    </section>
+
+
+    <!-- ==================================================
+         O QUE VISITAR
+    =================================================== -->
+
+    <section
+      class="content-section"
+      id="visitar"
+    >
+
+      <header class="content-header">
+
+        <span>
+          DESCUBRA ANDRELÂNDIA
+        </span>
+
+        <h2>
+          O que visitar
+        </h2>
+
+      </header>
+
+
+      <div
+        class="content-list"
+        id="visitarList"
+      ></div>
+
+
+      <button
+        type="button"
+        id="mostrarMaisVisitar"
+        class="mostrar-mais"
+        hidden
+      >
+        Mostrar mais
+      </button>
+
+    </section>
+
+
+    <!-- ==================================================
+         ONDE COMER
+    =================================================== -->
+
+    <section
+      class="content-section"
+      id="comer"
+    >
+
+      <header class="content-header">
+
+        <span>
+          DESCUBRA ANDRELÂNDIA
+        </span>
+
+        <h2>
+          Onde comer
+        </h2>
+
+      </header>
+
+
+      <!-- FILTROS -->
+
+      <div class="content-filters">
+
+
+        <button
+          class="comer-filtro active"
+          data-filter="Todos"
+          type="button"
+        >
+          Todos
+        </button>
+
+
+        <button
+          class="comer-filtro"
+          data-filter="Restaurante"
+          type="button"
+        >
+          Restaurante
+        </button>
+
+
+        <button
+          class="comer-filtro"
+          data-filter="Lanchonetes"
+          type="button"
+        >
+          Lanchonetes
+        </button>
+
+
+        <button
+          class="comer-filtro"
+          data-filter="Cafeteria"
+          type="button"
+        >
+          Café
+        </button>
+
+
+        <button
+          class="comer-filtro"
+          data-filter="Sorvete/Açaí"
+          type="button"
+        >
+          Sorvete/Açaí
+        </button>
+
+
+      </div>
+
+
+      <!-- FILTRO DE ABERTURA -->
+
+      <div class="comer-status">
+
+        <button
+          type="button"
+          id="filtroAberto"
+          class="status-filtro"
+          data-status="todos"
+        >
+
+          <span
+            id="textoStatus"
+          >
+            Aberto agora
+          </span>
+
+        </button>
+
+      </div>
+
+
+      <!-- LISTA -->
+
+      <div
+        class="content-list"
+        id="comerList"
+      ></div>
+
+
+      <!-- MOSTRAR MAIS -->
+
+      <button
+        type="button"
+        id="mostrarMaisComer"
+        class="mostrar-mais"
+        hidden
+      >
+        Mostrar mais
+      </button>
+
+    </section>
+
+
+    <!-- ==================================================
+         ONDE FICAR
+    =================================================== -->
+
+    <section
+      class="content-section"
+      id="ficar"
+    >
+
+      <header class="content-header">
+
+        <span>
+          DESCUBRA ANDRELÂNDIA
+        </span>
+
+        <h2>
+          Onde ficar
+        </h2>
+
+      </header>
+
+
+      <!-- LISTA -->
+
+      <div
+        class="content-list"
+        id="ficarList"
+      ></div>
+
+
+      <!-- MOSTRAR MAIS -->
+
+      <button
+        type="button"
+        id="mostrarMaisFicar"
+        class="mostrar-mais"
+        hidden
+      >
+        Mostrar mais
+      </button>
+
+    </section>
+
+
+  </main>
+
+<!-- =========================
+     MURAL DE ANDRELÂNDIA
+========================= -->
+<section class="content-section pessoas-section" id="pessoas">
+
+  <div class="content-header">
+    <span>GENTE DE ANDRELÂNDIA</span>
+    <h2>Mural de Andrelândia</h2>
+    <p>
+      Conheça pessoas que fazem parte da história, da cultura e da vida
+      de Andrelândia.
+    </p>
+  </div>
+
+  <div class="pessoas-list" id="pessoasList"></div>
+
+  <button
+    type="button"
+    id="mostrarMaisPessoas"
+    class="mostrar-mais"
+    hidden
+  >
+    Mostrar mais
+  </button>
+
+</section>
+
+
+<!-- =========================
+     INDICAÇÃO / CONTATO
+========================= -->
+<section class="contato-guia">
+
+  <div class="contato-guia-conteudo">
+
+    <span class="contato-guia-tag">AJUDE A CONSTRUIR O GUIA</span>
+
+    <h2>Está faltando alguém ou algum lugar?</h2>
+
+    <p>
+      Conhece uma pessoa importante, artista, fotógrafo, comércio,
+      atração turística ou outro lugar que ainda não aparece aqui?
+      Entre em contato e ajude a deixar o Guia Turístico de Andrelândia
+      cada vez mais completo.
+    </p>
+
+    <a
+      href="mailto:SEUEMAIL@EXEMPLO.COM"
+      class="contato-guia-botao"
+    >
+      Entrar em contato
+      <img src="img/icones/seta2.png" alt="">
+    </a>
+
+  </div>
+
+</section>
+
+  <!-- ==================================================
+       NAVBAR FIXA
+  =================================================== -->
+
+  <nav class="bottom-nav">
+
+
+    <a
+      class="nav-item active"
+      href="#inicio"
+    >
+
+      <span class="nav-icon">
+
+        <img
+          src="img/icones/home.png"
+          alt=""
+        >
+
+      </span>
+
+      <span>
+        Início
+      </span>
+
+    </a>
+
+
+    <a
+      class="nav-item"
+      href="#mapa"
+    >
+
+      <span class="nav-icon">
+
+        <img
+          src="img/icones/mapa2.png"
+          alt=""
+        >
+
+      </span>
+
+      <span>
+        Mapa
+      </span>
+
+    </a>
+
+
+    <a
+      class="nav-item"
+      href="#favoritos"
+    >
+
+      <span class="nav-icon">
+
+        <img
+          src="img/icones/favoritos.png"
+          alt=""
+        >
+
+      </span>
+
+      <span>
+        Favoritos
+      </span>
+
+    </a>
+
+
+    <a
+      class="nav-item"
+      href="#mais"
+    >
+
+      <span class="nav-icon">
+
+        <img
+          src="img/icones/mais.png"
+          alt=""
+        >
+
+      </span>
+
+      <span>
+        Mais
+      </span>
+
+    </a>
+
+
+  </nav>
+
+
+  <!-- ==================================================
+       LEAFLET
+  =================================================== -->
+
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+  ></script>
+
+
+  <!-- ==================================================
+       JAVASCRIPT DO SITE
+  =================================================== -->
+
+  <script
+    src="js/index.js"
+  ></script>
+
+
+</body>
+
+</html>
