@@ -1,0 +1,2483 @@
+/* =========================================================
+   ANDRELÂNDIA — GUIA TURÍSTICO
+   CSS RESPONSIVO OTIMIZADO
+========================================================= */
+
+:root {
+  --verde: #194138;
+  --verde-escuro: #091d1c;
+  --branco: #ffffff;
+  --cinza-borda: #c8c8c8;
+  --fundo: #f5f3ef;
+  --texto: #202522;
+  --texto-claro: #777;
+
+  --altura-navbar: 76px;
+  --espaco: clamp(15px, 4vw, 28px);
+  --largura-max: 1100px;
+}
+
+
+/* =========================================================
+   RESET
+========================================================= */
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  overflow-x: hidden;
+}
+
+body {
+  margin: 0;
+  padding-bottom: var(--altura-navbar);
+
+  background: var(--fundo);
+  color: var(--texto);
+
+  font-family:
+    "Roboto",
+    Arial,
+    Helvetica,
+    sans-serif;
+
+  overflow-x: hidden;
+}
+
+img {
+  max-width: 100%;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font: inherit;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+
+/* =========================================================
+   CONTAINER PRINCIPAL
+========================================================= */
+
+.page {
+  width: 100%;
+  max-width: var(--largura-max);
+  min-height: 100vh;
+
+  margin: 0 auto;
+
+  background: var(--fundo);
+
+  overflow: hidden;
+}
+
+
+/* =========================================================
+   HERO
+========================================================= */
+
+.hero {
+  position: relative;
+
+  height: clamp(430px, 65vh, 650px);
+  min-height: 430px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  background:
+    linear-gradient(
+      to bottom,
+      rgba(0, 0, 0, 0) 40%,
+      rgba(0, 0, 0, 0.02) 60%,
+      rgba(245, 243, 239, 0.20) 82%,
+      var(--fundo) 100%
+    ),
+    url("img/hero.png")
+    center center /
+    cover
+    no-repeat;
+}
+
+.hero-content {
+  position: relative;
+  z-index: 2;
+
+  width: 100%;
+
+  padding:
+    0
+    var(--espaco)
+    24px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  text-align: center;
+
+  transform:
+    translateY(
+      clamp(-190px, -24vh, -100px)
+    );
+}
+
+
+/* =========================================================
+   O QUE FAZER HOJE?
+========================================================= */
+
+.route-card {
+  position: relative;
+  z-index: 5;
+
+  display: flex;
+  align-items: center;
+
+  min-height:
+    clamp(76px, 12vw, 92px);
+
+  margin:
+    -8px
+    var(--espaco)
+    0;
+
+  padding:
+    14px
+    clamp(14px, 3vw, 20px);
+
+  background: var(--verde);
+  color: var(--branco);
+
+  border:
+    1px solid
+    var(--cinza-borda);
+
+  border-radius:
+    clamp(14px, 3vw, 20px);
+
+  box-shadow:
+    0 8px 25px
+    rgba(0, 0, 0, 0.14);
+}
+
+.route-icon {
+  width:
+    clamp(42px, 10vw, 52px);
+
+  height:
+    clamp(42px, 10vw, 52px);
+
+  flex:
+    0 0
+    clamp(42px, 10vw, 52px);
+
+  display: grid;
+  place-items: center;
+
+  color: var(--branco);
+
+  font-size:
+    clamp(20px, 5vw, 25px);
+}
+
+.route-text {
+  display: flex;
+  flex-direction: column;
+
+  min-width: 0;
+
+  padding-left: 3px;
+}
+
+.route-text strong {
+  font-size:
+    clamp(14px, 3.8vw, 17px);
+
+  line-height: 1.25;
+}
+
+.route-text span {
+  margin-top: 3px;
+
+  color: var(--branco);
+
+  font-size:
+    clamp(10px, 2.8vw, 13px);
+
+  line-height: 1.3;
+}
+
+.route-arrow {
+  margin-left: auto;
+  padding-left: 10px;
+
+  color: var(--branco);
+
+  font-size:
+    clamp(24px, 6vw, 30px);
+
+  line-height: 1;
+}
+
+
+/* =========================================================
+   6 BOTÕES PRINCIPAIS
+========================================================= */
+
+.section {
+  padding:
+    clamp(22px, 5vw, 35px)
+    var(--espaco)
+    10px;
+}
+
+.quick-grid {
+  display: grid;
+
+  grid-template-columns:
+    repeat(3, minmax(0, 1fr));
+
+  gap:
+    clamp(9px, 2.5vw, 16px);
+}
+
+.quick-item {
+  display: block;
+  min-width: 0;
+
+  color: var(--verde);
+}
+
+.quick-box {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  min-width: 0;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  padding:
+    clamp(7px, 2vw, 14px);
+
+  background: var(--branco);
+  color: var(--verde);
+
+  border:
+    2px solid
+    var(--cinza-borda);
+
+  border-radius:
+    clamp(12px, 3vw, 18px);
+
+  transition:
+    transform .18s ease,
+    box-shadow .18s ease;
+}
+
+.quick-box:hover {
+  transform: translateY(-2px);
+
+  box-shadow:
+    0 6px 18px
+    rgba(0, 0, 0, 0.08);
+}
+
+.quick-box:active {
+  transform: scale(.97);
+}
+
+.quick-box img {
+  width:
+    clamp(32px, 9vw, 52px);
+
+  height:
+    clamp(32px, 9vw, 52px);
+
+  object-fit: contain;
+
+  margin-bottom:
+    clamp(5px, 1.8vw, 10px);
+}
+
+.quick-box span {
+  width: 100%;
+
+  color: var(--verde);
+
+  text-align: center;
+
+  font-size:
+    clamp(9px, 2.5vw, 13px);
+
+  font-weight: 600;
+
+  line-height: 1.2;
+}
+
+
+/* =========================================================
+   NAVBAR INFERIOR
+========================================================= */
+
+.bottom-nav {
+  position: fixed;
+  z-index: 9999;
+
+  left: 0;
+  right: 0;
+  bottom: 0;
+
+  width: 100%;
+  height: var(--altura-navbar);
+
+  display: grid;
+
+  grid-template-columns:
+    repeat(4, 1fr);
+
+  align-items: center;
+
+  background: var(--verde-escuro);
+
+  border-top:
+    1px solid
+    rgba(255, 255, 255, 0.15);
+
+  box-shadow:
+    0 -5px 20px
+    rgba(0, 0, 0, 0.12);
+}
+
+.nav-item {
+  height: 100%;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  gap: 5px;
+
+  color: var(--branco);
+
+  font-size:
+    clamp(9px, 2.5vw, 11px);
+
+  font-weight: 500;
+
+  opacity: .82;
+
+  transition:
+    opacity .15s ease;
+}
+
+.nav-item:hover,
+.nav-item.active {
+  opacity: 1;
+}
+
+.nav-icon img {
+  width:
+    clamp(12px, 14vw, 24px);
+
+  height:
+    clamp(12px, 14vw, 24px);
+
+  display: block;
+}
+
+.nav-item > span:last-child {
+  color: var(--branco);
+}
+
+
+/* =========================================================
+   MAPA — SEÇÃO
+========================================================= */
+
+.home-map-section {
+  position: relative;
+  z-index: 0;
+
+  padding:
+    clamp(25px, 6vw, 45px)
+    var(--espaco)
+    clamp(30px, 6vw, 50px);
+}
+
+.home-map-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+
+  gap:
+    clamp(10px, 3vw, 20px);
+
+  margin-bottom:
+    clamp(10px, 3vw, 16px);
+}
+
+.home-map-header > div {
+  min-width: 0;
+}
+
+.home-map-header span {
+  display: block;
+
+  color: var(--texto-claro);
+
+  font-size:
+    clamp(8px, 2vw, 10px);
+
+  letter-spacing:
+    clamp(.7px, .2vw, 1.2px);
+}
+
+.home-map-header h2 {
+  margin: 4px 0 0;
+
+  color: var(--verde);
+
+  font-size:
+    clamp(21px, 5vw, 30px);
+
+  line-height: 1.1;
+}
+
+.home-map-header p {
+  margin: 4px 0 0;
+
+  color: var(--texto-claro);
+
+  line-height: 1.1;
+}
+
+.map-full-button {
+  flex-shrink: 0;
+
+  padding:
+    clamp(8px, 2vw, 11px)
+    clamp(10px, 2.5vw, 14px);
+
+  background: var(--verde);
+  color: var(--branco);
+
+  border-radius:
+    clamp(8px, 2vw, 10px);
+
+  font-size:
+    clamp(10px, 2.5vw, 12px);
+
+  font-weight: 600;
+
+  white-space: nowrap;
+}
+
+
+/* =========================================================
+   MAPA
+========================================================= */
+
+.home-map {
+  position: relative;
+  z-index: 1;
+
+  width: 100%;
+
+  height:
+    clamp(
+      280px,
+      55vw,
+      500px
+    );
+
+  min-height: 280px;
+
+  overflow: hidden;
+
+  border:
+    1px solid
+    var(--cinza-borda);
+
+  border-radius:
+    clamp(14px, 3vw, 20px);
+
+  box-shadow:
+    0 5px 18px
+    rgba(0, 0, 0, 0.08);
+}
+
+
+/* =========================================================
+   MARCADORES
+========================================================= */
+
+.leaflet-marker-icon {
+  filter:
+    drop-shadow(
+      0 3px 4px
+      rgba(0, 0, 0, 0.28)
+    );
+}
+
+
+/* =========================================================
+   POPUP DO MAPA
+========================================================= */
+
+.leaflet-popup-content-wrapper {
+  padding: 0;
+
+  overflow: hidden;
+
+  border-radius: 16px;
+
+  max-width:
+    calc(100vw - 40px);
+}
+
+.leaflet-popup-content {
+  width:
+    min(260px, calc(100vw - 60px)) !important;
+
+  margin: 0;
+}
+
+.popup {
+  padding-bottom: 14px;
+}
+
+.popup-image {
+  display: block;
+
+  width: 100%;
+
+  height:
+    clamp(105px, 30vw, 125px);
+
+  object-fit: cover;
+}
+
+.popup-content {
+  padding:
+    12px 14px 0;
+}
+
+.popup-category {
+  color: #777;
+
+  font-size: 9px;
+
+  text-transform: uppercase;
+
+  letter-spacing: .8px;
+}
+
+.popup h3 {
+  margin:
+    3px 0 5px;
+
+  color: var(--verde);
+
+  font-size:
+    clamp(15px, 4vw, 17px);
+
+  line-height: 1.2;
+}
+
+.popup p {
+  margin:
+    0 0 12px;
+
+  color: #666;
+
+  font-size:
+    clamp(11px, 3vw, 12px);
+
+  line-height: 1.45;
+}
+
+.popup-button {
+  display: block;
+
+  width: 100%;
+
+  padding:
+    clamp(9px, 2.5vw, 10px);
+
+  background: var(--verde);
+  color: var(--branco);
+
+  text-align: center;
+
+  border-radius: 9px;
+
+  font-size:
+    clamp(11px, 3vw, 12px);
+
+  font-weight: 600;
+}
+
+
+/* =========================================================
+   FILTROS DO MAPA
+========================================================= */
+
+.map-filters {
+  display: flex;
+  flex-wrap: wrap;
+
+  justify-content: center;
+
+  gap: 12px;
+
+  margin-top: 16px;
+
+  padding:
+    4px 0 8px;
+}
+
+.map-filter {
+  flex:
+    0 0
+    clamp(65px, 18vw, 78px);
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+
+  gap: 6px;
+
+  padding: 0;
+
+  border: 0;
+
+  background: transparent;
+
+  color: #555;
+
+  font-family: inherit;
+
+  font-size:
+    clamp(9px, 2.5vw, 11px);
+
+  font-weight: 600;
+
+  cursor: pointer;
+
+  -webkit-tap-highlight-color: transparent;
+}
+
+
+/*
+   Ícone padrão:
+   sem borda e sem fundo.
+*/
+
+.filter-icon {
+  width:
+    clamp(52px, 14vw, 64px);
+
+  height:
+    clamp(52px, 14vw, 64px);
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  background: transparent;
+
+  border: 2px solid transparent;
+
+  border-radius: 50%;
+
+  box-shadow: none;
+
+  transition:
+    background .18s ease,
+    border-color .18s ease,
+    transform .18s ease,
+    box-shadow .18s ease;
+}
+
+.filter-icon img {
+  width:
+    clamp(25px, 7vw, 34px);
+
+  height:
+    clamp(25px, 7vw, 34px);
+
+  object-fit: contain;
+
+  transition:
+    transform .18s ease;
+}
+
+.map-filter > span:last-child {
+  white-space: nowrap;
+
+  line-height: 1.1;
+
+  color: #666;
+
+  transition:
+    color .18s ease;
+}
+
+
+/*
+   SOMENTE O FILTRO SELECIONADO
+   recebe fundo, borda e sombra.
+*/
+
+.map-filter.active .filter-icon {
+  background: var(--branco);
+
+  border-color: var(--verde);
+
+  box-shadow:
+    0 5px 14px
+    rgba(9, 29, 28, .18);
+
+  transform:
+    translateY(-2px);
+}
+
+.map-filter.active > span:last-child {
+  color: var(--verde);
+
+  font-weight: 700;
+}
+
+.map-filter:active .filter-icon {
+  transform: scale(.92);
+}
+
+
+/* =========================================================
+   SEÇÕES DE CONTEÚDO
+========================================================= */
+
+.content-section {
+  padding:
+    clamp(25px, 6vw, 45px)
+    var(--espaco)
+    clamp(30px, 6vw, 50px);
+}
+
+.content-header {
+  margin-bottom:
+    clamp(14px, 3vw, 20px);
+}
+
+.content-header span {
+  display: block;
+
+  color: var(--texto-claro);
+
+  font-size:
+    clamp(8px, 2vw, 10px);
+
+  letter-spacing:
+    clamp(.7px, .2vw, 1.2px);
+}
+
+.content-header h2 {
+  margin:
+    4px 0 0;
+
+  color: var(--verde);
+
+  font-size:
+    clamp(21px, 5vw, 30px);
+
+  line-height: 1.1;
+}
+
+.content-header p {
+  margin:
+    8px 0 0;
+
+  color: #666;
+
+  font-size: 14px;
+
+  line-height: 1.5;
+}
+
+
+/* =========================================================
+   FILTROS — ONDE COMER
+========================================================= */
+
+.content-filters {
+  display: flex;
+
+  flex-wrap: wrap;
+
+  gap: 8px;
+
+  padding:
+    2px 0 10px;
+}
+
+.comer-filtro {
+  flex:
+    0 0 auto;
+
+  padding:
+    9px 15px;
+
+  border:
+    1px solid
+    #d3d3d3;
+
+  border-radius: 999px;
+
+  background: var(--branco);
+
+  color: #666;
+
+  font-family:
+    "Roboto",
+    Arial,
+    Helvetica,
+    sans-serif;
+
+  font-size: 12px;
+
+  font-weight: 500;
+
+  white-space: nowrap;
+
+  cursor: pointer;
+
+  transition:
+    background .2s ease,
+    color .2s ease,
+    border-color .2s ease,
+    transform .15s ease;
+}
+
+.comer-filtro.active {
+  background: var(--verde);
+
+  border-color: var(--verde);
+
+  color: var(--branco);
+}
+
+.comer-filtro:active {
+  transform: scale(.96);
+}
+
+
+/* =========================================================
+   STATUS — ONDE COMER
+========================================================= */
+
+.comer-status {
+  display: flex;
+  align-items: center;
+
+  margin:
+    4px 0 14px;
+}
+
+.status-filtro {
+  display: inline-flex;
+  align-items: center;
+
+  padding: 0;
+
+  border: 0;
+
+  background: transparent;
+
+  color: #24a148;
+
+  font-family:
+    "Roboto",
+    Arial,
+    Helvetica,
+    sans-serif;
+
+  font-size: 12px;
+
+  font-weight: 600;
+
+  line-height: 1.2;
+
+  cursor: pointer;
+
+  transition:
+    color .2s ease,
+    opacity .2s ease,
+    transform .15s ease;
+}
+
+.status-filtro.fechado {
+  color: #d32f2f;
+}
+
+.status-filtro.selecionado {
+  color: var(--verde);
+}
+
+.status-filtro:active {
+  transform: scale(.97);
+}
+
+.status-bolinha {
+  display: none;
+}
+
+
+/* =========================================================
+   LISTAS
+========================================================= */
+
+.content-list {
+  display: flex;
+  flex-direction: column;
+
+  gap: 12px;
+}
+
+
+/* =========================================================
+   CARTÃO PADRÃO
+========================================================= */
+
+.visitar-item,
+.comer-item,
+.ficar-item {
+  display: flex;
+  align-items: center;
+
+  width: 100%;
+  min-width: 0;
+
+  padding: 10px;
+
+  background: var(--branco);
+
+  border:
+    1px solid
+    var(--cinza-borda);
+
+  border-radius: 14px;
+
+  text-decoration: none;
+
+  color: inherit;
+
+  box-shadow:
+    0 3px 12px
+    rgba(0, 0, 0, .05);
+
+  transition:
+    transform .18s ease,
+    box-shadow .18s ease;
+}
+
+.visitar-item:hover,
+.comer-item:hover,
+.ficar-item:hover {
+  transform: translateY(-2px);
+
+  box-shadow:
+    0 6px 18px
+    rgba(0, 0, 0, .09);
+}
+
+.visitar-item:active,
+.comer-item:active,
+.ficar-item:active {
+  transform: scale(.985);
+}
+
+
+/* =========================================================
+   FOTO — COMPONENTE PADRÃO
+========================================================= */
+
+.visitar-image,
+.comer-image,
+.ficar-image {
+  flex:
+    0 0
+    clamp(82px, 22vw, 105px);
+
+  width:
+    clamp(82px, 22vw, 105px);
+
+  height:
+    clamp(82px, 22vw, 105px);
+
+  overflow: hidden;
+
+  border-radius: 10px;
+
+  background: #e5e5e5;
+}
+
+.visitar-image img,
+.comer-image img,
+.ficar-image img {
+  width: 100%;
+  height: 100%;
+
+  display: block;
+
+  object-fit: cover;
+}
+
+
+/* =========================================================
+   INFORMAÇÕES — COMPONENTE PADRÃO
+========================================================= */
+
+.visitar-info,
+.comer-info,
+.ficar-info {
+  flex: 1;
+
+  min-width: 0;
+
+  padding:
+    0 10px 0 13px;
+}
+
+
+/* =========================================================
+   NOME
+========================================================= */
+
+.visitar-nome,
+.comer-nome,
+.ficar-nome {
+  margin: 0;
+
+  color: var(--verde);
+
+  font-size:
+    clamp(14px, 3.8vw, 17px);
+
+  font-weight: 700;
+
+  line-height: 1.2;
+}
+
+
+/* =========================================================
+   LOCAL / ENDEREÇO
+========================================================= */
+
+.visitar-local,
+.comer-endereco,
+.ficar-endereco {
+  margin-top: 5px;
+
+  color: #777;
+
+  font-size:
+    clamp(10px, 2.7vw, 12px);
+
+  line-height: 1.2;
+
+  white-space: nowrap;
+
+  overflow: hidden;
+
+  text-overflow: ellipsis;
+}
+
+
+/* =========================================================
+   RESUMO
+========================================================= */
+
+.visitar-resumo {
+  margin:
+    6px 0 0;
+
+  color: #666;
+
+  font-size:
+    clamp(10px, 2.7vw, 12px);
+
+  line-height: 1.3;
+
+  white-space: nowrap;
+
+  overflow: hidden;
+
+  text-overflow: ellipsis;
+}
+
+
+/* =========================================================
+   CATEGORIA — ONDE COMER
+========================================================= */
+
+.comer-categoria {
+  margin-top: 4px;
+
+  color: #888;
+
+  font-size: 11px;
+
+  line-height: 1.2;
+}
+
+
+/* =========================================================
+   STATUS DENTRO DO CARD
+========================================================= */
+
+.comer-horario {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  width: fit-content;
+
+  min-width: 88px;
+  height: 25px;
+
+  margin-top: 7px;
+
+  padding:
+    0 9px;
+
+  border-radius: 5px;
+
+  color: var(--branco);
+
+  font-size: 10px;
+
+  font-weight: 700;
+
+  line-height: 1;
+
+  white-space: nowrap;
+}
+
+.comer-horario.aberto {
+  background: #24a148;
+}
+
+.comer-horario.fechado {
+  background: #d32f2f;
+}
+
+
+/* =========================================================
+   AVALIAÇÃO — ONDE FICAR
+========================================================= */
+
+.ficar-nota {
+  display: flex;
+  align-items: center;
+
+  gap: 5px;
+
+  margin-top: 7px;
+}
+
+.ficar-nota img {
+  width: 17px;
+  height: 17px;
+
+  display: block;
+
+  object-fit: contain;
+}
+
+.ficar-nota span {
+  color: #555;
+
+  font-size: 12px;
+
+  font-weight: 600;
+
+  line-height: 1;
+}
+
+
+/* =========================================================
+   SETA
+========================================================= */
+
+.visitar-arrow,
+.comer-arrow,
+.ficar-arrow {
+  flex:
+    0 0
+    34px;
+
+  width: 34px;
+  height: 34px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.visitar-arrow img,
+.comer-arrow img,
+.ficar-arrow img {
+  width: 20px;
+  height: 20px;
+
+  display: block;
+
+  object-fit: contain;
+}
+
+
+/* =========================================================
+   ESTADOS VAZIOS
+========================================================= */
+
+.visitar-empty,
+.comer-empty,
+.ficar-empty,
+.lista-vazia {
+  padding: 20px;
+
+  text-align: center;
+
+  color: #777;
+
+  font-size: 13px;
+}
+
+
+/* =========================================================
+   BOTÃO MOSTRAR MAIS
+========================================================= */
+
+.mostrar-mais {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 100%;
+
+  margin-top: 16px;
+
+  padding:
+    12px 18px;
+
+  border:
+    1px solid
+    var(--verde);
+
+  border-radius: 10px;
+
+  background: var(--branco);
+
+  color: var(--verde);
+
+  font-family:
+    "Roboto",
+    Arial,
+    Helvetica,
+    sans-serif;
+
+  font-size: 13px;
+
+  font-weight: 600;
+
+  cursor: pointer;
+
+  transition:
+    background .2s ease,
+    color .2s ease,
+    transform .15s ease;
+}
+
+.mostrar-mais:hover {
+  background: var(--verde);
+
+  color: var(--branco);
+}
+
+.mostrar-mais:active {
+  transform: scale(.98);
+}
+
+
+/* =========================================================
+   MURAL DE ANDRELÂNDIA
+========================================================= */
+
+.pessoas-section {
+  overflow: hidden;
+}
+
+.pessoas-section .content-header {
+  margin-bottom: 18px;
+}
+
+
+/* =========================================================
+   GRID DO MURAL
+========================================================= */
+
+.pessoas-list {
+  display: grid;
+
+  grid-template-columns:
+    repeat(4, minmax(0, 1fr));
+
+  gap: 18px;
+
+  width: 100%;
+}
+
+
+/* =========================================================
+   CARD DE PESSOA
+========================================================= */
+
+.pessoa-item {
+  position: relative;
+
+  display: block;
+
+  width: 100%;
+  height: 270px;
+
+  overflow: hidden;
+
+  background:
+    var(--verde-escuro);
+
+  border-radius: 16px;
+
+  text-decoration: none;
+
+  color: var(--branco);
+
+  box-shadow:
+    0 5px 14px
+    rgba(9, 29, 28, .12);
+
+  transition:
+    transform .28s ease,
+    box-shadow .28s ease;
+}
+
+
+/* =========================================================
+   FOTO DA PESSOA
+========================================================= */
+
+.pessoa-image {
+  position: absolute;
+
+  inset: 0;
+
+  width: 100%;
+  height: 100%;
+
+  overflow: hidden;
+
+  background:
+    var(--verde-escuro);
+}
+
+.pessoa-image img {
+  width: 100%;
+  height: 100%;
+
+  display: block;
+
+  object-fit: cover;
+
+  transition:
+    transform .45s ease,
+    filter .35s ease;
+}
+
+
+/* =========================================================
+   DEGRADÊ INFERIOR
+========================================================= */
+
+.pessoa-item::after {
+  content: "";
+
+  position: absolute;
+
+  inset: 0;
+
+  background:
+    linear-gradient(
+      to top,
+      rgba(9, 29, 28, .98) 0%,
+      rgba(9, 29, 28, .84) 23%,
+      rgba(9, 29, 28, .42) 48%,
+      rgba(9, 29, 28, 0) 72%
+    );
+
+  pointer-events: none;
+}
+
+
+/* =========================================================
+   INFORMAÇÕES DA PESSOA
+========================================================= */
+
+.pessoa-info {
+  position: absolute;
+
+  z-index: 2;
+
+  left: 0;
+  right: 0;
+  bottom: 0;
+
+  padding:
+    48px 17px 17px;
+}
+
+.pessoa-name {
+  margin: 0;
+
+  color: var(--branco);
+
+  font-size: 17px;
+
+  font-weight: 700;
+
+  line-height: 1.2;
+}
+
+.pessoa-category {
+  display: block;
+
+  margin-top: 6px;
+
+  color:
+    rgba(255, 255, 255, .72);
+
+  font-size: 11px;
+
+  font-weight: 600;
+
+  text-transform: uppercase;
+
+  letter-spacing: .8px;
+}
+
+
+/* =========================================================
+   ANIMAÇÃO DO CARD
+========================================================= */
+
+.pessoa-item:hover {
+  transform: translateY(-6px);
+
+  box-shadow:
+    0 10px 22px
+    rgba(9, 29, 28, .18),
+
+    0 20px 35px
+    rgba(9, 29, 28, .10);
+}
+
+.pessoa-item:hover .pessoa-image img {
+  transform: scale(1.06);
+
+  filter:
+    brightness(.88);
+}
+
+
+/* =========================================================
+   BRILHO NO HOVER
+========================================================= */
+
+.pessoa-item::before {
+  content: "";
+
+  position: absolute;
+
+  z-index: 3;
+
+  top: 0;
+  left: -120%;
+
+  width: 70%;
+  height: 100%;
+
+  background:
+    linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, .10),
+      transparent
+    );
+
+  transform:
+    skewX(-18deg);
+
+  transition:
+    left .6s ease;
+
+  pointer-events: none;
+}
+
+.pessoa-item:hover::before {
+  left: 150%;
+}
+
+
+/* =========================================================
+   ÁREA DE CONTATO
+========================================================= */
+
+.contato-guia {
+  margin-top: 45px;
+
+  padding:
+    0 0 45px;
+}
+
+.contato-guia-conteudo {
+  position: relative;
+
+  max-width: 760px;
+
+  margin: 0 auto;
+
+  padding:
+    34px 30px;
+
+  background:
+    var(--verde-escuro);
+
+  border-radius: 18px;
+
+  text-align: center;
+
+  overflow: hidden;
+}
+
+.contato-guia-conteudo::before {
+  content: "";
+
+  position: absolute;
+
+  width: 180px;
+  height: 180px;
+
+  top: -90px;
+  right: -60px;
+
+  border:
+    1px solid
+    rgba(255, 255, 255, .08);
+
+  border-radius: 50%;
+}
+
+.contato-guia-conteudo::after {
+  content: "";
+
+  position: absolute;
+
+  width: 130px;
+  height: 130px;
+
+  bottom: -75px;
+  left: -45px;
+
+  border:
+    1px solid
+    rgba(255, 255, 255, .06);
+
+  border-radius: 50%;
+}
+
+.contato-guia-tag {
+  position: relative;
+  z-index: 1;
+
+  display: block;
+
+  margin-bottom: 9px;
+
+  color:
+    rgba(255, 255, 255, .62);
+
+  font-size: 10px;
+
+  font-weight: 700;
+
+  letter-spacing: 1.4px;
+}
+
+.contato-guia h2 {
+  position: relative;
+  z-index: 1;
+
+  margin: 0;
+
+  color: var(--branco);
+
+  font-size: 24px;
+
+  line-height: 1.25;
+}
+
+.contato-guia p {
+  position: relative;
+  z-index: 1;
+
+  max-width: 600px;
+
+  margin:
+    12px auto 22px;
+
+  color:
+    rgba(255, 255, 255, .75);
+
+  font-size: 14px;
+
+  line-height: 1.6;
+}
+
+
+/* =========================================================
+   BOTÃO DE CONTATO
+========================================================= */
+
+.contato-guia-botao {
+  position: relative;
+  z-index: 1;
+
+  display: inline-flex;
+
+  align-items: center;
+  justify-content: center;
+
+  gap: 10px;
+
+  min-height: 44px;
+
+  padding:
+    0 18px;
+
+  background: var(--branco);
+
+  border-radius: 10px;
+
+  color: var(--verde);
+
+  font-size: 13px;
+
+  font-weight: 700;
+
+  text-decoration: none;
+
+  transition:
+    transform .18s ease,
+    background .18s ease;
+}
+
+.contato-guia-botao:hover {
+  transform:
+    translateY(-2px);
+
+  background: #f2f2f2;
+}
+
+.contato-guia-botao img {
+  width: 15px;
+  height: 15px;
+
+  object-fit: contain;
+}
+
+
+/* =========================================================
+   PÁGINA DA PESSOA
+========================================================= */
+
+.pessoa-detalhe {
+  max-width: 900px;
+
+  margin: 0 auto;
+
+  padding:
+    25px 18px 60px;
+}
+
+.pessoa-hero {
+  width: 100%;
+
+  max-width: 700px;
+
+  margin:
+    25px auto 0;
+
+  overflow: hidden;
+
+  border-radius: 16px;
+
+  background: #eee;
+}
+
+.pessoa-hero img {
+  width: 100%;
+
+  display: block;
+
+  max-height: 620px;
+
+  object-fit: cover;
+}
+
+.pessoa-texto {
+  max-width: 700px;
+
+  margin:
+    25px auto 0;
+}
+
+.pessoa-detalhe-categoria {
+  display: block;
+
+  margin-bottom: 7px;
+
+  color: var(--verde);
+
+  font-size: 12px;
+
+  font-weight: 700;
+
+  text-transform: uppercase;
+
+  letter-spacing: .8px;
+}
+
+.pessoa-texto h1 {
+  margin: 0;
+
+  color: #222;
+
+  font-size: 32px;
+
+  line-height: 1.2;
+}
+
+.pessoa-texto p {
+  margin:
+    15px 0 0;
+
+  color: #555;
+
+  font-size: 15px;
+
+  line-height: 1.7;
+}
+
+.pessoa-instagram {
+  display: inline-flex;
+
+  margin-top: 20px;
+
+  padding:
+    11px 17px;
+
+  border-radius: 9px;
+
+  background: var(--verde);
+
+  color: var(--branco);
+
+  font-size: 13px;
+
+  font-weight: 700;
+
+  text-decoration: none;
+}
+
+
+/* =========================================================
+   GALERIA DA PESSOA
+========================================================= */
+
+.pessoa-galeria {
+  margin-top: 45px;
+}
+
+.pessoa-galeria-list {
+  display: grid;
+
+  grid-template-columns:
+    repeat(3, 1fr);
+
+  gap: 10px;
+
+  margin-top: 18px;
+}
+
+.pessoa-galeria-list img {
+  width: 100%;
+
+  aspect-ratio: 1 / 1;
+
+  display: block;
+
+  object-fit: cover;
+
+  border-radius: 10px;
+}
+
+
+/* =========================================================
+   ERRO — PÁGINA DA PESSOA
+========================================================= */
+
+.pessoa-erro {
+  padding:
+    60px 20px;
+
+  text-align: center;
+}
+
+.pessoa-erro h1 {
+  margin: 0;
+
+  font-size: 25px;
+}
+
+.pessoa-erro p {
+  margin-top: 10px;
+
+  color: #666;
+}
+
+
+/* =========================================================
+   CELULAR
+========================================================= */
+
+@media (max-width: 699px) {
+
+  /* -------------------------------------------------------
+     FILTROS DO MAPA
+     Até 3 por fileira
+  ------------------------------------------------------- */
+
+  .map-filters {
+    display: grid;
+
+    grid-template-columns:
+      repeat(3, minmax(0, 1fr));
+
+    gap:
+      14px 8px;
+
+    width: 100%;
+
+    margin-top: 16px;
+
+    padding:
+      4px 0 8px;
+  }
+
+  .map-filter {
+    width: 100%;
+
+    flex: none;
+
+    justify-self: center;
+  }
+
+  .filter-icon {
+    width:
+      clamp(50px, 15vw, 60px);
+
+    height:
+      clamp(50px, 15vw, 60px);
+
+    margin: 0 auto;
+  }
+
+
+  /* -------------------------------------------------------
+     MURAL
+     Até 3 pessoas por fileira
+  ------------------------------------------------------- */
+
+  .pessoas-list {
+    display: grid;
+
+    grid-template-columns:
+      repeat(3, minmax(0, 1fr));
+
+    gap:
+      12px 8px;
+
+    width: 100%;
+
+    padding:
+      4px 0 0;
+
+    overflow: visible;
+  }
+
+  .pessoa-item {
+    width: 100%;
+
+    height: 190px;
+
+    border-radius: 13px;
+  }
+
+  .pessoa-info {
+    padding:
+      38px 10px 11px;
+  }
+
+  .pessoa-name {
+    font-size: 13px;
+  }
+
+  .pessoa-category {
+    margin-top: 4px;
+
+    font-size: 8px;
+
+    letter-spacing: .5px;
+  }
+
+
+  /* -------------------------------------------------------
+     BOTÃO MOSTRAR MAIS
+  ------------------------------------------------------- */
+
+  #mostrarMaisPessoas {
+    display: flex;
+
+    width: 100%;
+
+    margin-top: 18px;
+  }
+
+
+  /* -------------------------------------------------------
+     CONTATO
+  ------------------------------------------------------- */
+
+  .contato-guia {
+    margin-top: 30px;
+
+    padding-bottom: 30px;
+  }
+
+  .contato-guia-conteudo {
+    padding:
+      28px 20px;
+
+    border-radius: 15px;
+  }
+
+  .contato-guia h2 {
+    font-size: 21px;
+  }
+
+  .contato-guia p {
+    font-size: 13px;
+  }
+
+
+  /* -------------------------------------------------------
+     PÁGINA DA PESSOA
+  ------------------------------------------------------- */
+
+  .pessoa-detalhe {
+    padding:
+      20px 15px 45px;
+  }
+
+  .pessoa-texto h1 {
+    font-size: 26px;
+  }
+
+  .pessoa-galeria-list {
+    grid-template-columns:
+      repeat(2, 1fr);
+
+    gap: 8px;
+  }
+
+
+  /* -------------------------------------------------------
+     FILTROS ONDE COMER
+  ------------------------------------------------------- */
+
+  .content-filters {
+    display: flex;
+
+    flex-wrap: wrap;
+
+    gap: 7px;
+
+    overflow: visible;
+  }
+
+  .comer-filtro {
+    padding:
+      8px 12px;
+
+    font-size: 11px;
+  }
+
+}
+
+
+/* =========================================================
+   CELULARES MUITO PEQUENOS
+========================================================= */
+
+@media (max-width: 350px) {
+
+  :root {
+    --altura-navbar: 70px;
+  }
+
+
+  /* HERO */
+
+  .hero {
+    min-height: 390px;
+
+    height: 55vh;
+  }
+
+  .hero-content {
+    transform:
+      translateY(-130px);
+  }
+
+
+  /* ROUTE */
+
+  .route-card {
+    margin-left: 12px;
+    margin-right: 12px;
+
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  .route-icon {
+    width: 38px;
+    height: 38px;
+
+    flex-basis: 38px;
+  }
+
+  .route-text strong {
+    font-size: 13px;
+  }
+
+  .route-text span {
+    font-size: 10px;
+  }
+
+
+  /* QUICK GRID */
+
+  .quick-grid {
+    gap: 8px;
+  }
+
+  .quick-box {
+    padding:
+      5px 3px;
+
+    border-radius: 11px;
+  }
+
+  .quick-box img {
+    width: 30px;
+    height: 30px;
+
+    margin-bottom: 5px;
+  }
+
+  .quick-box span {
+    font-size: 8px;
+  }
+
+
+  /* MAPA */
+
+  .home-map {
+    min-height: 260px;
+
+    height: 75vw;
+  }
+
+
+  /* FILTROS */
+
+  .map-filters {
+    gap:
+      12px 4px;
+  }
+
+  .filter-icon {
+    width: 48px;
+    height: 48px;
+  }
+
+  .filter-icon img {
+    width: 24px;
+    height: 24px;
+  }
+
+  .map-filter {
+    font-size: 8px;
+  }
+
+
+  /* MURAL */
+
+  .pessoas-list {
+    gap:
+      10px 5px;
+  }
+
+  .pessoa-item {
+    height: 170px;
+
+    border-radius: 11px;
+  }
+
+  .pessoa-info {
+    padding:
+      30px 8px 9px;
+  }
+
+  .pessoa-name {
+    font-size: 11px;
+  }
+
+  .pessoa-category {
+    font-size: 7px;
+  }
+
+}
+
+
+/* =========================================================
+   TELAS GRANDES — 500+
+========================================================= */
+
+@media (min-width: 500px) and (max-width: 699px) {
+
+  .quick-grid {
+    gap: 16px;
+  }
+
+  .quick-box img {
+    width: 48px;
+    height: 48px;
+  }
+
+
+  /* Mural um pouco maior */
+
+  .pessoa-item {
+    height: 230px;
+  }
+
+  .pessoa-name {
+    font-size: 15px;
+  }
+
+  .pessoa-category {
+    font-size: 9px;
+  }
+
+}
+
+
+/* =========================================================
+   TABLET — 700+
+========================================================= */
+
+@media (min-width: 700px) {
+
+  body {
+    padding:
+      30px 0
+      var(--altura-navbar);
+
+    background: #e7e4dc;
+  }
+
+  .page {
+    min-height:
+      calc(100vh - 60px);
+
+    border-radius: 28px;
+
+    box-shadow:
+      0 20px 70px
+      rgba(0, 0, 0, 0.14);
+  }
+
+
+  /* QUICK GRID */
+
+  .quick-grid {
+    grid-template-columns:
+      repeat(6, minmax(0, 1fr));
+  }
+
+
+  /* HERO */
+
+  .hero {
+    height:
+      clamp(500px, 65vh, 650px);
+  }
+
+  .hero-content {
+    transform:
+      translateY(-180px);
+  }
+
+
+  /* MAPA */
+
+  .home-map {
+    height:
+      clamp(350px, 45vw, 500px);
+  }
+
+
+  /* LISTAS */
+
+  .content-list {
+    gap: 14px;
+  }
+
+  .visitar-item,
+  .comer-item,
+  .ficar-item {
+    padding: 12px;
+  }
+
+  .visitar-image,
+  .comer-image,
+  .ficar-image {
+    flex-basis: 110px;
+
+    width: 110px;
+    height: 110px;
+  }
+
+  .visitar-info,
+  .comer-info,
+  .ficar-info {
+    padding-left: 16px;
+  }
+
+  .visitar-arrow,
+  .comer-arrow,
+  .ficar-arrow {
+    flex-basis: 42px;
+
+    width: 42px;
+    height: 42px;
+  }
+
+  .visitar-arrow img,
+  .comer-arrow img,
+  .ficar-arrow img {
+    width: 23px;
+    height: 23px;
+  }
+
+  .comer-horario {
+    min-width: 95px;
+
+    height: 27px;
+
+    padding:
+      0 10px;
+
+    font-size: 11px;
+
+    border-radius: 5px;
+  }
+
+  .status-filtro {
+    font-size: 13px;
+  }
+
+  .ficar-nota img {
+    width: 18px;
+    height: 18px;
+  }
+
+
+  /* -------------------------------------------------------
+     FILTROS DO MAPA
+  ------------------------------------------------------- */
+
+  .map-filters {
+    justify-content: center;
+
+    grid-template-columns: none;
+
+    flex-wrap: wrap;
+
+    gap: 18px;
+  }
+
+  .map-filter {
+    flex:
+      0 0 72px;
+  }
+
+  .filter-icon {
+    width: 60px;
+    height: 60px;
+  }
+
+
+  /* -------------------------------------------------------
+     MURAL
+  ------------------------------------------------------- */
+
+  .pessoas-list {
+    grid-template-columns:
+      repeat(4, minmax(0, 1fr));
+
+    gap: 18px;
+  }
+
+  .pessoa-item {
+    height: 270px;
+  }
+
+}
+
+
+/* =========================================================
+   DESKTOP — 1000+
+========================================================= */
+
+@media (min-width: 1000px) {
+
+  .page {
+    max-width: 1100px;
+  }
+
+
+  /* HERO */
+
+  .hero {
+    height: 620px;
+  }
+
+  .hero-content {
+    transform:
+      translateY(-170px);
+  }
+
+
+  /* ESPAÇAMENTO */
+
+  .section {
+    padding-left: 35px;
+    padding-right: 35px;
+  }
+
+  .content-section,
+  .home-map-section {
+    padding-left: 35px;
+    padding-right: 35px;
+  }
+
+
+  /* QUICK */
+
+  .quick-grid {
+    gap: 18px;
+  }
+
+
+  /* MAPA */
+
+  .home-map {
+    height: 480px;
+  }
+
+
+  /* MURAL */
+
+  .pessoas-list {
+    grid-template-columns:
+      repeat(4, minmax(0, 1fr));
+
+    gap: 20px;
+  }
+
+  .pessoa-item {
+    height: 285px;
+  }
+
+}
+
+
+/* =========================================================
+   TELAS MUITO GRANDES
+========================================================= */
+
+@media (min-width: 1400px) {
+
+  .page {
+    max-width: 1200px;
+  }
+
+  .hero {
+    height: 680px;
+  }
+
+  .section,
+  .content-section,
+  .home-map-section {
+    padding-left: 45px;
+    padding-right: 45px;
+  }
+
+}
