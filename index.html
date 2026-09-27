@@ -312,8 +312,6 @@
       </div>
 
 
-      <!-- MAPA -->
-
       <div
         id="homeMap"
         class="home-map"
@@ -328,6 +326,7 @@
         <button
           class="map-filter active"
           data-filter="Todos"
+          type="button"
         >
 
           <span class="filter-icon">
@@ -347,6 +346,7 @@
         <button
           class="map-filter"
           data-filter="Igreja"
+          type="button"
         >
 
           <span class="filter-icon">
@@ -366,6 +366,7 @@
         <button
           class="map-filter"
           data-filter="Histórico"
+          type="button"
         >
 
           <span class="filter-icon">
@@ -385,6 +386,7 @@
         <button
           class="map-filter"
           data-filter="Natureza"
+          type="button"
         >
 
           <span class="filter-icon">
@@ -404,6 +406,7 @@
         <button
           class="map-filter"
           data-filter="Alimentação"
+          type="button"
         >
 
           <span class="filter-icon">
@@ -423,6 +426,7 @@
         <button
           class="map-filter"
           data-filter="Cafeteria"
+          type="button"
         >
 
           <span class="filter-icon">
@@ -442,6 +446,7 @@
         <button
           class="map-filter"
           data-filter="Hospedagem"
+          type="button"
         >
 
           <span class="filter-icon">
@@ -461,6 +466,7 @@
         <button
           class="map-filter"
           data-filter="Comércio"
+          type="button"
         >
 
           <span class="filter-icon">
@@ -480,6 +486,7 @@
         <button
           class="map-filter"
           data-filter="Esporte"
+          type="button"
         >
 
           <span class="filter-icon">
@@ -563,7 +570,7 @@
       </header>
 
 
-      <!-- FILTROS -->
+      <!-- FILTROS DE COMIDA -->
 
       <div class="content-filters">
 
@@ -616,7 +623,7 @@
       </div>
 
 
-      <!-- FILTRO DE ABERTURA -->
+      <!-- ABERTO AGORA -->
 
       <div class="comer-status">
 
@@ -627,9 +634,7 @@
           data-status="todos"
         >
 
-          <span
-            id="textoStatus"
-          >
+          <span id="textoStatus">
             Aberto agora
           </span>
 
@@ -638,15 +643,11 @@
       </div>
 
 
-      <!-- LISTA -->
-
       <div
         class="content-list"
         id="comerList"
       ></div>
 
-
-      <!-- MOSTRAR MAIS -->
 
       <button
         type="button"
@@ -682,15 +683,11 @@
       </header>
 
 
-      <!-- LISTA -->
-
       <div
         class="content-list"
         id="ficarList"
       ></div>
 
-
-      <!-- MOSTRAR MAIS -->
 
       <button
         type="button"
@@ -704,65 +701,189 @@
     </section>
 
 
+    <!-- ==================================================
+         COMÉRCIO LOCAL
+    =================================================== -->
+
+    <section
+      class="content-section"
+      id="comercio"
+    >
+
+      <header class="content-header">
+
+        <span>
+          DESCUBRA ANDRELÂNDIA
+        </span>
+
+        <h2>
+          Comércio local
+        </h2>
+
+        <p>
+          Encontre lojas, mercados, serviços e outros
+          estabelecimentos de Andrelândia.
+        </p>
+
+      </header>
+
+
+      <!-- ==================================================
+           PESQUISA
+      =================================================== -->
+
+      <div class="comercio-pesquisa">
+
+        <input
+          type="search"
+          id="pesquisaComercio"
+          placeholder="Pesquisar comércio ou categoria..."
+          autocomplete="off"
+          spellcheck="false"
+          aria-label="Pesquisar comércio ou categoria"
+        >
+
+      </div>
+
+
+      <!-- ==================================================
+           ABERTO AGORA
+      =================================================== -->
+
+      <div class="comer-status">
+
+        <button
+          type="button"
+          id="filtroAbertoComercio"
+          class="status-filtro"
+          data-status="todos"
+        >
+
+          <span id="textoStatusComercio">
+            Aberto agora
+          </span>
+
+        </button>
+
+      </div>
+
+
+      <!-- ==================================================
+           LISTA DE COMÉRCIOS
+      =================================================== -->
+
+      <div
+        class="content-list"
+        id="comercioList"
+      ></div>
+
+
+      <!-- ==================================================
+           MOSTRAR MAIS
+      =================================================== -->
+
+      <button
+        type="button"
+        id="mostrarMaisComercio"
+        class="mostrar-mais"
+        hidden
+      >
+        Mostrar mais
+      </button>
+
+    </section>
+
+
   </main>
 
-<!-- =========================
-     MURAL DE ANDRELÂNDIA
-========================= -->
-<section class="content-section pessoas-section" id="pessoas">
 
-  <div class="content-header">
-    <span>GENTE DE ANDRELÂNDIA</span>
-    <h2>Mural de Andrelândia</h2>
-    <p>
-      Conheça pessoas que fazem parte da história, da cultura e da vida
-      de Andrelândia.
-    </p>
-  </div>
+  <!-- ==================================================
+       MURAL DE ANDRELÂNDIA
+  =================================================== -->
 
-  <div class="pessoas-list" id="pessoasList"></div>
-
-  <button
-    type="button"
-    id="mostrarMaisPessoas"
-    class="mostrar-mais"
-    hidden
+  <section
+    class="content-section pessoas-section"
+    id="pessoas"
   >
-    Mostrar mais
-  </button>
 
-</section>
+    <div class="content-header">
+
+      <span>
+        GENTE DE ANDRELÂNDIA
+      </span>
+
+      <h2>
+        Mural de Andrelândia
+      </h2>
+
+      <p>
+        Conheça pessoas que fazem parte da história,
+        da cultura e da vida de Andrelândia.
+      </p>
+
+    </div>
 
 
-<!-- =========================
-     INDICAÇÃO / CONTATO
-========================= -->
-<section class="contato-guia">
+    <div
+      class="pessoas-list"
+      id="pessoasList"
+    ></div>
 
-  <div class="contato-guia-conteudo">
 
-    <span class="contato-guia-tag">AJUDE A CONSTRUIR O GUIA</span>
-
-    <h2>Está faltando alguém ou algum lugar?</h2>
-
-    <p>
-      Conhece uma pessoa importante, artista, fotógrafo, comércio,
-      atração turística ou outro lugar que ainda não aparece aqui?
-      Entre em contato e ajude a deixar o Guia Turístico de Andrelândia
-      cada vez mais completo.
-    </p>
-
-    <a
-      href="mailto:SEUEMAIL@EXEMPLO.COM"
-      class="contato-guia-botao"
+    <button
+      type="button"
+      id="mostrarMaisPessoas"
+      class="mostrar-mais"
+      hidden
     >
-      Entrar em contato
-      <img src="img/icones/seta2.png" alt="">
-    </a>
+      Mostrar mais
+    </button>
 
-  </div>
+  </section>
 
-</section>
+
+  <!-- ==================================================
+       INDICAÇÃO / CONTATO
+  =================================================== -->
+
+  <section class="contato-guia">
+
+    <div class="contato-guia-conteudo">
+
+      <span class="contato-guia-tag">
+        AJUDE A CONSTRUIR O GUIA
+      </span>
+
+      <h2>
+        Está faltando alguém ou algum lugar?
+      </h2>
+
+      <p>
+        Conhece uma pessoa importante, artista,
+        fotógrafo, comércio, atração turística
+        ou outro lugar que ainda não aparece aqui?
+        Entre em contato e ajude a deixar o
+        Guia Turístico de Andrelândia cada vez mais completo.
+      </p>
+
+      <a
+        href="mailto:SEUEMAIL@EXEMPLO.COM"
+        class="contato-guia-botao"
+      >
+
+        Entrar em contato
+
+        <img
+          src="img/icones/seta2.png"
+          alt=""
+        >
+
+      </a>
+
+    </div>
+
+  </section>
+
 
   <!-- ==================================================
        NAVBAR FIXA
@@ -868,7 +989,7 @@
 
 
   <!-- ==================================================
-       JAVASCRIPT DO SITE
+       JAVASCRIPT
   =================================================== -->
 
   <script
