@@ -55,42 +55,67 @@ function corrigirCaminhoImagem(caminho) {
     return "";
   }
 
-  caminho = String(caminho).trim();
+  caminho =
+    String(caminho).trim();
+
+
+  /*
+    URL externa
+  */
+
+  if (
+    caminho.startsWith("http://") ||
+    caminho.startsWith("https://") ||
+    caminho.startsWith("data:")
+  ) {
+    return caminho;
+  }
+
+
+  /*
+    Caminho absoluto
+  */
+
+  if (caminho.startsWith("/")) {
+    return caminho;
+  }
+
 
   /*
     JSON:
 
-    ./img/pousada/capa.jpg
+    ./img/igreja-matriz/capa.png
 
-    local.html:
-
-    pages/local.html
+    local.html está dentro de PAGES
 
     Resultado:
 
-    ../img/pousada/capa.jpg
+    ../img/igreja-matriz/capa.png
   */
 
   if (
-    caminho.startsWith("./")
+    caminho.startsWith("./img/")
   ) {
-    return "../" + caminho.substring(2);
+
+    return "../" +
+      caminho.substring(2);
   }
+
+
+  /*
+    Caso venha:
+
+    img/igreja-matriz/capa.png
+  */
 
   if (
     caminho.startsWith("img/")
   ) {
-    return "../" + caminho;
+
+    return "../" +
+      caminho;
   }
 
-  if (
-    caminho.startsWith("../") ||
-    caminho.startsWith("http://") ||
-    caminho.startsWith("https://") ||
-    caminho.startsWith("/")
-  ) {
-    return caminho;
-  }
 
   return caminho;
 }
@@ -197,13 +222,6 @@ async function carregarLocal() {
         idLocal
       );
 
-      console.log(
-        "IDs disponíveis:",
-        todos.map(
-          item => item.id
-        )
-      );
-
       mostrarErro(
         "Local não encontrado."
       );
@@ -221,6 +239,7 @@ async function carregarLocal() {
     preencherPagina(
       localAtual
     );
+
 
   } catch (erro) {
 
@@ -254,8 +273,7 @@ function preencherPagina(item) {
   if (nomeElemento) {
 
     nomeElemento.textContent =
-      item.nome ||
-      "Local";
+      item.nome || "Local";
   }
 
 
@@ -267,8 +285,7 @@ function preencherPagina(item) {
   if (categoriaElemento) {
 
     categoriaElemento.textContent =
-      item.categoria ||
-      "LOCAL";
+      item.categoria || "LOCAL";
   }
 
 
@@ -279,7 +296,6 @@ function preencherPagina(item) {
   const descricao =
     item.descricao ||
     item.historia ||
-    item.sobre ||
     "Conheça este lugar em Andrelândia.";
 
 
@@ -313,11 +329,8 @@ function preencherPagina(item) {
 
     } else {
 
-      if (historiaElemento.parentElement) {
-
-        historiaElemento.parentElement.style.display =
-          "none";
-      }
+      historiaElemento.parentElement.style.display =
+        "none";
     }
   }
 
@@ -340,11 +353,8 @@ function preencherPagina(item) {
 
     } else {
 
-      if (curiosidadesElemento.parentElement) {
-
-        curiosidadesElemento.parentElement.style.display =
-          "none";
-      }
+      curiosidadesElemento.parentElement.style.display =
+        "none";
     }
   }
 
@@ -420,11 +430,8 @@ function preencherPagina(item) {
 
     } else {
 
-      if (telefoneElemento.parentElement) {
-
-        telefoneElemento.parentElement.style.display =
-          "none";
-      }
+      telefoneElemento.parentElement.style.display =
+        "none";
     }
   }
 
@@ -445,12 +452,6 @@ function preencherPagina(item) {
       siteElemento.href =
         item.site;
 
-      siteElemento.target =
-        "_blank";
-
-      siteElemento.rel =
-        "noopener noreferrer";
-
       siteElemento.style.display =
         "flex";
 
@@ -462,15 +463,49 @@ function preencherPagina(item) {
   }
 
 
-  configurarInstagram(item);
+  /* =========================
+     INSTAGRAM
+  ========================= */
 
-  configurarWhatsApp(item);
+  configurarInstagram(
+    item
+  );
 
-  configurarGaleria(item);
 
-  configurarMapa(item);
+  /* =========================
+     WHATSAPP
+  ========================= */
 
-  configurarGoogleMaps(item);
+  configurarWhatsApp(
+    item
+  );
+
+
+  /* =========================
+     GALERIA
+  ========================= */
+
+  configurarGaleria(
+    item
+  );
+
+
+  /* =========================
+     MAPA
+  ========================= */
+
+  configurarMapa(
+    item
+  );
+
+
+  /* =========================
+     GOOGLE MAPS
+  ========================= */
+
+  configurarGoogleMaps(
+    item
+  );
 }
 
 
@@ -478,7 +513,9 @@ function preencherPagina(item) {
    HORÁRIO
 ========================= */
 
-function formatarHorario(horario) {
+function formatarHorario(
+  horario
+) {
 
   if (!horario) {
 
@@ -486,7 +523,9 @@ function formatarHorario(horario) {
   }
 
 
-  if (typeof horario === "string") {
+  if (
+    typeof horario === "string"
+  ) {
 
     return escaparHTML(
       horario
@@ -494,10 +533,13 @@ function formatarHorario(horario) {
   }
 
 
-  if (typeof horario === "object") {
+  if (
+    typeof horario === "object"
+  ) {
 
-    return Object.entries(horario)
-
+    return Object.entries(
+      horario
+    )
       .map(
         ([dia, hora]) => {
 
@@ -510,10 +552,8 @@ function formatarHorario(horario) {
               ${escaparHTML(hora)}
             </div>
           `;
-
         }
       )
-
       .join("");
   }
 
@@ -526,7 +566,9 @@ function formatarHorario(horario) {
    INSTAGRAM
 ========================= */
 
-function configurarInstagram(item) {
+function configurarInstagram(
+  item
+) {
 
   const link =
     document.getElementById(
@@ -539,7 +581,10 @@ function configurarInstagram(item) {
     );
 
 
-  if (!link) {
+  if (
+    !link ||
+    !nome
+  ) {
     return;
   }
 
@@ -548,17 +593,9 @@ function configurarInstagram(item) {
     item.instagram || "";
 
 
-  instagram =
-    String(instagram).trim();
-
-
-  /*
-    SEM INSTAGRAM
-
-    O botão desaparece.
-  */
-
-  if (!instagram) {
+  if (
+    !String(instagram).trim()
+  ) {
 
     link.style.display =
       "none";
@@ -567,11 +604,15 @@ function configurarInstagram(item) {
   }
 
 
+  instagram =
+    String(instagram).trim();
+
+
   let url =
     instagram;
 
-  let usuario =
-    "";
+
+  let usuario = "";
 
 
   if (
@@ -589,11 +630,23 @@ function configurarInstagram(item) {
     usuario =
       instagram
         .replace(
-          /^https?:\/\/(www\.)?instagram\.com\//i,
+          "https://www.instagram.com/",
           ""
         )
         .replace(
-          /\/.*$/,
+          "https://instagram.com/",
+          ""
+        )
+        .replace(
+          "http://www.instagram.com/",
+          ""
+        )
+        .replace(
+          "http://instagram.com/",
+          ""
+        )
+        .replace(
+          /\/$/,
           ""
         );
 
@@ -602,19 +655,15 @@ function configurarInstagram(item) {
     usuario =
       instagram
         .replace(
-          /^@/,
+          "@",
           ""
         )
         .replace(
-          /^instagram\.com\//i,
+          "instagram.com/",
           ""
         )
         .replace(
-          /^www\.instagram\.com\//i,
-          ""
-        )
-        .replace(
-          /\/.*$/,
+          "/",
           ""
         );
 
@@ -623,11 +672,10 @@ function configurarInstagram(item) {
   }
 
 
-  if (nome) {
-
-    nome.textContent =
-      `@${usuario}`;
-  }
+  nome.textContent =
+    usuario
+      ? `@${usuario}`
+      : "Instagram";
 
 
   link.href =
@@ -649,112 +697,41 @@ function configurarInstagram(item) {
 ========================= */
 
 function configurarWhatsApp(item) {
-
-  const link =
-    document.getElementById(
-      "whatsappLocal"
-    );
-
+  const link = document.getElementById("whatsappLocal");
+  const nome = document.getElementById("whatsappNome");
 
   if (!link) {
     return;
   }
 
+  // Usa telefone como WhatsApp
+  const telefone = item.telefone || item.whatsapp || "";
 
-  /*
-    Pode usar no JSON:
-
-    "whatsapp": "5535999999999"
-
-    ou
-
-    "whatsapp": "(35) 99999-9999"
-  */
-
-  let whatsapp =
-    item.whatsapp ||
-    item.telefone ||
-    "";
-
-
-  whatsapp =
-    String(whatsapp).trim();
-
-
-  /*
-    SEM WHATSAPP
-
-    O botão desaparece.
-  */
-
-  if (!whatsapp) {
-
-    link.style.display =
-      "none";
-
+  if (!String(telefone).trim()) {
+    link.style.display = "none";
     return;
   }
 
-
-  /*
-    Remove tudo que não for número.
-  */
-
-  const numero =
-    whatsapp.replace(
-      /\D/g,
-      ""
-    );
-
+  let numero = String(telefone).replace(/\D/g, "");
 
   if (!numero) {
-
-    link.style.display =
-      "none";
-
+    link.style.display = "none";
     return;
   }
 
-
-  /*
-    Se tiver somente DDD + número,
-    adiciona o código do Brasil.
-
-    Exemplo:
-
-    35999999999
-
-    vira:
-
-    5535999999999
-  */
-
-  let numeroFinal =
-    numero;
-
-
-  if (
-    numero.length === 10 ||
-    numero.length === 11
-  ) {
-
-    numeroFinal =
-      "55" + numero;
+  // Adiciona código do Brasil se ainda não existir
+  if (!numero.startsWith("55")) {
+    numero = "55" + numero;
   }
 
+  if (nome) {
+    nome.textContent = "WhatsApp";
+  }
 
-  link.href =
-    `https://wa.me/${numeroFinal}`;
-
-
-  link.target =
-    "_blank";
-
-  link.rel =
-    "noopener noreferrer";
-
-  link.style.display =
-    "flex";
+  link.href = `https://wa.me/${numero}`;
+  link.target = "_blank";
+  link.rel = "noopener noreferrer";
+  link.style.display = "flex";
 }
 
 
@@ -762,7 +739,9 @@ function configurarWhatsApp(item) {
    GALERIA
 ========================= */
 
-function configurarGaleria(item) {
+function configurarGaleria(
+  item
+) {
 
   const principal =
     document.getElementById(
@@ -786,25 +765,30 @@ function configurarGaleria(item) {
   let fotos = [];
 
 
-  /* CAPA */
+  /* =========================
+     CAPA
+  ========================= */
 
   if (item.capa) {
 
-    const caminho =
+    const capa =
       corrigirCaminhoImagem(
         item.capa
       );
 
-    if (caminho) {
+
+    if (capa) {
 
       fotos.push(
-        caminho
+        capa
       );
     }
   }
 
 
-  /* GALERIA */
+  /* =========================
+     GALERIA
+  ========================= */
 
   if (
     Array.isArray(
@@ -832,13 +816,14 @@ function configurarGaleria(item) {
             caminho
           );
         }
-
       }
     );
   }
 
 
-  /* FOTOS */
+  /* =========================
+     FOTOS
+  ========================= */
 
   if (
     Array.isArray(
@@ -866,13 +851,14 @@ function configurarGaleria(item) {
             caminho
           );
         }
-
       }
     );
   }
 
 
-  /* SEM FOTOS */
+  /* =========================
+     SEM FOTOS
+  ========================= */
 
   if (
     fotos.length === 0
@@ -891,15 +877,15 @@ function configurarGaleria(item) {
   }
 
 
-  /* FOTO PRINCIPAL */
+  /* =========================
+     FOTO PRINCIPAL
+  ========================= */
 
   principal.style.display =
     "";
 
-
   principal.src =
     fotos[0];
-
 
   principal.alt =
     item.nome ||
@@ -907,9 +893,8 @@ function configurarGaleria(item) {
 
 
   /*
-    Se a imagem principal
-    não carregar, mostra
-    o erro no console.
+    Se a imagem não existir,
+    mostramos o erro no console.
   */
 
   principal.onerror =
@@ -922,7 +907,9 @@ function configurarGaleria(item) {
     };
 
 
-  /* MINIATURAS */
+  /* =========================
+     MINIATURAS
+  ========================= */
 
   miniaturas.innerHTML =
     "";
@@ -935,10 +922,6 @@ function configurarGaleria(item) {
         document.createElement(
           "button"
         );
-
-
-      button.type =
-        "button";
 
 
       button.className =
@@ -955,33 +938,12 @@ function configurarGaleria(item) {
       }
 
 
-      const imagem =
-        document.createElement(
-          "img"
-        );
-
-
-      imagem.src =
-        foto;
-
-
-      imagem.alt =
-        `Foto ${index + 1}`;
-
-
-      imagem.onerror =
-        () => {
-
-          console.error(
-            "Erro ao carregar miniatura:",
-            foto
-          );
-        };
-
-
-      button.appendChild(
-        imagem
-      );
+      button.innerHTML = `
+        <img
+          src="${escaparHTML(foto)}"
+          alt="Foto ${index + 1}"
+        >
+      `;
 
 
       button.addEventListener(
@@ -1023,13 +985,19 @@ function configurarGaleria(item) {
    MAPA
 ========================= */
 
-function configurarMapa(item) {
+function configurarMapa(
+  item
+) {
 
   const latitude =
-    Number(item.latitude);
+    Number(
+      item.latitude
+    );
 
   const longitude =
-    Number(item.longitude);
+    Number(
+      item.longitude
+    );
 
 
   const elementoMapa =
@@ -1077,7 +1045,8 @@ function configurarMapa(item) {
         scrollWheelZoom: false,
         maxZoom: 22
       }
-    ).setView(
+    )
+    .setView(
       [
         latitude,
         longitude
@@ -1101,16 +1070,20 @@ function configurarMapa(item) {
       attribution:
         "Tiles &copy; Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community"
     }
-  ).addTo(
+  )
+  .addTo(
     mapaLocal
   );
 
 
   const marcador =
-    L.marker([
-      latitude,
-      longitude
-    ]).addTo(
+    L.marker(
+      [
+        latitude,
+        longitude
+      ]
+    )
+    .addTo(
       mapaLocal
     );
 
@@ -1133,13 +1106,19 @@ function configurarMapa(item) {
    GOOGLE MAPS
 ========================= */
 
-function configurarGoogleMaps(item) {
+function configurarGoogleMaps(
+  item
+) {
 
   const latitude =
-    Number(item.latitude);
+    Number(
+      item.latitude
+    );
 
   const longitude =
-    Number(item.longitude);
+    Number(
+      item.longitude
+    );
 
 
   const botao =
@@ -1197,12 +1176,10 @@ function abrirFotoTelaCheia() {
       "fotoPrincipal"
     );
 
-
   const viewer =
     document.getElementById(
       "photoViewer"
     );
-
 
   const viewerImage =
     document.getElementById(
@@ -1262,7 +1239,8 @@ document.addEventListener(
   event => {
 
     if (
-      event.key === "Escape"
+      event.key ===
+      "Escape"
     ) {
 
       fecharFotoTelaCheia();
@@ -1324,7 +1302,10 @@ function carregarComentarios() {
 
 
   comentarios.forEach(
-    (comentario, index) => {
+    (
+      comentario,
+      index
+    ) => {
 
       const elemento =
         document.createElement(
@@ -1438,7 +1419,9 @@ function publicarComentario() {
       "Digite seu nome."
     );
 
+
     nomeInput.focus();
+
 
     return;
   }
@@ -1450,7 +1433,9 @@ function publicarComentario() {
       "Escreva um comentário."
     );
 
+
     textoInput.focus();
+
 
     return;
   }
@@ -1505,7 +1490,9 @@ function publicarComentario() {
 }
 
 
-function excluirComentario(index) {
+function excluirComentario(
+  index
+) {
 
   if (!idLocal) {
     return;
@@ -1546,7 +1533,9 @@ function excluirComentario(index) {
    ERRO
 ========================= */
 
-function mostrarErro(mensagem) {
+function mostrarErro(
+  mensagem
+) {
 
   const pagina =
     document.querySelector(
