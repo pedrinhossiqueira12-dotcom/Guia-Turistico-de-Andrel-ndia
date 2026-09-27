@@ -1,0 +1,221 @@
+:root {
+  --verde: rgb(9, 29, 28);
+  --branco: #ffffff;
+  --cinza: #c8c8c8;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+body {
+  background: #f5f3ef;
+}
+
+.map-page {
+  width: 100%;
+  height: 100vh;
+  position: relative;
+  overflow: hidden;
+}
+
+/* ==========================
+   CABEÇALHO
+========================== */
+
+.map-header {
+  position: absolute;
+
+  z-index: 1000;
+
+  top: 15px;
+  left: 15px;
+  right: 15px;
+
+  display: flex;
+  align-items: center;
+
+  gap: 12px;
+
+  padding: 12px 15px;
+
+  background: rgba(255,255,255,.95);
+
+  border: 1px solid var(--cinza);
+
+  border-radius: 16px;
+
+  box-shadow: 0 5px 20px rgba(0,0,0,.15);
+}
+
+.back-button {
+  width: 40px;
+  height: 40px;
+
+  display: grid;
+  place-items: center;
+
+  border-radius: 12px;
+
+  background: var(--verde);
+
+  color: white;
+
+  font-size: 28px;
+
+  line-height: 1;
+}
+
+.map-header span {
+  display: block;
+
+  color: #777;
+
+  font-size: 9px;
+
+  letter-spacing: 1px;
+}
+
+.map-header h1 {
+  margin: 2px 0 0;
+
+  color: var(--verde);
+
+  font-size: 18px;
+}
+
+/* ==========================
+   MAPA
+========================== */
+
+#map {
+  width: 100%;
+  height: 100%;
+}
+
+/* ==========================
+   MARCADORES
+========================== */
+
+.custom-marker {
+  width: 42px;
+  height: 42px;
+
+  display: grid;
+  place-items: center;
+
+  background: var(--verde);
+
+  color: white;
+
+  border: 3px solid white;
+
+  border-radius: 50% 50% 50% 0;
+
+  transform: rotate(-45deg);
+
+  box-shadow:
+    0 4px 10px rgba(0,0,0,.3);
+}
+
+.custom-marker span {
+  transform: rotate(45deg);
+
+  font-size: 17px;
+}
+
+/* ==========================
+   POPUP
+========================== */
+
+.leaflet-popup-content-wrapper {
+  border-radius: 16px;
+  padding: 0;
+
+  overflow: hidden;
+}
+
+.leaflet-popup-content {
+  width: 260px !important;
+
+  margin: 0;
+}
+
+.popup {
+  padding-bottom: 14px;
+}
+
+.popup-image {
+  width: 100%;
+  height: 125px;
+
+  object-fit: cover;
+
+  display: block;
+}
+
+.popup-content {
+  padding: 12px 14px 0;
+}
+
+.popup-category {
+  color: #777;
+
+  font-size: 10px;
+
+  text-transform: uppercase;
+
+  letter-spacing: .8px;
+}
+
+.popup h3 {
+  margin: 3px 0 5px;
+
+  color: var(--verde);
+
+  font-size: 17px;
+}
+
+.popup p {
+  margin: 0 0 12px;
+
+  color: #666;
+
+  font-size: 12px;
+
+  line-height: 1.45;
+}
+
+.popup-button {
+  display: block;
+
+  width: 100%;
+
+  padding: 10px;
+
+  background: var(--verde);
+
+  color: white;
+
+  text-align: center;
+
+  border-radius: 9px;
+
+  font-size: 12px;
+
+  font-weight: 600;
+}
+
+/* remove alguns elementos do Leaflet que poluem o visual */
+
+.leaflet-control-attribution {
+  font-size: 8px;
+}
