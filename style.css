@@ -939,7 +939,44 @@ button {
   display: none;
 }
 
+/* =========================================================
+   BUSCA — COMÉRCIO LOCAL
+========================================================= */
+.comercio-pesquisa {
+  width: 100%;
+  min-height: 40px;
+  padding: 10px 14px;
+  border: 1px solid #d3d3d3;
+  border-radius: 999px;
+  background: var(--branco);
+  color: var(--texto);
+  font-family:
+    "Roboto",
+    Arial,
+    Helvetica,
+    sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  outline: none;
+  transition:
+    border-color .2s ease,
+    box-shadow .2s ease;
+}
 
+.comercio-pesquisa::placeholder {
+  color: #999;
+}
+
+.comercio-pesquisa:focus {
+  border-color: var(--verde);
+  box-shadow:
+    0 0 0 3px
+    rgba(25, 65, 56, .08);
+}
+
+.comercio-pesquisa::-webkit-search-cancel-button {
+  cursor: pointer;
+}
 /* =========================================================
    LISTAS
 ========================================================= */
