@@ -64,7 +64,7 @@ function corrigirCaminhoImagem(caminho) {
 
     local.html:
 
-    PAGES/local.html
+    pages/local.html
 
     Resultado:
 
