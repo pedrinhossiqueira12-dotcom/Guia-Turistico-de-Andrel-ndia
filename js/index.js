@@ -37,7 +37,8 @@ function normalizarTexto(texto) {
   return String(texto || "")
     .toLowerCase()
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
 }
 
 
@@ -691,40 +692,6 @@ if (mostrarMaisVisitar) {
 
 
 /* =========================================================
-   ONDE COMER
-   ========================================================= */
-
-const comerList =
-  document.getElementById(
-    "comerList"
-  );
-
-const mostrarMaisComer =
-  document.getElementById(
-    "mostrarMaisComer"
-  );
-
-const filtroAberto =
-  document.getElementById(
-    "filtroAberto"
-  );
-
-const textoStatus =
-  document.getElementById(
-    "textoStatus"
-  );
-
-let categoriaComerFiltro =
-  "Todos";
-
-let mostrarSomenteAbertos =
-  false;
-
-let limiteComer =
-  LIMITE_INICIAL;
-
-
-/* =========================================================
    HORÁRIOS
    ========================================================= */
 
@@ -785,7 +752,13 @@ function comercioEstaAberto(
   const dia =
     obterDiaSemana();
 
-  const diasSegundaASabado = [
+
+  /* =======================================================
+     VERIFICAÇÃO DO DIA
+     ======================================================= */
+
+  const diasDaSemana = [
+    "domingo",
     "segunda",
     "terca",
     "quarta",
@@ -794,13 +767,12 @@ function comercioEstaAberto(
     "sabado"
   ];
 
-  const diasSegundaASexta = [
-    "segunda",
-    "terca",
-    "quarta",
-    "quinta",
-    "sexta"
-  ];
+  let diaPermitido = true;
+
+
+  /*
+     Segunda a sábado
+  */
 
   if (
     texto.includes(
@@ -808,108 +780,306 @@ function comercioEstaAberto(
     )
   ) {
 
-    if (
-      !diasSegundaASabado.includes(
-        dia
-      )
-    ) {
+    diaPermitido =
+      [
+        "segunda",
+        "terca",
+        "quarta",
+        "quinta",
+        "sexta",
+        "sabado"
+      ].includes(dia);
 
-      return false;
-    }
+  }
 
-  } else if (
+
+  /*
+     Segunda a sexta
+  */
+
+  else if (
     texto.includes(
       "segunda a sexta"
     )
   ) {
 
-    if (
-      !diasSegundaASexta.includes(
-        dia
-      )
-    ) {
+    diaPermitido =
+      [
+        "segunda",
+        "terca",
+        "quarta",
+        "quinta",
+        "sexta"
+      ].includes(dia);
 
-      return false;
-    }
   }
 
-  const resultado =
-    texto.match(
-      /(\d{1,2}):(\d{2})\s*(?:as|-|a)\s*(\d{1,2}):(\d{2})/
-    );
 
-  if (!resultado) {
+  /*
+     Somente sábado
+  */
+
+  else if (
+    texto.includes(
+      "sabado"
+    ) &&
+    !texto.includes(
+      "segunda a sabado"
+    )
+  ) {
+
+    if (
+      texto.includes("segunda") ||
+      texto.includes("terca") ||
+      texto.includes("quarta") ||
+      texto.includes("quinta") ||
+      texto.includes("sexta")
+    ) {
+
+      diaPermitido = true;
+
+    }
+
+  }
+
+
+  if (!diaPermitido) {
     return false;
   }
 
-  const horaInicial =
-    converterParaMinutos(
-      resultado[1],
-      resultado[2]
+
+  /* =======================================================
+     HORÁRIOS
+  ======================================================= */
+
+  const horarios =
+    texto.match(
+      /(\d{1,2}):(\d{2})\s*(?:as|-|a)\s*(\d{1,2}):(\d{2})/g
     );
 
-  const horaFinal =
-    converterParaMinutos(
-      resultado[3],
-      resultado[4]
-    );
 
   if (
-    horaFinal >=
-    horaInicial
+    !horarios ||
+    horarios.length === 0
   ) {
 
-    return (
-      horaAtual >= horaInicial &&
-      horaAtual <= horaFinal
-    );
+    return false;
   }
 
-  return (
-    horaAtual >= horaInicial ||
-    horaAtual <= horaFinal
+
+  for (
+    const horario of horarios
+  ) {
+
+    const resultado =
+      horario.match(
+        /(\d{1,2}):(\d{2})\s*(?:as|-|a)\s*(\d{1,2}):(\d{2})/
+      );
+
+    if (!resultado) {
+      continue;
+    }
+
+    const horaInicial =
+      converterParaMinutos(
+        resultado[1],
+        resultado[2]
+      );
+
+    const horaFinal =
+      converterParaMinutos(
+        resultado[3],
+        resultado[4]
+      );
+
+
+    if (
+      horaFinal >=
+      horaInicial
+    ) {
+
+      if (
+        horaAtual >= horaInicial &&
+        horaAtual <= horaFinal
+      ) {
+
+        return true;
+      }
+
+    } else {
+
+      if (
+        horaAtual >= horaInicial ||
+        horaAtual <= horaFinal
+      ) {
+
+        return true;
+      }
+    }
+  }
+
+
+  return false;
+}
+
+
+/* =========================================================
+   ONDE COMER
+   ========================================================= */
+
+const comerList =
+  document.getElementById(
+    "comerList"
+  );
+
+const mostrarMaisComer =
+  document.getElementById(
+    "mostrarMaisComer"
+  );
+
+const filtroAberto =
+  document.getElementById(
+    "filtroAberto"
+  );
+
+const textoStatus =
+  document.getElementById(
+    "textoStatus"
+  );
+
+let categoriaComerFiltro =
+  "Todos";
+
+let mostrarSomenteAbertos =
+  false;
+
+let limiteComer =
+  LIMITE_INICIAL;
+
+
+/* =========================================================
+   CATEGORIAS DE ALIMENTAÇÃO
+   ========================================================= */
+
+const CATEGORIAS_COMIDA = [
+
+  "restaurante",
+  "restaurantes",
+
+  "lanchonete",
+  "lanchonetes",
+
+  "cafeteria",
+  "cafe",
+  "cafes",
+
+  "sorveteria",
+  "sorvete",
+
+  "acai",
+  "açai",
+
+  "pizzaria",
+  "pizzaria",
+
+  "hamburgueria",
+  "hamburguer",
+
+  "padaria",
+  "panificadora",
+
+  "confeitaria",
+  "doceria",
+
+  "churrascaria",
+
+  "bar",
+
+  "alimentacao",
+  "alimentação",
+
+  "food",
+
+  "fast food"
+].map(normalizarTexto);
+
+
+/* =========================================================
+   IDENTIFICAR ESTABELECIMENTO DE COMIDA
+   ========================================================= */
+
+function comercioEhAlimentacao(
+  comercio
+) {
+
+  if (!comercio) {
+    return false;
+  }
+
+  const categoria =
+    normalizarTexto(
+      comercio.categoria
+    );
+
+  const nome =
+    normalizarTexto(
+      comercio.nome
+    );
+
+
+  /*
+     Primeiro verifica a categoria.
+  */
+
+  if (
+    CATEGORIAS_COMIDA.some(
+      categoriaComida =>
+        categoria.includes(
+          categoriaComida
+        )
+    )
+  ) {
+
+    return true;
+  }
+
+
+  /*
+     Alguns estabelecimentos podem
+     ter categoria genérica.
+     Neste caso verificamos o nome.
+  */
+
+  const palavrasComida = [
+
+    "restaurante",
+    "lanchonete",
+    "cafeteria",
+    "cafe",
+    "sorvete",
+    "sorveteria",
+    "acai",
+    "pizzaria",
+    "hamburguer",
+    "padaria",
+    "panificadora",
+    "confeitaria",
+    "doceria",
+    "churrascaria"
+
+  ].map(normalizarTexto);
+
+
+  return palavrasComida.some(
+    palavra =>
+      nome.includes(palavra)
   );
 }
 
 
-function atualizarStatusBotao() {
-
-  if (!filtroAberto) {
-    return;
-  }
-
-  const algumAberto =
-    dadosComercios.some(
-      comercio =>
-        comercioEstaAberto(
-          comercio
-        )
-    );
-
-  if (algumAberto) {
-
-    if (textoStatus) {
-      textoStatus.textContent =
-        "Aberto agora";
-    }
-
-    filtroAberto.classList.remove(
-      "fechado"
-    );
-
-  } else {
-
-    if (textoStatus) {
-      textoStatus.textContent =
-        "Fechado";
-    }
-
-    filtroAberto.classList.add(
-      "fechado"
-    );
-  }
-}
-
+/* =========================================================
+   CATEGORIA DO FILTRO — ONDE COMER
+   ========================================================= */
 
 function comercioPertenceCategoria(
   comercio,
@@ -920,7 +1090,9 @@ function comercioPertenceCategoria(
     filtro === "Todos"
   ) {
 
-    return true;
+    return comercioEhAlimentacao(
+      comercio
+    );
   }
 
   const categoria =
@@ -928,28 +1100,34 @@ function comercioPertenceCategoria(
       comercio.categoria
     );
 
-  switch (filtro) {
+  switch (normalizarTexto(filtro)) {
 
-    case "Restaurante":
+    case "restaurante":
 
       return categoria.includes(
         "restaurante"
       );
 
-    case "Lanchonetes":
+    case "lanchonetes":
+
+    case "lanchonete":
 
       return categoria.includes(
         "lanchonete"
       );
 
-    case "Cafeteria":
+    case "cafeteria":
+
+    case "cafe":
 
       return (
         categoria.includes("cafe") ||
         categoria.includes("cafeteria")
       );
 
-    case "Sorvete/Açaí":
+    case "sorvete/acai":
+
+    case "sorvete/acai":
 
       return (
         categoria.includes("sorvete") ||
@@ -965,6 +1143,10 @@ function comercioPertenceCategoria(
   }
 }
 
+
+/* =========================================================
+   COMÉRCIOS FILTRADOS — ONDE COMER
+   ========================================================= */
 
 function obterComerciosFiltrados() {
 
@@ -994,6 +1176,60 @@ function obterComerciosFiltrados() {
   );
 }
 
+
+/* =========================================================
+   STATUS DO BOTÃO — ONDE COMER
+   ========================================================= */
+
+function atualizarStatusBotao() {
+
+  if (!filtroAberto) {
+    return;
+  }
+
+  const algumAberto =
+    dadosComercios
+      .filter(comercio =>
+        comercioEhAlimentacao(
+          comercio
+        )
+      )
+      .some(
+        comercio =>
+          comercioEstaAberto(
+            comercio
+          )
+      );
+
+
+  if (algumAberto) {
+
+    if (textoStatus) {
+      textoStatus.textContent =
+        "Aberto agora";
+    }
+
+    filtroAberto.classList.remove(
+      "fechado"
+    );
+
+  } else {
+
+    if (textoStatus) {
+      textoStatus.textContent =
+        "Fechado";
+    }
+
+    filtroAberto.classList.add(
+      "fechado"
+    );
+  }
+}
+
+
+/* =========================================================
+   CARD — ONDE COMER
+   ========================================================= */
 
 function criarCardComercio(
   comercio
@@ -1088,6 +1324,10 @@ function criarCardComercio(
 }
 
 
+/* =========================================================
+   RENDERIZAR — ONDE COMER
+   ========================================================= */
+
 function renderizarComercios() {
 
   if (!comerList) {
@@ -1099,13 +1339,14 @@ function renderizarComercios() {
   const filtrados =
     obterComerciosFiltrados();
 
+
   if (
     filtrados.length === 0
   ) {
 
     comerList.innerHTML = `
       <div class="comer-empty">
-        Nenhum estabelecimento encontrado.
+        Nenhum lugar para comer encontrado.
       </div>
     `;
 
@@ -1116,11 +1357,13 @@ function renderizarComercios() {
     return;
   }
 
+
   const quantidade =
     Math.min(
       limiteComer,
       filtrados.length
     );
+
 
   filtrados
     .slice(0, quantidade)
@@ -1133,6 +1376,7 @@ function renderizarComercios() {
       );
 
     });
+
 
   configurarMostrarMais({
 
@@ -1148,6 +1392,10 @@ function renderizarComercios() {
 }
 
 
+/* =========================================================
+   BOTÃO MOSTRAR MAIS — ONDE COMER
+   ========================================================= */
+
 if (mostrarMaisComer) {
 
   mostrarMaisComer.addEventListener(
@@ -1162,6 +1410,10 @@ if (mostrarMaisComer) {
   );
 }
 
+
+/* =========================================================
+   FILTROS — ONDE COMER
+   ========================================================= */
 
 document
   .querySelectorAll(
@@ -1203,6 +1455,10 @@ document
   });
 
 
+/* =========================================================
+   ABERTO AGORA — ONDE COMER
+   ========================================================= */
+
 if (filtroAberto) {
 
   filtroAberto.addEventListener(
@@ -1232,6 +1488,687 @@ if (filtroAberto) {
 
 
 /* =========================================================
+   COMÉRCIO LOCAL
+   ========================================================= */
+
+const comercioList =
+  document.getElementById(
+    "comercioList"
+  );
+
+const mostrarMaisComercio =
+  document.getElementById(
+    "mostrarMaisComercio"
+  );
+
+const pesquisaComercio =
+  document.getElementById(
+    "pesquisaComercio"
+  );
+
+const filtroAbertoComercio =
+  document.getElementById(
+    "filtroAbertoComercio"
+  );
+
+const textoStatusComercio =
+  document.getElementById(
+    "textoStatusComercio"
+  );
+
+let pesquisaComercioTexto = "";
+
+let mostrarSomenteComercioAbertos =
+  false;
+
+let limiteComercio =
+  LIMITE_INICIAL;
+
+
+/* =========================================================
+   DISTÂNCIA DE TEXTO
+   ========================================================= */
+
+function distanciaLevenshtein(
+  textoA,
+  textoB
+) {
+
+  const a =
+    normalizarTexto(textoA);
+
+  const b =
+    normalizarTexto(textoB);
+
+  if (!a) {
+    return b.length;
+  }
+
+  if (!b) {
+    return a.length;
+  }
+
+  const matriz =
+    Array.from(
+      {
+        length: a.length + 1
+      },
+      () =>
+        new Array(
+          b.length + 1
+        ).fill(0)
+    );
+
+
+  for (
+    let i = 0;
+    i <= a.length;
+    i++
+  ) {
+
+    matriz[i][0] = i;
+  }
+
+
+  for (
+    let j = 0;
+    j <= b.length;
+    j++
+  ) {
+
+    matriz[0][j] = j;
+  }
+
+
+  for (
+    let i = 1;
+    i <= a.length;
+    i++
+  ) {
+
+    for (
+      let j = 1;
+      j <= b.length;
+      j++
+    ) {
+
+      const custo =
+        a[i - 1] === b[j - 1]
+          ? 0
+          : 1;
+
+      matriz[i][j] =
+        Math.min(
+
+          matriz[i - 1][j] + 1,
+
+          matriz[i][j - 1] + 1,
+
+          matriz[i - 1][j - 1] +
+            custo
+        );
+    }
+  }
+
+  return matriz[a.length][b.length];
+}
+
+
+/* =========================================================
+   PESQUISA APROXIMADA
+   ========================================================= */
+
+function palavraCombina(
+  palavraPesquisa,
+  texto
+) {
+
+  const palavra =
+    normalizarTexto(
+      palavraPesquisa
+    );
+
+  const alvo =
+    normalizarTexto(
+      texto
+    );
+
+
+  if (!palavra) {
+    return true;
+  }
+
+
+  if (
+    alvo.includes(palavra)
+  ) {
+
+    return true;
+  }
+
+
+  const palavras =
+    alvo.split(
+      /\s+/
+    );
+
+
+  /*
+     Tolerância de erro:
+
+     1 erro para palavras pequenas
+     2 erros para palavras maiores
+  */
+
+  let tolerancia = 1;
+
+  if (
+    palavra.length >= 6
+  ) {
+
+    tolerancia = 2;
+  }
+
+
+  return palavras.some(
+    palavraAlvo => {
+
+      if (
+        palavraAlvo.includes(
+          palavra
+        )
+      ) {
+
+        return true;
+      }
+
+
+      /*
+         Evita comparar palavras
+         muito diferentes em tamanho.
+      */
+
+      if (
+        Math.abs(
+          palavraAlvo.length -
+          palavra.length
+        ) > tolerancia
+      ) {
+
+        return false;
+      }
+
+
+      return (
+        distanciaLevenshtein(
+          palavra,
+          palavraAlvo
+        ) <= tolerancia
+      );
+    }
+  );
+}
+
+
+/* =========================================================
+   VERIFICAR PESQUISA DO COMÉRCIO
+   ========================================================= */
+
+function comercioCombinaPesquisa(
+  comercio,
+  pesquisa
+) {
+
+  const busca =
+    normalizarTexto(
+      pesquisa
+    );
+
+
+  if (!busca) {
+    return true;
+  }
+
+
+  const nome =
+    normalizarTexto(
+      comercio.nome
+    );
+
+  const categoria =
+    normalizarTexto(
+      comercio.categoria
+    );
+
+
+  /*
+     A pesquisa pode encontrar:
+
+     - nome
+     - categoria
+     - nome + categoria
+  */
+
+  const textoCompleto =
+    `${nome} ${categoria}`;
+
+
+  /*
+     Primeiro tenta a frase completa.
+  */
+
+  if (
+    textoCompleto.includes(
+      busca
+    )
+  ) {
+
+    return true;
+  }
+
+
+  /*
+     Depois separa cada palavra.
+
+     Exemplo:
+
+     "supermercado nogueira"
+
+     procura:
+
+     supermercado
+     +
+     nogueira
+  */
+
+  const palavras =
+    busca.split(
+      /\s+/
+    ).filter(Boolean);
+
+
+  return palavras.every(
+    palavra => {
+
+      return (
+        palavraCombina(
+          palavra,
+          nome
+        ) ||
+        palavraCombina(
+          palavra,
+          categoria
+        )
+      );
+    }
+  );
+}
+
+
+/* =========================================================
+   COMÉRCIOS FILTRADOS — COMÉRCIO LOCAL
+   ========================================================= */
+
+function obterComerciosPesquisa() {
+
+  return dadosComercios.filter(
+    comercio => {
+
+      const pesquisaOk =
+        comercioCombinaPesquisa(
+          comercio,
+          pesquisaComercioTexto
+        );
+
+      const aberto =
+        comercioEstaAberto(
+          comercio
+        );
+
+      const abertoOk =
+        !mostrarSomenteComercioAbertos ||
+        aberto;
+
+      return (
+        pesquisaOk &&
+        abertoOk
+      );
+    }
+  );
+}
+
+
+/* =========================================================
+   CARD DE COMÉRCIO
+   =========================================================
+   
+   Usa as mesmas classes dos cards
+   de "Onde comer" para reaproveitar
+   o CSS existente.
+   ========================================================= */
+
+function criarCardComercioLocal(
+  comercio
+) {
+
+  const aberto =
+    comercioEstaAberto(
+      comercio
+    );
+
+  const nome =
+    comercio.nome ||
+    "Comércio";
+
+  const categoria =
+    comercio.categoria ||
+    "Comércio";
+
+  const endereco =
+    comercio.endereco ||
+    comercio.endereço ||
+    "Andrelândia - MG";
+
+
+  const elemento =
+    document.createElement("a");
+
+
+  /*
+     Reaproveita .comer-item
+     para não duplicar CSS.
+  */
+
+  elemento.className =
+    "comer-item comercio-item";
+
+
+  elemento.href =
+    criarLinkLocal(
+      comercio.id
+    );
+
+
+  elemento.innerHTML = `
+
+    <div class="comer-image">
+
+      <img
+        src="${escaparHTML(
+          obterImagem(comercio)
+        )}"
+        alt="${escaparHTML(nome)}"
+        loading="lazy"
+        onerror="this.src='${FALLBACK_IMAGE}'"
+      >
+
+    </div>
+
+
+    <div class="comer-info">
+
+      <h3 class="comer-nome">
+        ${escaparHTML(nome)}
+      </h3>
+
+
+      <div class="comer-categoria">
+        ${escaparHTML(categoria)}
+      </div>
+
+
+      <div class="comer-endereco">
+        ${escaparHTML(endereco)}
+      </div>
+
+
+      <div
+        class="comer-horario ${
+          aberto
+            ? "aberto"
+            : "fechado"
+        }"
+      >
+        ${
+          aberto
+            ? "Aberto agora"
+            : "Fechado"
+        }
+      </div>
+
+    </div>
+
+
+    <div class="comer-arrow">
+
+      <img
+        src="img/icones/seta2.png"
+        alt=""
+      >
+
+    </div>
+
+  `;
+
+
+  return elemento;
+}
+
+
+/* =========================================================
+   RENDERIZAR COMÉRCIO LOCAL
+   ========================================================= */
+
+function renderizarComercioLocal() {
+
+  if (!comercioList) {
+    return;
+  }
+
+
+  comercioList.innerHTML = "";
+
+
+  const filtrados =
+    obterComerciosPesquisa();
+
+
+  if (
+    filtrados.length === 0
+  ) {
+
+    comercioList.innerHTML = `
+
+      <div class="comer-empty">
+
+        ${
+          pesquisaComercioTexto
+            ? "Nenhum comércio encontrado para essa pesquisa."
+            : "Nenhum comércio encontrado."
+        }
+
+      </div>
+
+    `;
+
+
+    if (mostrarMaisComercio) {
+      mostrarMaisComercio.hidden = true;
+    }
+
+
+    return;
+  }
+
+
+  const quantidade =
+    Math.min(
+      limiteComercio,
+      filtrados.length
+    );
+
+
+  filtrados
+    .slice(0, quantidade)
+    .forEach(
+      comercio => {
+
+        comercioList.appendChild(
+          criarCardComercioLocal(
+            comercio
+          )
+        );
+
+      }
+    );
+
+
+  configurarMostrarMais({
+
+    botao:
+      mostrarMaisComercio,
+
+    total:
+      filtrados.length,
+
+    limite:
+      limiteComercio
+  });
+}
+
+
+/* =========================================================
+   PESQUISA EM TEMPO REAL
+   ========================================================= */
+
+if (pesquisaComercio) {
+
+  pesquisaComercio.addEventListener(
+    "input",
+    () => {
+
+      pesquisaComercioTexto =
+        pesquisaComercio.value.trim();
+
+      limiteComercio =
+        LIMITE_INICIAL;
+
+      renderizarComercioLocal();
+    }
+  );
+}
+
+
+/* =========================================================
+   STATUS — COMÉRCIO LOCAL
+   ========================================================= */
+
+function atualizarStatusComercio() {
+
+  if (
+    !filtroAbertoComercio
+  ) {
+
+    return;
+  }
+
+
+  const algumAberto =
+    dadosComercios.some(
+      comercio =>
+        comercioEstaAberto(
+          comercio
+        )
+    );
+
+
+  if (algumAberto) {
+
+    if (textoStatusComercio) {
+
+      textoStatusComercio.textContent =
+        "Aberto agora";
+    }
+
+    filtroAbertoComercio.classList.remove(
+      "fechado"
+    );
+
+  } else {
+
+    if (textoStatusComercio) {
+
+      textoStatusComercio.textContent =
+        "Fechado";
+    }
+
+    filtroAbertoComercio.classList.add(
+      "fechado"
+    );
+  }
+}
+
+
+/* =========================================================
+   BOTÃO ABERTO AGORA — COMÉRCIO
+   ========================================================= */
+
+if (
+  filtroAbertoComercio
+) {
+
+  filtroAbertoComercio.addEventListener(
+    "click",
+    () => {
+
+      mostrarSomenteComercioAbertos =
+        !mostrarSomenteComercioAbertos;
+
+
+      limiteComercio =
+        LIMITE_INICIAL;
+
+
+      filtroAbertoComercio.dataset.status =
+        mostrarSomenteComercioAbertos
+          ? "abertos"
+          : "todos";
+
+
+      filtroAbertoComercio.classList.toggle(
+        "selecionado",
+        mostrarSomenteComercioAbertos
+      );
+
+
+      renderizarComercioLocal();
+    }
+  );
+}
+
+
+/* =========================================================
+   MOSTRAR MAIS — COMÉRCIO
+   ========================================================= */
+
+if (
+  mostrarMaisComercio
+) {
+
+  mostrarMaisComercio.addEventListener(
+    "click",
+    () => {
+
+      limiteComercio +=
+        LIMITE_INCREMENTO;
+
+      renderizarComercioLocal();
+    }
+  );
+}
+
+
+/* =========================================================
    ONDE FICAR
    ========================================================= */
 
@@ -1250,7 +2187,7 @@ let limiteFicar =
 
 
 /* =========================================================
-   CRIAR CARD — ONDE FICAR
+   CARD — ONDE FICAR
    ========================================================= */
 
 function criarCardHospedagem(
@@ -1418,7 +2355,10 @@ if (mostrarMaisFicar) {
    CARREGAR UM JSON
    ========================================================= */
 
-async function carregarJSON(caminho, nome) {
+async function carregarJSON(
+  caminho,
+  nome
+) {
 
   try {
 
@@ -1486,10 +2426,6 @@ async function carregarDados() {
     );
 
 
-  /* =======================================================
-     MOSTRAR QUANTIDADES
-     ======================================================= */
-
   console.log(
     "TOTAL DE LOCAIS:",
     dadosLocais.length
@@ -1508,7 +2444,7 @@ async function carregarDados() {
 
   /* =======================================================
      MAPA
-     ======================================================= */
+  ======================================================= */
 
   [
     ...dadosLocais,
@@ -1521,14 +2457,14 @@ async function carregarDados() {
 
   /* =======================================================
      O QUE VISITAR
-     ======================================================= */
+  ======================================================= */
 
   renderizarOQueVisitar();
 
 
   /* =======================================================
      ONDE COMER
-     ======================================================= */
+  ======================================================= */
 
   atualizarStatusBotao();
 
@@ -1536,8 +2472,17 @@ async function carregarDados() {
 
 
   /* =======================================================
+     COMÉRCIO LOCAL
+  ======================================================= */
+
+  atualizarStatusComercio();
+
+  renderizarComercioLocal();
+
+
+  /* =======================================================
      ONDE FICAR
-     ======================================================= */
+  ======================================================= */
 
   renderizarHospedagens();
 }
@@ -1551,7 +2496,7 @@ carregarDados();
 
 
 /* =========================================================
-   ATUALIZAR STATUS DOS COMÉRCIOS
+   ATUALIZAR STATUS A CADA MINUTO
    ========================================================= */
 
 setInterval(
@@ -1566,7 +2511,11 @@ setInterval(
 
     atualizarStatusBotao();
 
+    atualizarStatusComercio();
+
     renderizarComercios();
+
+    renderizarComercioLocal();
 
   },
   60000
