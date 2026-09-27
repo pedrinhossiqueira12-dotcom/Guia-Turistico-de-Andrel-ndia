@@ -54,7 +54,7 @@ function escaparHTML(texto) {
 
 function criarLinkLocal(id) {
 
-  return `PAGES/local.html?id=${encodeURIComponent(id || "")}`;
+  return `pages/local.html?id=${encodeURIComponent(id || "")}`;
 }
 
 
