@@ -1666,7 +1666,7 @@ function criarPessoaCard(pessoa) {
     "pessoa-item";
 
   link.href =
-    `./PAGES/pessoa.html?id=${encodeURIComponent(
+    `./pages/pessoa.html?id=${encodeURIComponent(
       pessoa.id
     )}`;
 
