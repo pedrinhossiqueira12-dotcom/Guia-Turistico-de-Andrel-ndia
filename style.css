@@ -614,23 +614,15 @@ button {
 
 .popup-button {
   display: block;
-
   width: 100%;
-
-  padding:
-    clamp(9px, 2.5vw, 10px);
-
+  padding: clamp(9px, 2.5vw, 10px);
   background: var(--verde);
-  color: var(--branco);
-
+  color: #fff !important;
   text-align: center;
-
   border-radius: 9px;
-
-  font-size:
-    clamp(11px, 3vw, 12px);
-
+  font-size: clamp(11px, 3vw, 12px);
   font-weight: 600;
+  text-decoration: none;
 }
 
 
