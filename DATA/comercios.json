@@ -1,0 +1,48 @@
+[
+  {
+    "id": "docecomamor",
+    "tipo": "comercio",
+    "nome": "DOCE COM AMOR • Cafeteria & Doceria",
+    "categoria": "Cafeteria",
+    "descricao": "Venha tomar café",
+    "sobre": "Cafés especiais, cafés expressos, cappuccinos, chocolate quente, sucos naturais, doces caseiros, brownies, Minas Quente, misto quente, fondue de frutas, pinga da roça, biscoitos de São Tiago-MG, cafés Unique, goiabada São Lourenço, café coado na hora e café moído na hora.",
+    "horario": "Segunda a sábado • 08:00 às 18:00",
+    "telefone": "(35) 99999-9999",
+    "endereco": "Rua Exemplo, 100 - Centro",
+    "instagram": "https://www.instagram.com/docecomamormg",
+    "site": "",
+    "x": 47453,
+    "y": 33097,
+    "latitude": -21.740000,
+    "longitude": -44.309000,
+    "capa": "./img/comercios/docecomamor/capa.jpeg",
+    "galeria": [
+      "./img/comercios/docecomamor/capa.jpeg",
+      "./img/comercios/docecomamor/capa.jpeg",
+      "./img/comercios/docecomamor/capa.jpeg"
+    ]
+  },
+    {
+    "id": "docecomamor",
+    "tipo": "comercio",
+    "nome": "DOCE COM AMOR • Cafeteria & Doceria",
+    "categoria": "Cafeteria",
+    "descricao": "Venha tomar café",
+    "sobre": "Cafés especiais, cafés expressos, cappuccinos, chocolate quente, sucos naturais, doces caseiros, brownies, Minas Quente, misto quente, fondue de frutas, pinga da roça, biscoitos de São Tiago-MG, cafés Unique, goiabada São Lourenço, café coado na hora e café moído na hora.",
+    "horario": "Segunda a sábado • 08:00 às 08:00",
+    "telefone": "(35) 99999-9999",
+    "endereco": "Rua Exemplo, 100 - Centro",
+    "instagram": "https://www.instagram.com/docecomamormg",
+    "site": "",
+    "x": 47453,
+    "y": 33097,
+    "latitude": -21.740000,
+    "longitude": -44.309000,
+    "capa": "./img/comercios/docecomamor/capa.jpeg",
+    "galeria": [
+      "./img/comercios/docecomamor/capa.jpeg",
+      "./img/comercios/docecomamor/capa.jpeg",
+      "./img/comercios/docecomamor/capa.jpeg"
+    ]
+  }
+]
