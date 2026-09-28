@@ -426,7 +426,7 @@ a {
 
   place-items: center;
 
-  background: rgba(255, 255, 255, .12);
+  background:rgba(255, 255, 255, .12);
 
   border-radius: 50%;
 
@@ -450,13 +450,6 @@ a {
   font-size: 12px;
 
   font-weight: 700;
-
-}
-
-
-.instagram-button-arrow {
-
-  font-size: 19px;
 
 }
 
