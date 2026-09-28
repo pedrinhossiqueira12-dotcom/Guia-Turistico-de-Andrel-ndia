@@ -3,7 +3,6 @@
    INDEX.JS
    ========================================================= */
 
-
 /* =========================================================
    CONFIGURAÇÕES GERAIS
    ========================================================= */
@@ -18,6 +17,28 @@ const LIMITE_INCREMENTO = 10;
 
 const FALLBACK_IMAGE = "./img/sem-foto.png";
 
+const SUPABASE_URL = "https://xdmbkflufsfqziixzpxc.supabase.co";
+const SUPABASE_KEY = "sb_publishable_dvwNkLDf3oZrCqvZ5uAaRA_VsfiuZFy";
+
+/* =========================================================
+   SUPABASE
+   ========================================================= */
+
+let supabaseClient = null;
+
+if (
+  window.supabase &&
+  typeof window.supabase.createClient === "function"
+) {
+  supabaseClient = window.supabase.createClient(
+    SUPABASE_URL,
+    SUPABASE_KEY
+  );
+} else {
+  console.error(
+    "Supabase não foi carregado."
+  );
+}
 
 /* =========================================================
    DADOS
@@ -27,13 +48,16 @@ let dadosLocais = [];
 let dadosComercios = [];
 let dadosHospedagem = [];
 
+let avaliacoes = [];
+let pessoas = [];
+let votosPessoas = [];
+let usuarioAtual = null;
 
 /* =========================================================
    FUNÇÕES UTILITÁRIAS
    ========================================================= */
 
 function normalizarTexto(texto) {
-
   return String(texto || "")
     .toLowerCase()
     .normalize("NFD")
@@ -41,9 +65,7 @@ function normalizarTexto(texto) {
     .trim();
 }
 
-
 function escaparHTML(texto) {
-
   return String(texto ?? "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -52,18 +74,18 @@ function escaparHTML(texto) {
     .replace(/'/g, "&#039;");
 }
 
-
 function criarLinkLocal(id) {
-
-  return `pages/local.html?id=${encodeURIComponent(id || "")}`;
+  return `pages/local.html?id=${encodeURIComponent(
+    id || ""
+  )}`;
 }
-
 
 function obterImagem(item) {
-
-  return item?.capa || FALLBACK_IMAGE;
+  return (
+    item?.capa ||
+    FALLBACK_IMAGE
+  );
 }
-
 
 /* =========================================================
    DISTÂNCIA
@@ -75,31 +97,33 @@ function calcularDistancia(
   lat2,
   lon2
 ) {
-
   const R = 6371;
 
   const dLat =
     (lat2 - lat1) *
-    Math.PI / 180;
+    Math.PI /
+    180;
 
   const dLon =
     (lon2 - lon1) *
-    Math.PI / 180;
+    Math.PI /
+    180;
 
   const a =
     Math.sin(dLat / 2) *
-    Math.sin(dLat / 2) +
-
+      Math.sin(dLat / 2) +
     Math.cos(
-      lat1 * Math.PI / 180
+      lat1 *
+        Math.PI /
+        180
     ) *
-
-    Math.cos(
-      lat2 * Math.PI / 180
-    ) *
-
-    Math.sin(dLon / 2) *
-    Math.sin(dLon / 2);
+      Math.cos(
+        lat2 *
+          Math.PI /
+          180
+      ) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
 
   const c =
     2 *
@@ -111,17 +135,19 @@ function calcularDistancia(
   return R * c;
 }
 
-
-function formatarDistancia(distancia) {
-
+function formatarDistancia(
+  distancia
+) {
   if (distancia < 1) {
-
-    return `${Math.round(distancia * 1000)} m do centro`;
+    return `${Math.round(
+      distancia * 1000
+    )} m do centro`;
   }
 
-  return `${distancia.toFixed(1).replace(".", ",")} km do centro`;
+  return `${distancia
+    .toFixed(1)
+    .replace(".", ",")} km do centro`;
 }
-
 
 /* =========================================================
    PAGINAÇÃO
@@ -132,144 +158,558 @@ function configurarMostrarMais({
   total,
   limite
 }) {
-
   if (!botao) {
     return;
   }
 
   if (total > limite) {
-
     botao.hidden = false;
     botao.textContent = "Mostrar mais";
-
   } else {
-
     botao.hidden = true;
   }
 }
 
+/* =========================================================
+   CARROSSEL
+   ========================================================= */
+
+const heroCarousel =
+  document.getElementById(
+    "heroCarousel"
+  );
+
+const heroText =
+  document.getElementById(
+    "heroText"
+  );
+
+let slidesHero = [];
+let slideHeroAtual = 0;
+let intervaloHero = null;
+let inicioToqueHero = 0;
+
+/*
+ * O JS verifica quais imagens realmente existem antes de criar os slides.
+ */
+
+const HERO_MAXIMO = 20;
+
+const TEXTOS_HERO = [
+  "Descubra Andrelândia",
+  "Conheça a história de Andrelândia",
+  "Explore as belezas de Andrelândia",
+  "Viva Andrelândia",
+  "Descubra novos lugares",
+  "Um destino para conhecer"
+];
+
+async function verificarImagemExiste(
+  caminho
+) {
+  try {
+    const resposta = await fetch(
+      caminho,
+      {
+        method: "HEAD",
+        cache: "no-store"
+      }
+    );
+
+    return resposta.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function descobrirSlidesHero() {
+  if (!heroCarousel) {
+    return;
+  }
+
+  const encontrados = [];
+
+  for (
+    let numero = 1;
+    numero <= HERO_MAXIMO;
+    numero++
+  ) {
+    const caminho =
+      `img/carrossel/hero${numero}.png`;
+
+    const existe =
+      await verificarImagemExiste(
+        caminho
+      );
+
+    if (existe) {
+      encontrados.push({
+        caminho,
+        texto:
+          TEXTOS_HERO[
+            (numero - 1) %
+              TEXTOS_HERO.length
+          ]
+      });
+    }
+  }
+
+  /*
+   * Se o servidor não permitir HEAD, tenta pelo menos os três arquivos principais.
+   */
+
+  if (encontrados.length === 0) {
+    for (
+      let numero = 1;
+      numero <= 3;
+      numero++
+    ) {
+      const caminho =
+        `img/carrossel/hero${numero}.png`;
+
+      encontrados.push({
+        caminho,
+        texto:
+          TEXTOS_HERO[
+            (numero - 1) %
+              TEXTOS_HERO.length
+          ]
+      });
+    }
+  }
+
+  slidesHero = encontrados;
+
+  montarCarrossel();
+}
+
+function montarCarrossel() {
+  if (!heroCarousel) {
+    return;
+  }
+
+  heroCarousel.innerHTML = "";
+
+  if (slidesHero.length === 0) {
+    return;
+  }
+
+  slidesHero.forEach(
+    (slide, indice) => {
+      const elemento =
+        document.createElement(
+          "div"
+        );
+
+      elemento.className =
+        "hero-slide";
+
+      elemento.style.backgroundImage =
+        `url("${slide.caminho}")`;
+
+      elemento.dataset.index =
+        indice;
+
+      if (indice === 0) {
+        elemento.classList.add(
+          "active"
+        );
+      }
+
+      heroCarousel.appendChild(
+        elemento
+      );
+    }
+  );
+
+  slideHeroAtual = 0;
+
+  atualizarHero();
+
+  iniciarIntervaloHero();
+
+  configurarGestosHero();
+}
+
+function atualizarHero() {
+  if (slidesHero.length === 0) {
+    return;
+  }
+
+  const slides =
+    heroCarousel.querySelectorAll(
+      ".hero-slide"
+    );
+
+  slides.forEach(
+    (slide, indice) => {
+      slide.classList.toggle(
+        "active",
+        indice ===
+          slideHeroAtual
+      );
+    }
+  );
+
+  if (heroText) {
+    heroText.textContent =
+      slidesHero[
+        slideHeroAtual
+      ]?.texto ||
+      "Descubra Andrelândia";
+  }
+}
+
+function mudarHero(
+  direcao
+) {
+  if (slidesHero.length <= 1) {
+    return;
+  }
+
+  slideHeroAtual += direcao;
+
+  if (
+    slideHeroAtual >=
+    slidesHero.length
+  ) {
+    slideHeroAtual = 0;
+  }
+
+  if (slideHeroAtual < 0) {
+    slideHeroAtual =
+      slidesHero.length - 1;
+  }
+
+  atualizarHero();
+}
+
+function iniciarIntervaloHero() {
+  if (intervaloHero) {
+    clearInterval(
+      intervaloHero
+    );
+  }
+
+  if (slidesHero.length <= 1) {
+    return;
+  }
+
+  intervaloHero =
+    setInterval(() => {
+      mudarHero(1);
+    }, 10000);
+}
+
+function configurarGestosHero() {
+  if (!heroCarousel) {
+    return;
+  }
+
+  heroCarousel.addEventListener(
+    "touchstart",
+    event => {
+      inicioToqueHero =
+        event.changedTouches[0]
+          .clientX;
+    },
+    {
+      passive: true
+    }
+  );
+
+  heroCarousel.addEventListener(
+    "touchend",
+    event => {
+      const fim =
+        event.changedTouches[0]
+          .clientX;
+
+      const diferenca =
+        fim -
+        inicioToqueHero;
+
+      if (
+        Math.abs(diferenca) <
+        50
+      ) {
+        return;
+      }
+
+      if (diferenca < 0) {
+        mudarHero(1);
+      } else {
+        mudarHero(-1);
+      }
+
+      iniciarIntervaloHero();
+    },
+    {
+      passive: true
+    }
+  );
+}
 
 /* =========================================================
    MAPA
    ========================================================= */
 
-const homeMap = L.map("homeMap", {
-
-  zoomControl: false,
-
-  scrollWheelZoom: true,
-
-  maxZoom: 22
-
-}).setView(
-  [
-    CENTRO_ANDRELANDIA.latitude,
-    CENTRO_ANDRELANDIA.longitude
-  ],
-  15
-);
-
-
-/* =========================================================
-   MAPA SATÉLITE
-   ========================================================= */
-
-L.tileLayer(
-  "https://{s}.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-  {
-    subdomains: [
-      "server",
-      "services"
-    ],
-
-    maxNativeZoom: 19,
-
-    maxZoom: 22,
-
-    attribution:
-      "Tiles &copy; Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community"
-  }
-).addTo(homeMap);
-
-
-/* =========================================================
-   CONTROLE DE ZOOM
-   ========================================================= */
-
-L.control.zoom({
-  position: "bottomright"
-}).addTo(homeMap);
-
-
-/* =========================================================
-   MARCADORES
-   ========================================================= */
+let homeMap = null;
 
 const marcadores = [];
 
+function inicializarMapa() {
+  const elemento =
+    document.getElementById(
+      "homeMap"
+    );
+
+  if (
+    !elemento ||
+    typeof L === "undefined"
+  ) {
+    console.error(
+      "Leaflet ou #homeMap não encontrado."
+    );
+
+    return;
+  }
+
+  homeMap = L.map(
+    elemento,
+    {
+      zoomControl: false,
+      scrollWheelZoom: true,
+      maxZoom: 22
+    }
+  ).setView(
+    [
+      CENTRO_ANDRELANDIA.latitude,
+      CENTRO_ANDRELANDIA.longitude
+    ],
+    15
+  );
+
+  /*
+   * URL correta do Esri. NÃO usar:
+   * https://{s}.arcgisonline.com/...
+   */
+
+  L.tileLayer(
+    "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    {
+      maxNativeZoom: 19,
+      maxZoom: 22,
+      attribution:
+        "Tiles &copy; Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community"
+    }
+  ).addTo(homeMap);
+
+  L.control
+    .zoom({
+      position:
+        "bottomright"
+    })
+    .addTo(homeMap);
+
+  /*
+   * O mapa precisa recalcular o tamanho depois que a página termina de carregar.
+   */
+
+  setTimeout(() => {
+    homeMap.invalidateSize();
+  }, 300);
+}
 
 /* =========================================================
-   ÍCONE DO MARCADOR
+   GRUPO DE CATEGORIA DO MAPA
    ========================================================= */
 
-function criarIcone(categoria) {
+function obterGrupoCategoriaMapa(
+  categoria
+) {
+  const texto =
+    normalizarTexto(
+      categoria
+    );
 
-  const categoriaNormalizada =
-    normalizarTexto(categoria);
+  if (
+    texto.includes("igreja") ||
+    texto.includes("capela")
+  ) {
+    return "igreja";
+  }
 
-  let arquivo = "local.png";
+  if (
+    texto.includes("histor") ||
+    texto.includes("historia") ||
+    texto.includes("patrimonio") ||
+    texto.includes("ferrovi")
+  ) {
+    return "historico";
+  }
 
-  switch (categoriaNormalizada) {
+  if (
+    texto.includes("natureza") ||
+    texto.includes("cachoeira") ||
+    texto.includes("mirante") ||
+    texto.includes("parque") ||
+    texto.includes("trilha") ||
+    texto.includes("pedra")
+  ) {
+    return "natureza";
+  }
 
+  if (
+    texto.includes("aliment") ||
+    texto.includes("restaurante") ||
+    texto.includes("lanch") ||
+    texto.includes("sorvete") ||
+    texto.includes("acai") ||
+    texto.includes("pizzaria") ||
+    texto.includes("hamburg")
+  ) {
+    return "alimentacao";
+  }
+
+  if (
+    texto.includes("cafe") ||
+    texto.includes("cafeteria")
+  ) {
+    return "cafe";
+  }
+
+  if (
+    texto.includes("hosped") ||
+    texto.includes("hotel") ||
+    texto.includes("pousada")
+  ) {
+    return "hospedagem";
+  }
+
+  if (
+    texto.includes("comerc") ||
+    texto.includes("loja") ||
+    texto.includes("mercado") ||
+    texto.includes("servico")
+  ) {
+    return "comercio";
+  }
+
+  if (
+    texto.includes("esport") ||
+    texto.includes("academia") ||
+    texto.includes("futebol")
+  ) {
+    return "esporte";
+  }
+
+  if (
+    texto.includes("cultura") ||
+    texto.includes("artista")
+  ) {
+    return "cultura";
+  }
+
+  return "outros";
+}
+
+/* =========================================================
+   ÍCONE DO MAPA
+   ========================================================= */
+
+function criarIcone(
+  categoria
+) {
+  const grupo =
+    obterGrupoCategoriaMapa(
+      categoria
+    );
+
+  let arquivo = null;
+
+  switch (grupo) {
     case "igreja":
-      arquivo = "igreja.png";
-      break;
-
-    case "mirante":
-      arquivo = "mirante.png";
-      break;
-
-    case "natureza":
-      arquivo = "natureza.png";
+      arquivo =
+        "igreja.png";
       break;
 
     case "historico":
-    case "historia":
-      arquivo = "historico.png";
+      arquivo =
+        "historico.png";
+      break;
+
+    case "natureza":
+      arquivo =
+        "natureza.png";
       break;
 
     case "alimentacao":
-      arquivo = "alimentacao.png";
+      arquivo =
+        "alimentacao.png";
       break;
 
+    /*
+     * Como cafe.png pode não existir, usa o marcador de alimentação.
+     */
+
     case "cafe":
-    case "cafeteria":
-      arquivo = "cafeteria.png";
+      arquivo =
+        "alimentacao.png";
       break;
 
     case "hospedagem":
-      arquivo = "hotel.png";
+      arquivo =
+        "hotel.png";
       break;
 
     case "comercio":
-      arquivo = "comercio.png";
-      break;
-
-    case "cultura":
-      arquivo = "cultura.png";
+      arquivo =
+        "comercio.png";
       break;
 
     case "esporte":
-    case "esportes":
-      arquivo = "esporte.png";
+      arquivo =
+        "esporte.png";
+      break;
+
+    case "cultura":
+      arquivo =
+        "cultura.png";
       break;
 
     default:
-      arquivo = "local.png";
+
+      /*
+       * Não tenta carregar local.png, pois ele pode não existir.
+       * Usa um marcador CSS simples.
+       */
+
+      return L.divIcon({
+        className:
+          "marcador-mapa-generico",
+
+        html:
+          `<span></span>`,
+
+        iconSize: [
+          30,
+          30
+        ],
+
+        iconAnchor: [
+          15,
+          30
+        ],
+
+        popupAnchor: [
+          0,
+          -28
+        ]
+      });
   }
 
   return L.icon({
-
     iconUrl:
       `img/marcadores/${arquivo}`,
 
@@ -290,13 +730,66 @@ function criarIcone(categoria) {
   });
 }
 
+/* =========================================================
+   ESTILO DO MARCADOR GENÉRICO
+   ========================================================= */
+
+function adicionarEstiloMarcadorGenerico() {
+  if (
+    document.getElementById(
+      "estiloMarcadorGenerico"
+    )
+  ) {
+    return;
+  }
+
+  const style =
+    document.createElement(
+      "style"
+    );
+
+  style.id =
+    "estiloMarcadorGenerico";
+
+  style.textContent = `
+    .marcador-mapa-generico {
+      background: transparent;
+      border: none;
+    }
+
+    .marcador-mapa-generico span {
+      display: block;
+      width: 30px;
+      height: 30px;
+      border-radius: 50% 50% 50% 0;
+      transform: rotate(-45deg);
+      background: #194138;
+      border: 3px solid #ffffff;
+      box-shadow: 0 2px 7px rgba(0,0,0,.35);
+      box-sizing: border-box;
+    }
+
+    .marcador-mapa-generico span::after {
+      content: "";
+      display: block;
+      width: 8px;
+      height: 8px;
+      margin: 8px;
+      border-radius: 50%;
+      background: #ffffff;
+    }
+  `;
+
+  document.head.appendChild(
+    style
+  );
+}
 
 /* =========================================================
    POPUP DO MAPA
    ========================================================= */
 
 function criarPopup(item) {
-
   let descricao =
     item.descricao ||
     item.historia ||
@@ -304,10 +797,11 @@ function criarPopup(item) {
     "Conheça este lugar em Andrelândia.";
 
   if (descricao.length > 140) {
-
     descricao =
-      descricao.substring(0, 140) +
-      "...";
+      descricao.substring(
+        0,
+        140
+      ) + "...";
   }
 
   const imagem =
@@ -317,20 +811,23 @@ function criarPopup(item) {
 
   const nome =
     escaparHTML(
-      item.nome || "Local"
+      item.nome ||
+        "Local"
     );
 
   const categoria =
     escaparHTML(
-      item.categoria || "Local"
+      item.categoria ||
+        "Local"
     );
 
   const textoDescricao =
-    escaparHTML(descricao);
+    escaparHTML(
+      descricao
+    );
 
   return `
     <div class="popup">
-
       <img
         class="popup-image"
         src="${imagem}"
@@ -360,29 +857,39 @@ function criarPopup(item) {
         </a>
 
       </div>
-
     </div>
   `;
 }
-
 
 /* =========================================================
    ADICIONAR MARCADOR
    ========================================================= */
 
-function adicionarMarcador(item) {
+function adicionarMarcador(
+  item
+) {
+  if (!homeMap) {
+    return;
+  }
 
   const latitude =
-    Number(item.latitude);
+    Number(
+      item.latitude
+    );
 
   const longitude =
-    Number(item.longitude);
+    Number(
+      item.longitude
+    );
 
   if (
-    !Number.isFinite(latitude) ||
-    !Number.isFinite(longitude)
+    !Number.isFinite(
+      latitude
+    ) ||
+    !Number.isFinite(
+      longitude
+    )
   ) {
-
     console.warn(
       "Local sem coordenadas válidas:",
       item.nome,
@@ -400,7 +907,9 @@ function adicionarMarcador(item) {
       ],
       {
         icon:
-          criarIcone(item.categoria)
+          criarIcone(
+            item.categoria
+          )
       }
     );
 
@@ -412,94 +921,126 @@ function adicionarMarcador(item) {
   );
 
   marcadores.push({
-
     marcador,
 
     categoria:
-      item.categoria || "",
+      item.categoria ||
+      "",
+
+    grupo:
+      obterGrupoCategoriaMapa(
+        item.categoria
+      ),
 
     id:
       item.id,
 
     nome:
-      item.nome || ""
+      item.nome ||
+      ""
   });
 
-  marcador.addTo(homeMap);
+  marcador.addTo(
+    homeMap
+  );
 }
-
 
 /* =========================================================
    FILTROS DO MAPA
    ========================================================= */
 
-function aplicarFiltroMapa(categoria) {
+function aplicarFiltroMapa(
+  categoria
+) {
+  if (!homeMap) {
+    return;
+  }
 
-  const filtroNormalizado =
-    normalizarTexto(categoria);
-
-  marcadores.forEach(item => {
-
-    const categoriaItem =
-      normalizarTexto(
-        item.categoria
-      );
-
-    const mostrar =
-      filtroNormalizado === "todos" ||
-      categoriaItem === filtroNormalizado;
-
-    if (mostrar) {
-
-      item.marcador.addTo(
-        homeMap
-      );
-
-    } else {
-
-      homeMap.removeLayer(
-        item.marcador
-      );
-    }
-
-  });
-}
-
-
-document
-  .querySelectorAll(".map-filter")
-  .forEach(botao => {
-
-    botao.addEventListener(
-      "click",
-      () => {
-
-        const filtro =
-          botao.dataset.filter ||
-          "Todos";
-
-        document
-          .querySelectorAll(".map-filter")
-          .forEach(item => {
-
-            item.classList.remove(
-              "active"
-            );
-
-          });
-
-        botao.classList.add(
-          "active"
-        );
-
-        aplicarFiltroMapa(
-          filtro
-        );
-      }
+  const filtro =
+    normalizarTexto(
+      categoria
     );
 
-  });
+  marcadores.forEach(
+    item => {
+      let mostrar = false;
 
+      if (
+        filtro === "todos"
+      ) {
+        mostrar = true;
+      } else {
+        const filtroGrupo =
+          obterGrupoCategoriaMapa(
+            categoria
+          );
+
+        mostrar =
+          item.grupo ===
+          filtroGrupo;
+      }
+
+      if (mostrar) {
+        if (
+          !homeMap.hasLayer(
+            item.marcador
+          )
+        ) {
+          item.marcador.addTo(
+            homeMap
+          );
+        }
+      } else {
+        if (
+          homeMap.hasLayer(
+            item.marcador
+          )
+        ) {
+          homeMap.removeLayer(
+            item.marcador
+          );
+        }
+      }
+    }
+  );
+}
+
+document
+  .querySelectorAll(
+    ".map-filter"
+  )
+  .forEach(
+    botao => {
+      botao.addEventListener(
+        "click",
+        () => {
+          const filtro =
+            botao.dataset.filter ||
+            "Todos";
+
+          document
+            .querySelectorAll(
+              ".map-filter"
+            )
+            .forEach(
+              item => {
+                item.classList.remove(
+                  "active"
+                );
+              }
+            );
+
+          botao.classList.add(
+            "active"
+          );
+
+          aplicarFiltroMapa(
+            filtro
+          );
+        }
+      );
+    }
+  );
 
 /* =========================================================
    O QUE VISITAR
@@ -518,9 +1059,9 @@ const mostrarMaisVisitar =
 let limiteVisitar =
   LIMITE_INICIAL;
 
-
-function criarCardVisitar(item) {
-
+function criarCardVisitar(
+  item
+) {
   const nome =
     item.nome ||
     "Local turístico";
@@ -536,19 +1077,26 @@ function criarCardVisitar(item) {
     "";
 
   const latitude =
-    Number(item.latitude);
+    Number(
+      item.latitude
+    );
 
   const longitude =
-    Number(item.longitude);
+    Number(
+      item.longitude
+    );
 
   let localizacao =
     "Andrelândia - MG";
 
   if (
-    Number.isFinite(latitude) &&
-    Number.isFinite(longitude)
+    Number.isFinite(
+      latitude
+    ) &&
+    Number.isFinite(
+      longitude
+    )
   ) {
-
     const distancia =
       calcularDistancia(
         CENTRO_ANDRELANDIA.latitude,
@@ -561,9 +1109,7 @@ function criarCardVisitar(item) {
       formatarDistancia(
         distancia
       );
-
   } else {
-
     localizacao =
       item.endereco ||
       item.endereço ||
@@ -571,16 +1117,19 @@ function criarCardVisitar(item) {
   }
 
   const elemento =
-    document.createElement("a");
+    document.createElement(
+      "a"
+    );
 
   elemento.className =
     "visitar-item";
 
   elemento.href =
-    criarLinkLocal(item.id);
+    criarLinkLocal(
+      item.id
+    );
 
   elemento.innerHTML = `
-
     <div class="visitar-image">
 
       <img
@@ -616,23 +1165,21 @@ function criarCardVisitar(item) {
       >
 
     </div>
-
   `;
 
   return elemento;
 }
 
-
 function renderizarOQueVisitar() {
-
   if (!visitarList) {
     return;
   }
 
   visitarList.innerHTML = "";
 
-  if (dadosLocais.length === 0) {
-
+  if (
+    dadosLocais.length === 0
+  ) {
     visitarList.innerHTML = `
       <div class="visitar-empty">
         Nenhum ponto turístico encontrado.
@@ -640,7 +1187,8 @@ function renderizarOQueVisitar() {
     `;
 
     if (mostrarMaisVisitar) {
-      mostrarMaisVisitar.hidden = true;
+      mostrarMaisVisitar.hidden =
+        true;
     }
 
     return;
@@ -653,17 +1201,21 @@ function renderizarOQueVisitar() {
     );
 
   dadosLocais
-    .slice(0, quantidade)
-    .forEach(item => {
-
-      visitarList.appendChild(
-        criarCardVisitar(item)
-      );
-
-    });
+    .slice(
+      0,
+      quantidade
+    )
+    .forEach(
+      item => {
+        visitarList.appendChild(
+          criarCardVisitar(
+            item
+          )
+        );
+      }
+    );
 
   configurarMostrarMais({
-
     botao:
       mostrarMaisVisitar,
 
@@ -675,13 +1227,10 @@ function renderizarOQueVisitar() {
   });
 }
 
-
 if (mostrarMaisVisitar) {
-
   mostrarMaisVisitar.addEventListener(
     "click",
     () => {
-
       limiteVisitar +=
         LIMITE_INCREMENTO;
 
@@ -690,13 +1239,11 @@ if (mostrarMaisVisitar) {
   );
 }
 
-
 /* =========================================================
    HORÁRIOS
    ========================================================= */
 
 function obterDiaSemana() {
-
   const dias = [
     "domingo",
     "segunda",
@@ -712,28 +1259,23 @@ function obterDiaSemana() {
   ];
 }
 
-
 function converterParaMinutos(
   hora,
   minuto
 ) {
-
   return (
     Number(hora) * 60 +
     Number(minuto)
   );
 }
 
-
 function comercioEstaAberto(
   comercio
 ) {
-
   if (
     !comercio ||
     !comercio.horario
   ) {
-
     return false;
   }
 
@@ -752,11 +1294,6 @@ function comercioEstaAberto(
   const dia =
     obterDiaSemana();
 
-
-  /* =======================================================
-     VERIFICAÇÃO DO DIA
-     ======================================================= */
-
   const diasDaSemana = [
     "domingo",
     "segunda",
@@ -769,17 +1306,11 @@ function comercioEstaAberto(
 
   let diaPermitido = true;
 
-
-  /*
-     Segunda a sábado
-  */
-
   if (
     texto.includes(
       "segunda a sabado"
     )
   ) {
-
     diaPermitido =
       [
         "segunda",
@@ -789,20 +1320,11 @@ function comercioEstaAberto(
         "sexta",
         "sabado"
       ].includes(dia);
-
-  }
-
-
-  /*
-     Segunda a sexta
-  */
-
-  else if (
+  } else if (
     texto.includes(
       "segunda a sexta"
     )
   ) {
-
     diaPermitido =
       [
         "segunda",
@@ -811,66 +1333,27 @@ function comercioEstaAberto(
         "quinta",
         "sexta"
       ].includes(dia);
-
   }
-
-
-  /*
-     Somente sábado
-  */
-
-  else if (
-    texto.includes(
-      "sabado"
-    ) &&
-    !texto.includes(
-      "segunda a sabado"
-    )
-  ) {
-
-    if (
-      texto.includes("segunda") ||
-      texto.includes("terca") ||
-      texto.includes("quarta") ||
-      texto.includes("quinta") ||
-      texto.includes("sexta")
-    ) {
-
-      diaPermitido = true;
-
-    }
-
-  }
-
 
   if (!diaPermitido) {
     return false;
   }
-
-
-  /* =======================================================
-     HORÁRIOS
-  ======================================================= */
 
   const horarios =
     texto.match(
       /(\d{1,2}):(\d{2})\s*(?:as|-|a)\s*(\d{1,2}):(\d{2})/g
     );
 
-
   if (
     !horarios ||
     horarios.length === 0
   ) {
-
     return false;
   }
-
 
   for (
     const horario of horarios
   ) {
-
     const resultado =
       horario.match(
         /(\d{1,2}):(\d{2})\s*(?:as|-|a)\s*(\d{1,2}):(\d{2})/
@@ -892,36 +1375,32 @@ function comercioEstaAberto(
         resultado[4]
       );
 
-
     if (
       horaFinal >=
       horaInicial
     ) {
-
       if (
-        horaAtual >= horaInicial &&
-        horaAtual <= horaFinal
+        horaAtual >=
+          horaInicial &&
+        horaAtual <=
+          horaFinal
       ) {
-
         return true;
       }
-
     } else {
-
       if (
-        horaAtual >= horaInicial ||
-        horaAtual <= horaFinal
+        horaAtual >=
+          horaInicial ||
+        horaAtual <=
+          horaFinal
       ) {
-
         return true;
       }
     }
   }
 
-
   return false;
 }
-
 
 /* =========================================================
    ONDE COMER
@@ -956,62 +1435,40 @@ let mostrarSomenteAbertos =
 let limiteComer =
   LIMITE_INICIAL;
 
-
 /* =========================================================
    CATEGORIAS DE ALIMENTAÇÃO
    ========================================================= */
 
 const CATEGORIAS_COMIDA = [
-
   "restaurante",
   "restaurantes",
-
   "lanchonete",
   "lanchonetes",
-
   "cafeteria",
   "cafe",
   "cafes",
-
   "sorveteria",
   "sorvete",
-
   "acai",
-  "açai",
-
   "pizzaria",
-  "pizzaria",
-
   "hamburgueria",
   "hamburguer",
-
   "padaria",
   "panificadora",
-
   "confeitaria",
   "doceria",
-
   "churrascaria",
-
   "bar",
-
   "alimentacao",
-  "alimentação",
-
   "food",
-
   "fast food"
-].map(normalizarTexto);
-
-
-/* =========================================================
-   IDENTIFICAR ESTABELECIMENTO DE COMIDA
-   ========================================================= */
+].map(
+  normalizarTexto
+);
 
 function comercioEhAlimentacao(
   comercio
 ) {
-
   if (!comercio) {
     return false;
   }
@@ -1026,11 +1483,6 @@ function comercioEhAlimentacao(
       comercio.nome
     );
 
-
-  /*
-     Primeiro verifica a categoria.
-  */
-
   if (
     CATEGORIAS_COMIDA.some(
       categoriaComida =>
@@ -1039,19 +1491,10 @@ function comercioEhAlimentacao(
         )
     )
   ) {
-
     return true;
   }
 
-
-  /*
-     Alguns estabelecimentos podem
-     ter categoria genérica.
-     Neste caso verificamos o nome.
-  */
-
   const palavrasComida = [
-
     "restaurante",
     "lanchonete",
     "cafeteria",
@@ -1066,9 +1509,9 @@ function comercioEhAlimentacao(
     "confeitaria",
     "doceria",
     "churrascaria"
-
-  ].map(normalizarTexto);
-
+  ].map(
+    normalizarTexto
+  );
 
   return palavrasComida.some(
     palavra =>
@@ -1076,20 +1519,11 @@ function comercioEhAlimentacao(
   );
 }
 
-
-/* =========================================================
-   CATEGORIA DO FILTRO — ONDE COMER
-   ========================================================= */
-
 function comercioPertenceCategoria(
   comercio,
   filtro
 ) {
-
-  if (
-    filtro === "Todos"
-  ) {
-
+  if (filtro === "Todos") {
     return comercioEhAlimentacao(
       comercio
     );
@@ -1100,59 +1534,54 @@ function comercioPertenceCategoria(
       comercio.categoria
     );
 
-  switch (normalizarTexto(filtro)) {
-
+  switch (
+    normalizarTexto(filtro)
+  ) {
     case "restaurante":
-
       return categoria.includes(
         "restaurante"
       );
 
     case "lanchonetes":
-
     case "lanchonete":
-
       return categoria.includes(
         "lanchonete"
       );
 
     case "cafeteria":
-
     case "cafe":
-
       return (
-        categoria.includes("cafe") ||
-        categoria.includes("cafeteria")
+        categoria.includes(
+          "cafe"
+        ) ||
+        categoria.includes(
+          "cafeteria"
+        )
       );
 
     case "sorvete/acai":
-
-    case "sorvete/acai":
-
       return (
-        categoria.includes("sorvete") ||
-        categoria.includes("acai")
+        categoria.includes(
+          "sorvete"
+        ) ||
+        categoria.includes(
+          "acai"
+        )
       );
 
     default:
-
       return (
         categoria ===
-        normalizarTexto(filtro)
+        normalizarTexto(
+          filtro
+        )
       );
   }
 }
 
-
-/* =========================================================
-   COMÉRCIOS FILTRADOS — ONDE COMER
-   ========================================================= */
-
 function obterComerciosFiltrados() {
-
   return dadosComercios.filter(
     comercio => {
-
       const categoriaOk =
         comercioPertenceCategoria(
           comercio,
@@ -1176,23 +1605,18 @@ function obterComerciosFiltrados() {
   );
 }
 
-
-/* =========================================================
-   STATUS DO BOTÃO — ONDE COMER
-   ========================================================= */
-
 function atualizarStatusBotao() {
-
   if (!filtroAberto) {
     return;
   }
 
   const algumAberto =
     dadosComercios
-      .filter(comercio =>
-        comercioEhAlimentacao(
-          comercio
-        )
+      .filter(
+        comercio =>
+          comercioEhAlimentacao(
+            comercio
+          )
       )
       .some(
         comercio =>
@@ -1201,9 +1625,7 @@ function atualizarStatusBotao() {
           )
       );
 
-
   if (algumAberto) {
-
     if (textoStatus) {
       textoStatus.textContent =
         "Aberto agora";
@@ -1212,9 +1634,7 @@ function atualizarStatusBotao() {
     filtroAberto.classList.remove(
       "fechado"
     );
-
   } else {
-
     if (textoStatus) {
       textoStatus.textContent =
         "Fechado";
@@ -1226,6 +1646,78 @@ function atualizarStatusBotao() {
   }
 }
 
+/* =========================================================
+   AVALIAÇÕES
+   ========================================================= */
+
+function obterAvaliacaoLocal(
+  localId
+) {
+  const lista =
+    avaliacoes.filter(
+      avaliacao =>
+        String(
+          avaliacao.local_id
+        ) ===
+        String(localId)
+    );
+
+  if (lista.length === 0) {
+    return null;
+  }
+
+  const soma =
+    lista.reduce(
+      (
+        total,
+        avaliacao
+      ) =>
+        total +
+        Number(
+          avaliacao.nota
+        ),
+      0
+    );
+
+  return (
+    soma /
+    lista.length
+  );
+}
+
+function formatarNota(
+  localId,
+  notaOriginal
+) {
+  const nota =
+    obterAvaliacaoLocal(
+      localId
+    );
+
+  if (nota === null) {
+    if (
+      notaOriginal !==
+        undefined &&
+      notaOriginal !==
+        null &&
+      notaOriginal !==
+        ""
+    ) {
+      return String(
+        notaOriginal
+      );
+    }
+
+    return "—";
+  }
+
+  return nota
+    .toFixed(1)
+    .replace(
+      ".",
+      ","
+    );
+}
 
 /* =========================================================
    CARD — ONDE COMER
@@ -1234,7 +1726,6 @@ function atualizarStatusBotao() {
 function criarCardComercio(
   comercio
 ) {
-
   const aberto =
     comercioEstaAberto(
       comercio
@@ -1254,7 +1745,9 @@ function criarCardComercio(
     "Andrelândia - MG";
 
   const elemento =
-    document.createElement("a");
+    document.createElement(
+      "a"
+    );
 
   elemento.className =
     "comer-item";
@@ -1265,12 +1758,13 @@ function criarCardComercio(
     );
 
   elemento.innerHTML = `
-
     <div class="comer-image">
 
       <img
         src="${escaparHTML(
-          obterImagem(comercio)
+          obterImagem(
+            comercio
+          )
         )}"
         alt="${escaparHTML(nome)}"
         loading="lazy"
@@ -1317,19 +1811,12 @@ function criarCardComercio(
       >
 
     </div>
-
   `;
 
   return elemento;
 }
 
-
-/* =========================================================
-   RENDERIZAR — ONDE COMER
-   ========================================================= */
-
 function renderizarComercios() {
-
   if (!comerList) {
     return;
   }
@@ -1339,11 +1826,7 @@ function renderizarComercios() {
   const filtrados =
     obterComerciosFiltrados();
 
-
-  if (
-    filtrados.length === 0
-  ) {
-
+  if (filtrados.length === 0) {
     comerList.innerHTML = `
       <div class="comer-empty">
         Nenhum lugar para comer encontrado.
@@ -1351,12 +1834,12 @@ function renderizarComercios() {
     `;
 
     if (mostrarMaisComer) {
-      mostrarMaisComer.hidden = true;
+      mostrarMaisComer.hidden =
+        true;
     }
 
     return;
   }
-
 
   const quantidade =
     Math.min(
@@ -1364,22 +1847,22 @@ function renderizarComercios() {
       filtrados.length
     );
 
-
   filtrados
-    .slice(0, quantidade)
-    .forEach(comercio => {
-
-      comerList.appendChild(
-        criarCardComercio(
-          comercio
-        )
-      );
-
-    });
-
+    .slice(
+      0,
+      quantidade
+    )
+    .forEach(
+      comercio => {
+        comerList.appendChild(
+          criarCardComercio(
+            comercio
+          )
+        );
+      }
+    );
 
   configurarMostrarMais({
-
     botao:
       mostrarMaisComer,
 
@@ -1391,17 +1874,10 @@ function renderizarComercios() {
   });
 }
 
-
-/* =========================================================
-   BOTÃO MOSTRAR MAIS — ONDE COMER
-   ========================================================= */
-
 if (mostrarMaisComer) {
-
   mostrarMaisComer.addEventListener(
     "click",
     () => {
-
       limiteComer +=
         LIMITE_INCREMENTO;
 
@@ -1410,61 +1886,48 @@ if (mostrarMaisComer) {
   );
 }
 
-
-/* =========================================================
-   FILTROS — ONDE COMER
-   ========================================================= */
-
 document
   .querySelectorAll(
     ".comer-filtro"
   )
-  .forEach(botao => {
+  .forEach(
+    botao => {
+      botao.addEventListener(
+        "click",
+        () => {
+          categoriaComerFiltro =
+            botao.dataset.filter ||
+            "Todos";
 
-    botao.addEventListener(
-      "click",
-      () => {
+          limiteComer =
+            LIMITE_INICIAL;
 
-        categoriaComerFiltro =
-          botao.dataset.filter ||
-          "Todos";
-
-        limiteComer =
-          LIMITE_INICIAL;
-
-        document
-          .querySelectorAll(
-            ".comer-filtro"
-          )
-          .forEach(item => {
-
-            item.classList.remove(
-              "active"
+          document
+            .querySelectorAll(
+              ".comer-filtro"
+            )
+            .forEach(
+              item => {
+                item.classList.remove(
+                  "active"
+                );
+              }
             );
 
-          });
+          botao.classList.add(
+            "active"
+          );
 
-        botao.classList.add(
-          "active"
-        );
-
-        renderizarComercios();
-      }
-    );
-
-  });
-
-
-/* =========================================================
-   ABERTO AGORA — ONDE COMER
-   ========================================================= */
+          renderizarComercios();
+        }
+      );
+    }
+  );
 
 if (filtroAberto) {
-
   filtroAberto.addEventListener(
     "click",
     () => {
-
       mostrarSomenteAbertos =
         !mostrarSomenteAbertos;
 
@@ -1485,7 +1948,6 @@ if (filtroAberto) {
     }
   );
 }
-
 
 /* =========================================================
    COMÉRCIO LOCAL
@@ -1516,7 +1978,8 @@ const textoStatusComercio =
     "textoStatusComercio"
   );
 
-let pesquisaComercioTexto = "";
+let pesquisaComercioTexto =
+  "";
 
 let mostrarSomenteComercioAbertos =
   false;
@@ -1524,21 +1987,19 @@ let mostrarSomenteComercioAbertos =
 let limiteComercio =
   LIMITE_INICIAL;
 
-
-/* =========================================================
-   DISTÂNCIA DE TEXTO
-   ========================================================= */
-
 function distanciaLevenshtein(
   textoA,
   textoB
 ) {
-
   const a =
-    normalizarTexto(textoA);
+    normalizarTexto(
+      textoA
+    );
 
   const b =
-    normalizarTexto(textoB);
+    normalizarTexto(
+      textoB
+    );
 
   if (!a) {
     return b.length;
@@ -1551,7 +2012,8 @@ function distanciaLevenshtein(
   const matriz =
     Array.from(
       {
-        length: a.length + 1
+        length:
+          a.length + 1
       },
       () =>
         new Array(
@@ -1559,70 +2021,65 @@ function distanciaLevenshtein(
         ).fill(0)
     );
 
-
   for (
     let i = 0;
     i <= a.length;
     i++
   ) {
-
     matriz[i][0] = i;
   }
-
 
   for (
     let j = 0;
     j <= b.length;
     j++
   ) {
-
     matriz[0][j] = j;
   }
-
 
   for (
     let i = 1;
     i <= a.length;
     i++
   ) {
-
     for (
       let j = 1;
       j <= b.length;
       j++
     ) {
-
       const custo =
-        a[i - 1] === b[j - 1]
+        a[i - 1] ===
+        b[j - 1]
           ? 0
           : 1;
 
       matriz[i][j] =
         Math.min(
+          matriz[i - 1][j] +
+            1,
 
-          matriz[i - 1][j] + 1,
+          matriz[i][j - 1] +
+            1,
 
-          matriz[i][j - 1] + 1,
-
-          matriz[i - 1][j - 1] +
+          matriz[i - 1][
+            j - 1
+          ] +
             custo
         );
     }
   }
 
-  return matriz[a.length][b.length];
+  return matriz[
+    a.length
+  ][
+    b.length
+  ];
 }
-
-
-/* =========================================================
-   PESQUISA APROXIMADA
-   ========================================================= */
 
 function palavraCombina(
   palavraPesquisa,
   texto
 ) {
-
   const palavra =
     normalizarTexto(
       palavraPesquisa
@@ -1633,102 +2090,72 @@ function palavraCombina(
       texto
     );
 
-
   if (!palavra) {
     return true;
   }
 
-
   if (
-    alvo.includes(palavra)
+    alvo.includes(
+      palavra
+    )
   ) {
-
     return true;
   }
-
 
   const palavras =
     alvo.split(
       /\s+/
     );
 
-
-  /*
-     Tolerância de erro:
-
-     1 erro para palavras pequenas
-     2 erros para palavras maiores
-  */
-
   let tolerancia = 1;
 
-  if (
-    palavra.length >= 6
-  ) {
-
+  if (palavra.length >= 6) {
     tolerancia = 2;
   }
 
-
   return palavras.some(
     palavraAlvo => {
-
       if (
         palavraAlvo.includes(
           palavra
         )
       ) {
-
         return true;
       }
-
-
-      /*
-         Evita comparar palavras
-         muito diferentes em tamanho.
-      */
 
       if (
         Math.abs(
           palavraAlvo.length -
-          palavra.length
-        ) > tolerancia
+            palavra.length
+        ) >
+        tolerancia
       ) {
-
         return false;
       }
-
 
       return (
         distanciaLevenshtein(
           palavra,
           palavraAlvo
-        ) <= tolerancia
+        ) <=
+        tolerancia
       );
     }
   );
 }
 
-
-/* =========================================================
-   VERIFICAR PESQUISA DO COMÉRCIO
-   ========================================================= */
-
 function comercioCombinaPesquisa(
   comercio,
   pesquisa
 ) {
-
   const busca =
     normalizarTexto(
       pesquisa
     );
 
-
   if (!busca) {
     return true;
   }
-
 
   const nome =
     normalizarTexto(
@@ -1740,56 +2167,24 @@ function comercioCombinaPesquisa(
       comercio.categoria
     );
 
-
-  /*
-     A pesquisa pode encontrar:
-
-     - nome
-     - categoria
-     - nome + categoria
-  */
-
   const textoCompleto =
     `${nome} ${categoria}`;
-
-
-  /*
-     Primeiro tenta a frase completa.
-  */
 
   if (
     textoCompleto.includes(
       busca
     )
   ) {
-
     return true;
   }
 
-
-  /*
-     Depois separa cada palavra.
-
-     Exemplo:
-
-     "supermercado nogueira"
-
-     procura:
-
-     supermercado
-     +
-     nogueira
-  */
-
   const palavras =
-    busca.split(
-      /\s+/
-    ).filter(Boolean);
-
+    busca
+      .split(/\s+/)
+      .filter(Boolean);
 
   return palavras.every(
     palavra => {
-
       return (
         palavraCombina(
           palavra,
@@ -1804,16 +2199,9 @@ function comercioCombinaPesquisa(
   );
 }
 
-
-/* =========================================================
-   COMÉRCIOS FILTRADOS — COMÉRCIO LOCAL
-   ========================================================= */
-
 function obterComerciosPesquisa() {
-
   return dadosComercios.filter(
     comercio => {
-
       const pesquisaOk =
         comercioCombinaPesquisa(
           comercio,
@@ -1837,20 +2225,9 @@ function obterComerciosPesquisa() {
   );
 }
 
-
-/* =========================================================
-   CARD DE COMÉRCIO
-   =========================================================
-   
-   Usa as mesmas classes dos cards
-   de "Onde comer" para reaproveitar
-   o CSS existente.
-   ========================================================= */
-
 function criarCardComercioLocal(
   comercio
 ) {
-
   const aberto =
     comercioEstaAberto(
       comercio
@@ -1869,33 +2246,27 @@ function criarCardComercioLocal(
     comercio.endereço ||
     "Andrelândia - MG";
 
-
   const elemento =
-    document.createElement("a");
-
-
-  /*
-     Reaproveita .comer-item
-     para não duplicar CSS.
-  */
+    document.createElement(
+      "a"
+    );
 
   elemento.className =
     "comer-item comercio-item";
-
 
   elemento.href =
     criarLinkLocal(
       comercio.id
     );
 
-
   elemento.innerHTML = `
-
     <div class="comer-image">
 
       <img
         src="${escaparHTML(
-          obterImagem(comercio)
+          obterImagem(
+            comercio
+          )
         )}"
         alt="${escaparHTML(nome)}"
         loading="lazy"
@@ -1904,23 +2275,19 @@ function criarCardComercioLocal(
 
     </div>
 
-
     <div class="comer-info">
 
       <h3 class="comer-nome">
         ${escaparHTML(nome)}
       </h3>
 
-
       <div class="comer-categoria">
         ${escaparHTML(categoria)}
       </div>
 
-
       <div class="comer-endereco">
         ${escaparHTML(endereco)}
       </div>
-
 
       <div
         class="comer-horario ${
@@ -1938,7 +2305,6 @@ function criarCardComercioLocal(
 
     </div>
 
-
     <div class="comer-arrow">
 
       <img
@@ -1947,59 +2313,42 @@ function criarCardComercioLocal(
       >
 
     </div>
-
   `;
-
 
   return elemento;
 }
 
-
-/* =========================================================
-   RENDERIZAR COMÉRCIO LOCAL
-   ========================================================= */
-
 function renderizarComercioLocal() {
-
   if (!comercioList) {
     return;
   }
 
-
-  comercioList.innerHTML = "";
-
+  comercioList.innerHTML =
+    "";
 
   const filtrados =
     obterComerciosPesquisa();
 
-
   if (
     filtrados.length === 0
   ) {
-
     comercioList.innerHTML = `
-
       <div class="comer-empty">
-
         ${
           pesquisaComercioTexto
             ? "Nenhum comércio encontrado para essa pesquisa."
             : "Nenhum comércio encontrado."
         }
-
       </div>
-
     `;
 
-
     if (mostrarMaisComercio) {
-      mostrarMaisComercio.hidden = true;
+      mostrarMaisComercio.hidden =
+        true;
     }
-
 
     return;
   }
-
 
   const quantidade =
     Math.min(
@@ -2007,24 +2356,22 @@ function renderizarComercioLocal() {
       filtrados.length
     );
 
-
   filtrados
-    .slice(0, quantidade)
+    .slice(
+      0,
+      quantidade
+    )
     .forEach(
       comercio => {
-
         comercioList.appendChild(
           criarCardComercioLocal(
             comercio
           )
         );
-
       }
     );
 
-
   configurarMostrarMais({
-
     botao:
       mostrarMaisComercio,
 
@@ -2036,17 +2383,10 @@ function renderizarComercioLocal() {
   });
 }
 
-
-/* =========================================================
-   PESQUISA EM TEMPO REAL
-   ========================================================= */
-
 if (pesquisaComercio) {
-
   pesquisaComercio.addEventListener(
     "input",
     () => {
-
       pesquisaComercioTexto =
         pesquisaComercio.value.trim();
 
@@ -2058,20 +2398,12 @@ if (pesquisaComercio) {
   );
 }
 
-
-/* =========================================================
-   STATUS — COMÉRCIO LOCAL
-   ========================================================= */
-
 function atualizarStatusComercio() {
-
   if (
     !filtroAbertoComercio
   ) {
-
     return;
   }
-
 
   const algumAberto =
     dadosComercios.some(
@@ -2081,11 +2413,10 @@ function atualizarStatusComercio() {
         )
     );
 
-
   if (algumAberto) {
-
-    if (textoStatusComercio) {
-
+    if (
+      textoStatusComercio
+    ) {
       textoStatusComercio.textContent =
         "Aberto agora";
     }
@@ -2093,11 +2424,10 @@ function atualizarStatusComercio() {
     filtroAbertoComercio.classList.remove(
       "fechado"
     );
-
   } else {
-
-    if (textoStatusComercio) {
-
+    if (
+      textoStatusComercio
+    ) {
       textoStatusComercio.textContent =
         "Fechado";
     }
@@ -2108,57 +2438,39 @@ function atualizarStatusComercio() {
   }
 }
 
-
-/* =========================================================
-   BOTÃO ABERTO AGORA — COMÉRCIO
-   ========================================================= */
-
 if (
   filtroAbertoComercio
 ) {
-
   filtroAbertoComercio.addEventListener(
     "click",
     () => {
-
       mostrarSomenteComercioAbertos =
         !mostrarSomenteComercioAbertos;
 
-
       limiteComercio =
         LIMITE_INICIAL;
-
 
       filtroAbertoComercio.dataset.status =
         mostrarSomenteComercioAbertos
           ? "abertos"
           : "todos";
 
-
       filtroAbertoComercio.classList.toggle(
         "selecionado",
         mostrarSomenteComercioAbertos
       );
-
 
       renderizarComercioLocal();
     }
   );
 }
 
-
-/* =========================================================
-   MOSTRAR MAIS — COMÉRCIO
-   ========================================================= */
-
 if (
   mostrarMaisComercio
 ) {
-
   mostrarMaisComercio.addEventListener(
     "click",
     () => {
-
       limiteComercio +=
         LIMITE_INCREMENTO;
 
@@ -2166,7 +2478,6 @@ if (
     }
   );
 }
-
 
 /* =========================================================
    ONDE FICAR
@@ -2185,15 +2496,9 @@ const mostrarMaisFicar =
 let limiteFicar =
   LIMITE_INICIAL;
 
-
-/* =========================================================
-   CARD — ONDE FICAR
-   ========================================================= */
-
 function criarCardHospedagem(
   hospedagem
 ) {
-
   const nome =
     hospedagem.nome ||
     "Hospedagem";
@@ -2204,13 +2509,19 @@ function criarCardHospedagem(
     "Andrelândia - MG";
 
   const nota =
-    hospedagem.nota ??
-    hospedagem.avaliacao ??
-    hospedagem.avaliação ??
-    "";
+    formatarNota(
+      hospedagem.id,
+
+      hospedagem.nota ??
+        hospedagem.avaliacao ??
+        hospedagem.avaliação ??
+        ""
+    );
 
   const elemento =
-    document.createElement("a");
+    document.createElement(
+      "a"
+    );
 
   elemento.className =
     "ficar-item";
@@ -2221,12 +2532,13 @@ function criarCardHospedagem(
     );
 
   elemento.innerHTML = `
-
     <div class="ficar-image">
 
       <img
         src="${escaparHTML(
-          obterImagem(hospedagem)
+          obterImagem(
+            hospedagem
+          )
         )}"
         alt="${escaparHTML(nome)}"
         loading="lazy"
@@ -2268,29 +2580,23 @@ function criarCardHospedagem(
       >
 
     </div>
-
   `;
 
   return elemento;
 }
 
-
-/* =========================================================
-   RENDERIZAR — ONDE FICAR
-   ========================================================= */
-
 function renderizarHospedagens() {
-
   if (!ficarList) {
     return;
   }
 
-  ficarList.innerHTML = "";
+  ficarList.innerHTML =
+    "";
 
   if (
-    dadosHospedagem.length === 0
+    dadosHospedagem.length ===
+    0
   ) {
-
     ficarList.innerHTML = `
       <div class="ficar-empty">
         Nenhuma hospedagem encontrada.
@@ -2298,7 +2604,8 @@ function renderizarHospedagens() {
     `;
 
     if (mostrarMaisFicar) {
-      mostrarMaisFicar.hidden = true;
+      mostrarMaisFicar.hidden =
+        true;
     }
 
     return;
@@ -2311,19 +2618,21 @@ function renderizarHospedagens() {
     );
 
   dadosHospedagem
-    .slice(0, quantidade)
-    .forEach(hospedagem => {
-
-      ficarList.appendChild(
-        criarCardHospedagem(
-          hospedagem
-        )
-      );
-
-    });
+    .slice(
+      0,
+      quantidade
+    )
+    .forEach(
+      hospedagem => {
+        ficarList.appendChild(
+          criarCardHospedagem(
+            hospedagem
+          )
+        );
+      }
+    );
 
   configurarMostrarMais({
-
     botao:
       mostrarMaisFicar,
 
@@ -2335,13 +2644,10 @@ function renderizarHospedagens() {
   });
 }
 
-
 if (mostrarMaisFicar) {
-
   mostrarMaisFicar.addEventListener(
     "click",
     () => {
-
       limiteFicar +=
         LIMITE_INCREMENTO;
 
@@ -2350,23 +2656,21 @@ if (mostrarMaisFicar) {
   );
 }
 
-
 /* =========================================================
-   CARREGAR UM JSON
+   CARREGAR JSON
    ========================================================= */
 
 async function carregarJSON(
   caminho,
   nome
 ) {
-
   try {
-
     const resposta =
-      await fetch(caminho);
+      await fetch(
+        caminho
+      );
 
     if (!resposta.ok) {
-
       throw new Error(
         `${nome}: HTTP ${resposta.status}`
       );
@@ -2375,8 +2679,11 @@ async function carregarJSON(
     const dados =
       await resposta.json();
 
-    if (!Array.isArray(dados)) {
-
+    if (
+      !Array.isArray(
+        dados
+      )
+    ) {
       throw new Error(
         `${nome} não contém um array JSON`
       );
@@ -2388,9 +2695,7 @@ async function carregarJSON(
     );
 
     return dados;
-
   } catch (erro) {
-
     console.error(
       `Erro ao carregar ${nome}:`,
       erro
@@ -2400,31 +2705,80 @@ async function carregarJSON(
   }
 }
 
+/* =========================================================
+   CARREGAR AVALIAÇÕES SUPABASE
+   ========================================================= */
+
+async function carregarAvaliacoes() {
+  if (!supabaseClient) {
+    return;
+  }
+
+  try {
+    const {
+      data,
+      error
+    } =
+      await supabaseClient
+        .from("avaliacoes")
+        .select(
+          "local_id, nota"
+        );
+
+    if (error) {
+      console.error(
+        "Erro ao carregar avaliações:",
+        error
+      );
+
+      return;
+    }
+
+    avaliacoes =
+      Array.isArray(data)
+        ? data
+        : [];
+  } catch (erro) {
+    console.error(
+      "Erro nas avaliações:",
+      erro
+    );
+  }
+}
 
 /* =========================================================
    CARREGAMENTO DOS JSONs
    ========================================================= */
 
 async function carregarDados() {
+  const resultados =
+    await Promise.all([
+      carregarJSON(
+        "./DATA/locais.json",
+        "locais.json"
+      ),
+
+      carregarJSON(
+        "./DATA/comercios.json",
+        "comercios.json"
+      ),
+
+      carregarJSON(
+        "./DATA/hospedagem.json",
+        "hospedagem.json"
+      )
+    ]);
 
   dadosLocais =
-    await carregarJSON(
-      "./DATA/locais.json",
-      "locais.json"
-    );
+    resultados[0];
 
   dadosComercios =
-    await carregarJSON(
-      "./DATA/comercios.json",
-      "comercios.json"
-    );
+    resultados[1];
 
   dadosHospedagem =
-    await carregarJSON(
-      "./DATA/hospedagem.json",
-      "hospedagem.json"
-    );
+    resultados[2];
 
+  await carregarAvaliacoes();
 
   console.log(
     "TOTAL DE LOCAIS:",
@@ -2441,11 +2795,6 @@ async function carregarDados() {
     dadosHospedagem.length
   );
 
-
-  /* =======================================================
-     MAPA
-  ======================================================= */
-
   [
     ...dadosLocais,
     ...dadosComercios,
@@ -2454,76 +2803,27 @@ async function carregarDados() {
     adicionarMarcador
   );
 
-
-  /* =======================================================
-     O QUE VISITAR
-  ======================================================= */
-
   renderizarOQueVisitar();
-
-
-  /* =======================================================
-     ONDE COMER
-  ======================================================= */
 
   atualizarStatusBotao();
 
   renderizarComercios();
 
-
-  /* =======================================================
-     COMÉRCIO LOCAL
-  ======================================================= */
-
   atualizarStatusComercio();
 
   renderizarComercioLocal();
 
-
-  /* =======================================================
-     ONDE FICAR
-  ======================================================= */
-
   renderizarHospedagens();
+
+  if (homeMap) {
+    setTimeout(() => {
+      homeMap.invalidateSize();
+    }, 500);
+  }
 }
 
-
 /* =========================================================
-   INICIAR SITE
-   ========================================================= */
-
-carregarDados();
-
-
-/* =========================================================
-   ATUALIZAR STATUS A CADA MINUTO
-   ========================================================= */
-
-setInterval(
-  () => {
-
-    if (
-      dadosComercios.length === 0
-    ) {
-
-      return;
-    }
-
-    atualizarStatusBotao();
-
-    atualizarStatusComercio();
-
-    renderizarComercios();
-
-    renderizarComercioLocal();
-
-  },
-  60000
-);
-
-
-/* =========================================================
-   MURAL DE ANDRELÂNDIA
+   MURAL — CONFIGURAÇÕES
    ========================================================= */
 
 const pessoasList =
@@ -2536,30 +2836,24 @@ const mostrarMaisPessoas =
     "mostrarMaisPessoas"
   );
 
-let pessoas = [];
-
 let limitePessoas = 10;
-
 
 /* =========================================================
    CARREGAR PESSOAS
    ========================================================= */
 
 async function carregarPessoas() {
-
   if (!pessoasList) {
     return;
   }
 
   try {
-
     const resposta =
       await fetch(
         "./DATA/pessoas.json"
       );
 
     if (!resposta.ok) {
-
       throw new Error(
         "Não foi possível carregar pessoas.json"
       );
@@ -2568,8 +2862,11 @@ async function carregarPessoas() {
     pessoas =
       await resposta.json();
 
-    if (!Array.isArray(pessoas)) {
-
+    if (
+      !Array.isArray(
+        pessoas
+      )
+    ) {
       throw new Error(
         "pessoas.json não contém um array"
       );
@@ -2580,10 +2877,10 @@ async function carregarPessoas() {
       pessoas
     );
 
+    await carregarVotosPessoas();
+
     renderizarPessoas();
-
   } catch (erro) {
-
     console.error(
       "Erro ao carregar pessoas:",
       erro
@@ -2596,20 +2893,210 @@ async function carregarPessoas() {
     `;
 
     if (mostrarMaisPessoas) {
-      mostrarMaisPessoas.hidden = true;
+      mostrarMaisPessoas.hidden =
+        true;
     }
   }
 }
 
-
 /* =========================================================
-   CRIAR CARTÃO
+   CARREGAR VOTOS
    ========================================================= */
 
-function criarPessoaCard(pessoa) {
+async function carregarVotosPessoas() {
+  if (!supabaseClient) {
+    votosPessoas = [];
+    return;
+  }
 
+  try {
+    const {
+      data,
+      error
+    } =
+      await supabaseClient
+        .from(
+          "votos_pessoas"
+        )
+        .select(
+          "pessoa_id, usuario_id, voto"
+        );
+
+    if (error) {
+      console.error(
+        "Erro ao carregar votos do mural:",
+        error
+      );
+
+      votosPessoas = [];
+
+      return;
+    }
+
+    votosPessoas =
+      Array.isArray(data)
+        ? data
+        : [];
+  } catch (erro) {
+    console.error(
+      "Erro ao carregar votos:",
+      erro
+    );
+
+    votosPessoas = [];
+  }
+}
+
+/* =========================================================
+   CONTAGEM DE VOTOS
+   ========================================================= */
+
+function obterResumoVotos(
+  pessoaId
+) {
+  const votos =
+    votosPessoas.filter(
+      voto =>
+        String(
+          voto.pessoa_id
+        ) ===
+        String(
+          pessoaId
+        )
+    );
+
+  let likes = 0;
+  let dislikes = 0;
+
+  votos.forEach(
+    voto => {
+      if (
+        Number(voto.voto) ===
+        1
+      ) {
+        likes++;
+      } else if (
+        Number(voto.voto) ===
+        -1
+      ) {
+        dislikes++;
+      }
+    }
+  );
+
+  return {
+    likes,
+    dislikes,
+    score:
+      likes -
+      dislikes
+  };
+}
+
+function obterVotoDoUsuario(
+  pessoaId
+) {
+  if (!usuarioAtual) {
+    return 0;
+  }
+
+  const voto =
+    votosPessoas.find(
+      item =>
+        String(
+          item.pessoa_id
+        ) ===
+          String(
+            pessoaId
+          ) &&
+        String(
+          item.usuario_id
+        ) ===
+          String(
+            usuarioAtual.id
+          )
+    );
+
+  return voto
+    ? Number(
+        voto.voto
+      )
+    : 0;
+}
+
+/* =========================================================
+   ORDENAR MURAL
+   ========================================================= */
+
+function ordenarPessoasPorVotos(
+  lista
+) {
+  return [
+    ...lista
+  ].sort(
+    (
+      a,
+      b
+    ) => {
+      const votoA =
+        obterResumoVotos(
+          a.id
+        );
+
+      const votoB =
+        obterResumoVotos(
+          b.id
+        );
+
+      /*
+       * Primeiro: maior pontuação.
+       * Em caso de empate: mais curtidas.
+       * Depois: nome.
+       */
+
+      if (
+        votoB.score !==
+        votoA.score
+      ) {
+        return (
+          votoB.score -
+          votoA.score
+        );
+      }
+
+      if (
+        votoB.likes !==
+        votoA.likes
+      ) {
+        return (
+          votoB.likes -
+          votoA.likes
+        );
+      }
+
+      return String(
+        a.nome || ""
+      ).localeCompare(
+        String(
+          b.nome || ""
+        ),
+        "pt-BR"
+      );
+    }
+  );
+}
+
+/* =========================================================
+   CRIAR CARTÃO DE PESSOA
+   ========================================================= */
+
+function criarPessoaCard(
+  pessoa
+) {
   const link =
-    document.createElement("a");
+    document.createElement(
+      "a"
+    );
 
   link.className =
     "pessoa-item";
@@ -2621,7 +3108,7 @@ function criarPessoaCard(pessoa) {
 
   const imagem =
     pessoa.capa ||
-    "./img/sem-foto.png";
+    FALLBACK_IMAGE;
 
   const nome =
     pessoa.nome ||
@@ -2631,8 +3118,29 @@ function criarPessoaCard(pessoa) {
     pessoa.categoria ||
     "Personalidade";
 
-  link.innerHTML = `
+  const resumo =
+    obterResumoVotos(
+      pessoa.id
+    );
 
+  const votoUsuario =
+    obterVotoDoUsuario(
+      pessoa.id
+    );
+    
+    const iconeSobe =
+    
+    votoUsuario === 1
+    ? "img/icones/sobe-ativa.png"
+    : "img/icones/sobe.png";
+    
+    const iconeDesce =
+    
+    votoUsuario === -1
+    ? "img/icones/desce-ativa.png"
+    : "img/icones/desce.png";
+
+  link.innerHTML = `
     <div class="pessoa-image">
 
       <img
@@ -2654,31 +3162,108 @@ function criarPessoaCard(pessoa) {
         ${escaparHTML(categoria)}
       </span>
 
-    </div>
+      <div
+        class="pessoa-votos"
+        data-pessoa-id="${escaparHTML(
+          pessoa.id
+        )}"
+      >
 
+        <button
+          type="button"
+          class="pessoa-voto pessoa-voto-like ${
+            votoUsuario === 1
+              ? "selecionado"
+              : ""
+          }"
+          data-voto="1"
+          aria-label="Curtir ${escaparHTML(nome)}"
+          title="Curtir"
+        >
+
+         <img
+         src="${iconeSobe}"
+         alt=""
+         >
+
+          <span class="pessoa-like-count">
+            ${resumo.likes}
+          </span>
+
+        </button>
+
+        <button
+          type="button"
+          class="pessoa-voto pessoa-voto-dislike ${
+            votoUsuario === -1
+              ? "selecionado"
+              : ""
+          }"
+          data-voto="-1"
+          aria-label="Não curtir ${escaparHTML(nome)}"
+          title="Não curtir"
+        >
+
+         <img
+         src="${iconeDesce}"
+         alt=""
+         >
+
+        </button>
+
+      </div>
+
+    </div>
   `;
+
+  /*
+   * Impede que clicar no botão de voto abra a página da pessoa.
+   */
+
+  link
+    .querySelectorAll(
+      ".pessoa-voto"
+    )
+    .forEach(
+      botao => {
+        botao.addEventListener(
+          "click",
+          event => {
+            event.preventDefault();
+            event.stopPropagation();
+
+            processarVotoPessoa(
+              pessoa.id,
+              Number(
+                botao.dataset.voto
+              )
+            );
+          }
+        );
+      }
+    );
 
   return link;
 }
-
 
 /* =========================================================
    RENDERIZAR PESSOAS
    ========================================================= */
 
 function renderizarPessoas() {
-
   if (!pessoasList) {
     return;
   }
 
-  pessoasList.innerHTML = "";
+  pessoasList.innerHTML =
+    "";
 
   if (
-    !Array.isArray(pessoas) ||
+    !Array.isArray(
+      pessoas
+    ) ||
     pessoas.length === 0
   ) {
-
     pessoasList.innerHTML = `
       <p class="lista-vazia">
         Ainda não há pessoas cadastradas no mural.
@@ -2686,28 +3271,34 @@ function renderizarPessoas() {
     `;
 
     if (mostrarMaisPessoas) {
-      mostrarMaisPessoas.hidden = true;
+      mostrarMaisPessoas.hidden =
+        true;
     }
 
     return;
   }
 
-  const fragmento =
-    document.createDocumentFragment();
+  const pessoasOrdenadas =
+    ordenarPessoasPorVotos(
+      pessoas
+    );
 
   const pessoasVisiveis =
-    pessoas.slice(
+    pessoasOrdenadas.slice(
       0,
       limitePessoas
     );
 
+  const fragmento =
+    document.createDocumentFragment();
+
   pessoasVisiveis.forEach(
     pessoa => {
-
       fragmento.appendChild(
-        criarPessoaCard(pessoa)
+        criarPessoaCard(
+          pessoa
+        )
       );
-
     }
   );
 
@@ -2716,34 +3307,1129 @@ function renderizarPessoas() {
   );
 
   if (mostrarMaisPessoas) {
-
     mostrarMaisPessoas.hidden =
-      pessoas.length <= limitePessoas;
+      pessoas.length <=
+      limitePessoas;
   }
 }
 
+/* =========================================================
+   PROCESSAR VOTO
+   ========================================================= */
+
+async function processarVotoPessoa(
+  pessoaId,
+  novoVoto
+) {
+  /*
+   * Usuário precisa estar logado.
+   */
+
+  if (!usuarioAtual) {
+    abrirLogin();
+    return;
+  }
+
+  if (!supabaseClient) {
+    alert(
+      "Não foi possível conectar ao sistema de votação."
+    );
+
+    return;
+  }
+
+  const votoExistente =
+    votosPessoas.find(
+      voto =>
+        String(
+          voto.pessoa_id
+        ) ===
+          String(
+            pessoaId
+          ) &&
+        String(
+          voto.usuario_id
+        ) ===
+          String(
+            usuarioAtual.id
+          )
+    );
+
+  try {
+    /*
+     * Se clicou no mesmo voto: remove.
+     */
+
+    if (
+      votoExistente &&
+      Number(
+        votoExistente.voto
+      ) === novoVoto
+    ) {
+      const {
+        error
+      } =
+        await supabaseClient
+          .from(
+            "votos_pessoas"
+          )
+          .delete()
+          .eq(
+            "pessoa_id",
+            pessoaId
+          )
+          .eq(
+            "usuario_id",
+            usuarioAtual.id
+          );
+
+      if (error) {
+        throw error;
+      }
+
+      /*
+       * Se clicou no voto contrário: altera.
+       */
+
+    } else if (
+      votoExistente
+    ) {
+      const {
+        error
+      } =
+        await supabaseClient
+          .from(
+            "votos_pessoas"
+          )
+          .update({
+            voto:
+              novoVoto
+          })
+          .eq(
+            "pessoa_id",
+            pessoaId
+          )
+          .eq(
+            "usuario_id",
+            usuarioAtual.id
+          );
+
+      if (error) {
+        throw error;
+      }
+
+      /*
+       * Se ainda não votou: cria.
+       */
+
+    } else {
+      const {
+        error
+      } =
+        await supabaseClient
+          .from(
+            "votos_pessoas"
+          )
+          .insert({
+            pessoa_id:
+              pessoaId,
+
+            usuario_id:
+              usuarioAtual.id,
+
+            voto:
+              novoVoto
+          });
+
+      if (error) {
+        throw error;
+      }
+    }
+
+    await carregarVotosPessoas();
+
+    renderizarPessoas();
+  } catch (erro) {
+    console.error(
+      "Erro ao registrar voto:",
+      erro
+    );
+
+    alert(
+      "Não foi possível registrar seu voto."
+    );
+  }
+}
 
 /* =========================================================
    MOSTRAR MAIS PESSOAS
    ========================================================= */
 
 if (mostrarMaisPessoas) {
-
   mostrarMaisPessoas.addEventListener(
     "click",
     () => {
-
       limitePessoas += 10;
 
       renderizarPessoas();
-
     }
   );
 }
 
-
 /* =========================================================
-   INICIAR MURAL
+   LOGIN — ESTILO
    ========================================================= */
 
-carregarPessoas();
+function adicionarEstiloLogin() {
+  if (
+    document.getElementById(
+      "estiloLoginMural"
+    )
+  ) {
+    return;
+  }
+
+  const style =
+    document.createElement(
+      "style"
+    );
+
+  style.id =
+    "estiloLoginMural";
+
+  style.textContent = `
+    .login-mural-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 99999;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: rgba(0,0,0,.58);
+    }
+
+    .login-mural-overlay.aberto {
+      display: flex;
+    }
+
+    .login-mural-box {
+      width: min(100%, 420px);
+      background: #ffffff;
+      border-radius: 18px;
+      padding: 28px;
+      box-shadow: 0 20px 60px rgba(0,0,0,.28);
+      position: relative;
+    }
+
+    .login-mural-fechar {
+      position: absolute;
+      top: 12px;
+      right: 14px;
+      border: 0;
+      background: transparent;
+      font-size: 28px;
+      line-height: 1;
+      cursor: pointer;
+      color: #555;
+    }
+
+    .login-mural-tag {
+      display: block;
+      color: #194138;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1.2px;
+      margin-bottom: 8px;
+    }
+
+    .login-mural-box h2 {
+      margin: 0 0 8px;
+      color: #091D1C;
+      font-size: 24px;
+    }
+
+    .login-mural-box p {
+      margin: 0 0 20px;
+      color: #666;
+      line-height: 1.5;
+      font-size: 14px;
+    }
+
+    .login-mural-form {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .login-mural-form input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 13px 14px;
+      border: 1px solid #d5d5d5;
+      border-radius: 10px;
+      font: inherit;
+      outline: none;
+    }
+
+    .login-mural-form input:focus {
+      border-color: #194138;
+    }
+
+    .login-mural-entrar,
+    .login-mural-cadastrar,
+    .login-mural-sair {
+      width: 100%;
+      border: 0;
+      border-radius: 10px;
+      padding: 13px 16px;
+      cursor: pointer;
+      font: inherit;
+      font-weight: 600;
+    }
+
+    .login-mural-entrar {
+      background: #194138;
+      color: #ffffff;
+    }
+
+    .login-mural-cadastrar {
+      background: #f1f1f1;
+      color: #194138;
+    }
+
+    .login-mural-mensagem {
+      min-height: 20px;
+      margin-top: 4px;
+      font-size: 13px;
+      color: #555;
+    }
+
+    .login-mural-conta {
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid #e5e5e5;
+    }
+
+    .login-mural-conta strong {
+      display: block;
+      margin-bottom: 8px;
+      color: #091D1C;
+    }
+
+    .login-mural-status {
+      display: none;
+    }
+
+    .login-mural-status.aberto {
+      display: block;
+    }
+
+    .login-mural-status-email {
+      display: block;
+      margin-bottom: 12px;
+      color: #555;
+      font-size: 13px;
+      word-break: break-word;
+    }
+
+    .pessoa-votos {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 8px;
+    }
+
+    .pessoa-voto {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px;
+      border: 0;
+      background: transparent;
+      cursor: pointer;
+    }
+
+    .pessoa-voto img {
+      width: 22px;
+      height: 22px;
+      object-fit: contain;
+    }
+
+    .pessoa-voto-like .pessoa-like-count {
+      font-size: 12px;
+      font-weight: 600;
+      color: #194138;
+    }
+  `;
+
+  document.head.appendChild(
+    style
+  );
+}
+
+/* =========================================================
+   CRIAR LOGIN
+   ========================================================= */
+
+function criarInterfaceLogin() {
+  adicionarEstiloLogin();
+
+  if (
+    document.getElementById(
+      "loginMuralOverlay"
+    )
+  ) {
+    return;
+  }
+
+  const overlay =
+    document.createElement(
+      "div"
+    );
+
+  overlay.id =
+    "loginMuralOverlay";
+
+  overlay.className =
+    "login-mural-overlay";
+
+  overlay.innerHTML = `
+    <div
+      class="login-mural-box"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="loginMuralTitulo"
+    >
+
+      <button
+        type="button"
+        class="login-mural-fechar"
+        id="loginMuralFechar"
+        aria-label="Fechar"
+      >
+        ×
+      </button>
+
+      <div
+        id="loginMuralFormulario"
+      >
+
+        <span class="login-mural-tag">
+          MURAL DE ANDRELÂNDIA
+        </span>
+
+        <h2 id="loginMuralTitulo">
+          Entre para votar
+        </h2>
+
+        <p>
+          Faça login para participar do mural e votar nas pessoas de Andrelândia.
+        </p>
+
+        <form
+          class="login-mural-form"
+          id="formLoginMural"
+        >
+
+          <input
+            type="email"
+            id="loginMuralEmail"
+            placeholder="Seu e-mail"
+            autocomplete="email"
+            required
+          >
+
+          <input
+            type="password"
+            id="loginMuralSenha"
+            placeholder="Sua senha"
+            autocomplete="current-password"
+            minlength="6"
+            required
+          >
+
+          <button
+            type="submit"
+            class="login-mural-entrar"
+          >
+            Entrar
+          </button>
+
+        </form>
+
+        <div class="login-mural-conta">
+
+          <strong>
+            Ainda não possui conta?
+          </strong>
+
+          <button
+            type="button"
+            class="login-mural-cadastrar"
+            id="loginMuralCadastrar"
+          >
+            Criar conta
+          </button>
+
+        </div>
+
+        <div
+          class="login-mural-mensagem"
+          id="loginMuralMensagem"
+        ></div>
+
+      </div>
+
+      <div
+        class="login-mural-status"
+        id="loginMuralStatus"
+      >
+
+        <span class="login-mural-tag">
+          CONTA
+        </span>
+
+        <h2>
+          Você está conectado
+        </h2>
+
+        <span
+          class="login-mural-status-email"
+          id="loginMuralStatusEmail"
+        ></span>
+
+        <button
+          type="button"
+          class="login-mural-sair"
+          id="loginMuralSair"
+        >
+          Sair
+        </button>
+
+      </div>
+
+    </div>
+  `;
+
+  document.body.appendChild(
+    overlay
+  );
+
+  const fechar =
+    document.getElementById(
+      "loginMuralFechar"
+    );
+
+  const formulario =
+    document.getElementById(
+      "formLoginMural"
+    );
+
+  const cadastrar =
+    document.getElementById(
+      "loginMuralCadastrar"
+    );
+
+  const sair =
+    document.getElementById(
+      "loginMuralSair"
+    );
+
+  fechar.addEventListener(
+    "click",
+    fecharLogin
+  );
+
+  overlay.addEventListener(
+    "click",
+    event => {
+      if (
+        event.target ===
+        overlay
+      ) {
+        fecharLogin();
+      }
+    }
+  );
+
+  formulario.addEventListener(
+    "submit",
+    async event => {
+      event.preventDefault();
+
+      await fazerLogin();
+    }
+  );
+
+  cadastrar.addEventListener(
+    "click",
+    fazerCadastro
+  );
+
+  sair.addEventListener(
+    "click",
+    fazerLogout
+  );
+}
+
+/* =========================================================
+   ABRIR LOGIN
+   ========================================================= */
+
+function abrirLogin() {
+  criarInterfaceLogin();
+
+  const overlay =
+    document.getElementById(
+      "loginMuralOverlay"
+    );
+
+  if (!overlay) {
+    return;
+  }
+
+  overlay.classList.add(
+    "aberto"
+  );
+
+  atualizarInterfaceLogin();
+
+  setTimeout(() => {
+    document
+      .getElementById(
+        "loginMuralEmail"
+      )
+      ?.focus();
+  }, 50);
+}
+
+function fecharLogin() {
+  const overlay =
+    document.getElementById(
+      "loginMuralOverlay"
+    );
+
+  if (!overlay) {
+    return;
+  }
+
+  overlay.classList.remove(
+    "aberto"
+  );
+}
+
+/* =========================================================
+   MENSAGEM DO LOGIN
+   ========================================================= */
+
+function mostrarMensagemLogin(
+  mensagem
+) {
+  const elemento =
+    document.getElementById(
+      "loginMuralMensagem"
+    );
+
+  if (elemento) {
+    elemento.textContent =
+      mensagem;
+  }
+}
+
+/* =========================================================
+   FAZER LOGIN
+   ========================================================= */
+
+async function fazerLogin() {
+  if (!supabaseClient) {
+    mostrarMensagemLogin(
+      "Sistema de login indisponível."
+    );
+
+    return;
+  }
+
+  const email =
+    document
+      .getElementById(
+        "loginMuralEmail"
+      )
+      ?.value
+      .trim();
+
+  const senha =
+    document
+      .getElementById(
+        "loginMuralSenha"
+      )
+      ?.value;
+
+  if (
+    !email ||
+    !senha
+  ) {
+    mostrarMensagemLogin(
+      "Preencha e-mail e senha."
+    );
+
+    return;
+  }
+
+  mostrarMensagemLogin(
+    "Entrando..."
+  );
+
+  const {
+    data,
+    error
+  } =
+    await supabaseClient.auth.signInWithPassword(
+      {
+        email,
+        password:
+          senha
+      }
+    );
+
+  if (error) {
+    console.error(
+      error
+    );
+
+    mostrarMensagemLogin(
+      "E-mail ou senha incorretos."
+    );
+
+    return;
+  }
+
+  usuarioAtual =
+    data.user;
+
+  mostrarMensagemLogin(
+    "Login realizado."
+  );
+
+  await carregarVotosPessoas();
+
+  renderizarPessoas();
+
+  atualizarInterfaceLogin();
+
+  setTimeout(
+    fecharLogin,
+    500
+  );
+}
+
+/* =========================================================
+   CADASTRO
+   ========================================================= */
+
+async function fazerCadastro() {
+  if (!supabaseClient) {
+    mostrarMensagemLogin(
+      "Sistema de cadastro indisponível."
+    );
+
+    return;
+  }
+
+  const email =
+    document
+      .getElementById(
+        "loginMuralEmail"
+      )
+      ?.value
+      .trim();
+
+  const senha =
+    document
+      .getElementById(
+        "loginMuralSenha"
+      )
+      ?.value;
+
+  if (
+    !email ||
+    !senha
+  ) {
+    mostrarMensagemLogin(
+      "Informe e-mail e uma senha com pelo menos 6 caracteres."
+    );
+
+    return;
+  }
+
+  if (
+    senha.length <
+    6
+  ) {
+    mostrarMensagemLogin(
+      "A senha precisa ter pelo menos 6 caracteres."
+    );
+
+    return;
+  }
+
+  mostrarMensagemLogin(
+    "Criando sua conta..."
+  );
+
+  const {
+    data,
+    error
+  } =
+    await supabaseClient.auth.signUp(
+      {
+        email,
+        password:
+          senha
+      }
+    );
+
+  if (error) {
+    console.error(
+      error
+    );
+
+    mostrarMensagemLogin(
+      error.message ||
+        "Não foi possível criar a conta."
+    );
+
+    return;
+  }
+
+  /*
+   * Dependendo da configuração do Supabase, a confirmação de e-mail pode estar ativada.
+   */
+
+  if (
+    data.session &&
+    data.user
+  ) {
+    usuarioAtual =
+      data.user;
+
+    mostrarMensagemLogin(
+      "Conta criada e login realizado."
+    );
+
+    await carregarVotosPessoas();
+
+    renderizarPessoas();
+
+    atualizarInterfaceLogin();
+
+    setTimeout(
+      fecharLogin,
+      700
+    );
+  } else {
+    mostrarMensagemLogin(
+      "Conta criada. Verifique seu e-mail para confirmar o cadastro e depois faça login."
+    );
+  }
+}
+
+/* =========================================================
+   LOGOUT
+   ========================================================= */
+
+async function fazerLogout() {
+  if (!supabaseClient) {
+    return;
+  }
+
+  const {
+    error
+  } =
+    await supabaseClient.auth.signOut();
+
+  if (error) {
+    console.error(
+      "Erro ao sair:",
+      error
+    );
+
+    return;
+  }
+
+  usuarioAtual =
+    null;
+
+  await carregarVotosPessoas();
+
+  renderizarPessoas();
+
+  atualizarInterfaceLogin();
+
+  fecharLogin();
+}
+
+/* =========================================================
+   INTERFACE DE LOGIN
+   ========================================================= */
+
+function atualizarInterfaceLogin() {
+  const formulario =
+    document.getElementById(
+      "loginMuralFormulario"
+    );
+
+  const status =
+    document.getElementById(
+      "loginMuralStatus"
+    );
+
+  const email =
+    document.getElementById(
+      "loginMuralStatusEmail"
+    );
+
+  if (
+    !formulario ||
+    !status
+  ) {
+    return;
+  }
+
+  if (usuarioAtual) {
+    formulario.style.display =
+      "none";
+
+    status.classList.add(
+      "aberto"
+    );
+
+    if (email) {
+      email.textContent =
+        usuarioAtual.email ||
+        "";
+    }
+  } else {
+    formulario.style.display =
+      "block";
+
+    status.classList.remove(
+      "aberto"
+    );
+  }
+}
+
+/* =========================================================
+   ESTADO DE AUTENTICAÇÃO
+   ========================================================= */
+
+async function inicializarAutenticacao() {
+  if (!supabaseClient) {
+    return;
+  }
+
+  const {
+    data
+  } =
+    await supabaseClient.auth.getSession();
+
+  usuarioAtual =
+    data?.session?.user ||
+    null;
+
+  criarInterfaceLogin();
+
+  atualizarInterfaceLogin();
+
+  supabaseClient.auth.onAuthStateChange(
+    async (
+      evento,
+      sessao
+    ) => {
+      usuarioAtual =
+        sessao?.user ||
+        null;
+
+      atualizarInterfaceLogin();
+
+      /*
+       * Recarrega os votos porque o destaque do voto depende do usuário logado.
+       */
+
+      await carregarVotosPessoas();
+
+      renderizarPessoas();
+    }
+  );
+}
+
+/* =========================================================
+   BOTÃO DE LOGIN NO MURAL
+   ========================================================= */
+
+function adicionarBotaoLoginMural() {
+  const secao =
+    document.getElementById(
+      "pessoas"
+    );
+
+  if (!secao) {
+    return;
+  }
+
+  if (
+    document.getElementById(
+      "botaoLoginMural"
+    )
+  ) {
+    return;
+  }
+
+  const header =
+    secao.querySelector(
+      ".content-header"
+    );
+
+  if (!header) {
+    return;
+  }
+
+  const area =
+    document.createElement(
+      "div"
+    );
+
+  area.id =
+    "botaoLoginMural";
+
+  area.style.marginTop =
+    "14px";
+
+  area.innerHTML = `
+    <button
+      type="button"
+      class="status-filtro"
+      id="abrirLoginMuralBotao"
+    >
+      Entrar para votar
+    </button>
+  `;
+
+  header.appendChild(
+    area
+  );
+
+  const botao =
+    document.getElementById(
+      "abrirLoginMuralBotao"
+    );
+
+  botao.addEventListener(
+    "click",
+    abrirLogin
+  );
+
+  atualizarBotaoLoginMural();
+}
+
+function atualizarBotaoLoginMural() {
+  const botao =
+    document.getElementById(
+      "abrirLoginMuralBotao"
+    );
+
+  if (!botao) {
+    return;
+  }
+
+  if (usuarioAtual) {
+    botao.textContent =
+      "Minha conta";
+  } else {
+    botao.textContent =
+      "Entrar para votar";
+  }
+}
+
+/* =========================================================
+   INICIALIZAÇÃO DO SITE
+   ========================================================= */
+
+async function iniciarSite() {
+  adicionarEstiloMarcadorGenerico();
+
+  inicializarMapa();
+
+  descobrirSlidesHero();
+
+  criarInterfaceLogin();
+
+  adicionarBotaoLoginMural();
+
+  await inicializarAutenticacao();
+
+  atualizarBotaoLoginMural();
+
+  await carregarDados();
+
+  await carregarPessoas();
+}
+
+/* =========================================================
+   INICIAR
+   ========================================================= */
+
+iniciarSite();
+
+/* =========================================================
+   ATUALIZAR HORÁRIOS A CADA MINUTO
+   ========================================================= */
+
+setInterval(
+  () => {
+    if (
+      dadosComercios.length ===
+      0
+    ) {
+      return;
+    }
+
+    atualizarStatusBotao();
+
+    atualizarStatusComercio();
+
+    renderizarComercios();
+
+    renderizarComercioLocal();
+  },
+  60000
+);
+
+/* =========================================================
+   ATUALIZAR TAMANHO DO MAPA
+   ========================================================= */
+
+window.addEventListener(
+  "resize",
+  () => {
+    if (homeMap) {
+      homeMap.invalidateSize();
+    }
+  }
+);
+
+/* =========================================================
+   TECLA ESC — LOGIN
+   ========================================================= */
+
+document.addEventListener(
+  "keydown",
+  event => {
+    if (
+      event.key ===
+      "Escape"
+    ) {
+      fecharLogin();
+    }
+  }
+);
