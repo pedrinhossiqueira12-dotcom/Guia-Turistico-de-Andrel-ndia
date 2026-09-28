@@ -1,38 +1,73 @@
-const params = new URLSearchParams(window.location.search);
-const idLocal = params.get("id");
+/* =========================================================
+ANDRELÂNDIA — GUIA TURÍSTICO
+LOCAL.JS
+========================================================= */
+
+/* =========================================================
+SUPABASE
+========================================================= */
+
+const SUPABASE_URL =
+"https://xdmbkflufsfqziixzpxc.supabase.co";
+
+const SUPABASE_KEY =
+"sb_publishable_dvwNkLDf3oZrCqvZ5uAaRA_VsfiuZFy";
+
+const supabaseClient =
+window.supabase.createClient(
+SUPABASE_URL,
+SUPABASE_KEY
+);
+
+/* =========================================================
+VARIÁVEIS
+========================================================= */
+
+const params =
+new URLSearchParams(
+window.location.search
+);
+
+const idLocal =
+params.get("id");
 
 let localAtual = null;
+
 let mapaLocal = null;
 
+let notaSelecionada = 0;
 
-/* =========================
-   VOLTAR
-========================= */
+let avaliacaoAtual = null;
+
+/* =========================================================
+VOLTAR
+========================================================= */
 
 function voltarPagina() {
 
-  if (
-    document.referrer &&
-    document.referrer.includes(window.location.hostname)
-  ) {
-    history.back();
-    return;
-  }
+if (
+document.referrer &&
+document.referrer.includes(
+window.location.hostname
+)
+) {
 
-  window.location.href = "../index.html";
+history.back();
+
+return;
+
 }
 
+window.location.href =
+"../index.html";
+}
 
-/* =========================
-   SEGURANÇA
-========================= */
+/* =========================================================
+SEGURANÇA
+========================================================= */
 
 function escaparHTML(valor) {
-
-  if (
-    valor === undefined ||
-    valor === null
-  ) {
+  if (valor === null || valor === undefined) {
     return "";
   }
 
@@ -44,557 +79,490 @@ function escaparHTML(valor) {
     .replace(/'/g, "&#039;");
 }
 
-
-/* =========================
-   CAMINHO DAS IMAGENS
-========================= */
+/* =========================================================
+CAMINHO DAS IMAGENS
+========================================================= */
 
 function corrigirCaminhoImagem(caminho) {
 
-  if (!caminho) {
-    return "";
-  }
-
-  caminho =
-    String(caminho).trim();
-
-
-  /*
-    URL externa
-  */
-
-  if (
-    caminho.startsWith("http://") ||
-    caminho.startsWith("https://") ||
-    caminho.startsWith("data:")
-  ) {
-    return caminho;
-  }
-
-
-  /*
-    Caminho absoluto
-  */
-
-  if (caminho.startsWith("/")) {
-    return caminho;
-  }
-
-
-  /*
-    JSON:
-
-    ./img/igreja-matriz/capa.png
-
-    local.html está dentro de PAGES
-
-    Resultado:
-
-    ../img/igreja-matriz/capa.png
-  */
-
-  if (
-    caminho.startsWith("./img/")
-  ) {
-
-    return "../" +
-      caminho.substring(2);
-  }
-
-
-  /*
-    Caso venha:
-
-    img/igreja-matriz/capa.png
-  */
-
-  if (
-    caminho.startsWith("img/")
-  ) {
-
-    return "../" +
-      caminho;
-  }
-
-
-  return caminho;
+if (!caminho) {
+return "";
 }
 
+caminho =
+String(caminho).trim();
 
-/* =========================
-   CARREGAR LOCAL
-========================= */
+if (
+caminho.startsWith("http://") ||
+caminho.startsWith("https://") ||
+caminho.startsWith("data:")
+) {
+return caminho;
+}
+
+if (
+caminho.startsWith("/")
+) {
+return caminho;
+}
+
+if (
+caminho.startsWith("./img/")
+) {
+return "../" +
+caminho.substring(2);
+}
+
+if (
+caminho.startsWith("img/")
+) {
+return "../" +
+caminho;
+}
+
+return caminho;
+}
+
+/* =========================================================
+CARREGAR LOCAL
+========================================================= */
 
 async function carregarLocal() {
 
-  if (!idLocal) {
+if (!idLocal) {
 
-    mostrarErro(
-      "Local não informado."
-    );
+mostrarErro(
+  "Local não informado."
+);
 
-    return;
-  }
+return;
 
+}
 
-  try {
+try {
 
-    const [
-      locaisResponse,
-      comerciosResponse,
-      hospedagemResponse
-    ] = await Promise.all([
+const [
+  locaisResponse,
+  comerciosResponse,
+  hospedagemResponse
+] = await Promise.all([
 
-      fetch("../DATA/locais.json"),
+  fetch("../DATA/locais.json"),
 
-      fetch("../DATA/comercios.json"),
+  fetch("../DATA/comercios.json"),
 
-      fetch("../DATA/hospedagem.json")
+  fetch("../DATA/hospedagem.json")
 
-    ]);
-
-
-    if (!locaisResponse.ok) {
-
-      throw new Error(
-        "Não foi possível carregar locais.json"
-      );
-    }
+]);
 
 
-    if (!comerciosResponse.ok) {
+if (!locaisResponse.ok) {
 
-      throw new Error(
-        "Não foi possível carregar comercios.json"
-      );
-    }
+  throw new Error(
+    "Não foi possível carregar locais.json"
+  );
 
-
-    if (!hospedagemResponse.ok) {
-
-      throw new Error(
-        "Não foi possível carregar hospedagem.json"
-      );
-    }
-
-
-    const locais =
-      await locaisResponse.json();
-
-
-    const comercios =
-      await comerciosResponse.json();
-
-
-    const hospedagens =
-      await hospedagemResponse.json();
-
-
-    const todos = [
-
-      ...(Array.isArray(locais)
-        ? locais
-        : []),
-
-      ...(Array.isArray(comercios)
-        ? comercios
-        : []),
-
-      ...(Array.isArray(hospedagens)
-        ? hospedagens
-        : [])
-
-    ];
-
-
-    localAtual =
-      todos.find(
-        item =>
-          String(item.id) ===
-          String(idLocal)
-      );
-
-
-    if (!localAtual) {
-
-      console.error(
-        "ID não encontrado:",
-        idLocal
-      );
-
-      mostrarErro(
-        "Local não encontrado."
-      );
-
-      return;
-    }
-
-
-    console.log(
-      "Local carregado:",
-      localAtual
-    );
-
-
-    preencherPagina(
-      localAtual
-    );
-
-
-  } catch (erro) {
-
-    console.error(
-      "Erro ao carregar local:",
-      erro
-    );
-
-    mostrarErro(
-      "Não foi possível carregar as informações deste lugar."
-    );
-  }
 }
 
 
-/* =========================
-   PREENCHER PÁGINA
-========================= */
+if (!comerciosResponse.ok) {
+
+  throw new Error(
+    "Não foi possível carregar comercios.json"
+  );
+
+}
+
+
+if (!hospedagemResponse.ok) {
+
+  throw new Error(
+    "Não foi possível carregar hospedagem.json"
+  );
+
+}
+
+
+const locais =
+  await locaisResponse.json();
+
+
+const comercios =
+  await comerciosResponse.json();
+
+
+const hospedagens =
+  await hospedagemResponse.json();
+
+
+const todos = [
+
+  ...(Array.isArray(locais)
+    ? locais
+    : []),
+
+  ...(Array.isArray(comercios)
+    ? comercios
+    : []),
+
+  ...(Array.isArray(hospedagens)
+    ? hospedagens
+    : [])
+
+];
+
+
+localAtual =
+  todos.find(
+    item =>
+      String(item.id) ===
+      String(idLocal)
+  );
+
+
+if (!localAtual) {
+
+  console.error(
+    "ID não encontrado:",
+    idLocal
+  );
+
+  mostrarErro(
+    "Local não encontrado."
+  );
+
+  return;
+}
+
+
+console.log(
+  "Local carregado:",
+  localAtual
+);
+
+
+preencherPagina(
+  localAtual
+);
+
+
+await carregarAvaliacoes();
+
+await verificarUsuario();
+
+} catch (erro) {
+
+console.error(
+  "Erro ao carregar local:",
+  erro
+);
+
+mostrarErro(
+  "Não foi possível carregar as informações deste lugar."
+);
+
+}
+
+}
+
+/* =========================================================
+PREENCHER PÁGINA
+========================================================= */
 
 function preencherPagina(item) {
 
-  document.title =
-    `${item.nome || "Local"} — Guia Turístico de Andrelândia`;
+document.title =
+document.title = `${item.nome || "Local"} — Guia Turístico de Andrelândia`;
+const nomeElemento =
+document.getElementById(
+"nomeLocal"
+);
 
+if (nomeElemento) {
 
-  const nomeElemento =
-    document.getElementById(
-      "nomeLocal"
-    );
+nomeElemento.textContent =
+  item.nome || "Local";
 
-  if (nomeElemento) {
-
-    nomeElemento.textContent =
-      item.nome || "Local";
-  }
-
-
-  const categoriaElemento =
-    document.getElementById(
-      "categoriaLocal"
-    );
-
-  if (categoriaElemento) {
-
-    categoriaElemento.textContent =
-      item.categoria || "LOCAL";
-  }
-
-
-  /* =========================
-     DESCRIÇÃO
-  ========================= */
-
-  const descricao =
-    item.descricao ||
-    item.historia ||
-    "Conheça este lugar em Andrelândia.";
-
-
-  const descricaoElemento =
-    document.getElementById(
-      "descricaoLocal"
-    );
-
-  if (descricaoElemento) {
-
-    descricaoElemento.textContent =
-      descricao;
-  }
-
-
-  /* =========================
-     HISTÓRIA
-  ========================= */
-
-  const historiaElemento =
-    document.getElementById(
-      "historiaLocal"
-    );
-
-  if (historiaElemento) {
-
-    if (item.historia) {
-
-      historiaElemento.textContent =
-        item.historia;
-
-    } else {
-
-      historiaElemento.parentElement.style.display =
-        "none";
-    }
-  }
-
-
-  /* =========================
-     CURIOSIDADES
-  ========================= */
-
-  const curiosidadesElemento =
-    document.getElementById(
-      "curiosidadesLocal"
-    );
-
-  if (curiosidadesElemento) {
-
-    if (item.curiosidades) {
-
-      curiosidadesElemento.textContent =
-        item.curiosidades;
-
-    } else {
-
-      curiosidadesElemento.parentElement.style.display =
-        "none";
-    }
-  }
-
-
-  /* =========================
-     HORÁRIO
-  ========================= */
-
-  const horarioElemento =
-    document.getElementById(
-      "horarioLocal"
-    );
-
-  if (horarioElemento) {
-
-    horarioElemento.innerHTML =
-      formatarHorario(
-        item.horario
-      );
-  }
-
-
-  /* =========================
-     ENDEREÇO
-  ========================= */
-
-  const enderecoElemento =
-    document.getElementById(
-      "enderecoLocal"
-    );
-
-  if (enderecoElemento) {
-
-    enderecoElemento.textContent =
-      item.endereco ||
-      item.endereço ||
-      "Endereço não informado";
-  }
-
-
-  /* =========================
-     ENTRADA
-  ========================= */
-
-  const entradaElemento =
-    document.getElementById(
-      "entradaLocal"
-    );
-
-  if (entradaElemento) {
-
-    entradaElemento.textContent =
-      item.entrada ||
-      "Não informado";
-  }
-
-
-  /* =========================
-     TELEFONE
-  ========================= */
-
-  const telefoneElemento =
-    document.getElementById(
-      "telefoneLocal"
-    );
-
-  if (telefoneElemento) {
-
-    if (item.telefone) {
-
-      telefoneElemento.textContent =
-        item.telefone;
-
-    } else {
-
-      telefoneElemento.parentElement.style.display =
-        "none";
-    }
-  }
-
-
-  /* =========================
-     SITE
-  ========================= */
-
-  const siteElemento =
-    document.getElementById(
-      "siteLocal"
-    );
-
-  if (siteElemento) {
-
-    if (item.site) {
-
-      siteElemento.href =
-        item.site;
-
-      siteElemento.style.display =
-        "flex";
-
-    } else {
-
-      siteElemento.style.display =
-        "none";
-    }
-  }
-
-
-  /* =========================
-     INSTAGRAM
-  ========================= */
-
-  configurarInstagram(
-    item
-  );
-
-
-  /* =========================
-     WHATSAPP
-  ========================= */
-
-  configurarWhatsApp(
-    item
-  );
-
-
-  /* =========================
-     GALERIA
-  ========================= */
-
-  configurarGaleria(
-    item
-  );
-
-
-  /* =========================
-     MAPA
-  ========================= */
-
-  configurarMapa(
-    item
-  );
-
-
-  /* =========================
-     GOOGLE MAPS
-  ========================= */
-
-  configurarGoogleMaps(
-    item
-  );
 }
 
+const categoriaElemento =
+document.getElementById(
+"categoriaLocal"
+);
 
-/* =========================
-   HORÁRIO
-========================= */
+if (categoriaElemento) {
 
-function formatarHorario(
+categoriaElemento.textContent =
+  item.categoria || "LOCAL";
+
+}
+
+const descricao =
+item.descricao ||
+item.historia ||
+"Conheça este lugar em Andrelândia.";
+
+const descricaoElemento =
+document.getElementById(
+"descricaoLocal"
+);
+
+if (descricaoElemento) {
+
+descricaoElemento.textContent =
+  descricao;
+
+}
+
+const historiaElemento =
+document.getElementById(
+"historiaLocal"
+);
+
+if (historiaElemento) {
+
+if (item.historia) {
+
+  historiaElemento.textContent =
+    item.historia;
+
+} else {
+
+  historiaElemento.parentElement.style.display =
+    "none";
+
+}
+
+}
+
+const curiosidadesElemento =
+document.getElementById(
+"curiosidadesLocal"
+);
+
+if (curiosidadesElemento) {
+
+if (item.curiosidades) {
+
+  curiosidadesElemento.textContent =
+    item.curiosidades;
+
+} else {
+
+  curiosidadesElemento.parentElement.style.display =
+    "none";
+
+}
+
+}
+
+const horarioElemento =
+document.getElementById(
+"horarioLocal"
+);
+
+if (horarioElemento) {
+
+horarioElemento.innerHTML =
+  formatarHorario(
+    item.horario
+  );
+
+}
+
+const enderecoElemento =
+document.getElementById(
+"enderecoLocal"
+);
+
+if (enderecoElemento) {
+
+enderecoElemento.textContent =
+  item.endereco ||
+  item.endereço ||
+  "Endereço não informado";
+
+}
+
+const entradaElemento =
+document.getElementById(
+"entradaLocal"
+);
+
+if (entradaElemento) {
+
+entradaElemento.textContent =
+  item.entrada ||
+  "Não informado";
+
+}
+
+const telefoneElemento =
+document.getElementById(
+"telefoneLocal"
+);
+
+if (telefoneElemento) {
+
+if (item.telefone) {
+
+  telefoneElemento.textContent =
+    item.telefone;
+
+} else {
+
+  telefoneElemento.parentElement.style.display =
+    "none";
+
+}
+
+}
+
+const siteElemento =
+document.getElementById(
+"siteLocal"
+);
+
+if (siteElemento) {
+
+if (item.site) {
+
+  siteElemento.href =
+    item.site;
+
+  siteElemento.style.display =
+    "flex";
+
+} else {
+
+  siteElemento.style.display =
+    "none";
+
+}
+
+}
+
+configurarInstagram(item);
+
+configurarWhatsApp(item);
+
+configurarGaleria(item);
+
+configurarMapa(item);
+
+configurarGoogleMaps(item);
+
+}
+
+/* =========================================================
+HORÁRIO
+========================================================= */
+
+function formatarHorario(horario) {
+
+if (!horario) {
+
+return "Horário não informado";
+
+}
+
+if (
+typeof horario === "string"
+) {
+
+return escaparHTML(
   horario
-) {
+);
 
-  if (!horario) {
-
-    return "Horário não informado";
-  }
-
-
-  if (
-    typeof horario === "string"
-  ) {
-
-    return escaparHTML(
-      horario
-    );
-  }
-
-
-  if (
-    typeof horario === "object"
-  ) {
-
-    return Object.entries(
-      horario
-    )
-      .map(
-        ([dia, hora]) => {
-
-          return `
-            <div>
-              <strong>
-                ${escaparHTML(dia)}:
-              </strong>
-
-              ${escaparHTML(hora)}
-            </div>
-          `;
-        }
-      )
-      .join("");
-  }
-
-
-  return "Horário não informado";
 }
 
-
-/* =========================
-   INSTAGRAM
-========================= */
-
-function configurarInstagram(
-  item
+if (
+typeof horario === "object"
 ) {
+
+return Object.entries(
+  horario
+)
+  .map(
+    ([dia, hora]) => {
+
+      return `
+        <div>
+          <strong>
+            ${escaparHTML(dia)}:
+          </strong>
+          ${escaparHTML(hora)}
+        </div>
+      `;
+
+    }
+  )
+  .join("");
+
+}
+
+return "Horário não informado";
+
+}
+
+/* =========================================================
+INSTAGRAM
+========================================================= */
+
+function configurarInstagram(item) {
+  const link = document.getElementById("instagramLocal");
+  const nome = document.getElementById("instagramNome");
+
+  if (!link || !nome) {
+    return;
+  }
+
+  const usuario = item.instagram || "";
+
+  if (!usuario) {
+    link.style.display = "none";
+    return;
+  }
+
+  const url = `https://www.instagram.com/${usuario}/`;
+
+  nome.textContent = usuario
+    ? `@${usuario}`
+    : "Instagram";
+
+  link.href = url;
+  link.target = "_blank";
+  link.rel = "noopener noreferrer";
+  link.style.display = "flex";
+}
+
+/* =========================================================
+WHATSAPP
+========================================================= */
+
+function configurarWhatsApp(item) {
 
   const link =
     document.getElementById(
-      "instagramLocal"
+      "whatsappLocal"
     );
 
   const nome =
     document.getElementById(
-      "instagramNome"
+      "whatsappNome"
     );
 
-
-  if (
-    !link ||
-    !nome
-  ) {
+  if (!link) {
     return;
   }
 
-
-  let instagram =
-    item.instagram || "";
-
+  const telefone =
+    item.telefone ||
+    item.whatsapp ||
+    "";
 
   if (
-    !String(instagram).trim()
+    !String(telefone).trim()
   ) {
 
     link.style.display =
@@ -603,83 +571,36 @@ function configurarInstagram(
     return;
   }
 
+  let numero =
+    String(telefone)
+      .replace(/\D/g, "");
 
-  instagram =
-    String(instagram).trim();
+  if (!numero) {
 
+    link.style.display =
+      "none";
 
-  let url =
-    instagram;
-
-
-  let usuario = "";
-
-
-  if (
-    instagram.startsWith(
-      "http://"
-    ) ||
-    instagram.startsWith(
-      "https://"
-    )
-  ) {
-
-    url =
-      instagram;
-
-    usuario =
-      instagram
-        .replace(
-          "https://www.instagram.com/",
-          ""
-        )
-        .replace(
-          "https://instagram.com/",
-          ""
-        )
-        .replace(
-          "http://www.instagram.com/",
-          ""
-        )
-        .replace(
-          "http://instagram.com/",
-          ""
-        )
-        .replace(
-          /\/$/,
-          ""
-        );
-
-  } else {
-
-    usuario =
-      instagram
-        .replace(
-          "@",
-          ""
-        )
-        .replace(
-          "instagram.com/",
-          ""
-        )
-        .replace(
-          "/",
-          ""
-        );
-
-    url =
-      `https://www.instagram.com/${usuario}/`;
+    return;
   }
 
+  if (
+    !numero.startsWith("55")
+  ) {
 
-  nome.textContent =
-    usuario
-      ? `@${usuario}`
-      : "Instagram";
+    numero =
+      "55" + numero;
 
+  }
+
+  if (nome) {
+
+    nome.textContent =
+      "WhatsApp";
+
+  }
 
   link.href =
-    url;
+    `https://wa.me/${numero}`;
 
   link.target =
     "_blank";
@@ -691,303 +612,238 @@ function configurarInstagram(
     "flex";
 }
 
+/* =========================================================
+GALERIA
+========================================================= */
 
-/* =========================
-   WHATSAPP
-========================= */
+function configurarGaleria(item) {
 
-function configurarWhatsApp(item) {
-  const link = document.getElementById("whatsappLocal");
-  const nome = document.getElementById("whatsappNome");
+const principal =
+document.getElementById(
+"fotoPrincipal"
+);
 
-  if (!link) {
-    return;
-  }
+const miniaturas =
+document.getElementById(
+"miniaturas"
+);
 
-  // Usa telefone como WhatsApp
-  const telefone = item.telefone || item.whatsapp || "";
-
-  if (!String(telefone).trim()) {
-    link.style.display = "none";
-    return;
-  }
-
-  let numero = String(telefone).replace(/\D/g, "");
-
-  if (!numero) {
-    link.style.display = "none";
-    return;
-  }
-
-  // Adiciona código do Brasil se ainda não existir
-  if (!numero.startsWith("55")) {
-    numero = "55" + numero;
-  }
-
-  if (nome) {
-    nome.textContent = "WhatsApp";
-  }
-
-  link.href = `https://wa.me/${numero}`;
-  link.target = "_blank";
-  link.rel = "noopener noreferrer";
-  link.style.display = "flex";
-}
-
-
-/* =========================
-   GALERIA
-========================= */
-
-function configurarGaleria(
-  item
+if (
+!principal ||
+!miniaturas
 ) {
 
-  const principal =
-    document.getElementById(
-      "fotoPrincipal"
-    );
+return;
 
-  const miniaturas =
-    document.getElementById(
-      "miniaturas"
-    );
+}
 
+let fotos = [];
 
-  if (
-    !principal ||
-    !miniaturas
-  ) {
-    return;
-  }
+if (item.capa) {
 
+const capa =
+  corrigirCaminhoImagem(
+    item.capa
+  );
 
-  let fotos = [];
+if (capa) {
 
+  fotos.push(capa);
 
-  /* =========================
-     CAPA
-  ========================= */
+}
 
-  if (item.capa) {
+}
 
-    const capa =
+if (
+Array.isArray(
+item.galeria
+)
+) {
+
+item.galeria.forEach(
+  foto => {
+
+    const caminho =
       corrigirCaminhoImagem(
-        item.capa
+        foto
       );
 
-
-    if (capa) {
+    if (
+      caminho &&
+      !fotos.includes(
+        caminho
+      )
+    ) {
 
       fotos.push(
-        capa
+        caminho
       );
+
     }
+
   }
+);
 
-
-  /* =========================
-     GALERIA
-  ========================= */
-
-  if (
-    Array.isArray(
-      item.galeria
-    )
-  ) {
-
-    item.galeria.forEach(
-      foto => {
-
-        const caminho =
-          corrigirCaminhoImagem(
-            foto
-          );
-
-
-        if (
-          caminho &&
-          !fotos.includes(
-            caminho
-          )
-        ) {
-
-          fotos.push(
-            caminho
-          );
-        }
-      }
-    );
-  }
-
-
-  /* =========================
-     FOTOS
-  ========================= */
-
-  if (
-    Array.isArray(
-      item.fotos
-    )
-  ) {
-
-    item.fotos.forEach(
-      foto => {
-
-        const caminho =
-          corrigirCaminhoImagem(
-            foto
-          );
-
-
-        if (
-          caminho &&
-          !fotos.includes(
-            caminho
-          )
-        ) {
-
-          fotos.push(
-            caminho
-          );
-        }
-      }
-    );
-  }
-
-
-  /* =========================
-     SEM FOTOS
-  ========================= */
-
-  if (
-    fotos.length === 0
-  ) {
-
-    principal.style.display =
-      "none";
-
-    miniaturas.innerHTML = `
-      <div class="empty-comments">
-        Nenhuma foto disponível.
-      </div>
-    `;
-
-    return;
-  }
-
-
-  /* =========================
-     FOTO PRINCIPAL
-  ========================= */
-
-  principal.style.display =
-    "";
-
-  principal.src =
-    fotos[0];
-
-  principal.alt =
-    item.nome ||
-    "Foto do local";
-
-
-  /*
-    Se a imagem não existir,
-    mostramos o erro no console.
-  */
-
-  principal.onerror =
-    () => {
-
-      console.error(
-        "Erro ao carregar imagem:",
-        principal.src
-      );
-    };
-
-
-  /* =========================
-     MINIATURAS
-  ========================= */
-
-  miniaturas.innerHTML =
-    "";
-
-
-  fotos.forEach(
-    (foto, index) => {
-
-      const button =
-        document.createElement(
-          "button"
-        );
-
-
-      button.className =
-        "thumbnail";
-
-
-      if (
-        index === 0
-      ) {
-
-        button.classList.add(
-          "active"
-        );
-      }
-
-
-      button.innerHTML = `
-        <img
-          src="${escaparHTML(foto)}"
-          alt="Foto ${index + 1}"
-        >
-      `;
-
-
-      button.addEventListener(
-        "click",
-        () => {
-
-          principal.src =
-            foto;
-
-
-          document
-            .querySelectorAll(
-              ".thumbnail"
-            )
-            .forEach(
-              item =>
-                item.classList.remove(
-                  "active"
-                )
-            );
-
-
-          button.classList.add(
-            "active"
-          );
-        }
-      );
-
-
-      miniaturas.appendChild(
-        button
-      );
-    }
-  );
 }
 
-
-/* =========================
-   MAPA
-========================= */
-
-function configurarMapa(
-  item
+if (
+Array.isArray(
+item.fotos
+)
 ) {
+
+item.fotos.forEach(
+  foto => {
+
+    const caminho =
+      corrigirCaminhoImagem(
+        foto
+      );
+
+    if (
+      caminho &&
+      !fotos.includes(
+        caminho
+      )
+    ) {
+
+      fotos.push(
+        caminho
+      );
+
+    }
+
+  }
+);
+
+}
+
+if (
+fotos.length === 0
+) {
+
+principal.style.display =
+  "none";
+
+miniaturas.innerHTML = `
+
+  <div class="empty-comments">
+    Nenhuma foto disponível.
+  </div>
+
+`;
+
+return;
+
+}
+
+principal.style.display =
+"";
+
+principal.src =
+fotos[0];
+
+principal.alt =
+item.nome ||
+"Foto do local";
+
+principal.onerror =
+() => {
+
+  console.error(
+    "Erro ao carregar imagem:",
+    principal.src
+  );
+
+};
+
+miniaturas.innerHTML =
+"";
+
+fotos.forEach(
+(foto, index) => {
+
+  const button =
+    document.createElement(
+      "button"
+    );
+
+
+  button.className =
+    "thumbnail";
+
+
+  if (
+    index === 0
+  ) {
+
+    button.classList.add(
+      "active"
+    );
+
+  }
+
+
+  const imagem =
+    document.createElement(
+      "img"
+    );
+
+  imagem.src =
+    foto;
+
+  imagem.alt =
+    `Foto ${index + 1}`;
+
+
+  button.appendChild(
+    imagem
+  );
+
+
+  button.addEventListener(
+    "click",
+    () => {
+
+      principal.src =
+        foto;
+
+
+      document
+        .querySelectorAll(
+          ".thumbnail"
+        )
+        .forEach(
+          item =>
+            item.classList.remove(
+              "active"
+            )
+        );
+
+
+      button.classList.add(
+        "active"
+      );
+
+    }
+  );
+
+
+  miniaturas.appendChild(
+    button
+  );
+
+}
+
+);
+
+}
+
+/* =========================================================
+MAPA
+========================================================= */
+
+function configurarMapa(item) {
 
   const latitude =
     Number(
@@ -999,28 +855,22 @@ function configurarMapa(
       item.longitude
     );
 
-
   const elementoMapa =
     document.getElementById(
       "localMap"
     );
 
-
   if (!elementoMapa) {
     return;
   }
 
-
   if (
-    !Number.isFinite(
-      latitude
-    ) ||
-    !Number.isFinite(
-      longitude
-    )
+    !Number.isFinite(latitude) ||
+    !Number.isFinite(longitude)
   ) {
 
     elementoMapa.innerHTML = `
+
       <div style="
         height:100%;
         display:grid;
@@ -1029,13 +879,19 @@ function configurarMapa(
         color:#777;
         text-align:center;
       ">
+
         Localização deste lugar ainda não cadastrada.
+
       </div>
+
     `;
 
     return;
   }
 
+  if (mapaLocal) {
+    mapaLocal.remove();
+  }
 
   mapaLocal =
     L.map(
@@ -1054,7 +910,6 @@ function configurarMapa(
       18
     );
 
-
   L.tileLayer(
     "https://{s}.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
     {
@@ -1062,19 +917,15 @@ function configurarMapa(
         "server",
         "services"
       ],
-
       maxNativeZoom: 19,
-
       maxZoom: 22,
-
       attribution:
-        "Tiles &copy; Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community"
+        "Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community"
     }
   )
   .addTo(
     mapaLocal
   );
-
 
   const marcador =
     L.marker(
@@ -1087,28 +938,17 @@ function configurarMapa(
       mapaLocal
     );
 
-
   marcador.bindPopup(
-    `<strong>
-      ${escaparHTML(
-        item.nome ||
-        "Local"
-      )}
-    </strong>`
+    `<strong>${escaparHTML(item.nome || "Local")}</strong>`
   );
-
 
   marcador.openPopup();
 }
+/* =========================================================
+GOOGLE MAPS
+========================================================= */
 
-
-/* =========================
-   GOOGLE MAPS
-========================= */
-
-function configurarGoogleMaps(
-  item
-) {
+function configurarGoogleMaps(item) {
 
   const latitude =
     Number(
@@ -1120,25 +960,18 @@ function configurarGoogleMaps(
       item.longitude
     );
 
-
   const botao =
     document.getElementById(
       "comoChegar"
     );
 
-
   if (!botao) {
     return;
   }
 
-
   if (
-    !Number.isFinite(
-      latitude
-    ) ||
-    !Number.isFinite(
-      longitude
-    )
+    !Number.isFinite(latitude) ||
+    !Number.isFinite(longitude)
   ) {
 
     botao.style.display =
@@ -1147,480 +980,2104 @@ function configurarGoogleMaps(
     return;
   }
 
-
   const destino =
     `${latitude},${longitude}`;
-
 
   botao.href =
     `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destino)}`;
 
-
   botao.target =
     "_blank";
-
 
   botao.rel =
     "noopener noreferrer";
 }
 
-
-/* =========================
-   FOTO EM TELA CHEIA
-========================= */
+/* =========================================================
+FOTO EM TELA CHEIA
+========================================================= */
 
 function abrirFotoTelaCheia() {
 
-  const principal =
-    document.getElementById(
-      "fotoPrincipal"
-    );
+const principal =
+document.getElementById(
+"fotoPrincipal"
+);
 
-  const viewer =
-    document.getElementById(
-      "photoViewer"
-    );
+const viewer =
+document.getElementById(
+"photoViewer"
+);
 
-  const viewerImage =
-    document.getElementById(
-      "viewerImage"
-    );
+const viewerImage =
+document.getElementById(
+"viewerImage"
+);
 
+if (
+!principal ||
+!viewer ||
+!viewerImage ||
+!principal.src
+) {
 
-  if (
-    !principal ||
-    !viewer ||
-    !viewerImage ||
-    !principal.src
-  ) {
-    return;
-  }
+return;
 
-
-  viewerImage.src =
-    principal.src;
-
-
-  viewer.classList.add(
-    "open"
-  );
-
-
-  document.body.style.overflow =
-    "hidden";
 }
 
+viewerImage.src =
+principal.src;
+
+viewer.classList.add(
+"open"
+);
+
+document.body.style.overflow =
+"hidden";
+
+}
 
 function fecharFotoTelaCheia() {
 
-  const viewer =
-    document.getElementById(
-      "photoViewer"
+const viewer =
+document.getElementById(
+"photoViewer"
+);
+
+if (!viewer) {
+return;
+}
+
+viewer.classList.remove(
+"open"
+);
+
+document.body.style.overflow =
+"";
+
+}
+
+document.addEventListener(
+"keydown",
+event => {
+
+if (
+  event.key ===
+  "Escape"
+) {
+
+  fecharFotoTelaCheia();
+
+}
+
+}
+);
+
+/* =========================================================
+AUTENTICAÇÃO
+========================================================= */
+
+async function verificarUsuario() {
+
+const {
+data,
+error
+} =
+await supabaseClient.auth.getSession();
+
+if (error) {
+
+console.error(
+  "Erro ao verificar usuário:",
+  error
+);
+
+mostrarUsuarioDeslogado();
+
+return;
+
+}
+
+if (
+data.session &&
+data.session.user
+) {
+
+await mostrarUsuarioLogado(
+  data.session.user
+);
+
+} else {
+
+mostrarUsuarioDeslogado();
+
+}
+
+}
+
+/* =========================================================
+USUÁRIO LOGADO
+========================================================= */
+
+async function mostrarUsuarioLogado(user) {
+
+const areaAuth =
+document.getElementById(
+"areaAutenticacao"
+);
+
+const areaAvaliacao =
+document.getElementById(
+"areaAvaliacao"
+);
+
+const nomeElemento =
+document.getElementById(
+"nomeUsuarioLogado"
+);
+
+const nome =
+user.user_metadata?.nome ||
+user.email?.split("@")[0] ||
+"Usuário";
+
+if (nomeElemento) {
+
+nomeElemento.textContent =
+  nome;
+
+}
+
+if (areaAuth) {
+
+areaAuth.style.display =
+  "none";
+
+}
+
+if (areaAvaliacao) {
+
+areaAvaliacao.style.display =
+  "block";
+
+}
+
+await verificarAvaliacaoUsuario();
+
+}
+
+/* =========================================================
+USUÁRIO DESLOGADO
+========================================================= */
+
+function mostrarUsuarioDeslogado() {
+
+const areaAuth =
+document.getElementById(
+"areaAutenticacao"
+);
+
+const areaAvaliacao =
+document.getElementById(
+"areaAvaliacao"
+);
+
+if (areaAuth) {
+
+areaAuth.style.display =
+  "block";
+
+}
+
+if (areaAvaliacao) {
+
+areaAvaliacao.style.display =
+  "none";
+
+}
+
+}
+
+/* =========================================================
+MODAL
+========================================================= */
+
+function abrirModalAuth(modo = "login") {
+
+const modal =
+document.getElementById(
+"authModal"
+);
+
+if (!modal) {
+return;
+}
+
+modal.classList.add(
+"open"
+);
+
+modal.setAttribute(
+"aria-hidden",
+"false"
+);
+
+mostrarFormularioAuth(
+modo
+);
+
+document.body.style.overflow =
+"hidden";
+
+}
+
+function fecharModalAuth() {
+
+const modal =
+document.getElementById(
+"authModal"
+);
+
+if (!modal) {
+return;
+}
+
+modal.classList.remove(
+"open"
+);
+
+modal.setAttribute(
+"aria-hidden",
+"true"
+);
+
+document.body.style.overflow =
+"";
+
+}
+
+function mostrarFormularioAuth(
+modo
+) {
+
+const login =
+document.getElementById(
+"formLogin"
+);
+
+const cadastro =
+document.getElementById(
+"formCadastro"
+);
+
+if (!login || !cadastro) {
+return;
+}
+
+if (
+modo === "cadastro"
+) {
+
+login.style.display =
+  "none";
+
+cadastro.style.display =
+  "block";
+
+} else {
+
+login.style.display =
+  "block";
+
+cadastro.style.display =
+  "none";
+
+}
+
+}
+
+/* =========================================================
+CADASTRO
+========================================================= */
+
+async function cadastrarUsuario() {
+
+const nomeInput =
+document.getElementById(
+"cadastroNome"
+);
+
+const emailInput =
+document.getElementById(
+"cadastroEmail"
+);
+
+const senhaInput =
+document.getElementById(
+"cadastroSenha"
+);
+
+const confirmarInput =
+document.getElementById(
+"cadastroConfirmarSenha"
+);
+
+const erro =
+document.getElementById(
+"erroCadastro"
+);
+
+if (
+!nomeInput ||
+!emailInput ||
+!senhaInput ||
+!confirmarInput
+) {
+return;
+}
+
+const nome =
+nomeInput.value.trim();
+
+const email =
+emailInput.value.trim();
+
+const senha =
+senhaInput.value;
+
+const confirmar =
+confirmarInput.value;
+
+if (!nome) {
+
+mostrarErroAuth(
+  erro,
+  "Digite seu nome."
+);
+
+nomeInput.focus();
+
+return;
+
+}
+
+if (
+nome.length < 2
+) {
+
+mostrarErroAuth(
+  erro,
+  "Digite um nome válido."
+);
+
+nomeInput.focus();
+
+return;
+
+}
+
+if (!email) {
+
+mostrarErroAuth(
+  erro,
+  "Digite seu e-mail."
+);
+
+emailInput.focus();
+
+return;
+
+}
+
+if (
+senha.length < 6
+) {
+
+mostrarErroAuth(
+  erro,
+  "A senha precisa ter pelo menos 6 caracteres."
+);
+
+senhaInput.focus();
+
+return;
+
+}
+
+if (
+senha !== confirmar
+) {
+
+mostrarErroAuth(
+  erro,
+  "As senhas não são iguais."
+);
+
+confirmarInput.focus();
+
+return;
+
+}
+
+mostrarErroAuth(
+erro,
+""
+);
+
+const botao =
+document.getElementById(
+"botaoCadastro"
+);
+
+if (botao) {
+
+botao.disabled =
+  true;
+
+botao.textContent =
+  "Criando conta...";
+
+}
+
+const {
+data,
+error
+} =
+await supabaseClient.auth.signUp({
+
+  email: email,
+
+  password: senha,
+
+  options: {
+
+    data: {
+      nome: nome
+    }
+
+  }
+
+});
+
+if (botao) {
+
+botao.disabled =
+  false;
+
+botao.textContent =
+  "Criar conta";
+
+}
+
+if (error) {
+
+console.error(
+  "Erro ao criar conta:",
+  error
+);
+
+
+mostrarErroAuth(
+  erro,
+  traduzirErroAuth(
+    error
+  )
+);
+
+return;
+
+}
+
+if (
+data.session
+) {
+
+fecharModalAuth();
+
+await verificarUsuario();
+
+return;
+
+}
+
+mostrarErroAuth(
+erro,
+"Conta criada. Agora faça login."
+);
+
+mostrarFormularioAuth(
+"login"
+);
+
+const loginEmail =
+document.getElementById(
+"loginEmail"
+);
+
+if (loginEmail) {
+
+loginEmail.value =
+  email;
+
+}
+
+}
+
+/* =========================================================
+LOGIN
+========================================================= */
+
+async function fazerLogin() {
+
+const emailInput =
+document.getElementById(
+"loginEmail"
+);
+
+const senhaInput =
+document.getElementById(
+"loginSenha"
+);
+
+const erro =
+document.getElementById(
+"erroLogin"
+);
+
+if (
+!emailInput ||
+!senhaInput
+) {
+return;
+}
+
+const email =
+emailInput.value.trim();
+
+const senha =
+senhaInput.value;
+
+if (!email) {
+
+mostrarErroAuth(
+  erro,
+  "Digite seu e-mail."
+);
+
+emailInput.focus();
+
+return;
+
+}
+
+if (!senha) {
+
+mostrarErroAuth(
+  erro,
+  "Digite sua senha."
+);
+
+senhaInput.focus();
+
+return;
+
+}
+
+mostrarErroAuth(
+erro,
+""
+);
+
+const botao =
+document.getElementById(
+"botaoLogin"
+);
+
+if (botao) {
+
+botao.disabled =
+  true;
+
+botao.textContent =
+  "Entrando...";
+
+}
+
+const {
+data,
+error
+} =
+await supabaseClient.auth.signInWithPassword({
+
+  email: email,
+
+  password: senha
+
+});
+
+if (botao) {
+
+botao.disabled =
+  false;
+
+botao.textContent =
+  "Entrar";
+
+}
+
+if (error) {
+
+console.error(
+  "Erro ao entrar:",
+  error
+);
+
+
+mostrarErroAuth(
+  erro,
+  "E-mail ou senha incorretos."
+);
+
+return;
+
+}
+
+fecharModalAuth();
+
+await mostrarUsuarioLogado(
+data.user
+);
+
+}
+
+/* =========================================================
+LOGOUT
+========================================================= */
+
+async function sairUsuario() {
+
+const {
+error
+} =
+await supabaseClient.auth.signOut();
+
+if (error) {
+
+console.error(
+  "Erro ao sair:",
+  error
+);
+
+return;
+
+}
+
+notaSelecionada =
+0;
+
+avaliacaoAtual =
+null;
+
+atualizarEstrelas(
+0
+);
+
+mostrarUsuarioDeslogado();
+
+}
+
+/* =========================================================
+ERROS DE AUTENTICAÇÃO
+========================================================= */
+
+function mostrarErroAuth(
+elemento,
+mensagem
+) {
+
+if (!elemento) {
+return;
+}
+
+elemento.textContent =
+mensagem || "";
+
+}
+
+/* =========================================================
+TRADUZIR ERROS
+========================================================= */
+
+function traduzirErroAuth(
+error
+) {
+
+const mensagem =
+String(
+error?.message || ""
+).toLowerCase();
+
+if (
+mensagem.includes(
+"user already registered"
+)
+) {
+
+return "Este e-mail já possui uma conta.";
+
+}
+
+if (
+mensagem.includes(
+"invalid login credentials"
+)
+) {
+
+return "E-mail ou senha incorretos.";
+
+}
+
+if (
+mensagem.includes(
+"password should be at least"
+)
+) {
+
+return "A senha precisa ter pelo menos 6 caracteres.";
+
+}
+
+return (
+error?.message ||
+"Não foi possível realizar a operação."
+);
+
+}
+
+/* =========================================================
+ESTRELAS
+========================================================= */
+
+function atualizarEstrelas(
+quantidade
+) {
+
+const botoes =
+document.querySelectorAll(
+".star-button"
+);
+
+botoes.forEach(
+botao => {
+
+  const valor =
+    Number(
+      botao.dataset.rating
+    );
+
+  const imagem =
+    botao.querySelector(
+      "img"
     );
 
 
-  if (!viewer) {
+  if (!imagem) {
     return;
   }
 
 
-  viewer.classList.remove(
-    "open"
+  if (
+    valor <= quantidade
+  ) {
+
+    imagem.src =
+      "../img/icones/estrela.png";
+
+  } else {
+
+    imagem.src =
+      "../img/icones/estrela2.png";
+
+  }
+
+}
+
+);
+
+}
+
+/* =========================================================
+ESTRELAS DA MÉDIA
+========================================================= */
+
+function criarEstrelasMedia(
+media
+) {
+
+const container =
+document.getElementById(
+"estrelasMedia"
+);
+
+if (!container) {
+return;
+}
+
+container.innerHTML =
+"";
+
+for (
+let i = 1;
+i <= 5;
+i++
+) {
+
+const imagem =
+  document.createElement(
+    "img"
   );
 
 
-  document.body.style.overflow =
-    "";
+imagem.className =
+  "rating-star";
+
+
+imagem.src =
+  i <= Math.round(media)
+    ? "../img/icones/estrela.png"
+    : "../img/icones/estrela2.png";
+
+
+imagem.alt =
+  "";
+
+
+container.appendChild(
+  imagem
+);
+
+}
+
+}
+
+/* =========================================================
+VERIFICAR AVALIAÇÃO DO USUÁRIO
+========================================================= */
+
+async function verificarAvaliacaoUsuario() {
+
+const {
+data: sessionData
+} =
+await supabaseClient.auth.getSession();
+
+const user =
+sessionData?.session?.user;
+
+if (!user || !idLocal) {
+return;
+}
+
+const {
+data,
+error
+} =
+await supabaseClient
+.from("avaliacoes")
+.select(
+"id, nota, comentario"
+)
+.eq(
+"local_id",
+idLocal
+)
+.eq(
+"usuario_id",
+user.id
+)
+.maybeSingle();
+
+if (error) {
+
+console.error(
+  "Erro ao verificar avaliação:",
+  error
+);
+
+return;
+
+}
+
+avaliacaoAtual =
+data || null;
+
+if (data) {
+
+notaSelecionada =
+  data.nota;
+
+
+atualizarEstrelas(
+  data.nota
+);
+
+
+const texto =
+  document.getElementById(
+    "textoComentario"
+  );
+
+
+if (texto) {
+
+  texto.value =
+    data.comentario;
+
 }
 
 
-document.addEventListener(
-  "keydown",
+const botao =
+  document.getElementById(
+    "publicarComentario"
+  );
+
+
+if (botao) {
+
+  botao.textContent =
+    "Atualizar avaliação";
+
+}
+
+} else {
+
+notaSelecionada =
+  0;
+
+
+atualizarEstrelas(
+  0
+);
+
+}
+
+}
+
+/* =========================================================
+CARREGAR AVALIAÇÕES
+========================================================= */
+
+async function carregarAvaliacoes() {
+
+const lista =
+document.getElementById(
+"listaComentarios"
+);
+
+if (
+!lista ||
+!idLocal
+) {
+return;
+}
+
+const {
+data,
+error
+} =
+await supabaseClient
+.from("avaliacoes")
+.select(
+"id, local_id, usuario_id, nome_usuario, nota, comentario, criado_em"
+)
+.eq(
+"local_id",
+idLocal
+)
+.order(
+"criado_em",
+{
+ascending: false
+}
+);
+
+if (error) {
+
+console.error(
+  "Erro ao carregar avaliações:",
+  error
+);
+
+
+lista.innerHTML = `
+
+  <div class="empty-comments">
+    Não foi possível carregar as avaliações.
+  </div>
+
+`;
+
+return;
+
+}
+
+atualizarResumoAvaliacoes(
+data || []
+);
+
+lista.innerHTML =
+"";
+
+if (
+!data ||
+data.length === 0
+) {
+
+lista.innerHTML = `
+
+  <div class="empty-comments">
+    Ainda não há avaliações.
+    Seja o primeiro a avaliar!
+  </div>
+
+`;
+
+return;
+
+}
+
+data.forEach(
+avaliacao => {
+
+  const elemento =
+    document.createElement(
+      "div"
+    );
+
+
+  elemento.className =
+    "comment";
+
+
+  const dataFormatada =
+    formatarData(
+      avaliacao.criado_em
+    );
+
+
+  const estrelas =
+    criarHTMLestrelas(
+      avaliacao.nota
+    );
+
+
+  elemento.innerHTML = `
+
+    <div class="comment-header">
+
+      <strong>
+        ${escaparHTML(
+          avaliacao.nome_usuario
+        )}
+      </strong>
+
+      <span>
+        ${escaparHTML(
+          dataFormatada
+        )}
+      </span>
+
+    </div>
+
+
+    <div class="comment-stars">
+      ${estrelas}
+    </div>
+
+
+    <p>
+      ${escaparHTML(
+        avaliacao.comentario
+      )}
+    </p>
+
+  `;
+
+
+  const usuarioAtual =
+    obterUsuarioAtual();
+
+
+  if (
+    usuarioAtual &&
+    usuarioAtual.id ===
+    avaliacao.usuario_id
+  ) {
+
+    const acoes =
+      document.createElement(
+        "div"
+      );
+
+
+    acoes.className =
+      "comment-actions";
+
+
+    const editar =
+      document.createElement(
+        "button"
+      );
+
+
+    editar.type =
+      "button";
+
+    editar.className =
+      "delete-comment";
+
+    editar.textContent =
+      "Editar";
+
+    editar.addEventListener(
+      "click",
+      () => {
+
+        editarAvaliacao(
+          avaliacao
+        );
+
+      }
+    );
+
+
+    const excluir =
+      document.createElement(
+        "button"
+      );
+
+
+    excluir.type =
+      "button";
+
+    excluir.className =
+      "delete-comment";
+
+    excluir.textContent =
+      "Excluir";
+
+    excluir.addEventListener(
+      "click",
+      () => {
+
+        excluirAvaliacao(
+          avaliacao.id
+        );
+
+      }
+    );
+
+
+    acoes.appendChild(
+      editar
+    );
+
+    acoes.appendChild(
+      excluir
+    );
+
+
+    elemento.appendChild(
+      acoes
+    );
+
+  }
+
+
+  lista.appendChild(
+    elemento
+  );
+
+}
+
+);
+
+}
+
+/* =========================================================
+RESUMO
+========================================================= */
+
+function atualizarResumoAvaliacoes(
+avaliacoes
+) {
+
+const mediaElemento =
+document.getElementById(
+"mediaAvaliacoes"
+);
+
+const quantidadeElemento =
+document.getElementById(
+"quantidadeAvaliacoes"
+);
+
+const quantidade =
+avaliacoes.length;
+
+let media =
+0;
+
+if (quantidade > 0) {
+
+const soma =
+  avaliacoes.reduce(
+    (
+      total,
+      item
+    ) =>
+      total +
+      Number(item.nota || 0),
+    0
+  );
+
+
+media =
+  soma / quantidade;
+
+}
+
+if (mediaElemento) {
+
+mediaElemento.textContent =
+  media.toFixed(1)
+    .replace(
+      ".",
+      ","
+    );
+
+}
+
+if (quantidadeElemento) {
+
+quantidadeElemento.textContent =
+  quantidade === 0
+    ? "Nenhuma avaliação"
+    : quantidade === 1
+      ? "1 avaliação"
+      : `${quantidade} avaliações`;
+
+}
+
+criarEstrelasMedia(
+media
+);
+
+}
+
+/* =========================================================
+CRIAR ESTRELAS HTML
+========================================================= */
+
+function criarHTMLestrelas(
+nota
+) {
+
+let html =
+"";
+
+for (
+let i = 1;
+i <= 5;
+i++
+) {
+
+html += `
+
+  <img
+    class="comment-star"
+    src="${
+      i <= nota
+        ? "../img/icones/estrela.png"
+        : "../img/icones/estrela2.png"
+    }"
+    alt=""
+  >
+
+`;
+
+}
+
+return html;
+
+}
+
+/* =========================================================
+DATA
+========================================================= */
+
+function formatarData(
+valor
+) {
+
+if (!valor) {
+return "";
+}
+
+const data =
+new Date(
+valor
+);
+
+if (
+Number.isNaN(
+data.getTime()
+)
+) {
+
+return "";
+
+}
+
+return data.toLocaleDateString(
+"pt-BR"
+);
+
+}
+
+/* =========================================================
+USUÁRIO ATUAL
+========================================================= */
+
+function obterUsuarioAtual() {
+
+return window.usuarioAtualSupabase ||
+null;
+
+}
+
+/* =========================================================
+PUBLICAR / ATUALIZAR
+========================================================= */
+
+async function publicarComentario() {
+
+const textoInput =
+document.getElementById(
+"textoComentario"
+);
+
+if (
+!textoInput ||
+!idLocal
+) {
+return;
+}
+
+const texto =
+textoInput.value.trim();
+
+if (
+notaSelecionada < 1 ||
+notaSelecionada > 5
+) {
+
+alert(
+  "Escolha uma nota de 1 a 5 estrelas."
+);
+
+return;
+
+}
+
+if (!texto) {
+
+alert(
+  "Escreva um comentário."
+);
+
+textoInput.focus();
+
+return;
+
+}
+
+if (
+texto.length > 500
+) {
+
+alert(
+  "O comentário pode ter no máximo 500 caracteres."
+);
+
+return;
+
+}
+
+const {
+data: sessionData
+} =
+await supabaseClient.auth.getSession();
+
+const user =
+sessionData?.session?.user;
+
+if (!user) {
+
+abrirModalAuth(
+  "login"
+);
+
+return;
+
+}
+
+const nome =
+user.user_metadata?.nome ||
+user.email?.split("@")[0] ||
+"Usuário";
+
+const botao =
+document.getElementById(
+"publicarComentario"
+);
+
+if (botao) {
+
+botao.disabled =
+  true;
+
+botao.textContent =
+  avaliacaoAtual
+    ? "Atualizando..."
+    : "Publicando...";
+
+}
+
+let resultado;
+
+if (avaliacaoAtual) {
+
+resultado =
+  await supabaseClient
+    .from("avaliacoes")
+    .update({
+
+      nota:
+        notaSelecionada,
+
+      comentario:
+        texto,
+
+      nome_usuario:
+        nome
+
+    })
+    .eq(
+      "id",
+      avaliacaoAtual.id
+    )
+    .eq(
+      "usuario_id",
+      user.id
+    );
+
+} else {
+
+resultado =
+  await supabaseClient
+    .from("avaliacoes")
+    .insert({
+
+      local_id:
+        idLocal,
+
+      usuario_id:
+        user.id,
+
+      nome_usuario:
+        nome,
+
+      nota:
+        notaSelecionada,
+
+      comentario:
+        texto
+
+    });
+
+}
+
+if (botao) {
+
+botao.disabled =
+  false;
+
+botao.textContent =
+  avaliacaoAtual
+    ? "Atualizar avaliação"
+    : "Publicar avaliação";
+
+}
+
+if (resultado.error) {
+
+console.error(
+  "Erro ao salvar avaliação:",
+  resultado.error
+);
+
+
+alert(
+  "Não foi possível salvar sua avaliação."
+);
+
+return;
+
+}
+
+alert(
+avaliacaoAtual
+? "Sua avaliação foi atualizada!"
+: "Sua avaliação foi publicada!"
+);
+
+textoInput.value =
+"";
+
+notaSelecionada =
+0;
+
+avaliacaoAtual =
+null;
+
+atualizarEstrelas(
+0
+);
+
+if (botao) {
+
+botao.textContent =
+  "Publicar avaliação";
+
+}
+
+await carregarAvaliacoes();
+
+await verificarAvaliacaoUsuario();
+
+}
+
+/* =========================================================
+EDITAR
+========================================================= */
+
+function editarAvaliacao(
+avaliacao
+) {
+
+const area =
+document.getElementById(
+"areaAvaliacao"
+);
+
+if (area) {
+
+area.scrollIntoView({
+  behavior: "smooth",
+  block: "center"
+});
+
+}
+
+notaSelecionada =
+avaliacao.nota;
+
+atualizarEstrelas(
+avaliacao.nota
+);
+
+const texto =
+document.getElementById(
+"textoComentario"
+);
+
+if (texto) {
+
+texto.value =
+  avaliacao.comentario;
+
+texto.focus();
+
+}
+
+avaliacaoAtual =
+avaliacao;
+
+const botao =
+document.getElementById(
+"publicarComentario"
+);
+
+if (botao) {
+
+botao.textContent =
+  "Atualizar avaliação";
+
+}
+
+}
+
+/* =========================================================
+EXCLUIR
+========================================================= */
+
+async function excluirAvaliacao(
+id
+) {
+
+const confirmar =
+window.confirm(
+"Deseja realmente excluir sua avaliação?"
+);
+
+if (!confirmar) {
+return;
+}
+
+const {
+data: sessionData
+} =
+await supabaseClient.auth.getSession();
+
+const user =
+sessionData?.session?.user;
+
+if (!user) {
+return;
+}
+
+const {
+error
+} =
+await supabaseClient
+.from("avaliacoes")
+.delete()
+.eq(
+"id",
+id
+)
+.eq(
+"usuario_id",
+user.id
+);
+
+if (error) {
+
+console.error(
+  "Erro ao excluir avaliação:",
+  error
+);
+
+
+alert(
+  "Não foi possível excluir a avaliação."
+);
+
+return;
+
+}
+
+avaliacaoAtual =
+null;
+
+notaSelecionada =
+0;
+
+atualizarEstrelas(
+0
+);
+
+const texto =
+document.getElementById(
+"textoComentario"
+);
+
+if (texto) {
+
+texto.value =
+  "";
+
+}
+
+await carregarAvaliacoes();
+
+}
+
+/* =========================================================
+ERRO
+========================================================= */
+
+function mostrarErro(
+mensagem
+) {
+
+const pagina =
+document.querySelector(
+".local-page"
+);
+
+if (!pagina) {
+return;
+}
+
+pagina.innerHTML = `
+
+<div style="
+  min-height:100vh;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  padding:30px;
+  text-align:center;
+">
+
+  <h1 style="
+    color:#091D1C;
+    font-family:Georgia,serif;
+  ">
+    Ops!
+  </h1>
+
+  <p style="
+    color:#666;
+    line-height:1.6;
+  ">
+    ${escaparHTML(
+      mensagem
+    )}
+  </p>
+
+  <a
+    href="../index.html"
+    style="
+      margin-top:15px;
+      padding:12px 20px;
+      background:#091D1C;
+      color:#fff;
+      border-radius:9px;
+      font-weight:bold;
+    "
+  >
+    Voltar ao início
+  </a>
+
+</div>
+
+`;
+
+}
+
+/* =========================================================
+EVENTOS
+========================================================= */
+
+function configurarEventos() {
+
+const abrirLogin =
+document.getElementById(
+"abrirLogin"
+);
+
+const abrirCadastro =
+document.getElementById(
+"abrirCadastro"
+);
+
+const fecharAuth =
+document.getElementById(
+"fecharAuth"
+);
+
+const trocarCadastro =
+document.getElementById(
+"trocarCadastro"
+);
+
+const trocarLogin =
+document.getElementById(
+"trocarLogin"
+);
+
+const botaoLogin =
+document.getElementById(
+"botaoLogin"
+);
+
+const botaoCadastro =
+document.getElementById(
+"botaoCadastro"
+);
+
+const botaoSair =
+document.getElementById(
+"botaoSair"
+);
+
+const botaoPublicar =
+document.getElementById(
+"publicarComentario"
+);
+
+if (abrirLogin) {
+
+abrirLogin.addEventListener(
+  "click",
+  () => abrirModalAuth(
+    "login"
+  )
+);
+
+}
+
+if (abrirCadastro) {
+
+abrirCadastro.addEventListener(
+  "click",
+  () => abrirModalAuth(
+    "cadastro"
+  )
+);
+
+}
+
+if (fecharAuth) {
+
+fecharAuth.addEventListener(
+  "click",
+  fecharModalAuth
+);
+
+}
+
+if (trocarCadastro) {
+
+trocarCadastro.addEventListener(
+  "click",
+  () => {
+
+    mostrarFormularioAuth(
+      "cadastro"
+    );
+
+  }
+);
+
+}
+
+if (trocarLogin) {
+
+trocarLogin.addEventListener(
+  "click",
+  () => {
+
+    mostrarFormularioAuth(
+      "login"
+    );
+
+  }
+);
+
+}
+
+if (botaoLogin) {
+
+botaoLogin.addEventListener(
+  "click",
+  fazerLogin
+);
+
+}
+
+if (botaoCadastro) {
+
+botaoCadastro.addEventListener(
+  "click",
+  cadastrarUsuario
+);
+
+}
+
+if (botaoSair) {
+
+botaoSair.addEventListener(
+  "click",
+  sairUsuario
+);
+
+}
+
+if (botaoPublicar) {
+
+botaoPublicar.addEventListener(
+  "click",
+  publicarComentario
+);
+
+}
+
+document
+.querySelectorAll(
+".star-button"
+)
+.forEach(
+botao => {
+
+    botao.addEventListener(
+      "click",
+      () => {
+
+        notaSelecionada =
+          Number(
+            botao.dataset.rating
+          );
+
+
+        atualizarEstrelas(
+          notaSelecionada
+        );
+
+      }
+    );
+
+
+    botao.addEventListener(
+      "mouseenter",
+      () => {
+
+        atualizarEstrelas(
+          Number(
+            botao.dataset.rating
+          )
+        );
+
+      }
+    );
+
+  }
+);
+
+const seletor =
+document.getElementById(
+"seletorEstrelas"
+);
+
+if (seletor) {
+
+seletor.addEventListener(
+  "mouseleave",
+  () => {
+
+    atualizarEstrelas(
+      notaSelecionada
+    );
+
+  }
+);
+
+}
+
+const modal =
+document.getElementById(
+"authModal"
+);
+
+if (modal) {
+
+modal.addEventListener(
+  "click",
   event => {
 
     if (
-      event.key ===
-      "Escape"
+      event.target ===
+      modal
     ) {
 
-      fecharFotoTelaCheia();
+      fecharModalAuth();
+
     }
 
   }
 );
 
-
-/* =========================
-   COMENTÁRIOS
-========================= */
-
-function carregarComentarios() {
-
-  const lista =
-    document.getElementById(
-      "listaComentarios"
-    );
-
-
-  if (
-    !lista ||
-    !idLocal
-  ) {
-    return;
-  }
-
-
-  const chave =
-    `comentarios_${idLocal}`;
-
-
-  const comentarios =
-    JSON.parse(
-      localStorage.getItem(
-        chave
-      )
-    ) || [];
-
-
-  lista.innerHTML =
-    "";
-
-
-  if (
-    comentarios.length === 0
-  ) {
-
-    lista.innerHTML = `
-      <div class="empty-comments">
-        Ainda não há comentários.
-        Seja o primeiro a comentar!
-      </div>
-    `;
-
-    return;
-  }
-
-
-  comentarios.forEach(
-    (
-      comentario,
-      index
-    ) => {
-
-      const elemento =
-        document.createElement(
-          "div"
-        );
-
-
-      elemento.className =
-        "comment";
-
-
-      elemento.innerHTML = `
-        <div class="comment-header">
-
-          <strong>
-            ${escaparHTML(
-              comentario.nome
-            )}
-          </strong>
-
-          <span>
-            ${escaparHTML(
-              comentario.data
-            )}
-          </span>
-
-        </div>
-
-        <p>
-          ${escaparHTML(
-            comentario.texto
-          )}
-        </p>
-
-        <button
-          type="button"
-          class="delete-comment"
-          data-index="${index}"
-        >
-          Excluir
-        </button>
-      `;
-
-
-      lista.appendChild(
-        elemento
-      );
-    }
-  );
-
-
-  document
-    .querySelectorAll(
-      ".delete-comment"
-    )
-    .forEach(
-      botao => {
-
-        botao.addEventListener(
-          "click",
-          () => {
-
-            excluirComentario(
-              Number(
-                botao.dataset.index
-              )
-            );
-
-          }
-        );
-
-      }
-    );
 }
-
-
-function publicarComentario() {
-
-  const nomeInput =
-    document.getElementById(
-      "nomeComentario"
-    );
-
-
-  const textoInput =
-    document.getElementById(
-      "textoComentario"
-    );
-
-
-  if (
-    !nomeInput ||
-    !textoInput ||
-    !idLocal
-  ) {
-    return;
-  }
-
-
-  const nome =
-    nomeInput.value.trim();
-
-
-  const texto =
-    textoInput.value.trim();
-
-
-  if (!nome) {
-
-    alert(
-      "Digite seu nome."
-    );
-
-
-    nomeInput.focus();
-
-
-    return;
-  }
-
-
-  if (!texto) {
-
-    alert(
-      "Escreva um comentário."
-    );
-
-
-    textoInput.focus();
-
-
-    return;
-  }
-
-
-  const chave =
-    `comentarios_${idLocal}`;
-
-
-  const comentarios =
-    JSON.parse(
-      localStorage.getItem(
-        chave
-      )
-    ) || [];
-
-
-  const agora =
-    new Date();
-
-
-  comentarios.unshift({
-
-    nome: nome,
-
-    texto: texto,
-
-    data:
-      agora.toLocaleDateString(
-        "pt-BR"
-      )
-
-  });
-
-
-  localStorage.setItem(
-    chave,
-    JSON.stringify(
-      comentarios
-    )
-  );
-
-
-  nomeInput.value =
-    "";
-
-  textoInput.value =
-    "";
-
-
-  carregarComentarios();
-}
-
-
-function excluirComentario(
-  index
-) {
-
-  if (!idLocal) {
-    return;
-  }
-
-
-  const chave =
-    `comentarios_${idLocal}`;
-
-
-  const comentarios =
-    JSON.parse(
-      localStorage.getItem(
-        chave
-      )
-    ) || [];
-
-
-  comentarios.splice(
-    index,
-    1
-  );
-
-
-  localStorage.setItem(
-    chave,
-    JSON.stringify(
-      comentarios
-    )
-  );
-
-
-  carregarComentarios();
-}
-
-
-/* =========================
-   ERRO
-========================= */
-
-function mostrarErro(
-  mensagem
-) {
-
-  const pagina =
-    document.querySelector(
-      ".local-page"
-    );
-
-
-  if (!pagina) {
-    return;
-  }
-
-
-  pagina.innerHTML = `
-    <div style="
-      min-height:100vh;
-      display:flex;
-      flex-direction:column;
-      align-items:center;
-      justify-content:center;
-      padding:30px;
-      text-align:center;
-    ">
-
-      <h1 style="
-        color:#091D1C;
-        font-family:Georgia,serif;
-      ">
-        Ops!
-      </h1>
-
-      <p style="
-        color:#666;
-        line-height:1.6;
-      ">
-        ${escaparHTML(
-          mensagem
-        )}
-      </p>
-
-      <a
-        href="../index.html"
-        style="
-          margin-top:15px;
-          padding:12px 20px;
-          background:#091D1C;
-          color:#fff;
-          border-radius:9px;
-          font-weight:bold;
-        "
-      >
-        Voltar ao início
-      </a>
-
-    </div>
-  `;
-}
-
-
-/* =========================
-   INICIAR
-========================= */
 
 document.addEventListener(
-  "DOMContentLoaded",
-  () => {
+"keydown",
+event => {
 
-    carregarLocal();
+  if (
+    event.key ===
+    "Escape"
+  ) {
 
-
-    const botaoComentario =
-      document.getElementById(
-        "publicarComentario"
-      );
-
-
-    if (botaoComentario) {
-
-      botaoComentario.addEventListener(
-        "click",
-        publicarComentario
-      );
-    }
-
-
-    carregarComentarios();
+    fecharModalAuth();
 
   }
+
+}
+
+);
+
+}
+
+/* =========================================================
+MONITORAR LOGIN
+========================================================= */
+
+supabaseClient.auth.onAuthStateChange(
+async (
+event,
+session
+) => {
+
+window.usuarioAtualSupabase =
+  session?.user ||
+  null;
+
+
+if (
+  session?.user
+) {
+
+  await mostrarUsuarioLogado(
+    session.user
+  );
+
+} else {
+
+  mostrarUsuarioDeslogado();
+
+}
+
+}
+);
+
+/* =========================================================
+INICIAR
+========================================================= */
+
+document.addEventListener(
+"DOMContentLoaded",
+async () => {
+
+configurarEventos();
+
+window.usuarioAtualSupabase =
+  null;
+
+await carregarLocal();
+
+}
 );
