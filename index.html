@@ -65,7 +65,7 @@
 
 
     <!-- ==================================================
-         HERO
+         HERO / CARROSSEL
     =================================================== -->
 
     <section
@@ -73,17 +73,38 @@
       id="inicio"
     >
 
-      <div class="hero-content">
-
-        <!-- Logo futuro -->
+      <div
+        class="hero-carousel"
+        id="heroCarousel"
+      >
 
         <!--
+          As imagens do carrossel são carregadas
+          automaticamente pelo index.js a partir de:
+
+          img/carrossel/hero1.png
+          img/carrossel/hero2.png
+          img/carrossel/hero3.png
+          etc.
+        -->
+
+      </div>
+
+
+      <div class="hero-content">
+
         <img
-          src="img/logo-andrelandia.png"
+          src="img/logo.png"
           class="hero-logo"
           alt="Andrelândia"
         >
-        -->
+
+        <p
+          class="hero-text"
+          id="heroText"
+        >
+          Descubra Andrelândia
+        </p>
 
       </div>
 
@@ -199,6 +220,7 @@
 
         </a>
 
+
         <!-- ONDE FICAR -->
 
         <a
@@ -244,7 +266,8 @@
 
         </a>
 
-       <!-- CAFÉS -->
+
+        <!-- PESSOAS -->
 
         <a
           class="quick-item"
@@ -261,12 +284,13 @@
             <span>
               pessoas
             </span>
-          
-          </div>
+
           </div>
 
         </a>
 
+
+      </div>
 
     </section>
 
@@ -986,7 +1010,16 @@
 
 
   <!-- ==================================================
-       JAVASCRIPT
+       SUPABASE
+  =================================================== -->
+
+  <script
+    src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"
+  ></script>
+
+
+  <!-- ==================================================
+       JAVASCRIPT PRINCIPAL
   =================================================== -->
 
   <script
