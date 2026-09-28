@@ -1,6 +1,6 @@
 /* =========================================================
    ANDRELÂNDIA — GUIA TURÍSTICO
-   CSS RESPONSIVO OTIMIZADO
+   CSS RESPONSIVO
 ========================================================= */
 
 :root {
@@ -11,12 +11,10 @@
   --fundo: #f5f3ef;
   --texto: #202522;
   --texto-claro: #777;
-
   --altura-navbar: 76px;
   --espaco: clamp(15px, 4vw, 28px);
   --largura-max: 1100px;
 }
-
 
 /* =========================================================
    RESET
@@ -34,16 +32,13 @@ html {
 body {
   margin: 0;
   padding-bottom: var(--altura-navbar);
-
   background: var(--fundo);
   color: var(--texto);
-
   font-family:
     "Roboto",
     Arial,
     Helvetica,
     sans-serif;
-
   overflow-x: hidden;
 }
 
@@ -64,7 +59,6 @@ button {
   display: none !important;
 }
 
-
 /* =========================================================
    CONTAINER PRINCIPAL
 ========================================================= */
@@ -73,48 +67,96 @@ button {
   width: 100%;
   max-width: var(--largura-max);
   min-height: 100vh;
-
   margin: 0 auto;
-
   background: var(--fundo);
-
   overflow: hidden;
 }
 
-
 /* =========================================================
-   HERO
+   HERO / CARROSSEL
 ========================================================= */
 
 .hero {
   position: relative;
+  width: 100%;
+  height: clamp(400px, 62vw, 620px);
+  min-height: 400px;
+  overflow: hidden;
+  background: var(--verde-escuro);
+}
 
-  height: clamp(430px, 65vh, 650px);
-  min-height: 430px;
+.hero-carousel {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
 
-  display: flex;
-  align-items: center;
-  justify-content: center;
+/* =========================================================
+   SLIDE
+========================================================= */
+
+.hero-slide {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  visibility: hidden;
+
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-size: cover;
+  background-color: var(--verde-escuro);
+
+  transform: none;
+  transition: opacity 1.2s ease;
+}
+
+.hero-slide.active {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+}
+
+/* =========================================================
+   DEGRADÊ DO HERO
+========================================================= */
+
+.hero-carousel::after {
+  content: "";
+
+  position: absolute;
+  inset: 0;
+
+  z-index: 5;
+
+  pointer-events: none;
 
   background:
     linear-gradient(
       to bottom,
-      rgba(0, 0, 0, 0) 40%,
-      rgba(0, 0, 0, 0.02) 60%,
-      rgba(245, 243, 239, 0.20) 82%,
+      rgba(0, 0, 0, 0.08) 0%,
+      rgba(0, 0, 0, 0.00) 35%,
+      rgba(0, 0, 0, 0.08) 55%,
+      rgba(9, 29, 28, 0.42) 76%,
+      rgba(245, 243, 239, 0.82) 94%,
       var(--fundo) 100%
-    ),
-    url("img/hero.png")
-    center center /
-    cover
-    no-repeat;
+    );
 }
+
+/* =========================================================
+   CONTEÚDO DO HERO
+========================================================= */
 
 .hero-content {
   position: relative;
-  z-index: 2;
+
+  z-index: 10;
 
   width: 100%;
+  height: 100%;
 
   padding:
     0
@@ -122,18 +164,140 @@ button {
     24px;
 
   display: flex;
+
   flex-direction: column;
+
   align-items: center;
+
   justify-content: center;
 
   text-align: center;
 
-  transform:
-    translateY(
-      clamp(-190px, -24vh, -100px)
+  pointer-events: none;
+
+  /*
+    Antes o conteúdo era deslocado muito para cima.
+    Isso também contribuía para a sensação de
+    enquadramento incorreto.
+  */
+
+  transform: translateY(-90px);
+}
+
+/* =========================================================
+   LOGO DO HERO
+========================================================= */
+
+.hero-logo {
+  display: block;
+
+  width:
+    clamp(
+      155px,
+      42vw,
+      280px
+    );
+
+  max-height: 180px;
+
+  object-fit: contain;
+
+  filter:
+    drop-shadow(
+      0 5px 12px
+      rgba(0, 0, 0, 0.28)
     );
 }
 
+/* =========================================================
+   TEXTO DO CARROSSEL
+========================================================= */
+
+.hero-caption {
+  margin-top: 16px;
+
+  max-width:
+    clamp(
+      260px,
+      75vw,
+      620px
+    );
+
+  color: var(--branco);
+
+  font-size:
+    clamp(
+      13px,
+      3.5vw,
+      20px
+    );
+
+  font-weight: 500;
+
+  line-height: 1.35;
+
+  text-shadow:
+    0 2px 7px
+    rgba(0, 0, 0, 0.5);
+
+  transition:
+    opacity .4s ease,
+    transform .4s ease;
+}
+
+/* =========================================================
+   INDICADORES
+========================================================= */
+
+.hero-indicators {
+  position: absolute;
+
+  z-index: 20;
+
+  left: 50%;
+  bottom: 35px;
+
+  transform: translateX(-50%);
+
+  display: flex;
+
+  align-items: center;
+
+  gap: 7px;
+
+  pointer-events: none;
+}
+
+.hero-indicator {
+  width: 6px;
+  height: 6px;
+
+  padding: 0;
+
+  border: 0;
+
+  border-radius: 50%;
+
+  background:
+    rgba(255, 255, 255, 0.55);
+
+  opacity: .75;
+
+  transition:
+    width .25s ease,
+    opacity .25s ease,
+    background .25s ease;
+}
+
+.hero-indicator.active {
+  width: 18px;
+
+  border-radius: 999px;
+
+  background: var(--branco);
+
+  opacity: 1;
+}
 
 /* =========================================================
    O QUE FAZER HOJE?
@@ -141,13 +305,19 @@ button {
 
 .route-card {
   position: relative;
-  z-index: 5;
+
+  z-index: 50;
 
   display: flex;
+
   align-items: center;
 
   min-height:
-    clamp(76px, 12vw, 92px);
+    clamp(
+      76px,
+      12vw,
+      92px
+    );
 
   margin:
     -8px
@@ -156,9 +326,14 @@ button {
 
   padding:
     14px
-    clamp(14px, 3vw, 20px);
+    clamp(
+      14px,
+      3vw,
+      20px
+    );
 
   background: var(--verde);
+
   color: var(--branco);
 
   border:
@@ -166,7 +341,11 @@ button {
     var(--cinza-borda);
 
   border-radius:
-    clamp(14px, 3vw, 20px);
+    clamp(
+      14px,
+      3vw,
+      20px
+    );
 
   box-shadow:
     0 8px 25px
@@ -175,26 +354,44 @@ button {
 
 .route-icon {
   width:
-    clamp(42px, 10vw, 52px);
+    clamp(
+      42px,
+      10vw,
+      52px
+    );
 
   height:
-    clamp(42px, 10vw, 52px);
+    clamp(
+      42px,
+      10vw,
+      52px
+    );
 
   flex:
     0 0
-    clamp(42px, 10vw, 52px);
+    clamp(
+      42px,
+      10vw,
+      52px
+    );
 
   display: grid;
+
   place-items: center;
 
   color: var(--branco);
 
   font-size:
-    clamp(20px, 5vw, 25px);
+    clamp(
+      20px,
+      5vw,
+      25px
+    );
 }
 
 .route-text {
   display: flex;
+
   flex-direction: column;
 
   min-width: 0;
@@ -204,7 +401,11 @@ button {
 
 .route-text strong {
   font-size:
-    clamp(14px, 3.8vw, 17px);
+    clamp(
+      14px,
+      3.8vw,
+      17px
+    );
 
   line-height: 1.25;
 }
@@ -215,23 +416,31 @@ button {
   color: var(--branco);
 
   font-size:
-    clamp(10px, 2.8vw, 13px);
+    clamp(
+      10px,
+      2.8vw,
+      13px
+    );
 
   line-height: 1.3;
 }
 
 .route-arrow {
   margin-left: auto;
+
   padding-left: 10px;
 
   color: var(--branco);
 
   font-size:
-    clamp(24px, 6vw, 30px);
+    clamp(
+      24px,
+      6vw,
+      30px
+    );
 
   line-height: 1;
 }
-
 
 /* =========================================================
    6 BOTÕES PRINCIPAIS
@@ -239,7 +448,11 @@ button {
 
 .section {
   padding:
-    clamp(22px, 5vw, 35px)
+    clamp(
+      22px,
+      5vw,
+      35px
+    )
     var(--espaco)
     10px;
 }
@@ -248,14 +461,22 @@ button {
   display: grid;
 
   grid-template-columns:
-    repeat(3, minmax(0, 1fr));
+    repeat(
+      3,
+      minmax(0, 1fr)
+    );
 
   gap:
-    clamp(9px, 2.5vw, 16px);
+    clamp(
+      9px,
+      2.5vw,
+      16px
+    );
 }
 
 .quick-item {
   display: block;
+
   min-width: 0;
 
   color: var(--verde);
@@ -263,18 +484,28 @@ button {
 
 .quick-box {
   width: 100%;
+
   aspect-ratio: 1 / 1;
+
   min-width: 0;
 
   display: flex;
+
   flex-direction: column;
+
   align-items: center;
+
   justify-content: center;
 
   padding:
-    clamp(7px, 2vw, 14px);
+    clamp(
+      7px,
+      2vw,
+      14px
+    );
 
   background: var(--branco);
+
   color: var(--verde);
 
   border:
@@ -282,7 +513,11 @@ button {
     var(--cinza-borda);
 
   border-radius:
-    clamp(12px, 3vw, 18px);
+    clamp(
+      12px,
+      3vw,
+      18px
+    );
 
   transition:
     transform .18s ease,
@@ -303,15 +538,27 @@ button {
 
 .quick-box img {
   width:
-    clamp(32px, 9vw, 52px);
+    clamp(
+      32px,
+      9vw,
+      52px
+    );
 
   height:
-    clamp(32px, 9vw, 52px);
+    clamp(
+      32px,
+      9vw,
+      52px
+    );
 
   object-fit: contain;
 
   margin-bottom:
-    clamp(5px, 1.8vw, 10px);
+    clamp(
+      5px,
+      1.8vw,
+      10px
+    );
 }
 
 .quick-box span {
@@ -322,13 +569,16 @@ button {
   text-align: center;
 
   font-size:
-    clamp(9px, 2.5vw, 13px);
+    clamp(
+      9px,
+      2.5vw,
+      13px
+    );
 
   font-weight: 600;
 
   line-height: 1.2;
 }
-
 
 /* =========================================================
    NAVBAR INFERIOR
@@ -336,6 +586,7 @@ button {
 
 .bottom-nav {
   position: fixed;
+
   z-index: 9999;
 
   left: 0;
@@ -343,6 +594,7 @@ button {
   bottom: 0;
 
   width: 100%;
+
   height: var(--altura-navbar);
 
   display: grid;
@@ -367,8 +619,11 @@ button {
   height: 100%;
 
   display: flex;
+
   flex-direction: column;
+
   align-items: center;
+
   justify-content: center;
 
   gap: 5px;
@@ -376,7 +631,11 @@ button {
   color: var(--branco);
 
   font-size:
-    clamp(9px, 2.5vw, 11px);
+    clamp(
+      9px,
+      2.5vw,
+      11px
+    );
 
   font-weight: 500;
 
@@ -393,10 +652,18 @@ button {
 
 .nav-icon img {
   width:
-    clamp(12px, 14vw, 24px);
+    clamp(
+      12px,
+      14vw,
+      24px
+    );
 
   height:
-    clamp(12px, 14vw, 24px);
+    clamp(
+      12px,
+      14vw,
+      24px
+    );
 
   display: block;
 }
@@ -405,31 +672,49 @@ button {
   color: var(--branco);
 }
 
-
 /* =========================================================
-   MAPA — SEÇÃO
+   MAPA
 ========================================================= */
 
 .home-map-section {
   position: relative;
+
   z-index: 0;
 
   padding:
-    clamp(25px, 6vw, 45px)
+    clamp(
+      25px,
+      6vw,
+      45px
+    )
     var(--espaco)
-    clamp(30px, 6vw, 50px);
+    clamp(
+      30px,
+      6vw,
+      50px
+    );
 }
 
 .home-map-header {
   display: flex;
+
   align-items: flex-end;
+
   justify-content: space-between;
 
   gap:
-    clamp(10px, 3vw, 20px);
+    clamp(
+      10px,
+      3vw,
+      20px
+    );
 
   margin-bottom:
-    clamp(10px, 3vw, 16px);
+    clamp(
+      10px,
+      3vw,
+      16px
+    );
 }
 
 .home-map-header > div {
@@ -442,10 +727,18 @@ button {
   color: var(--texto-claro);
 
   font-size:
-    clamp(8px, 2vw, 10px);
+    clamp(
+      8px,
+      2vw,
+      10px
+    );
 
   letter-spacing:
-    clamp(.7px, .2vw, 1.2px);
+    clamp(
+      .7px,
+      .2vw,
+      1.2px
+    );
 }
 
 .home-map-header h2 {
@@ -454,7 +747,11 @@ button {
   color: var(--verde);
 
   font-size:
-    clamp(21px, 5vw, 30px);
+    clamp(
+      21px,
+      5vw,
+      30px
+    );
 
   line-height: 1.1;
 }
@@ -471,30 +768,43 @@ button {
   flex-shrink: 0;
 
   padding:
-    clamp(8px, 2vw, 11px)
-    clamp(10px, 2.5vw, 14px);
+    clamp(
+      8px,
+      2vw,
+      11px
+    )
+    clamp(
+      10px,
+      2.5vw,
+      14px
+    );
 
   background: var(--verde);
+
   color: var(--branco);
 
   border-radius:
-    clamp(8px, 2vw, 10px);
+    clamp(
+      8px,
+      2vw,
+      10px
+    );
 
   font-size:
-    clamp(10px, 2.5vw, 12px);
+    clamp(
+      10px,
+      2.5vw,
+      12px
+    );
 
   font-weight: 600;
 
   white-space: nowrap;
 }
 
-
-/* =========================================================
-   MAPA
-========================================================= */
-
 .home-map {
   position: relative;
+
   z-index: 1;
 
   width: 100%;
@@ -515,13 +825,16 @@ button {
     var(--cinza-borda);
 
   border-radius:
-    clamp(14px, 3vw, 20px);
+    clamp(
+      14px,
+      3vw,
+      20px
+    );
 
   box-shadow:
     0 5px 18px
     rgba(0, 0, 0, 0.08);
 }
-
 
 /* =========================================================
    MARCADORES
@@ -535,9 +848,8 @@ button {
     );
 }
 
-
 /* =========================================================
-   POPUP DO MAPA
+   POPUP
 ========================================================= */
 
 .leaflet-popup-content-wrapper {
@@ -548,12 +860,19 @@ button {
   border-radius: 16px;
 
   max-width:
-    calc(100vw - 40px);
+    calc(
+      100vw - 40px
+    );
 }
 
 .leaflet-popup-content {
   width:
-    min(260px, calc(100vw - 60px)) !important;
+    min(
+      260px,
+      calc(
+        100vw - 60px
+      )
+    ) !important;
 
   margin: 0;
 }
@@ -568,7 +887,11 @@ button {
   width: 100%;
 
   height:
-    clamp(105px, 30vw, 125px);
+    clamp(
+      105px,
+      30vw,
+      125px
+    );
 
   object-fit: cover;
 }
@@ -595,7 +918,11 @@ button {
   color: var(--verde);
 
   font-size:
-    clamp(15px, 4vw, 17px);
+    clamp(
+      15px,
+      4vw,
+      17px
+    );
 
   line-height: 1.2;
 }
@@ -607,24 +934,46 @@ button {
   color: #666;
 
   font-size:
-    clamp(11px, 3vw, 12px);
+    clamp(
+      11px,
+      3vw,
+      12px
+    );
 
   line-height: 1.45;
 }
 
 .popup-button {
   display: block;
+
   width: 100%;
-  padding: clamp(9px, 2.5vw, 10px);
+
+  padding:
+    clamp(
+      9px,
+      2.5vw,
+      10px
+    );
+
   background: var(--verde);
+
   color: #fff !important;
+
   text-align: center;
+
   border-radius: 9px;
-  font-size: clamp(11px, 3vw, 12px);
+
+  font-size:
+    clamp(
+      11px,
+      3vw,
+      12px
+    );
+
   font-weight: 600;
+
   text-decoration: none;
 }
-
 
 /* =========================================================
    FILTROS DO MAPA
@@ -632,6 +981,7 @@ button {
 
 .map-filters {
   display: flex;
+
   flex-wrap: wrap;
 
   justify-content: center;
@@ -647,10 +997,16 @@ button {
 .map-filter {
   flex:
     0 0
-    clamp(65px, 18vw, 78px);
+    clamp(
+      65px,
+      18vw,
+      78px
+    );
 
   display: flex;
+
   flex-direction: column;
+
   align-items: center;
 
   gap: 6px;
@@ -666,7 +1022,11 @@ button {
   font-family: inherit;
 
   font-size:
-    clamp(9px, 2.5vw, 11px);
+    clamp(
+      9px,
+      2.5vw,
+      11px
+    );
 
   font-weight: 600;
 
@@ -675,26 +1035,31 @@ button {
   -webkit-tap-highlight-color: transparent;
 }
 
-
-/*
-   Ícone padrão:
-   sem borda e sem fundo.
-*/
-
 .filter-icon {
   width:
-    clamp(52px, 14vw, 64px);
+    clamp(
+      52px,
+      14vw,
+      64px
+    );
 
   height:
-    clamp(52px, 14vw, 64px);
+    clamp(
+      52px,
+      14vw,
+      64px
+    );
 
   display: flex;
+
   align-items: center;
+
   justify-content: center;
 
   background: transparent;
 
-  border: 2px solid transparent;
+  border:
+    2px solid transparent;
 
   border-radius: 50%;
 
@@ -709,10 +1074,18 @@ button {
 
 .filter-icon img {
   width:
-    clamp(25px, 7vw, 34px);
+    clamp(
+      25px,
+      7vw,
+      34px
+    );
 
   height:
-    clamp(25px, 7vw, 34px);
+    clamp(
+      25px,
+      7vw,
+      34px
+    );
 
   object-fit: contain;
 
@@ -731,12 +1104,6 @@ button {
     color .18s ease;
 }
 
-
-/*
-   SOMENTE O FILTRO SELECIONADO
-   recebe fundo, borda e sombra.
-*/
-
 .map-filter.active .filter-icon {
   background: var(--branco);
 
@@ -744,7 +1111,12 @@ button {
 
   box-shadow:
     0 5px 14px
-    rgba(9, 29, 28, .18);
+    rgba(
+      9,
+      29,
+      28,
+      .18
+    );
 
   transform:
     translateY(-2px);
@@ -760,21 +1132,32 @@ button {
   transform: scale(.92);
 }
 
-
 /* =========================================================
    SEÇÕES DE CONTEÚDO
 ========================================================= */
 
 .content-section {
   padding:
-    clamp(25px, 6vw, 45px)
+    clamp(
+      25px,
+      6vw,
+      45px
+    )
     var(--espaco)
-    clamp(30px, 6vw, 50px);
+    clamp(
+      30px,
+      6vw,
+      50px
+    );
 }
 
 .content-header {
   margin-bottom:
-    clamp(14px, 3vw, 20px);
+    clamp(
+      14px,
+      3vw,
+      20px
+    );
 }
 
 .content-header span {
@@ -783,10 +1166,18 @@ button {
   color: var(--texto-claro);
 
   font-size:
-    clamp(8px, 2vw, 10px);
+    clamp(
+      8px,
+      2vw,
+      10px
+    );
 
   letter-spacing:
-    clamp(.7px, .2vw, 1.2px);
+    clamp(
+      .7px,
+      .2vw,
+      1.2px
+    );
 }
 
 .content-header h2 {
@@ -796,7 +1187,11 @@ button {
   color: var(--verde);
 
   font-size:
-    clamp(21px, 5vw, 30px);
+    clamp(
+      21px,
+      5vw,
+      30px
+    );
 
   line-height: 1.1;
 }
@@ -811,7 +1206,6 @@ button {
 
   line-height: 1.5;
 }
-
 
 /* =========================================================
    FILTROS — ONDE COMER
@@ -878,13 +1272,13 @@ button {
   transform: scale(.96);
 }
 
-
 /* =========================================================
-   STATUS — ONDE COMER
+   STATUS
 ========================================================= */
 
 .comer-status {
   display: flex;
+
   align-items: center;
 
   margin:
@@ -893,6 +1287,7 @@ button {
 
 .status-filtro {
   display: inline-flex;
+
   align-items: center;
 
   padding: 0;
@@ -940,24 +1335,98 @@ button {
 }
 
 /* =========================================================
-   BUSCA — COMÉRCIO LOCAL
+   NOTA / AVALIAÇÃO
 ========================================================= */
+
+.nota-avaliacao {
+  display: none;
+
+  align-items: center;
+
+  gap: 5px;
+
+  margin-top: 7px;
+
+  white-space: nowrap;
+}
+
+.nota-avaliacao.visivel {
+  display: inline-flex;
+}
+
+.nota-avaliacao img {
+  width: 17px;
+  height: 17px;
+
+  display: block;
+
+  object-fit: contain;
+}
+
+.nota-avaliacao span {
+  color: #555;
+
+  font-size: 12px;
+
+  font-weight: 600;
+
+  line-height: 1;
+}
+
+.card-status-avaliacao {
+  display: flex;
+
+  align-items: center;
+
+  flex-wrap: wrap;
+
+  gap: 8px;
+
+  margin-top: 7px;
+}
+
+.card-status-avaliacao .comer-horario {
+  margin-top: 0;
+}
+
+.card-status-avaliacao .nota-avaliacao {
+  margin-top: 0;
+}
+
+/* =========================================================
+   BUSCA
+========================================================= */
+
 .comercio-pesquisa {
   width: 100%;
+
   min-height: 40px;
-  padding: 10px 14px;
-  border: 1px solid #d3d3d3;
+
+  padding:
+    10px 14px;
+
+  border:
+    1px solid
+    #d3d3d3;
+
   border-radius: 999px;
+
   background: var(--branco);
+
   color: var(--texto);
+
   font-family:
     "Roboto",
     Arial,
     Helvetica,
     sans-serif;
+
   font-size: 12px;
+
   font-weight: 500;
+
   outline: none;
+
   transition:
     border-color .2s ease,
     box-shadow .2s ease;
@@ -969,37 +1438,46 @@ button {
 
 .comercio-pesquisa:focus {
   border-color: var(--verde);
+
   box-shadow:
     0 0 0 3px
-    rgba(25, 65, 56, .08);
+    rgba(
+      25,
+      65,
+      56,
+      .08
+    );
 }
 
 .comercio-pesquisa::-webkit-search-cancel-button {
   cursor: pointer;
 }
+
 /* =========================================================
    LISTAS
 ========================================================= */
 
 .content-list {
   display: flex;
+
   flex-direction: column;
 
   gap: 12px;
 }
 
-
 /* =========================================================
-   CARTÃO PADRÃO
+   CARTÕES
 ========================================================= */
 
 .visitar-item,
 .comer-item,
 .ficar-item {
   display: flex;
+
   align-items: center;
 
   width: 100%;
+
   min-width: 0;
 
   padding: 10px;
@@ -1018,7 +1496,12 @@ button {
 
   box-shadow:
     0 3px 12px
-    rgba(0, 0, 0, .05);
+    rgba(
+      0,
+      0,
+      0,
+      .05
+    );
 
   transition:
     transform .18s ease,
@@ -1032,7 +1515,12 @@ button {
 
   box-shadow:
     0 6px 18px
-    rgba(0, 0, 0, .09);
+    rgba(
+      0,
+      0,
+      0,
+      .09
+    );
 }
 
 .visitar-item:active,
@@ -1041,9 +1529,8 @@ button {
   transform: scale(.985);
 }
 
-
 /* =========================================================
-   FOTO — COMPONENTE PADRÃO
+   FOTOS
 ========================================================= */
 
 .visitar-image,
@@ -1051,13 +1538,25 @@ button {
 .ficar-image {
   flex:
     0 0
-    clamp(82px, 22vw, 105px);
+    clamp(
+      82px,
+      22vw,
+      105px
+    );
 
   width:
-    clamp(82px, 22vw, 105px);
+    clamp(
+      82px,
+      22vw,
+      105px
+    );
 
   height:
-    clamp(82px, 22vw, 105px);
+    clamp(
+      82px,
+      22vw,
+      105px
+    );
 
   overflow: hidden;
 
@@ -1070,6 +1569,7 @@ button {
 .comer-image img,
 .ficar-image img {
   width: 100%;
+
   height: 100%;
 
   display: block;
@@ -1077,9 +1577,8 @@ button {
   object-fit: cover;
 }
 
-
 /* =========================================================
-   INFORMAÇÕES — COMPONENTE PADRÃO
+   INFORMAÇÕES
 ========================================================= */
 
 .visitar-info,
@@ -1093,11 +1592,6 @@ button {
     0 10px 0 13px;
 }
 
-
-/* =========================================================
-   NOME
-========================================================= */
-
 .visitar-nome,
 .comer-nome,
 .ficar-nome {
@@ -1106,17 +1600,16 @@ button {
   color: var(--verde);
 
   font-size:
-    clamp(14px, 3.8vw, 17px);
+    clamp(
+      14px,
+      3.8vw,
+      17px
+    );
 
   font-weight: 700;
 
   line-height: 1.2;
 }
-
-
-/* =========================================================
-   LOCAL / ENDEREÇO
-========================================================= */
 
 .visitar-local,
 .comer-endereco,
@@ -1126,7 +1619,11 @@ button {
   color: #777;
 
   font-size:
-    clamp(10px, 2.7vw, 12px);
+    clamp(
+      10px,
+      2.7vw,
+      12px
+    );
 
   line-height: 1.2;
 
@@ -1137,11 +1634,6 @@ button {
   text-overflow: ellipsis;
 }
 
-
-/* =========================================================
-   RESUMO
-========================================================= */
-
 .visitar-resumo {
   margin:
     6px 0 0;
@@ -1149,7 +1641,11 @@ button {
   color: #666;
 
   font-size:
-    clamp(10px, 2.7vw, 12px);
+    clamp(
+      10px,
+      2.7vw,
+      12px
+    );
 
   line-height: 1.3;
 
@@ -1159,11 +1655,6 @@ button {
 
   text-overflow: ellipsis;
 }
-
-
-/* =========================================================
-   CATEGORIA — ONDE COMER
-========================================================= */
 
 .comer-categoria {
   margin-top: 4px;
@@ -1175,19 +1666,21 @@ button {
   line-height: 1.2;
 }
 
-
 /* =========================================================
-   STATUS DENTRO DO CARD
+   STATUS
 ========================================================= */
 
 .comer-horario {
   display: inline-flex;
+
   align-items: center;
+
   justify-content: center;
 
   width: fit-content;
 
   min-width: 88px;
+
   height: 25px;
 
   margin-top: 7px;
@@ -1216,13 +1709,13 @@ button {
   background: #d32f2f;
 }
 
-
 /* =========================================================
-   AVALIAÇÃO — ONDE FICAR
+   AVALIAÇÃO — HOSPEDAGEM
 ========================================================= */
 
 .ficar-nota {
   display: flex;
+
   align-items: center;
 
   gap: 5px;
@@ -1249,7 +1742,6 @@ button {
   line-height: 1;
 }
 
-
 /* =========================================================
    SETA
 ========================================================= */
@@ -1258,14 +1750,16 @@ button {
 .comer-arrow,
 .ficar-arrow {
   flex:
-    0 0
-    34px;
+    0 0 34px;
 
   width: 34px;
+
   height: 34px;
 
   display: flex;
+
   align-items: center;
+
   justify-content: center;
 }
 
@@ -1273,13 +1767,13 @@ button {
 .comer-arrow img,
 .ficar-arrow img {
   width: 20px;
+
   height: 20px;
 
   display: block;
 
   object-fit: contain;
 }
-
 
 /* =========================================================
    ESTADOS VAZIOS
@@ -1298,14 +1792,15 @@ button {
   font-size: 13px;
 }
 
-
 /* =========================================================
-   BOTÃO MOSTRAR MAIS
+   MOSTRAR MAIS
 ========================================================= */
 
 .mostrar-mais {
   display: flex;
+
   align-items: center;
+
   justify-content: center;
 
   width: 100%;
@@ -1353,9 +1848,8 @@ button {
   transform: scale(.98);
 }
 
-
 /* =========================================================
-   MURAL DE ANDRELÂNDIA
+   MURAL
 ========================================================= */
 
 .pessoas-section {
@@ -1366,76 +1860,108 @@ button {
   margin-bottom: 18px;
 }
 
-
-/* =========================================================
-   GRID DO MURAL
-========================================================= */
-
 .pessoas-list {
   display: grid;
 
   grid-template-columns:
-    repeat(4, minmax(0, 1fr));
+    repeat(
+      4,
+      minmax(
+        0,
+        1fr
+      )
+    );
 
-  gap: 18px;
+  gap: 22px;
 
   width: 100%;
 }
 
-
 /* =========================================================
-   CARD DE PESSOA
+   CARD POLAROID
 ========================================================= */
 
 .pessoa-item {
   position: relative;
 
-  display: block;
+  display: flex;
+
+  flex-direction: column;
 
   width: 100%;
-  height: 270px;
 
-  overflow: hidden;
+  min-width: 0;
 
-  background:
-    var(--verde-escuro);
+  padding:
+    10px 10px 13px;
 
-  border-radius: 16px;
+  background: #ffffff;
+
+  border:
+    1px solid
+    rgba(
+      0,
+      0,
+      0,
+      .08
+    );
+
+  border-radius: 2px;
 
   text-decoration: none;
 
-  color: var(--branco);
+  color: var(--texto);
 
   box-shadow:
-    0 5px 14px
-    rgba(9, 29, 28, .12);
+    0 4px 12px
+    rgba(
+      0,
+      0,
+      0,
+      .10
+    );
+
+  transform:
+    rotate(0deg);
 
   transition:
-    transform .28s ease,
-    box-shadow .28s ease;
+    transform .25s ease,
+    box-shadow .25s ease;
 }
 
+.pessoa-item:nth-child(3n + 1) {
+  transform:
+    rotate(-0.7deg);
+}
 
-/* =========================================================
-   FOTO DA PESSOA
-========================================================= */
+.pessoa-item:nth-child(3n + 2) {
+  transform:
+    rotate(0.5deg);
+}
+
+.pessoa-item:nth-child(3n) {
+  transform:
+    rotate(-0.3deg);
+}
 
 .pessoa-image {
-  position: absolute;
-
-  inset: 0;
+  position: relative;
 
   width: 100%;
-  height: 100%;
+
+  aspect-ratio:
+    1 / 1.08;
 
   overflow: hidden;
 
-  background:
-    var(--verde-escuro);
+  background: #eeeeee;
+
+  border-radius: 0;
 }
 
 .pessoa-image img {
   width: 100%;
+
   height: 100%;
 
   display: block;
@@ -1443,58 +1969,24 @@ button {
   object-fit: cover;
 
   transition:
-    transform .45s ease,
-    filter .35s ease;
+    transform .35s ease;
 }
-
-
-/* =========================================================
-   DEGRADÊ INFERIOR
-========================================================= */
-
-.pessoa-item::after {
-  content: "";
-
-  position: absolute;
-
-  inset: 0;
-
-  background:
-    linear-gradient(
-      to top,
-      rgba(9, 29, 28, .98) 0%,
-      rgba(9, 29, 28, .84) 23%,
-      rgba(9, 29, 28, .42) 48%,
-      rgba(9, 29, 28, 0) 72%
-    );
-
-  pointer-events: none;
-}
-
-
-/* =========================================================
-   INFORMAÇÕES DA PESSOA
-========================================================= */
 
 .pessoa-info {
-  position: absolute;
-
-  z-index: 2;
-
-  left: 0;
-  right: 0;
-  bottom: 0;
+  position: relative;
 
   padding:
-    48px 17px 17px;
+    11px 4px 2px;
+
+  text-align: center;
 }
 
 .pessoa-name {
   margin: 0;
 
-  color: var(--branco);
+  color: #252525;
 
-  font-size: 17px;
+  font-size: 15px;
 
   font-weight: 700;
 
@@ -1504,85 +1996,171 @@ button {
 .pessoa-category {
   display: block;
 
-  margin-top: 6px;
+  margin-top: 5px;
 
-  color:
-    rgba(255, 255, 255, .72);
+  color: #777;
 
-  font-size: 11px;
+  font-size: 9px;
 
   font-weight: 600;
 
   text-transform: uppercase;
 
-  letter-spacing: .8px;
+  letter-spacing: .7px;
 }
 
-
 /* =========================================================
-   ANIMAÇÃO DO CARD
+   VOTOS
 ========================================================= */
 
+.pessoa-votos {
+  display: flex;
+
+  align-items: center;
+
+  justify-content: center;
+
+  gap: 13px;
+
+  margin-top: 9px;
+}
+
+.pessoa-voto {
+  display: inline-flex;
+
+  align-items: center;
+
+  justify-content: center;
+
+  min-width: 35px;
+
+  height: 30px;
+
+  padding:
+    3px 7px;
+
+  border: 0;
+
+  background: transparent;
+
+  border-radius: 8px;
+
+  cursor: pointer;
+
+  -webkit-tap-highlight-color: transparent;
+
+  transition:
+    background .18s ease,
+    transform .15s ease,
+    opacity .18s ease;
+}
+
+.pessoa-voto:hover {
+  background:
+    rgba(
+      0,
+      0,
+      0,
+      .05
+    );
+}
+
+.pessoa-voto:active {
+  transform: scale(.90);
+}
+
+.pessoa-voto img {
+  width: 21px;
+
+  height: 21px;
+
+  display: block;
+
+  object-fit: contain;
+}
+
+.pessoa-like-area {
+  display: inline-flex;
+
+  align-items: center;
+
+  gap: 5px;
+}
+
+.pessoa-like-count {
+  min-width: 13px;
+
+  color: var(--verde);
+
+  font-size: 12px;
+
+  font-weight: 700;
+
+  line-height: 1;
+
+  text-align: left;
+}
+
+.pessoa-voto.ativo {
+  background:
+    rgba(
+      25,
+      65,
+      56,
+      .09
+    );
+}
+
+.pessoa-voto.deslike.ativo {
+  background:
+    rgba(
+      211,
+      47,
+      47,
+      .08
+    );
+}
+
+.pessoa-voto.bloqueado {
+  opacity: .55;
+}
+
 .pessoa-item:hover {
-  transform: translateY(-6px);
+  transform:
+    translateY(-5px)
+    rotate(0deg);
 
   box-shadow:
     0 10px 22px
-    rgba(9, 29, 28, .18),
-
-    0 20px 35px
-    rgba(9, 29, 28, .10);
-}
-
-.pessoa-item:hover .pessoa-image img {
-  transform: scale(1.06);
-
-  filter:
-    brightness(.88);
-}
-
-
-/* =========================================================
-   BRILHO NO HOVER
-========================================================= */
-
-.pessoa-item::before {
-  content: "";
-
-  position: absolute;
-
-  z-index: 3;
-
-  top: 0;
-  left: -120%;
-
-  width: 70%;
-  height: 100%;
-
-  background:
-    linear-gradient(
-      90deg,
-      transparent,
-      rgba(255, 255, 255, .10),
-      transparent
+    rgba(
+      0,
+      0,
+      0,
+      .15
     );
-
-  transform:
-    skewX(-18deg);
-
-  transition:
-    left .6s ease;
-
-  pointer-events: none;
 }
 
-.pessoa-item:hover::before {
-  left: 150%;
+.pessoa-item:hover
+.pessoa-image img {
+  transform: scale(1.035);
 }
 
+.pessoa-login-msg {
+  width: 100%;
+
+  margin-top: 9px;
+
+  color: #888;
+
+  font-size: 9px;
+
+  line-height: 1.3;
+
+  text-align: center;
+}
 
 /* =========================================================
-   ÁREA DE CONTATO
+   CONTATO
 ========================================================= */
 
 .contato-guia {
@@ -1618,14 +2196,21 @@ button {
   position: absolute;
 
   width: 180px;
+
   height: 180px;
 
   top: -90px;
+
   right: -60px;
 
   border:
     1px solid
-    rgba(255, 255, 255, .08);
+    rgba(
+      255,
+      255,
+      255,
+      .08
+    );
 
   border-radius: 50%;
 }
@@ -1636,20 +2221,28 @@ button {
   position: absolute;
 
   width: 130px;
+
   height: 130px;
 
   bottom: -75px;
+
   left: -45px;
 
   border:
     1px solid
-    rgba(255, 255, 255, .06);
+    rgba(
+      255,
+      255,
+      255,
+      .06
+    );
 
   border-radius: 50%;
 }
 
 .contato-guia-tag {
   position: relative;
+
   z-index: 1;
 
   display: block;
@@ -1657,7 +2250,12 @@ button {
   margin-bottom: 9px;
 
   color:
-    rgba(255, 255, 255, .62);
+    rgba(
+      255,
+      255,
+      255,
+      .62
+    );
 
   font-size: 10px;
 
@@ -1668,6 +2266,7 @@ button {
 
 .contato-guia h2 {
   position: relative;
+
   z-index: 1;
 
   margin: 0;
@@ -1681,6 +2280,7 @@ button {
 
 .contato-guia p {
   position: relative;
+
   z-index: 1;
 
   max-width: 600px;
@@ -1689,25 +2289,27 @@ button {
     12px auto 22px;
 
   color:
-    rgba(255, 255, 255, .75);
+    rgba(
+      255,
+      255,
+      255,
+      .75
+    );
 
   font-size: 14px;
 
   line-height: 1.6;
 }
 
-
-/* =========================================================
-   BOTÃO DE CONTATO
-========================================================= */
-
 .contato-guia-botao {
   position: relative;
+
   z-index: 1;
 
   display: inline-flex;
 
   align-items: center;
+
   justify-content: center;
 
   gap: 10px;
@@ -1743,11 +2345,11 @@ button {
 
 .contato-guia-botao img {
   width: 15px;
+
   height: 15px;
 
   object-fit: contain;
 }
-
 
 /* =========================================================
    PÁGINA DA PESSOA
@@ -1852,9 +2454,8 @@ button {
   text-decoration: none;
 }
 
-
 /* =========================================================
-   GALERIA DA PESSOA
+   GALERIA
 ========================================================= */
 
 .pessoa-galeria {
@@ -1865,7 +2466,10 @@ button {
   display: grid;
 
   grid-template-columns:
-    repeat(3, 1fr);
+    repeat(
+      3,
+      1fr
+    );
 
   gap: 10px;
 
@@ -1884,9 +2488,8 @@ button {
   border-radius: 10px;
 }
 
-
 /* =========================================================
-   ERRO — PÁGINA DA PESSOA
+   ERRO
 ========================================================= */
 
 .pessoa-erro {
@@ -1908,23 +2511,94 @@ button {
   color: #666;
 }
 
-
 /* =========================================================
    CELULAR
 ========================================================= */
 
 @media (max-width: 699px) {
 
-  /* -------------------------------------------------------
-     FILTROS DO MAPA
-     Até 3 por fileira
-  ------------------------------------------------------- */
+  /* =======================================================
+     HERO MOBILE
+  ======================================================= */
+
+  .hero {
+    width: 100%;
+
+    /*
+      Altura baseada na largura da tela.
+      Evita um hero exageradamente alto.
+    */
+
+    height:
+      clamp(
+        360px,
+        92vw,
+        500px
+      );
+
+    min-height: 360px;
+
+    background:
+      var(--verde-escuro);
+  }
+
+  .hero-slide {
+    align-items: center;
+
+    justify-content: center;
+  }
+
+  .hero-content {
+    transform:
+      translateY(-75px);
+
+    padding:
+      0 20px 20px;
+  }
+
+  .hero-logo {
+    width:
+      clamp(
+        145px,
+        48vw,
+        220px
+      );
+
+    max-height: 150px;
+  }
+
+  .hero-caption {
+    max-width: 82%;
+
+    margin-top: 12px;
+
+    font-size:
+      clamp(
+        12px,
+        3.4vw,
+        16px
+      );
+  }
+
+  .hero-indicators {
+    bottom: 25px;
+  }
+
+  /* =======================================================
+     MAPA
+  ======================================================= */
 
   .map-filters {
     display: grid;
 
     grid-template-columns:
-      repeat(3, minmax(0, 1fr));
+      repeat(
+        3,
+        minmax(
+          0,
+          1fr
+        )
+      );
 
     gap:
       14px 8px;
@@ -1947,28 +2621,40 @@ button {
 
   .filter-icon {
     width:
-      clamp(50px, 15vw, 60px);
+      clamp(
+        50px,
+        15vw,
+        60px
+      );
 
     height:
-      clamp(50px, 15vw, 60px);
+      clamp(
+        50px,
+        15vw,
+        60px
+      );
 
     margin: 0 auto;
   }
 
-
-  /* -------------------------------------------------------
+  /* =======================================================
      MURAL
-     Até 3 pessoas por fileira
-  ------------------------------------------------------- */
+  ======================================================= */
 
   .pessoas-list {
     display: grid;
 
     grid-template-columns:
-      repeat(3, minmax(0, 1fr));
+      repeat(
+        3,
+        minmax(
+          0,
+          1fr
+        )
+      );
 
     gap:
-      12px 8px;
+      15px 8px;
 
     width: 100%;
 
@@ -1981,32 +2667,66 @@ button {
   .pessoa-item {
     width: 100%;
 
-    height: 190px;
+    padding:
+      7px 7px 10px;
 
-    border-radius: 13px;
+    border-radius: 1px;
+  }
+
+  .pessoa-image {
+    aspect-ratio:
+      1 / 1.08;
   }
 
   .pessoa-info {
     padding:
-      38px 10px 11px;
+      8px 2px 0;
   }
 
   .pessoa-name {
-    font-size: 13px;
+    font-size: 11px;
   }
 
   .pessoa-category {
     margin-top: 4px;
 
-    font-size: 8px;
+    font-size: 7px;
 
-    letter-spacing: .5px;
+    letter-spacing: .45px;
   }
 
+  .pessoa-votos {
+    gap: 4px;
 
-  /* -------------------------------------------------------
-     BOTÃO MOSTRAR MAIS
-  ------------------------------------------------------- */
+    margin-top: 5px;
+  }
+
+  .pessoa-voto {
+    min-width: 26px;
+
+    height: 26px;
+
+    padding:
+      2px 4px;
+  }
+
+  .pessoa-voto img {
+    width: 17px;
+
+    height: 17px;
+  }
+
+  .pessoa-like-area {
+    gap: 3px;
+  }
+
+  .pessoa-like-count {
+    font-size: 9px;
+  }
+
+  .pessoa-login-msg {
+    font-size: 7px;
+  }
 
   #mostrarMaisPessoas {
     display: flex;
@@ -2016,10 +2736,9 @@ button {
     margin-top: 18px;
   }
 
-
-  /* -------------------------------------------------------
+  /* =======================================================
      CONTATO
-  ------------------------------------------------------- */
+  ======================================================= */
 
   .contato-guia {
     margin-top: 30px;
@@ -2042,10 +2761,9 @@ button {
     font-size: 13px;
   }
 
-
-  /* -------------------------------------------------------
-     PÁGINA DA PESSOA
-  ------------------------------------------------------- */
+  /* =======================================================
+     PESSOA
+  ======================================================= */
 
   .pessoa-detalhe {
     padding:
@@ -2058,15 +2776,17 @@ button {
 
   .pessoa-galeria-list {
     grid-template-columns:
-      repeat(2, 1fr);
+      repeat(
+        2,
+        1fr
+      );
 
     gap: 8px;
   }
 
-
-  /* -------------------------------------------------------
-     FILTROS ONDE COMER
-  ------------------------------------------------------- */
+  /* =======================================================
+     FILTROS
+  ======================================================= */
 
   .content-filters {
     display: flex;
@@ -2085,8 +2805,26 @@ button {
     font-size: 11px;
   }
 
-}
+  .nota-avaliacao img,
+  .ficar-nota img {
+    width: 15px;
 
+    height: 15px;
+  }
+
+  .nota-avaliacao span,
+  .ficar-nota span {
+    font-size: 10px;
+  }
+
+  .card-status-avaliacao {
+    gap: 6px;
+  }
+
+  .comer-horario {
+    min-width: 78px;
+  }
+}
 
 /* =========================================================
    CELULARES MUITO PEQUENOS
@@ -2098,33 +2836,38 @@ button {
     --altura-navbar: 70px;
   }
 
-
-  /* HERO */
-
   .hero {
-    min-height: 390px;
+    height: 360px;
 
-    height: 55vh;
+    min-height: 360px;
   }
 
   .hero-content {
     transform:
-      translateY(-130px);
+      translateY(-65px);
   }
 
+  .hero-logo {
+    width: 140px;
+  }
 
-  /* ROUTE */
+  .hero-caption {
+    font-size: 11px;
+  }
 
   .route-card {
     margin-left: 12px;
+
     margin-right: 12px;
 
     padding-left: 10px;
+
     padding-right: 10px;
   }
 
   .route-icon {
     width: 38px;
+
     height: 38px;
 
     flex-basis: 38px;
@@ -2137,9 +2880,6 @@ button {
   .route-text span {
     font-size: 10px;
   }
-
-
-  /* QUICK GRID */
 
   .quick-grid {
     gap: 8px;
@@ -2154,6 +2894,7 @@ button {
 
   .quick-box img {
     width: 30px;
+
     height: 30px;
 
     margin-bottom: 5px;
@@ -2163,17 +2904,11 @@ button {
     font-size: 8px;
   }
 
-
-  /* MAPA */
-
   .home-map {
     min-height: 260px;
 
     height: 75vw;
   }
-
-
-  /* FILTROS */
 
   .map-filters {
     gap:
@@ -2182,11 +2917,13 @@ button {
 
   .filter-icon {
     width: 48px;
+
     height: 48px;
   }
 
   .filter-icon img {
     width: 24px;
+
     height: 24px;
   }
 
@@ -2194,38 +2931,49 @@ button {
     font-size: 8px;
   }
 
-
-  /* MURAL */
-
   .pessoas-list {
     gap:
-      10px 5px;
+      12px 5px;
   }
 
   .pessoa-item {
-    height: 170px;
-
-    border-radius: 11px;
-  }
-
-  .pessoa-info {
     padding:
-      30px 8px 9px;
+      5px 5px 8px;
   }
 
   .pessoa-name {
-    font-size: 11px;
+    font-size: 9px;
   }
 
   .pessoa-category {
-    font-size: 7px;
+    font-size: 6px;
   }
 
+  .pessoa-votos {
+    margin-top: 4px;
+
+    gap: 1px;
+  }
+
+  .pessoa-voto {
+    min-width: 22px;
+
+    height: 23px;
+  }
+
+  .pessoa-voto img {
+    width: 15px;
+
+    height: 15px;
+  }
+
+  .pessoa-like-count {
+    font-size: 8px;
+  }
 }
 
-
 /* =========================================================
-   TELAS GRANDES — 500+
+   TELAS GRANDES DE CELULAR
 ========================================================= */
 
 @media (min-width: 500px) and (max-width: 699px) {
@@ -2236,29 +2984,36 @@ button {
 
   .quick-box img {
     width: 48px;
+
     height: 48px;
   }
 
-
-  /* Mural um pouco maior */
-
   .pessoa-item {
-    height: 230px;
+    padding:
+      9px 9px 12px;
   }
 
   .pessoa-name {
-    font-size: 15px;
+    font-size: 14px;
   }
 
   .pessoa-category {
-    font-size: 9px;
+    font-size: 8px;
   }
 
+  .pessoa-voto img {
+    width: 19px;
+
+    height: 19px;
+  }
+
+  .pessoa-like-count {
+    font-size: 10px;
+  }
 }
 
-
 /* =========================================================
-   TABLET — 700+
+   TABLET
 ========================================================= */
 
 @media (min-width: 700px) {
@@ -2273,46 +3028,61 @@ button {
 
   .page {
     min-height:
-      calc(100vh - 60px);
+      calc(
+        100vh - 60px
+      );
 
     border-radius: 28px;
 
     box-shadow:
       0 20px 70px
-      rgba(0, 0, 0, 0.14);
+      rgba(
+        0,
+        0,
+        0,
+        0.14
+      );
   }
-
-
-  /* QUICK GRID */
 
   .quick-grid {
     grid-template-columns:
-      repeat(6, minmax(0, 1fr));
+      repeat(
+        6,
+        minmax(
+          0,
+          1fr
+        )
+      );
   }
 
-
-  /* HERO */
+  /* =======================================================
+     HERO TABLET
+  ======================================================= */
 
   .hero {
     height:
-      clamp(500px, 65vh, 650px);
+      clamp(
+        450px,
+        58vw,
+        600px
+      );
+
+    min-height: 450px;
   }
 
   .hero-content {
     transform:
-      translateY(-180px);
+      translateY(-100px);
   }
-
-
-  /* MAPA */
 
   .home-map {
     height:
-      clamp(350px, 45vw, 500px);
+      clamp(
+        350px,
+        45vw,
+        500px
+      );
   }
-
-
-  /* LISTAS */
 
   .content-list {
     gap: 14px;
@@ -2330,6 +3100,7 @@ button {
     flex-basis: 110px;
 
     width: 110px;
+
     height: 110px;
   }
 
@@ -2345,6 +3116,7 @@ button {
     flex-basis: 42px;
 
     width: 42px;
+
     height: 42px;
   }
 
@@ -2352,6 +3124,7 @@ button {
   .comer-arrow img,
   .ficar-arrow img {
     width: 23px;
+
     height: 23px;
   }
 
@@ -2374,13 +3147,9 @@ button {
 
   .ficar-nota img {
     width: 18px;
+
     height: 18px;
   }
-
-
-  /* -------------------------------------------------------
-     FILTROS DO MAPA
-  ------------------------------------------------------- */
 
   .map-filters {
     justify-content: center;
@@ -2399,30 +3168,41 @@ button {
 
   .filter-icon {
     width: 60px;
+
     height: 60px;
   }
 
-
-  /* -------------------------------------------------------
-     MURAL
-  ------------------------------------------------------- */
-
   .pessoas-list {
     grid-template-columns:
-      repeat(4, minmax(0, 1fr));
+      repeat(
+        4,
+        minmax(
+          0,
+          1fr
+        )
+      );
 
-    gap: 18px;
+    gap: 20px;
   }
 
   .pessoa-item {
-    height: 270px;
+    padding:
+      10px 10px 13px;
   }
 
+  .pessoa-name {
+    font-size: 15px;
+  }
+
+  .pessoa-voto img {
+    width: 21px;
+
+    height: 21px;
+  }
 }
 
-
 /* =========================================================
-   DESKTOP — 1000+
+   DESKTOP
 ========================================================= */
 
 @media (min-width: 1000px) {
@@ -2431,62 +3211,60 @@ button {
     max-width: 1100px;
   }
 
-
-  /* HERO */
-
   .hero {
-    height: 620px;
+    height: 600px;
+
+    min-height: 600px;
   }
 
   .hero-content {
     transform:
-      translateY(-170px);
+      translateY(-100px);
   }
-
-
-  /* ESPAÇAMENTO */
 
   .section {
     padding-left: 35px;
+
     padding-right: 35px;
   }
 
   .content-section,
   .home-map-section {
     padding-left: 35px;
+
     padding-right: 35px;
   }
-
-
-  /* QUICK */
 
   .quick-grid {
     gap: 18px;
   }
 
-
-  /* MAPA */
-
   .home-map {
     height: 480px;
   }
 
-
-  /* MURAL */
-
   .pessoas-list {
     grid-template-columns:
-      repeat(4, minmax(0, 1fr));
+      repeat(
+        4,
+        minmax(
+          0,
+          1fr
+        )
+      );
 
-    gap: 20px;
+    gap: 22px;
   }
 
   .pessoa-item {
-    height: 285px;
+    padding:
+      11px 11px 14px;
   }
 
+  .pessoa-name {
+    font-size: 15px;
+  }
 }
-
 
 /* =========================================================
    TELAS MUITO GRANDES
@@ -2499,14 +3277,35 @@ button {
   }
 
   .hero {
-    height: 680px;
+    height: 650px;
+
+    min-height: 650px;
   }
 
   .section,
   .content-section,
   .home-map-section {
     padding-left: 45px;
+
     padding-right: 45px;
   }
+}
 
+/* =========================================================
+   ACESSIBILIDADE
+========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+
+  html {
+    scroll-behavior: auto;
+  }
+
+  .hero-slide,
+  .hero-caption,
+  .pessoa-item,
+  .pessoa-image img,
+  .quick-box {
+    transition: none;
+  }
 }
