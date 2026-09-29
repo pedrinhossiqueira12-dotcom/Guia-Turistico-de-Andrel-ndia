@@ -2,11 +2,12 @@
 <html lang="pt-BR">
 
 <head>
-  
+
   <meta
-  name="google-adsense-account"
-  content="ca-pub-6350200542802660"
->
+    name="google-adsense-account"
+    content="ca-pub-6350200542802660"
+  >
+
   <meta charset="UTF-8">
 
   <meta
@@ -26,7 +27,10 @@
        FONTE
   =================================================== -->
 
-  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link
+    rel="preconnect"
+    href="https://fonts.googleapis.com"
+  >
 
   <link
     rel="preconnect"
@@ -51,12 +55,22 @@
 
 
   <!-- ==================================================
-       CSS DO SITE
+       CSS PRINCIPAL
   =================================================== -->
 
   <link
     rel="stylesheet"
     href="style.css"
+  >
+
+
+  <!-- ==================================================
+       CSS DO LOGIN
+  =================================================== -->
+
+  <link
+    rel="stylesheet"
+    href="styles/login.css"
   >
 
 </head>
@@ -65,12 +79,16 @@
 <body>
 
 
+  <!-- ==================================================
+       PÁGINA PRINCIPAL
+  ================================================== -->
+
   <main class="page">
 
 
     <!-- ==================================================
          HERO / CARROSSEL
-    =================================================== -->
+    ================================================== -->
 
     <section
       class="hero"
@@ -84,12 +102,7 @@
 
         <!--
           As imagens do carrossel são carregadas
-          automaticamente pelo index.js a partir de:
-
-          img/carrossel/hero1.png
-          img/carrossel/hero2.png
-          img/carrossel/hero3.png
-          etc.
+          automaticamente pelo index.js.
         -->
 
       </div>
@@ -117,7 +130,7 @@
 
     <!-- ==================================================
          O QUE FAZER HOJE
-    =================================================== -->
+    ================================================== -->
 
     <a
       class="route-card"
@@ -149,7 +162,7 @@
 
     <!-- ==================================================
          CATEGORIAS PRINCIPAIS
-    =================================================== -->
+    ================================================== -->
 
     <section class="section">
 
@@ -282,11 +295,11 @@
 
             <img
               src="img/icones/pessoa.png"
-              alt="pessoas"
+              alt="Pessoas"
             >
 
             <span>
-              pessoas
+              Pessoas
             </span>
 
           </div>
@@ -301,7 +314,7 @@
 
     <!-- ==================================================
          MAPA TURÍSTICO
-    =================================================== -->
+    ================================================== -->
 
     <section
       class="home-map-section"
@@ -343,7 +356,9 @@
       ></div>
 
 
-      <!-- FILTROS DO MAPA -->
+      <!-- ==================================================
+           FILTROS DO MAPA
+      ================================================== -->
 
       <div class="map-filters">
 
@@ -355,10 +370,12 @@
         >
 
           <span class="filter-icon">
+
             <img
               src="img/icones/mapa.png"
               alt=""
             >
+
           </span>
 
           <span>
@@ -375,10 +392,12 @@
         >
 
           <span class="filter-icon">
+
             <img
               src="img/icones/igreja.png"
               alt=""
             >
+
           </span>
 
           <span>
@@ -395,10 +414,12 @@
         >
 
           <span class="filter-icon">
+
             <img
               src="img/icones/historico.png"
               alt=""
             >
+
           </span>
 
           <span>
@@ -415,10 +436,12 @@
         >
 
           <span class="filter-icon">
+
             <img
               src="img/icones/natureza.png"
               alt=""
             >
+
           </span>
 
           <span>
@@ -435,10 +458,12 @@
         >
 
           <span class="filter-icon">
+
             <img
               src="img/icones/alimentacao.png"
               alt=""
             >
+
           </span>
 
           <span>
@@ -455,10 +480,12 @@
         >
 
           <span class="filter-icon">
+
             <img
               src="img/icones/cafe.png"
               alt=""
             >
+
           </span>
 
           <span>
@@ -475,10 +502,12 @@
         >
 
           <span class="filter-icon">
+
             <img
               src="img/icones/hotel.png"
               alt=""
             >
+
           </span>
 
           <span>
@@ -495,10 +524,12 @@
         >
 
           <span class="filter-icon">
+
             <img
               src="img/icones/comercio.png"
               alt=""
             >
+
           </span>
 
           <span>
@@ -515,10 +546,12 @@
         >
 
           <span class="filter-icon">
+
             <img
               src="img/icones/esporte.png"
               alt=""
             >
+
           </span>
 
           <span>
@@ -535,7 +568,7 @@
 
     <!-- ==================================================
          O QUE VISITAR
-    =================================================== -->
+    ================================================== -->
 
     <section
       class="content-section"
@@ -575,7 +608,7 @@
 
     <!-- ==================================================
          ONDE COMER
-    =================================================== -->
+    ================================================== -->
 
     <section
       class="content-section"
@@ -595,7 +628,27 @@
       </header>
 
 
-      <!-- FILTROS DE COMIDA -->
+      <!-- ==================================================
+           PESQUISA — ONDE COMER
+      ================================================== -->
+
+      <div class="comercio-pesquisa">
+
+        <input
+          type="search"
+          id="pesquisaComer"
+          placeholder="Pesquisar restaurante, café, lanchonete..."
+          autocomplete="off"
+          spellcheck="false"
+          aria-label="Pesquisar onde comer"
+        >
+
+      </div>
+
+
+      <!-- ==================================================
+           FILTROS DE COMIDA
+      ================================================== -->
 
       <div class="content-filters">
 
@@ -648,7 +701,9 @@
       </div>
 
 
-      <!-- ABERTO AGORA -->
+      <!-- ==================================================
+           ABERTO AGORA
+      ================================================== -->
 
       <div class="comer-status">
 
@@ -688,7 +743,7 @@
 
     <!-- ==================================================
          ONDE FICAR
-    =================================================== -->
+    ================================================== -->
 
     <section
       class="content-section"
@@ -728,7 +783,7 @@
 
     <!-- ==================================================
          COMÉRCIO LOCAL
-    =================================================== -->
+    ================================================== -->
 
     <section
       class="content-section"
@@ -755,7 +810,7 @@
 
       <!-- ==================================================
            PESQUISA
-      =================================================== -->
+      ================================================== -->
 
       <div class="comercio-pesquisa">
 
@@ -773,7 +828,7 @@
 
       <!-- ==================================================
            ABERTO AGORA
-      =================================================== -->
+      ================================================== -->
 
       <div class="comer-status">
 
@@ -795,7 +850,7 @@
 
       <!-- ==================================================
            LISTA DE COMÉRCIOS
-      =================================================== -->
+      ================================================== -->
 
       <div
         class="content-list"
@@ -805,7 +860,7 @@
 
       <!-- ==================================================
            MOSTRAR MAIS
-      =================================================== -->
+      ================================================== -->
 
       <button
         type="button"
@@ -824,7 +879,7 @@
 
   <!-- ==================================================
        MURAL DE ANDRELÂNDIA
-  =================================================== -->
+  ================================================== -->
 
   <section
     class="content-section pessoas-section"
@@ -869,7 +924,7 @@
 
   <!-- ==================================================
        INDICAÇÃO / CONTATO
-  =================================================== -->
+  ================================================== -->
 
   <section class="contato-guia">
 
@@ -892,7 +947,7 @@
       </p>
 
       <a
-       href="https://wa.me/qr/UUO2B65HNPRTF1"
+        href="https://wa.me/qr/UUO2B65HNPRTF1"
         class="contato-guia-botao"
       >
 
@@ -909,9 +964,10 @@
 
   </section>
 
+
   <!-- ==================================================
        NAVBAR FIXA
-  =================================================== -->
+  ================================================== -->
 
   <nav class="bottom-nav">
 
@@ -1002,37 +1058,379 @@
 
   </nav>
 
-<footer>
+  <!-- ==================================================
+       ÁREA DE AUTENTICAÇÃO
+  ================================================== -->
 
-  <div class="footer-links">
+  <section
+    id="areaAutenticacao"
+    class="auth-area"
+    aria-label="Área de autenticação"
+  >
 
-    <a href="pages/politica-privacidade.html">
-      Política de Privacidade
-    </a>
+    <p>
+      Entre na sua conta para participar do Guia.
+    </p>
 
-    <span>•</span>
+    <div class="auth-buttons">
 
-    <a href="pages/termos.html">
-      Termos de Uso
-    </a>
+      <button
+        type="button"
+        id="abrirLogin"
+        class="auth-button primary"
+      >
+        Entrar
+      </button>
 
-    <span>•</span>
+      <button
+        type="button"
+        id="abrirCadastro"
+        class="auth-button secondary"
+      >
+        Criar conta
+      </button>
 
-    <a href="pages/contato.html">
-      Contato
-    </a>
+    </div>
+
+  </section>
+
+
+  <!-- ==================================================
+       ÁREA DO USUÁRIO LOGADO
+  ================================================== -->
+
+  <section
+    id="areaUsuario"
+    class="auth-area"
+    style="display: none;"
+    aria-label="Usuário logado"
+  >
+
+    <div class="user-rating-header">
+
+      <div>
+
+        <span class="form-label">
+          Usuário
+        </span>
+
+        <strong id="nomeUsuarioLogado">
+          Usuário
+        </strong>
+
+      </div>
+
+      <button
+        type="button"
+        id="botaoSair"
+        class="logout-button"
+      >
+        Sair
+      </button>
+
+    </div>
+
+  </section>
+
+
+  <!-- ==================================================
+       ÁREA DE AVALIAÇÃO
+       
+       Mantida para compatibilidade com o sistema
+       de avaliações.
+  ================================================== -->
+
+  <div
+    id="areaAvaliacao"
+    style="display: none;"
+  ></div>
+
+
+  <!-- ==================================================
+       MODAL DE AUTENTICAÇÃO
+  ================================================== -->
+
+  <div
+    class="auth-modal"
+    id="authModal"
+    aria-hidden="true"
+  >
+
+    <div class="auth-modal-content">
+
+
+      <!-- ==================================================
+           FECHAR
+      ================================================== -->
+
+      <button
+        type="button"
+        id="fecharAuth"
+        class="auth-close"
+        aria-label="Fechar"
+      >
+        ×
+      </button>
+
+
+      <!-- ==================================================
+           FORMULÁRIO DE LOGIN
+      ================================================== -->
+
+      <form
+        id="formLogin"
+        class="auth-form"
+      >
+
+        <span class="auth-kicker">
+          GUIA TURÍSTICO
+        </span>
+
+        <h2>
+          Entrar
+        </h2>
+
+        <p>
+          Acesse sua conta para participar
+          do Guia Turístico de Andrelândia.
+        </p>
+
+
+        <label
+          class="form-label"
+          for="loginEmail"
+        >
+          E-mail
+        </label>
+
+        <input
+          type="email"
+          id="loginEmail"
+          name="email"
+          placeholder="Seu e-mail"
+          autocomplete="email"
+          required
+        >
+
+
+        <label
+          class="form-label"
+          for="loginSenha"
+        >
+          Senha
+        </label>
+
+        <input
+          type="password"
+          id="loginSenha"
+          name="senha"
+          placeholder="Sua senha"
+          autocomplete="current-password"
+          required
+        >
+
+
+        <button
+          type="submit"
+          id="botaoLogin"
+          class="auth-submit"
+        >
+          Entrar
+        </button>
+
+
+        <div
+          id="erroLogin"
+          class="auth-error"
+          role="alert"
+          aria-live="polite"
+        ></div>
+
+
+        <p class="auth-switch">
+
+          Ainda não possui uma conta?
+
+          <button
+            type="button"
+            id="trocarCadastro"
+          >
+            Criar conta
+          </button>
+
+        </p>
+
+      </form>
+
+
+      <!-- ==================================================
+           FORMULÁRIO DE CADASTRO
+      ================================================== -->
+
+      <form
+        id="formCadastro"
+        class="auth-form"
+        style="display: none;"
+      >
+
+        <span class="auth-kicker">
+          GUIA TURÍSTICO
+        </span>
+
+        <h2>
+          Criar conta
+        </h2>
+
+        <p>
+          Crie sua conta para participar
+          do Guia Turístico de Andrelândia.
+        </p>
+
+
+        <label
+          class="form-label"
+          for="cadastroNome"
+        >
+          Nome
+        </label>
+
+        <input
+          type="text"
+          id="cadastroNome"
+          name="nome"
+          placeholder="Seu nome"
+          autocomplete="name"
+          required
+        >
+
+
+        <label
+          class="form-label"
+          for="cadastroEmail"
+        >
+          E-mail
+        </label>
+
+        <input
+          type="email"
+          id="cadastroEmail"
+          name="email"
+          placeholder="Seu e-mail"
+          autocomplete="email"
+          required
+        >
+
+
+        <label
+          class="form-label"
+          for="cadastroSenha"
+        >
+          Senha
+        </label>
+
+        <input
+          type="password"
+          id="cadastroSenha"
+          name="senha"
+          placeholder="Crie uma senha"
+          autocomplete="new-password"
+          minlength="6"
+          required
+        >
+
+
+        <label
+          class="form-label"
+          for="cadastroConfirmarSenha"
+        >
+          Confirmar senha
+        </label>
+
+        <input
+          type="password"
+          id="cadastroConfirmarSenha"
+          name="confirmarSenha"
+          placeholder="Repita sua senha"
+          autocomplete="new-password"
+          minlength="6"
+          required
+        >
+
+
+        <button
+          type="submit"
+          id="botaoCadastro"
+          class="auth-submit"
+        >
+          Criar conta
+        </button>
+
+
+        <div
+          id="erroCadastro"
+          class="auth-error"
+          role="alert"
+          aria-live="polite"
+        ></div>
+
+
+        <p class="auth-switch">
+
+          Já possui uma conta?
+
+          <button
+            type="button"
+            id="trocarLogin"
+          >
+            Entrar
+          </button>
+
+        </p>
+
+      </form>
+
+
+    </div>
 
   </div>
 
-  <p class="footer-copy">
-    © 2026 Andrelândia — Guia Turístico
-  </p>
+<!-- ==================================================
+       RODAPÉ
+  ================================================== -->
 
-</footer>
+  <footer>
+
+    <div class="footer-links">
+
+      <a href="pages/politica-privacidade.html">
+        Política de Privacidade
+      </a>
+
+      <span>•</span>
+
+      <a href="pages/termos.html">
+        Termos de Uso
+      </a>
+
+      <span>•</span>
+
+      <a href="pages/contato.html">
+        Contato
+      </a>
+
+    </div>
+
+
+    <p class="footer-copy">
+      © 2026 Andrelândia — Guia Turístico
+    </p>
+
+  </footer>
+
 
   <!-- ==================================================
        LEAFLET
-  =================================================== -->
+  ================================================== -->
 
   <script
     src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
@@ -1041,7 +1439,7 @@
 
   <!-- ==================================================
        SUPABASE
-  =================================================== -->
+  ================================================== -->
 
   <script
     src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"
@@ -1050,10 +1448,19 @@
 
   <!-- ==================================================
        JAVASCRIPT PRINCIPAL
-  =================================================== -->
+  ================================================== -->
 
   <script
     src="js/index.js"
+  ></script>
+
+
+  <!-- ==================================================
+       JAVASCRIPT DO LOGIN
+  ================================================== -->
+
+  <script
+    src="js/login.js"
   ></script>
 
 
