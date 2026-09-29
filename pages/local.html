@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+
+<html lang="pt-BR">
+
+<head>
+
+  <meta charset="UTF-8">
+
+<meta
+name="viewport"
+content="width=device-width, initial-scale=1.0"
+
+>
+
+<meta
+name="theme-color"
+content="#091D1C"
+
+>
+
+  <title>Local — Guia Turístico de Andrelândia</title>
+
+  <link
+    rel="stylesheet"
+    href="../styles/local.css"
+  >
+
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  >
+
+  <!-- FONTES -->
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+
+  <link
+    rel="preconnect"
+    href="https://fonts.gstatic.com"
+    crossorigin
+  >
+
+  <link
+    href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600;700&display=swap"
+    rel="stylesheet"
+  >
+
+</head>
+
+<body>
+
+<main class="local-page">
+
+  <!-- =====================================================
+       CABEÇALHO
+  ====================================================== -->
+
+  <header class="local-header">
+
+<button
+  class="back-button"
+  type="button"
+  onclick="voltarPagina()"
+  aria-label="Voltar"
+>
+
+  <img
+    class="home-button"
+    src="../img/icones/seta.png"
+    alt=""
+  >
+
+</button>
+
+
+<div class="local-header-title">
+
+  <span id="categoriaLocal">
+    LOCAL
+  </span>
+
+  <h1 id="nomeLocal">
+    Carregando...
+  </h1>
+
+</div>
+
+  </header>
+
+  <!-- =====================================================
+       GALERIA
+  ====================================================== -->
+
+  <section class="local-gallery">
+
+<div class="main-photo-container">
+
+  <img
+    id="fotoPrincipal"
+    class="main-photo"
+    src=""
+    alt=""
+  >
+
+  <button
+    class="fullscreen-button"
+    type="button"
+    onclick="abrirFotoTelaCheia()"
+    aria-label="Abrir foto em tela cheia"
+  >
+    ⛶
+  </button>
+
+</div>
+
+
+<div
+  id="miniaturas"
+  class="thumbnails"
+></div>
+
+  </section>
+
+  <!-- =====================================================
+       CONTEÚDO
+  ====================================================== -->
+
+  <section class="content-section">
+
+<div class="section-block">
+
+  <h2>
+    Sobre o local
+  </h2>
+
+  <p id="descricaoLocal"></p>
+
+</div>
+
+
+<div class="section-block">
+
+  <h2>
+    História
+  </h2>
+
+  <p id="historiaLocal"></p>
+
+</div>
+
+
+<div class="section-block">
+
+  <h2>
+    Curiosidades
+  </h2>
+
+  <p id="curiosidadesLocal"></p>
+
+</div>
+
+  </section>
+
+  <!-- =====================================================
+       INFORMAÇÕES
+  ====================================================== -->
+
+  <section class="local-info-grid">
+
+
+<div class="info-card">
+
+  <div class="info-icon">
+
+    <img
+      src="../img/icones/tempo.png"
+      alt="Horário"
+    >
+
+  </div>
+
+
+  <div class="info-content">
+
+    <span class="info-label">
+      HORÁRIO
+    </span>
+
+    <div
+      id="horarioLocal"
+      class="info-value"
+    >
+      Não informado
+    </div>
+
+  </div>
+
+</div>
+
+
+<div class="info-card">
+
+  <div class="info-icon">
+
+    <img
+      src="../img/icones/marcador.png"
+      alt="Endereço"
+    >
+
+  </div>
+
+
+  <div class="info-content">
+
+    <span class="info-label">
+      ENDEREÇO
+    </span>
+
+    <div
+      id="enderecoLocal"
+      class="info-value"
+    >
+      Não informado
+    </div>
+
+  </div>
+
+</div>
+
+
+  </section>
+
+  <!-- =====================================================
+       CONTATOS
+  ====================================================== -->
+
+  <div class="contatos-local">
+
+
+<a
+  id="whatsappLocal"
+  class="contato-local"
+  href="#"
+  target="_blank"
+  rel="noopener noreferrer"
+  style="display:none;"
+>
+
+  <img
+    src="../img/icones/whatsapp.png"
+    alt="WhatsApp"
+  >
+
+  <span id="whatsappNome">
+    WhatsApp
+  </span>
+
+</a>
+
+
+<a
+  id="instagramLocal"
+  class="contato-local"
+  href="#"
+  target="_blank"
+  rel="noopener noreferrer"
+  style="display:none;"
+>
+
+  <img
+    src="../img/icones/instagram2.png"
+    alt="Instagram"
+  >
+
+  <span id="instagramNome">
+    Instagram
+  </span>
+
+</a>
+
+
+  </div>
+
+  <!-- =====================================================
+       MAPA
+  ====================================================== -->
+
+  <section class="local-map-section">
+
+
+<div class="section-heading">
+
+  <span>
+    LOCALIZAÇÃO
+  </span>
+
+  <h2>
+    Onde fica?
+  </h2>
+
+</div>
+
+
+<div
+  id="localMap"
+  class="local-map"
+></div>
+
+
+<a
+  id="comoChegar"
+  class="directions-button"
+  href="#"
+  target="_blank"
+  rel="noopener noreferrer"
+>
+
+  Como chegar
+
+  <span>
+    →
+  </span>
+
+</a>
+
+
+  </section>
+
+  <!-- =====================================================
+       AVALIAÇÕES
+  ====================================================== -->
+
+  <section class="comments-section">
+
+
+<div class="section-title">
+
+  <span>
+    EXPERIÊNCIAS
+  </span>
+
+  <h2>
+    Avaliações
+  </h2>
+
+</div>
+
+
+<!-- RESUMO DAS AVALIAÇÕES -->
+
+<div
+  id="resumoAvaliacoes"
+  class="rating-summary"
+>
+
+  <div class="rating-average">
+
+    <strong id="mediaAvaliacoes">
+      0,0
+    </strong>
+
+    <div
+      id="estrelasMedia"
+      class="stars stars-medium"
+    ></div>
+
+    <span id="quantidadeAvaliacoes">
+      Nenhuma avaliação
+    </span>
+
+  </div>
+
+</div>
+
+
+
+<!-- ÁREA DE AUTENTICAÇÃO -->
+
+<div
+  id="areaAutenticacao"
+  class="auth-area"
+>
+
+  <p id="mensagemAutenticacao">
+    Entre ou crie uma conta para avaliar este local.
+  </p>
+
+  <div class="auth-buttons">
+
+    <button
+      type="button"
+      id="abrirLogin"
+      class="auth-button primary"
+    >
+      Entrar
+    </button>
+
+    <button
+      type="button"
+      id="abrirCadastro"
+      class="auth-button secondary"
+    >
+      Criar conta
+    </button>
+
+  </div>
+
+</div>
+
+
+
+<!-- FORMULÁRIO DE AVALIAÇÃO -->
+
+<div
+  id="areaAvaliacao"
+  class="comment-form"
+  style="display:none;"
+>
+
+  <div class="user-rating-header">
+
+    <div>
+
+      <span class="form-label">
+        Sua avaliação
+      </span>
+
+      <strong id="nomeUsuarioLogado">
+        Usuário
+      </strong>
+
+    </div>
+
+    <button
+      type="button"
+      id="botaoSair"
+      class="logout-button"
+    >
+      Sair
+    </button>
+
+  </div>
+
+
+  <div
+    id="seletorEstrelas"
+    class="rating-selector"
+    aria-label="Escolha uma nota de 1 a 5"
+  >
+
+    <button
+      type="button"
+      class="star-button"
+      data-rating="1"
+      aria-label="1 estrela"
+    >
+      <img
+        src="../img/icones/estrela2.png"
+        alt=""
+      >
+    </button>
+
+    <button
+      type="button"
+      class="star-button"
+      data-rating="2"
+      aria-label="2 estrelas"
+    >
+      <img
+        src="../img/icones/estrela2.png"
+        alt=""
+      >
+    </button>
+
+    <button
+      type="button"
+      class="star-button"
+      data-rating="3"
+      aria-label="3 estrelas"
+    >
+      <img
+        src="../img/icones/estrela2.png"
+        alt=""
+      >
+    </button>
+
+    <button
+      type="button"
+      class="star-button"
+      data-rating="4"
+      aria-label="4 estrelas"
+    >
+      <img
+        src="../img/icones/estrela2.png"
+        alt=""
+      >
+    </button>
+
+    <button
+      type="button"
+      class="star-button"
+      data-rating="5"
+      aria-label="5 estrelas"
+    >
+      <img
+        src="../img/icones/estrela2.png"
+        alt=""
+      >
+    </button>
+
+  </div>
+
+
+  <textarea
+    id="textoComentario"
+    placeholder="Conte como foi sua experiência..."
+    maxlength="500"
+    rows="4"
+  ></textarea>
+
+
+  <button
+    type="button"
+    id="publicarComentario"
+  >
+    Publicar avaliação
+  </button>
+
+</div>
+
+
+
+<!-- LISTA -->
+
+<div
+  id="listaComentarios"
+  class="comments-list"
+>
+
+  <div class="empty-comments">
+    Ainda não há avaliações.
+    Seja o primeiro a avaliar!
+  </div>
+
+</div>
+
+
+  </section>
+
+</main>
+
+<!-- =======================================================
+     MODAL DE LOGIN / CADASTRO
+======================================================== -->
+
+<div
+  id="authModal"
+  class="auth-modal"
+  aria-hidden="true"
+>
+
+  <div class="auth-modal-content">
+
+
+<button
+  type="button"
+  id="fecharAuth"
+  class="auth-close"
+  aria-label="Fechar"
+>
+  ×
+</button>
+
+
+<!-- LOGIN -->
+
+<div
+  id="formLogin"
+  class="auth-form"
+>
+
+  <span class="auth-kicker">
+    BEM-VINDO
+  </span>
+
+  <h2>
+    Entrar
+  </h2>
+
+  <p>
+    Entre na sua conta para avaliar este local.
+  </p>
+
+
+  <input
+    type="email"
+    id="loginEmail"
+    placeholder="Seu e-mail"
+    autocomplete="email"
+  >
+
+
+  <input
+    type="password"
+    id="loginSenha"
+    placeholder="Sua senha"
+    autocomplete="current-password"
+  >
+
+
+  <button
+    type="button"
+    id="botaoLogin"
+    class="auth-submit"
+  >
+    Entrar
+  </button>
+
+
+  <div
+    id="erroLogin"
+    class="auth-error"
+  ></div>
+
+
+  <p class="auth-switch">
+
+    Ainda não possui uma conta?
+
+    <button
+      type="button"
+      id="trocarCadastro"
+    >
+      Criar conta
+    </button>
+
+  </p>
+
+</div>
+
+
+
+<!-- CADASTRO -->
+
+<div
+  id="formCadastro"
+  class="auth-form"
+  style="display:none;"
+>
+
+  <span class="auth-kicker">
+    NOVA CONTA
+  </span>
+
+  <h2>
+    Criar conta
+  </h2>
+
+  <p>
+    Crie sua conta para participar das avaliações.
+  </p>
+
+
+  <input
+    type="text"
+    id="cadastroNome"
+    placeholder="Seu nome"
+    maxlength="40"
+    autocomplete="name"
+  >
+
+
+  <input
+    type="email"
+    id="cadastroEmail"
+    placeholder="Seu e-mail"
+    autocomplete="email"
+  >
+
+
+  <input
+    type="password"
+    id="cadastroSenha"
+    placeholder="Senha"
+    autocomplete="new-password"
+  >
+
+
+  <input
+    type="password"
+    id="cadastroConfirmarSenha"
+    placeholder="Confirmar senha"
+    autocomplete="new-password"
+  >
+
+
+  <button
+    type="button"
+    id="botaoCadastro"
+    class="auth-submit"
+  >
+    Criar conta
+  </button>
+
+
+  <div
+    id="erroCadastro"
+    class="auth-error"
+  ></div>
+
+
+  <p class="auth-switch">
+
+    Já possui uma conta?
+
+    <button
+      type="button"
+      id="trocarLogin"
+    >
+      Entrar
+    </button>
+
+  </p>
+
+</div>
+
+
+  </div>
+
+</div>
+
+<!-- =======================================================
+     VISUALIZADOR DE FOTO
+======================================================== -->
+
+<div
+  id="photoViewer"
+  class="photo-viewer"
+>
+
+<button
+class="close-viewer"
+type="button"
+onclick="fecharFotoTelaCheia()"
+aria-label="Fechar"
+
+>
+×
+
+  </button>
+
+<img
+id="viewerImage"
+src=""
+alt=""
+
+>
+
+</div>
+
+<!-- =======================================================
+     SCRIPTS
+======================================================== -->
+
+<script
+  src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"
+></script>
+
+<script
+  src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+></script>
+
+<script
+  src="../js/local.js"
+></script>
+
+</body>
+
+</html>
