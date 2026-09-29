@@ -126,7 +126,7 @@ button {
   background-repeat: no-repeat;
   background-position: center center;
   background-size: cover;
-  background-color: var(--verde-escuro);
+  background-color: var(--branco);
 
   transition: opacity 1.2s ease;
 }
@@ -236,7 +236,7 @@ button {
       620px
     );
 
-  color: var(--branco);
+  color: var(--verde);
 
   font-size:
     clamp(
@@ -1351,59 +1351,58 @@ button {
 ========================================================= */
 
 .comercio-pesquisa {
-  width: 100%;
-
-  min-height: 40px;
-
-  padding:
-    10px 14px;
-
-  border:
-    1px solid
-    #d3d3d3;
-
-  border-radius: 999px;
-
-  background: var(--branco);
-
-  color: var(--texto);
-
-  font-family:
-    "Roboto",
-    Arial,
-    Helvetica,
-    sans-serif;
-
-  font-size: 12px;
-
-  font-weight: 500;
-
-  outline: none;
-
-  transition:
-    border-color .2s ease,
-    box-shadow .2s ease;
+width: 100%;
 }
 
-.comercio-pesquisa::placeholder {
-  color: #999;
+.comercio-pesquisa input {
+width: 100%;
+min-height: 40px;
+
+padding: 10px 14px;
+
+border: 1px solid var(--cinza-borda);
+
+border-radius: 999px;
+
+background: var(--branco);
+
+color: var(--texto);
+
+font-family:
+"Roboto",
+Arial,
+Helvetica,
+sans-serif;
+
+font-size: 12px;
+
+font-weight: 500;
+
+outline: none;
+
+box-shadow: none;
+
+appearance: none;
+
+-webkit-appearance: none;
+
+transition:
+border-color .2s ease,
+box-shadow .2s ease;
 }
 
-.comercio-pesquisa:focus {
-  border-color: var(--verde);
-
-  box-shadow:
-    0 0 0 3px
-    rgba(
-      25,
-      65,
-      56,
-      .08
-    );
+.comercio-pesquisa input::placeholder {
+color: #999;
 }
 
-.comercio-pesquisa::-webkit-search-cancel-button {
-  cursor: pointer;
+.comercio-pesquisa input:focus {
+outline: none;
+border: 1px solid var(--verde);
+box-shadow: none;
+}
+
+.comercio-pesquisa input::-webkit-search-cancel-button {
+cursor: pointer;
 }
 
 
