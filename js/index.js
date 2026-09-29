@@ -3,6 +3,7 @@
    INDEX.JS
    ========================================================= */
 
+
 /* =========================================================
    CONFIGURAÇÕES GERAIS
    ========================================================= */
@@ -17,31 +18,26 @@ const LIMITE_INCREMENTO = 10;
 
 const FALLBACK_IMAGE = "./img/sem-foto.png";
 
-const SUPABASE_URL = "https://xdmbkflufsfqziixzpxc.supabase.co";
-const SUPABASE_KEY = "sb_publishable_dvwNkLDf3oZrCqvZ5uAaRA_VsfiuZFy";
 
 /* =========================================================
    SUPABASE
    ========================================================= */
 
-let supabaseClient = null;
+const SUPABASE_URL =
+  "https://xdmbkflufsfqziixzpxc.supabase.co";
 
-if (
-  window.supabase &&
-  typeof window.supabase.createClient === "function"
-) {
-  supabaseClient = window.supabase.createClient(
+const SUPABASE_KEY =
+  "sb_publishable_dvwNkLDf3oZrCqvZ5uAaRA_VsfiuZFy";
+
+const supabaseClient =
+  window.supabase.createClient(
     SUPABASE_URL,
     SUPABASE_KEY
   );
-} else {
-  console.error(
-    "Supabase não foi carregado."
-  );
-}
+
 
 /* =========================================================
-   DADOS
+   VARIÁVEIS GLOBAIS
    ========================================================= */
 
 let dadosLocais = [];
@@ -49,54 +45,103 @@ let dadosComercios = [];
 let dadosHospedagem = [];
 
 let avaliacoes = [];
+
 let pessoas = [];
 let votosPessoas = [];
+
 let usuarioAtual = null;
 
+let homeMap = null;
+
+let marcadores = [];
+
+let limiteVisitar = LIMITE_INICIAL;
+let limiteComer = LIMITE_INICIAL;
+let limiteComercio = LIMITE_INICIAL;
+let limitePessoas = LIMITE_INICIAL;
+
+let indiceSlideHero = 0;
+let intervaloHero = null;
+
+
 /* =========================================================
-   FUNÇÕES UTILITÁRIAS
+   UTILITÁRIOS
    ========================================================= */
 
 function normalizarTexto(texto) {
+
   return String(texto || "")
-    .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
     .trim();
+
 }
 
+
 function escaparHTML(texto) {
+
   return String(texto ?? "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
+
 }
 
-function criarLinkLocal(id) {
-  return `pages/local.html?id=${encodeURIComponent(
-    id || ""
-  )}`;
-}
 
 function obterImagem(item) {
+
+  if (!item) {
+    return FALLBACK_IMAGE;
+  }
+
   return (
-    item?.capa ||
+    item.capa ||
+    item.imagem ||
+    item.foto ||
+    item.fotoPrincipal ||
+    item.imagemPrincipal ||
     FALLBACK_IMAGE
   );
+
 }
+
+
+function criarLinkLocal(id) {
+
+  return `./pages/local.html?id=${encodeURIComponent(id)}`;
+
+}
+
+
+function formatarNumero(numero) {
+
+  const valor = Number(numero);
+
+  if (!Number.isFinite(valor)) {
+    return "";
+  }
+
+  return valor
+    .toFixed(1)
+    .replace(".", ",");
+
+}
+
 
 /* =========================================================
    DISTÂNCIA
    ========================================================= */
 
-function calcularDistancia(
+function calcularDistanciaKm(
   lat1,
   lon1,
   lat2,
   lon2
 ) {
+
   const R = 6371;
 
   const dLat =
@@ -110,20 +155,10 @@ function calcularDistancia(
     180;
 
   const a =
-    Math.sin(dLat / 2) *
-      Math.sin(dLat / 2) +
-    Math.cos(
-      lat1 *
-        Math.PI /
-        180
-    ) *
-      Math.cos(
-        lat2 *
-          Math.PI /
-          180
-      ) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) *
+    Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) ** 2;
 
   const c =
     2 *
@@ -133,109 +168,429 @@ function calcularDistancia(
     );
 
   return R * c;
+
 }
 
-function formatarDistancia(
-  distancia
-) {
-  if (distancia < 1) {
-    return `${Math.round(
-      distancia * 1000
-    )} m do centro`;
-  }
 
-  return `${distancia
-    .toFixed(1)
-    .replace(".", ",")} km do centro`;
-}
+function obterDistanciaDoItem(item) {
 
-/* =========================================================
-   PAGINAÇÃO
-   ========================================================= */
-
-function configurarMostrarMais({
-  botao,
-  total,
-  limite
-}) {
-  if (!botao) {
-    return;
-  }
-
-  if (total > limite) {
-    botao.hidden = false;
-    botao.textContent = "Mostrar mais";
-  } else {
-    botao.hidden = true;
-  }
-}
-
-/* =========================================================
-   CARROSSEL
-   ========================================================= */
-
-const heroCarousel =
-  document.getElementById(
-    "heroCarousel"
-  );
-
-const heroText =
-  document.getElementById(
-    "heroText"
-  );
-
-let slidesHero = [];
-let slideHeroAtual = 0;
-let intervaloHero = null;
-let inicioToqueHero = 0;
-
-/*
- * O JS verifica quais imagens realmente existem antes de criar os slides.
- */
-
-const HERO_MAXIMO = 20;
-
-const TEXTOS_HERO = [
-  "Descubra Andrelândia",
-  "Conheça a história de Andrelândia",
-  "Explore as belezas de Andrelândia",
-  "Viva Andrelândia",
-  "Descubra novos lugares",
-  "Um destino para conhecer"
-];
-
-async function verificarImagemExiste(
-  caminho
-) {
-  try {
-    const resposta = await fetch(
-      caminho,
-      {
-        method: "HEAD",
-        cache: "no-store"
-      }
+  const latitude =
+    Number(
+      item.latitude ??
+      item.lat
     );
 
-    return resposta.ok;
-  } catch {
-    return false;
+  const longitude =
+    Number(
+      item.longitude ??
+      item.lng ??
+      item.lon
+    );
+
+  if (
+    !Number.isFinite(latitude) ||
+    !Number.isFinite(longitude)
+  ) {
+    return null;
   }
+
+  return calcularDistanciaKm(
+    CENTRO_ANDRELANDIA.latitude,
+    CENTRO_ANDRELANDIA.longitude,
+    latitude,
+    longitude
+  );
+
 }
 
+
+/* =========================================================
+   HORÁRIOS
+   ========================================================= */
+
+function converterHorarioParaMinutos(horario) {
+
+  if (!horario) {
+    return null;
+  }
+
+  const texto = String(horario).trim();
+
+  const correspondencia =
+    texto.match(
+      /(\d{1,2})(?::(\d{2}))?/
+    );
+
+  if (!correspondencia) {
+    return null;
+  }
+
+  const horas =
+    Number(correspondencia[1]);
+
+  const minutos =
+    Number(correspondencia[2] || 0);
+
+  if (
+    horas < 0 ||
+    horas > 23 ||
+    minutos < 0 ||
+    minutos > 59
+  ) {
+    return null;
+  }
+
+  return horas * 60 + minutos;
+
+}
+
+
+function obterDiaAtual() {
+
+  const dias = [
+    "domingo",
+    "segunda",
+    "terca",
+    "quarta",
+    "quinta",
+    "sexta",
+    "sabado"
+  ];
+
+  return dias[new Date().getDay()];
+}
+
+
+function obterHorarioDoDia(comercio) {
+
+  if (!comercio) {
+    return null;
+  }
+
+  const horario = comercio.horario;
+
+  if (!horario) {
+    return null;
+  }
+
+  if (typeof horario === "object") {
+
+    const dia = obterDiaAtual();
+
+    return (
+      horario[dia] ||
+      horario[
+        dia === "terca"
+          ? "terça"
+          : dia
+      ] ||
+      null
+    );
+
+  }
+
+  return horario;
+
+}
+
+
+function comercioEstaAberto(comercio) {
+
+  const horario =
+    obterHorarioDoDia(comercio);
+
+  if (!horario) {
+    return false;
+  }
+
+  const texto =
+    String(horario)
+      .toLowerCase()
+      .trim();
+
+  if (
+    texto.includes("fechado") ||
+    texto.includes("encerrado")
+  ) {
+    return false;
+  }
+
+  if (
+    texto.includes("24h") ||
+    texto.includes("24 horas")
+  ) {
+    return true;
+  }
+
+  const agora = new Date();
+
+  const minutosAgora =
+    agora.getHours() * 60 +
+    agora.getMinutes();
+
+  const intervalos =
+    texto.split(/\s*(?:e|\/|;)\s*/i);
+
+  for (const intervalo of intervalos) {
+
+    const horarios =
+      intervalo.match(
+        /(\d{1,2}(?::\d{2})?)\s*(?:-|–|—|às|as)\s*(\d{1,2}(?::\d{2})?)/i
+      );
+
+    if (!horarios) {
+      continue;
+    }
+
+    const inicio =
+      converterHorarioParaMinutos(
+        horarios[1]
+      );
+
+    const fim =
+      converterHorarioParaMinutos(
+        horarios[2]
+      );
+
+    if (
+      inicio === null ||
+      fim === null
+    ) {
+      continue;
+    }
+
+    if (fim < inicio) {
+
+      if (
+        minutosAgora >= inicio ||
+        minutosAgora <= fim
+      ) {
+        return true;
+      }
+
+    } else {
+
+      if (
+        minutosAgora >= inicio &&
+        minutosAgora <= fim
+      ) {
+        return true;
+      }
+
+    }
+
+  }
+
+  return false;
+
+}
+
+
+/* =========================================================
+   AVALIAÇÕES
+   ========================================================= */
+
+async function carregarAvaliacoes() {
+
+  try {
+
+    const {
+      data,
+      error
+    } =
+      await supabaseClient
+        .from("avaliacoes")
+        .select("local_id, nota");
+
+    if (error) {
+      console.error(
+        "Erro ao carregar avaliações:",
+        error
+      );
+
+      avaliacoes = [];
+      return;
+    }
+
+    avaliacoes =
+      Array.isArray(data)
+        ? data
+        : [];
+
+  } catch (erro) {
+
+    console.error(
+      "Erro inesperado nas avaliações:",
+      erro
+    );
+
+    avaliacoes = [];
+
+  }
+
+}
+
+
+function obterAvaliacaoLocal(localId) {
+
+  const lista =
+    avaliacoes.filter(
+      avaliacao =>
+        String(avaliacao.local_id) ===
+        String(localId)
+    );
+
+  if (lista.length === 0) {
+    return null;
+  }
+
+  const notas =
+    lista
+      .map(item => Number(item.nota))
+      .filter(Number.isFinite);
+
+  if (notas.length === 0) {
+    return null;
+  }
+
+  const soma =
+    notas.reduce(
+      (total, nota) =>
+        total + nota,
+      0
+    );
+
+  return soma / notas.length;
+
+}
+
+
+function criarHTMLAvaliacao(localId) {
+
+  const nota =
+    obterAvaliacaoLocal(localId);
+
+  if (nota === null) {
+    return "";
+  }
+
+  return `
+    <div class="avaliacao-local">
+      <img
+        src="img/icones/estrela.png"
+        alt="Avaliação"
+      >
+      <span>
+        ${formatarNumero(nota)}
+      </span>
+    </div>
+  `;
+
+}
+
+
+/* =========================================================
+   CARROSSEL HERO
+   ========================================================= */
+
+async function verificarImagemExiste(caminho) {
+
+  return new Promise(resolve => {
+
+    const imagem =
+      new Image();
+
+    imagem.onload = () =>
+      resolve(true);
+
+    imagem.onerror = () =>
+      resolve(false);
+
+    imagem.src =
+      caminho;
+
+  });
+
+}
+
+
 async function descobrirSlidesHero() {
-  if (!heroCarousel) {
+
+  const carousel =
+    document.getElementById(
+      "heroCarousel"
+    );
+
+  if (!carousel) {
     return;
   }
+
+  clearInterval(
+    intervaloHero
+  );
+
+  indiceSlideHero = 0;
+
+  carousel.innerHTML = "";
+
+  const caminhos = [];
+
+  /*
+     Estrutura 1:
+     img/hero/hero1.jpg
+     img/hero/hero2.jpg
+     ...
+
+     Estrutura 2:
+     img/hero1.jpg
+     img/hero2.jpg
+     ...
+
+     Estrutura 3:
+     img/hero.png
+  */
+
+  const extensoes = [
+    "jpg",
+    "jpeg",
+    "png",
+    "webp"
+  ];
+
+  for (let i = 1; i <= 30; i++) {
+
+    for (const extensao of extensoes) {
+
+      caminhos.push(
+        `./img/hero/hero${i}.${extensao}`
+      );
+
+    }
+
+  }
+
+  for (let i = 1; i <= 30; i++) {
+
+    for (const extensao of extensoes) {
+
+      caminhos.push(
+        `./img/hero${i}.${extensao}`
+      );
+
+    }
+
+  }
+
+  caminhos.push(
+    "./img/hero.png",
+    "./img/hero.jpg",
+    "./img/hero.webp",
+    "./img/hero.jpeg"
+  );
 
   const encontrados = [];
 
-  for (
-    let numero = 1;
-    numero <= HERO_MAXIMO;
-    numero++
-  ) {
-    const caminho =
-      `img/carrossel/hero${numero}.png`;
+  for (const caminho of caminhos) {
 
     const existe =
       await verificarImagemExiste(
@@ -243,222 +598,271 @@ async function descobrirSlidesHero() {
       );
 
     if (existe) {
-      encontrados.push({
-        caminho,
-        texto:
-          TEXTOS_HERO[
-            (numero - 1) %
-              TEXTOS_HERO.length
-          ]
-      });
-    }
-  }
 
-  /*
-   * Se o servidor não permitir HEAD, tenta pelo menos os três arquivos principais.
-   */
+      if (
+        !encontrados.includes(caminho)
+      ) {
+        encontrados.push(caminho);
+      }
+
+    }
+
+    /*
+       Depois de encontrar uma quantidade
+       razoável de imagens, evitamos
+       procurar infinitamente.
+    */
+
+    if (
+      encontrados.length >= 10
+    ) {
+      break;
+    }
+
+  }
 
   if (encontrados.length === 0) {
-    for (
-      let numero = 1;
-      numero <= 3;
-      numero++
-    ) {
-      const caminho =
-        `img/carrossel/hero${numero}.png`;
 
-      encontrados.push({
-        caminho,
-        texto:
-          TEXTOS_HERO[
-            (numero - 1) %
-              TEXTOS_HERO.length
-          ]
-      });
-    }
-  }
+    console.warn(
+      "Nenhuma imagem do carrossel foi encontrada."
+    );
 
-  slidesHero = encontrados;
-
-  montarCarrossel();
-}
-
-function montarCarrossel() {
-  if (!heroCarousel) {
     return;
+
   }
 
-  heroCarousel.innerHTML = "";
+  encontrados.forEach(
+    (caminho, indice) => {
 
-  if (slidesHero.length === 0) {
-    return;
-  }
-
-  slidesHero.forEach(
-    (slide, indice) => {
-      const elemento =
+      const slide =
         document.createElement(
           "div"
         );
 
-      elemento.className =
+      slide.className =
         "hero-slide";
 
-      elemento.style.backgroundImage =
-        `url("${slide.caminho}")`;
-
-      elemento.dataset.index =
-        indice;
-
       if (indice === 0) {
-        elemento.classList.add(
+        slide.classList.add(
           "active"
         );
       }
 
-      heroCarousel.appendChild(
-        elemento
+      slide.style.backgroundImage =
+        `url("${caminho}")`;
+
+      carousel.appendChild(
+        slide
       );
+
     }
   );
 
-  slideHeroAtual = 0;
+  criarIndicadoresHero(
+    encontrados.length
+  );
 
-  atualizarHero();
+  iniciarCarrosselHero();
 
-  iniciarIntervaloHero();
+  console.log(
+    "Imagens do hero encontradas:",
+    encontrados
+  );
 
-  configurarGestosHero();
 }
 
-function atualizarHero() {
-  if (slidesHero.length === 0) {
+
+function criarIndicadoresHero(quantidade) {
+
+  const carousel =
+    document.getElementById(
+      "heroCarousel"
+    );
+
+  if (!carousel) {
     return;
   }
 
+  let indicadores =
+    document.querySelector(
+      ".hero-indicators"
+    );
+
+  if (!indicadores) {
+
+    indicadores =
+      document.createElement(
+        "div"
+      );
+
+    indicadores.className =
+      "hero-indicators";
+
+    carousel.appendChild(
+      indicadores
+    );
+
+  }
+
+  indicadores.innerHTML = "";
+
+  for (
+    let i = 0;
+    i < quantidade;
+    i++
+  ) {
+
+    const botao =
+      document.createElement(
+        "button"
+      );
+
+    botao.type = "button";
+
+    botao.className =
+      "hero-indicator";
+
+    if (i === 0) {
+      botao.classList.add(
+        "active"
+      );
+    }
+
+    botao.setAttribute(
+      "aria-label",
+      `Ir para imagem ${i + 1}`
+    );
+
+    botao.addEventListener(
+      "click",
+      () => {
+
+        mostrarSlideHero(i);
+
+        reiniciarCarrosselHero();
+
+      }
+    );
+
+    indicadores.appendChild(
+      botao
+    );
+
+  }
+
+}
+
+
+function mostrarSlideHero(indice) {
+
   const slides =
-    heroCarousel.querySelectorAll(
+    document.querySelectorAll(
       ".hero-slide"
     );
 
-  slides.forEach(
-    (slide, indice) => {
-      slide.classList.toggle(
-        "active",
-        indice ===
-          slideHeroAtual
-      );
-    }
-  );
-
-  if (heroText) {
-    heroText.textContent =
-      slidesHero[
-        slideHeroAtual
-      ]?.texto ||
-      "Descubra Andrelândia";
-  }
-}
-
-function mudarHero(
-  direcao
-) {
-  if (slidesHero.length <= 1) {
+  if (!slides.length) {
     return;
   }
 
-  slideHeroAtual += direcao;
-
   if (
-    slideHeroAtual >=
-    slidesHero.length
+    indice < 0 ||
+    indice >= slides.length
   ) {
-    slideHeroAtual = 0;
+    indice = 0;
   }
 
-  if (slideHeroAtual < 0) {
-    slideHeroAtual =
-      slidesHero.length - 1;
-  }
+  indiceSlideHero =
+    indice;
 
-  atualizarHero();
+  slides.forEach(
+    (slide, i) => {
+
+      slide.classList.toggle(
+        "active",
+        i === indice
+      );
+
+    }
+  );
+
+  const indicadores =
+    document.querySelectorAll(
+      ".hero-indicator"
+    );
+
+  indicadores.forEach(
+    (indicador, i) => {
+
+      indicador.classList.toggle(
+        "active",
+        i === indice
+      );
+
+    }
+  );
+
 }
 
-function iniciarIntervaloHero() {
-  if (intervaloHero) {
-    clearInterval(
-      intervaloHero
+
+function proximoSlideHero() {
+
+  const slides =
+    document.querySelectorAll(
+      ".hero-slide"
     );
+
+  if (slides.length <= 1) {
+    return;
   }
 
-  if (slidesHero.length <= 1) {
+  const proximo =
+    (indiceSlideHero + 1) %
+    slides.length;
+
+  mostrarSlideHero(
+    proximo
+  );
+
+}
+
+
+function iniciarCarrosselHero() {
+
+  clearInterval(
+    intervaloHero
+  );
+
+  const slides =
+    document.querySelectorAll(
+      ".hero-slide"
+    );
+
+  if (slides.length <= 1) {
     return;
   }
 
   intervaloHero =
-    setInterval(() => {
-      mudarHero(1);
-    }, 10000);
+    setInterval(
+      proximoSlideHero,
+      5000
+    );
+
 }
 
-function configurarGestosHero() {
-  if (!heroCarousel) {
-    return;
-  }
 
-  heroCarousel.addEventListener(
-    "touchstart",
-    event => {
-      inicioToqueHero =
-        event.changedTouches[0]
-          .clientX;
-    },
-    {
-      passive: true
-    }
-  );
+function reiniciarCarrosselHero() {
 
-  heroCarousel.addEventListener(
-    "touchend",
-    event => {
-      const fim =
-        event.changedTouches[0]
-          .clientX;
+  iniciarCarrosselHero();
 
-      const diferenca =
-        fim -
-        inicioToqueHero;
-
-      if (
-        Math.abs(diferenca) <
-        50
-      ) {
-        return;
-      }
-
-      if (diferenca < 0) {
-        mudarHero(1);
-      } else {
-        mudarHero(-1);
-      }
-
-      iniciarIntervaloHero();
-    },
-    {
-      passive: true
-    }
-  );
 }
+
 
 /* =========================================================
    MAPA
    ========================================================= */
 
-let homeMap = null;
-
-const marcadores = [];
-
 function inicializarMapa() {
+
   const elemento =
     document.getElementById(
       "homeMap"
@@ -468,32 +872,32 @@ function inicializarMapa() {
     !elemento ||
     typeof L === "undefined"
   ) {
-    console.error(
-      "Leaflet ou #homeMap não encontrado."
+    console.warn(
+      "Mapa ou Leaflet não encontrado."
     );
 
     return;
   }
 
-  homeMap = L.map(
-    elemento,
-    {
-      zoomControl: false,
-      scrollWheelZoom: true,
-      maxZoom: 22
-    }
-  ).setView(
-    [
-      CENTRO_ANDRELANDIA.latitude,
-      CENTRO_ANDRELANDIA.longitude
-    ],
-    15
-  );
+  if (homeMap) {
+    return;
+  }
 
-  /*
-   * URL correta do Esri. NÃO usar:
-   * https://{s}.arcgisonline.com/...
-   */
+  homeMap =
+    L.map(
+      elemento,
+      {
+        zoomControl: false,
+        scrollWheelZoom: true,
+        maxZoom: 22
+      }
+    ).setView(
+      [
+        CENTRO_ANDRELANDIA.latitude,
+        CENTRO_ANDRELANDIA.longitude
+      ],
+      15
+    );
 
   L.tileLayer(
     "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
@@ -503,31 +907,23 @@ function inicializarMapa() {
       attribution:
         "Tiles &copy; Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community"
     }
-  ).addTo(homeMap);
+  ).addTo(
+    homeMap
+  );
 
-  L.control
-    .zoom({
-      position:
-        "bottomright"
-    })
-    .addTo(homeMap);
+  L.control.zoom({
+    position: "bottomright"
+  }).addTo(
+    homeMap
+  );
 
-  /*
-   * O mapa precisa recalcular o tamanho depois que a página termina de carregar.
-   */
-
-  setTimeout(() => {
-    homeMap.invalidateSize();
-  }, 300);
 }
 
-/* =========================================================
-   GRUPO DE CATEGORIA DO MAPA
-   ========================================================= */
 
 function obterGrupoCategoriaMapa(
   categoria
 ) {
+
   const texto =
     normalizarTexto(
       categoria
@@ -542,9 +938,9 @@ function obterGrupoCategoriaMapa(
 
   if (
     texto.includes("histor") ||
-    texto.includes("historia") ||
     texto.includes("patrimonio") ||
-    texto.includes("ferrovi")
+    texto.includes("ferrovi") ||
+    texto.includes("estacao")
   ) {
     return "historico";
   }
@@ -612,346 +1008,299 @@ function obterGrupoCategoriaMapa(
   }
 
   return "outros";
+
 }
 
-/* =========================================================
-   ÍCONE DO MAPA
-   ========================================================= */
 
-function criarIcone(
-  categoria
+function criarIconeMapa(
+  grupo
 ) {
+
+  const arquivos = {
+
+    igreja:
+      "./img/marcadores/igreja.png",
+
+    historico:
+      "./img/marcadores/historico.png",
+
+    natureza:
+      "./img/marcadores/natureza.png",
+
+    alimentacao:
+      "./img/marcadores/alimentacao.png",
+
+    cafe:
+      "./img/marcadores/alimentacao.png",
+
+    hospedagem:
+      "./img/marcadores/hotel.png",
+
+    comercio:
+      "./img/marcadores/comercio.png",
+
+    esporte:
+      "./img/marcadores/esporte.png",
+
+    cultura:
+      "./img/marcadores/cultura.png"
+
+  };
+
+  const arquivo =
+    arquivos[grupo];
+
+  if (!arquivo) {
+
+    return L.divIcon({
+      className:
+        "marcador-padrao",
+      html:
+        '<div class="marcador-padrao-bolinha"></div>',
+      iconSize: [
+        28,
+        28
+      ],
+      iconAnchor: [
+        14,
+        28
+      ],
+      popupAnchor: [
+        0,
+        -28
+      ]
+    });
+
+  }
+
+  return L.icon({
+
+    iconUrl:
+      arquivo,
+
+    iconSize: [
+      38,
+      38
+    ],
+
+    iconAnchor: [
+      19,
+      38
+    ],
+
+    popupAnchor: [
+      0,
+      -38
+    ]
+
+  });
+
+}
+
+
+function obterCoordenadasItem(
+  item
+) {
+
+  const latitude =
+    Number(
+      item.latitude ??
+      item.lat
+    );
+
+  const longitude =
+    Number(
+      item.longitude ??
+      item.lng ??
+      item.lon
+    );
+
+  if (
+    !Number.isFinite(latitude) ||
+    !Number.isFinite(longitude)
+  ) {
+    return null;
+  }
+
+  return {
+    latitude,
+    longitude
+  };
+
+}
+
+
+function adicionarMarcador(
+  item,
+  origem
+) {
+
+  if (!homeMap || !item) {
+    return;
+  }
+
+  const coordenadas =
+    obterCoordenadasItem(
+      item
+    );
+
+  if (!coordenadas) {
+    return;
+  }
+
+  const categoria =
+    item.categoria ||
+    item.tipo ||
+    item.grupo ||
+    "";
+
   const grupo =
     obterGrupoCategoriaMapa(
       categoria
     );
 
-  let arquivo = null;
+  const nome =
+    item.nome ||
+    item.titulo ||
+    "Local";
 
-  switch (grupo) {
-    case "igreja":
-      arquivo =
-        "igreja.png";
-      break;
-
-    case "historico":
-      arquivo =
-        "historico.png";
-      break;
-
-    case "natureza":
-      arquivo =
-        "natureza.png";
-      break;
-
-    case "alimentacao":
-      arquivo =
-        "alimentacao.png";
-      break;
-
-    /*
-     * Como cafe.png pode não existir, usa o marcador de alimentação.
-     */
-
-    case "cafe":
-      arquivo =
-        "alimentacao.png";
-      break;
-
-    case "hospedagem":
-      arquivo =
-        "hotel.png";
-      break;
-
-    case "comercio":
-      arquivo =
-        "comercio.png";
-      break;
-
-    case "esporte":
-      arquivo =
-        "esporte.png";
-      break;
-
-    case "cultura":
-      arquivo =
-        "cultura.png";
-      break;
-
-    default:
-
-      /*
-       * Não tenta carregar local.png, pois ele pode não existir.
-       * Usa um marcador CSS simples.
-       */
-
-      return L.divIcon({
-        className:
-          "marcador-mapa-generico",
-
-        html:
-          `<span></span>`,
-
-        iconSize: [
-          30,
-          30
-        ],
-
-        iconAnchor: [
-          15,
-          30
-        ],
-
-        popupAnchor: [
-          0,
-          -28
-        ]
-      });
-  }
-
-  return L.icon({
-    iconUrl:
-      `img/marcadores/${arquivo}`,
-
-    iconSize: [
-      48,
-      48
-    ],
-
-    iconAnchor: [
-      24,
-      48
-    ],
-
-    popupAnchor: [
-      0,
-      -44
-    ]
-  });
-}
-
-/* =========================================================
-   ESTILO DO MARCADOR GENÉRICO
-   ========================================================= */
-
-function adicionarEstiloMarcadorGenerico() {
-  if (
-    document.getElementById(
-      "estiloMarcadorGenerico"
-    )
-  ) {
-    return;
-  }
-
-  const style =
-    document.createElement(
-      "style"
-    );
-
-  style.id =
-    "estiloMarcadorGenerico";
-
-  style.textContent = `
-    .marcador-mapa-generico {
-      background: transparent;
-      border: none;
-    }
-
-    .marcador-mapa-generico span {
-      display: block;
-      width: 30px;
-      height: 30px;
-      border-radius: 50% 50% 50% 0;
-      transform: rotate(-45deg);
-      background: #194138;
-      border: 3px solid #ffffff;
-      box-shadow: 0 2px 7px rgba(0,0,0,.35);
-      box-sizing: border-box;
-    }
-
-    .marcador-mapa-generico span::after {
-      content: "";
-      display: block;
-      width: 8px;
-      height: 8px;
-      margin: 8px;
-      border-radius: 50%;
-      background: #ffffff;
-    }
-  `;
-
-  document.head.appendChild(
-    style
-  );
-}
-
-/* =========================================================
-   POPUP DO MAPA
-   ========================================================= */
-
-function criarPopup(item) {
-  let descricao =
-    item.descricao ||
-    item.historia ||
-    item.sobre ||
-    "Conheça este lugar em Andrelândia.";
-
-  if (descricao.length > 140) {
-    descricao =
-      descricao.substring(
-        0,
-        140
-      ) + "...";
-  }
+  const id =
+    item.id ||
+    "";
 
   const imagem =
-    escaparHTML(
-      obterImagem(item)
-    );
+    obterImagem(item);
 
-  const nome =
-    escaparHTML(
-      item.nome ||
-        "Local"
-    );
-
-  const categoria =
-    escaparHTML(
-      item.categoria ||
-        "Local"
-    );
-
-  const textoDescricao =
-    escaparHTML(
-      descricao
-    );
-
-  return `
-    <div class="popup">
-      <img
-        class="popup-image"
-        src="${imagem}"
-        alt="${nome}"
-        onerror="this.src='${FALLBACK_IMAGE}'"
-      >
-
-      <div class="popup-content">
-
-        <div class="popup-category">
-          ${categoria}
-        </div>
-
-        <h3>
-          ${nome}
-        </h3>
-
-        <p>
-          ${textoDescricao}
-        </p>
-
-        <a
-          class="popup-button"
-          href="${criarLinkLocal(item.id)}"
-        >
-          Ver detalhes
-        </a>
-
-      </div>
-    </div>
-  `;
-}
-
-/* =========================================================
-   ADICIONAR MARCADOR
-   ========================================================= */
-
-function adicionarMarcador(
-  item
-) {
-  if (!homeMap) {
-    return;
-  }
-
-  const latitude =
-    Number(
-      item.latitude
-    );
-
-  const longitude =
-    Number(
-      item.longitude
-    );
+  let link =
+    criarLinkLocal(id);
 
   if (
-    !Number.isFinite(
-      latitude
-    ) ||
-    !Number.isFinite(
-      longitude
-    )
+    origem === "comercio" ||
+    origem === "hospedagem"
   ) {
-    console.warn(
-      "Local sem coordenadas válidas:",
-      item.nome,
-      item
-    );
-
-    return;
+    link =
+      criarLinkLocal(id);
   }
 
   const marcador =
     L.marker(
       [
-        latitude,
-        longitude
+        coordenadas.latitude,
+        coordenadas.longitude
       ],
       {
         icon:
-          criarIcone(
-            item.categoria
+          criarIconeMapa(
+            grupo
           )
       }
     );
 
+  const avaliacaoHTML =
+    criarHTMLAvaliacao(
+      id
+    );
+
+  const popup =
+    `
+      <div class="map-popup">
+
+        <img
+          src="${escaparHTML(imagem)}"
+          alt="${escaparHTML(nome)}"
+          class="map-popup-image"
+          onerror="this.src='${FALLBACK_IMAGE}'"
+        >
+
+        <div class="map-popup-content">
+
+          <h3>
+            ${escaparHTML(nome)}
+          </h3>
+
+          ${
+            avaliacaoHTML
+              ? `
+                <div class="map-popup-avaliacao">
+                  ${avaliacaoHTML}
+                </div>
+              `
+              : ""
+          }
+
+          <a
+            href="${link}"
+            class="popup-button"
+          >
+            Ver detalhes
+          </a>
+
+        </div>
+
+      </div>
+    `;
+
   marcador.bindPopup(
-    criarPopup(item),
-    {
-      maxWidth: 280
-    }
+    popup
   );
-
-  marcadores.push({
-    marcador,
-
-    categoria:
-      item.categoria ||
-      "",
-
-    grupo:
-      obterGrupoCategoriaMapa(
-        item.categoria
-      ),
-
-    id:
-      item.id,
-
-    nome:
-      item.nome ||
-      ""
-  });
 
   marcador.addTo(
     homeMap
   );
+
+  marcadores.push({
+
+    marcador,
+
+    categoria,
+
+    grupo,
+
+    id,
+
+    nome,
+
+    origem
+
+  });
+
 }
 
-/* =========================================================
-   FILTROS DO MAPA
-   ========================================================= */
+
+function limparMarcadoresMapa() {
+
+  if (!homeMap) {
+    return;
+  }
+
+  marcadores.forEach(
+    registro => {
+
+      if (
+        registro?.marcador &&
+        homeMap.hasLayer(
+          registro.marcador
+        )
+      ) {
+
+        homeMap.removeLayer(
+          registro.marcador
+        );
+
+      }
+
+    }
+  );
+
+  marcadores.length = 0;
+
+}
+
 
 function aplicarFiltroMapa(
   categoria
 ) {
+
   if (!homeMap) {
     return;
   }
@@ -959,1253 +1308,506 @@ function aplicarFiltroMapa(
   const filtro =
     normalizarTexto(
       categoria
-    );
+    ) || "todos";
 
   marcadores.forEach(
-    item => {
-      let mostrar = false;
+    registro => {
 
-      if (
-        filtro === "todos"
-      ) {
-        mostrar = true;
-      } else {
-        const filtroGrupo =
-          obterGrupoCategoriaMapa(
-            categoria
-          );
-
-        mostrar =
-          item.grupo ===
-          filtroGrupo;
-      }
+      const mostrar =
+        filtro === "todos" ||
+        registro.grupo === filtro;
 
       if (mostrar) {
+
         if (
           !homeMap.hasLayer(
-            item.marcador
+            registro.marcador
           )
         ) {
-          item.marcador.addTo(
+
+          registro.marcador.addTo(
             homeMap
           );
+
         }
+
       } else {
+
         if (
           homeMap.hasLayer(
-            item.marcador
+            registro.marcador
           )
         ) {
+
           homeMap.removeLayer(
-            item.marcador
+            registro.marcador
           );
+
         }
+
       }
+
     }
   );
+
 }
 
-document
-  .querySelectorAll(
-    ".map-filter"
-  )
-  .forEach(
+
+function obterCategoriaDoBotaoMapa(
+  botao
+) {
+
+  if (!botao) {
+    return "todos";
+  }
+
+  const valor =
+    botao.dataset.categoria ||
+    botao.dataset.category ||
+    botao.dataset.filtro ||
+    "";
+
+  if (valor) {
+
+    const grupo =
+      normalizarTexto(
+        valor
+      );
+
+    const gruposValidos = [
+      "todos",
+      "igreja",
+      "historico",
+      "natureza",
+      "alimentacao",
+      "cafe",
+      "hospedagem",
+      "comercio",
+      "esporte",
+      "cultura"
+    ];
+
+    if (
+      gruposValidos.includes(
+        grupo
+      )
+    ) {
+      return grupo;
+    }
+
+    return obterGrupoCategoriaMapa(
+      grupo
+    );
+
+  }
+
+  const texto =
+    normalizarTexto(
+      botao.textContent
+    );
+
+  if (
+    texto.includes("todos")
+  ) {
+    return "todos";
+  }
+
+  if (
+    texto.includes("igreja")
+  ) {
+    return "igreja";
+  }
+
+  if (
+    texto.includes("histor")
+  ) {
+    return "historico";
+  }
+
+  if (
+    texto.includes("natureza")
+  ) {
+    return "natureza";
+  }
+
+  if (
+    texto.includes("aliment")
+  ) {
+    return "alimentacao";
+  }
+
+  if (
+    texto.includes("cafe")
+  ) {
+    return "cafe";
+  }
+
+  if (
+    texto.includes("hosped")
+  ) {
+    return "hospedagem";
+  }
+
+  if (
+    texto.includes("comerc")
+  ) {
+    return "comercio";
+  }
+
+  if (
+    texto.includes("esport")
+  ) {
+    return "esporte";
+  }
+
+  if (
+    texto.includes("cultura")
+  ) {
+    return "cultura";
+  }
+
+  return "todos";
+
+}
+
+
+function configurarFiltrosMapa() {
+
+  const botoes =
+    document.querySelectorAll(
+      ".map-filter"
+    );
+
+  if (!botoes.length) {
+    return;
+  }
+
+  botoes.forEach(
     botao => {
+
+      if (
+        botao.dataset.filtroConfigurado ===
+        "true"
+      ) {
+        return;
+      }
+
+      botao.dataset.filtroConfigurado =
+        "true";
+
       botao.addEventListener(
         "click",
         () => {
-          const filtro =
-            botao.dataset.filter ||
-            "Todos";
 
-          document
-            .querySelectorAll(
-              ".map-filter"
-            )
-            .forEach(
-              item => {
-                item.classList.remove(
-                  "active"
-                );
-              }
-            );
+          botoes.forEach(
+            item =>
+              item.classList.remove(
+                "active"
+              )
+          );
 
           botao.classList.add(
             "active"
           );
 
+          const categoria =
+            obterCategoriaDoBotaoMapa(
+              botao
+            );
+
           aplicarFiltroMapa(
-            filtro
+            categoria
           );
+
         }
       );
+
     }
   );
 
-/* =========================================================
-   O QUE VISITAR
-   ========================================================= */
+  let botaoTodos = null;
 
-const visitarList =
-  document.getElementById(
-    "visitarList"
+  botoes.forEach(
+    botao => {
+
+      const categoria =
+        obterCategoriaDoBotaoMapa(
+          botao
+        );
+
+      if (
+        categoria === "todos" &&
+        !botaoTodos
+      ) {
+        botaoTodos = botao;
+      }
+
+    }
   );
 
-const mostrarMaisVisitar =
-  document.getElementById(
-    "mostrarMaisVisitar"
-  );
+  if (botaoTodos) {
 
-let limiteVisitar =
-  LIMITE_INICIAL;
-
-function criarCardVisitar(
-  item
-) {
-  const nome =
-    item.nome ||
-    "Local turístico";
-
-  const capa =
-    obterImagem(item);
-
-  const resumo =
-    item.resumo ||
-    item.descricao ||
-    item.historia ||
-    item.sobre ||
-    "";
-
-  const latitude =
-    Number(
-      item.latitude
+    botoes.forEach(
+      item =>
+        item.classList.remove(
+          "active"
+        )
     );
 
-  const longitude =
-    Number(
-      item.longitude
+    botaoTodos.classList.add(
+      "active"
     );
 
-  let localizacao =
-    "Andrelândia - MG";
-
-  if (
-    Number.isFinite(
-      latitude
-    ) &&
-    Number.isFinite(
-      longitude
-    )
-  ) {
-    const distancia =
-      calcularDistancia(
-        CENTRO_ANDRELANDIA.latitude,
-        CENTRO_ANDRELANDIA.longitude,
-        latitude,
-        longitude
-      );
-
-    localizacao =
-      formatarDistancia(
-        distancia
-      );
-  } else {
-    localizacao =
-      item.endereco ||
-      item.endereço ||
-      "Andrelândia - MG";
   }
 
-  const elemento =
-    document.createElement(
-      "a"
-    );
+  aplicarFiltroMapa(
+    "todos"
+  );
 
-  elemento.className =
-    "visitar-item";
-
-  elemento.href =
-    criarLinkLocal(
-      item.id
-    );
-
-  elemento.innerHTML = `
-    <div class="visitar-image">
-
-      <img
-        src="${escaparHTML(capa)}"
-        alt="${escaparHTML(nome)}"
-        loading="lazy"
-        onerror="this.src='${FALLBACK_IMAGE}'"
-      >
-
-    </div>
-
-    <div class="visitar-info">
-
-      <h3 class="visitar-nome">
-        ${escaparHTML(nome)}
-      </h3>
-
-      <div class="visitar-local">
-        ${escaparHTML(localizacao)}
-      </div>
-
-      <p class="visitar-resumo">
-        ${escaparHTML(resumo)}
-      </p>
-
-    </div>
-
-    <div class="visitar-arrow">
-
-      <img
-        src="img/icones/seta2.png"
-        alt=""
-      >
-
-    </div>
-  `;
-
-  return elemento;
 }
 
-function renderizarOQueVisitar() {
-  if (!visitarList) {
-    return;
-  }
 
-  visitarList.innerHTML = "";
+/* =========================================================
+   RENDERIZAÇÃO — VISITAR
+   ========================================================= */
 
-  if (
-    dadosLocais.length === 0
-  ) {
-    visitarList.innerHTML = `
-      <div class="visitar-empty">
-        Nenhum ponto turístico encontrado.
-      </div>
-    `;
+function renderizarVisitar() {
 
-    if (mostrarMaisVisitar) {
-      mostrarMaisVisitar.hidden =
-        true;
-    }
-
-    return;
-  }
-
-  const quantidade =
-    Math.min(
-      limiteVisitar,
-      dadosLocais.length
+  const lista =
+    document.getElementById(
+      "visitarList"
     );
 
-  dadosLocais
-    .slice(
+  if (!lista) {
+    return;
+  }
+
+  const itens =
+    dadosLocais.slice(
       0,
-      quantidade
-    )
-    .forEach(
-      item => {
-        visitarList.appendChild(
-          criarCardVisitar(
-            item
-          )
-        );
-      }
-    );
-
-  configurarMostrarMais({
-    botao:
-      mostrarMaisVisitar,
-
-    total:
-      dadosLocais.length,
-
-    limite:
       limiteVisitar
-  });
-}
-
-if (mostrarMaisVisitar) {
-  mostrarMaisVisitar.addEventListener(
-    "click",
-    () => {
-      limiteVisitar +=
-        LIMITE_INCREMENTO;
-
-      renderizarOQueVisitar();
-    }
-  );
-}
-
-/* =========================================================
-   HORÁRIOS
-   ========================================================= */
-
-function obterDiaSemana() {
-  const dias = [
-    "domingo",
-    "segunda",
-    "terca",
-    "quarta",
-    "quinta",
-    "sexta",
-    "sabado"
-  ];
-
-  return dias[
-    new Date().getDay()
-  ];
-}
-
-function converterParaMinutos(
-  hora,
-  minuto
-) {
-  return (
-    Number(hora) * 60 +
-    Number(minuto)
-  );
-}
-
-function comercioEstaAberto(
-  comercio
-) {
-  if (
-    !comercio ||
-    !comercio.horario
-  ) {
-    return false;
-  }
-
-  const texto =
-    normalizarTexto(
-      comercio.horario
     );
 
-  const agora =
-    new Date();
+  lista.innerHTML = "";
 
-  const horaAtual =
-    agora.getHours() * 60 +
-    agora.getMinutes();
+  itens.forEach(
+    local => {
 
-  const dia =
-    obterDiaSemana();
+      const imagem =
+        obterImagem(local);
 
-  const diasDaSemana = [
-    "domingo",
-    "segunda",
-    "terca",
-    "quarta",
-    "quinta",
-    "sexta",
-    "sabado"
-  ];
-
-  let diaPermitido = true;
-
-  if (
-    texto.includes(
-      "segunda a sabado"
-    )
-  ) {
-    diaPermitido =
-      [
-        "segunda",
-        "terca",
-        "quarta",
-        "quinta",
-        "sexta",
-        "sabado"
-      ].includes(dia);
-  } else if (
-    texto.includes(
-      "segunda a sexta"
-    )
-  ) {
-    diaPermitido =
-      [
-        "segunda",
-        "terca",
-        "quarta",
-        "quinta",
-        "sexta"
-      ].includes(dia);
-  }
-
-  if (!diaPermitido) {
-    return false;
-  }
-
-  const horarios =
-    texto.match(
-      /(\d{1,2}):(\d{2})\s*(?:as|-|a)\s*(\d{1,2}):(\d{2})/g
-    );
-
-  if (
-    !horarios ||
-    horarios.length === 0
-  ) {
-    return false;
-  }
-
-  for (
-    const horario of horarios
-  ) {
-    const resultado =
-      horario.match(
-        /(\d{1,2}):(\d{2})\s*(?:as|-|a)\s*(\d{1,2}):(\d{2})/
-      );
-
-    if (!resultado) {
-      continue;
-    }
-
-    const horaInicial =
-      converterParaMinutos(
-        resultado[1],
-        resultado[2]
-      );
-
-    const horaFinal =
-      converterParaMinutos(
-        resultado[3],
-        resultado[4]
-      );
-
-    if (
-      horaFinal >=
-      horaInicial
-    ) {
-      if (
-        horaAtual >=
-          horaInicial &&
-        horaAtual <=
-          horaFinal
-      ) {
-        return true;
-      }
-    } else {
-      if (
-        horaAtual >=
-          horaInicial ||
-        horaAtual <=
-          horaFinal
-      ) {
-        return true;
-      }
-    }
-  }
-
-  return false;
-}
-
-/* =========================================================
-   ONDE COMER
-   ========================================================= */
-
-const comerList =
-  document.getElementById(
-    "comerList"
-  );
-
-const mostrarMaisComer =
-  document.getElementById(
-    "mostrarMaisComer"
-  );
-
-const filtroAberto =
-  document.getElementById(
-    "filtroAberto"
-  );
-
-const textoStatus =
-  document.getElementById(
-    "textoStatus"
-  );
-
-let categoriaComerFiltro =
-  "Todos";
-
-let mostrarSomenteAbertos =
-  false;
-
-let limiteComer =
-  LIMITE_INICIAL;
-
-/* =========================================================
-   CATEGORIAS DE ALIMENTAÇÃO
-   ========================================================= */
-
-const CATEGORIAS_COMIDA = [
-  "restaurante",
-  "restaurantes",
-  "lanchonete",
-  "lanchonetes",
-  "cafeteria",
-  "cafe",
-  "cafes",
-  "sorveteria",
-  "sorvete",
-  "acai",
-  "pizzaria",
-  "hamburgueria",
-  "hamburguer",
-  "padaria",
-  "panificadora",
-  "confeitaria",
-  "doceria",
-  "churrascaria",
-  "bar",
-  "alimentacao",
-  "food",
-  "fast food"
-].map(
-  normalizarTexto
-);
-
-function comercioEhAlimentacao(
-  comercio
-) {
-  if (!comercio) {
-    return false;
-  }
-
-  const categoria =
-    normalizarTexto(
-      comercio.categoria
-    );
-
-  const nome =
-    normalizarTexto(
-      comercio.nome
-    );
-
-  if (
-    CATEGORIAS_COMIDA.some(
-      categoriaComida =>
-        categoria.includes(
-          categoriaComida
-        )
-    )
-  ) {
-    return true;
-  }
-
-  const palavrasComida = [
-    "restaurante",
-    "lanchonete",
-    "cafeteria",
-    "cafe",
-    "sorvete",
-    "sorveteria",
-    "acai",
-    "pizzaria",
-    "hamburguer",
-    "padaria",
-    "panificadora",
-    "confeitaria",
-    "doceria",
-    "churrascaria"
-  ].map(
-    normalizarTexto
-  );
-
-  return palavrasComida.some(
-    palavra =>
-      nome.includes(palavra)
-  );
-}
-
-function comercioPertenceCategoria(
-  comercio,
-  filtro
-) {
-  if (filtro === "Todos") {
-    return comercioEhAlimentacao(
-      comercio
-    );
-  }
-
-  const categoria =
-    normalizarTexto(
-      comercio.categoria
-    );
-
-  switch (
-    normalizarTexto(filtro)
-  ) {
-    case "restaurante":
-      return categoria.includes(
-        "restaurante"
-      );
-
-    case "lanchonetes":
-    case "lanchonete":
-      return categoria.includes(
-        "lanchonete"
-      );
-
-    case "cafeteria":
-    case "cafe":
-      return (
-        categoria.includes(
-          "cafe"
-        ) ||
-        categoria.includes(
-          "cafeteria"
-        )
-      );
-
-    case "sorvete/acai":
-      return (
-        categoria.includes(
-          "sorvete"
-        ) ||
-        categoria.includes(
-          "acai"
-        )
-      );
-
-    default:
-      return (
-        categoria ===
-        normalizarTexto(
-          filtro
-        )
-      );
-  }
-}
-
-function obterComerciosFiltrados() {
-  return dadosComercios.filter(
-    comercio => {
-      const categoriaOk =
-        comercioPertenceCategoria(
-          comercio,
-          categoriaComerFiltro
+      const distancia =
+        obterDistanciaDoItem(
+          local
         );
 
-      const aberto =
-        comercioEstaAberto(
-          comercio
+      const avaliacao =
+        criarHTMLAvaliacao(
+          local.id
         );
 
-      const abertoOk =
-        !mostrarSomenteAbertos ||
-        aberto;
+      const article =
+        document.createElement(
+          "article"
+        );
 
-      return (
-        categoriaOk &&
-        abertoOk
+      article.className =
+        "local-card";
+
+      article.innerHTML = `
+
+        <a
+          href="${criarLinkLocal(local.id)}"
+          class="local-card-link"
+        >
+
+          <img
+            src="${escaparHTML(imagem)}"
+            alt="${escaparHTML(local.nome || "Local")}"
+            class="local-card-image"
+            onerror="this.src='${FALLBACK_IMAGE}'"
+          >
+
+          <div class="local-card-content">
+
+            <h3>
+              ${escaparHTML(local.nome || "")}
+            </h3>
+
+            ${
+              local.categoria
+                ? `
+                  <div class="local-card-category">
+                    ${escaparHTML(local.categoria)}
+                  </div>
+                `
+                : ""
+            }
+
+            ${
+              local.descricao
+                ? `
+                  <p>
+                    ${escaparHTML(local.descricao)}
+                  </p>
+                `
+                : ""
+            }
+
+            <div class="local-card-footer">
+
+              ${
+                distancia !== null
+                  ? `
+                    <span>
+                      ${distancia.toFixed(1).replace(".", ",")} km
+                    </span>
+                  `
+                  : ""
+              }
+
+              ${
+                avaliacao
+                  ? avaliacao
+                  : ""
+              }
+
+            </div>
+
+          </div>
+
+        </a>
+
+      `;
+
+      lista.appendChild(
+        article
       );
+
     }
   );
+
+  const botao =
+    document.getElementById(
+      "mostrarMaisVisitar"
+    );
+
+  if (botao) {
+
+    botao.style.display =
+      limiteVisitar <
+      dadosLocais.length
+        ? ""
+        : "none";
+
+  }
+
 }
 
-function atualizarStatusBotao() {
-  if (!filtroAberto) {
+
+/* =========================================================
+   RENDERIZAÇÃO — COMER
+   ========================================================= */
+
+function renderizarComer() {
+
+  const lista =
+    document.getElementById(
+      "comerList"
+    );
+
+  if (!lista) {
     return;
   }
 
-  const algumAberto =
-    dadosComercios
-      .filter(
-        comercio =>
-          comercioEhAlimentacao(
-            comercio
-          )
-      )
-      .some(
+  const termo =
+    normalizarTexto(
+      document.getElementById(
+        "pesquisaComer"
+      )?.value
+    );
+
+  const filtro =
+    normalizarTexto(
+      document.getElementById(
+        "filtroAberto"
+      )?.value
+    );
+
+  let dados =
+    dadosComercios.slice();
+
+  if (termo) {
+
+    dados =
+      dados.filter(
+        comercio => {
+
+          const texto =
+            normalizarTexto(
+              [
+                comercio.nome,
+                comercio.categoria,
+                comercio.descricao,
+                comercio.endereco
+              ]
+                .filter(Boolean)
+                .join(" ")
+            );
+
+          return texto.includes(
+            termo
+          );
+
+        }
+      );
+
+  }
+
+  if (
+    filtro === "aberto" ||
+    filtro === "abertos"
+  ) {
+
+    dados =
+      dados.filter(
         comercio =>
           comercioEstaAberto(
             comercio
           )
       );
 
-  if (algumAberto) {
-    if (textoStatus) {
-      textoStatus.textContent =
-        "Aberto agora";
-    }
-
-    filtroAberto.classList.remove(
-      "fechado"
-    );
-  } else {
-    if (textoStatus) {
-      textoStatus.textContent =
-        "Fechado";
-    }
-
-    filtroAberto.classList.add(
-      "fechado"
-    );
-  }
-}
-
-/* =========================================================
-   AVALIAÇÕES
-   ========================================================= */
-
-function obterAvaliacaoLocal(
-  localId
-) {
-  const lista =
-    avaliacoes.filter(
-      avaliacao =>
-        String(
-          avaliacao.local_id
-        ) ===
-        String(localId)
-    );
-
-  if (lista.length === 0) {
-    return null;
   }
 
-  const soma =
-    lista.reduce(
-      (
-        total,
-        avaliacao
-      ) =>
-        total +
-        Number(
-          avaliacao.nota
-        ),
-      0
-    );
+  if (
+    filtro === "fechado" ||
+    filtro === "fechados"
+  ) {
 
-  return (
-    soma /
-    lista.length
-  );
-}
-
-function formatarNota(
-  localId,
-  notaOriginal
-) {
-  const nota =
-    obterAvaliacaoLocal(
-      localId
-    );
-
-  if (nota === null) {
-    if (
-      notaOriginal !==
-        undefined &&
-      notaOriginal !==
-        null &&
-      notaOriginal !==
-        ""
-    ) {
-      return String(
-        notaOriginal
-      );
-    }
-
-    return "—";
-  }
-
-  return nota
-    .toFixed(1)
-    .replace(
-      ".",
-      ","
-    );
-}
-
-/* =========================================================
-   CARD — ONDE COMER
-   ========================================================= */
-
-function criarCardComercio(
-  comercio
-) {
-  const aberto =
-    comercioEstaAberto(
-      comercio
-    );
-
-  const nome =
-    comercio.nome ||
-    "Estabelecimento";
-
-  const categoria =
-    comercio.categoria ||
-    "";
-
-  const endereco =
-    comercio.endereco ||
-    comercio.endereço ||
-    "Andrelândia - MG";
-
-  const elemento =
-    document.createElement(
-      "a"
-    );
-
-  elemento.className =
-    "comer-item";
-
-  elemento.href =
-    criarLinkLocal(
-      comercio.id
-    );
-
-  elemento.innerHTML = `
-    <div class="comer-image">
-
-      <img
-        src="${escaparHTML(
-          obterImagem(
+    dados =
+      dados.filter(
+        comercio =>
+          !comercioEstaAberto(
             comercio
           )
-        )}"
-        alt="${escaparHTML(nome)}"
-        loading="lazy"
-        onerror="this.src='${FALLBACK_IMAGE}'"
-      >
+      );
 
-    </div>
-
-    <div class="comer-info">
-
-      <h3 class="comer-nome">
-        ${escaparHTML(nome)}
-      </h3>
-
-      <div class="comer-categoria">
-        ${escaparHTML(categoria)}
-      </div>
-
-      <div class="comer-endereco">
-        ${escaparHTML(endereco)}
-      </div>
-
-      <div
-        class="comer-horario ${
-          aberto
-            ? "aberto"
-            : "fechado"
-        }"
-      >
-        ${
-          aberto
-            ? "Aberto agora"
-            : "Fechado"
-        }
-      </div>
-
-    </div>
-
-    <div class="comer-arrow">
-
-      <img
-        src="img/icones/seta2.png"
-        alt=""
-      >
-
-    </div>
-  `;
-
-  return elemento;
-}
-
-function renderizarComercios() {
-  if (!comerList) {
-    return;
   }
 
-  comerList.innerHTML = "";
-
-  const filtrados =
-    obterComerciosFiltrados();
-
-  if (filtrados.length === 0) {
-    comerList.innerHTML = `
-      <div class="comer-empty">
-        Nenhum lugar para comer encontrado.
-      </div>
-    `;
-
-    if (mostrarMaisComer) {
-      mostrarMaisComer.hidden =
-        true;
-    }
-
-    return;
-  }
-
-  const quantidade =
-    Math.min(
-      limiteComer,
-      filtrados.length
-    );
-
-  filtrados
-    .slice(
+  const itens =
+    dados.slice(
       0,
-      quantidade
-    )
-    .forEach(
-      comercio => {
-        comerList.appendChild(
-          criarCardComercio(
-            comercio
-          )
-        );
-      }
-    );
-
-  configurarMostrarMais({
-    botao:
-      mostrarMaisComer,
-
-    total:
-      filtrados.length,
-
-    limite:
       limiteComer
-  });
-}
-
-if (mostrarMaisComer) {
-  mostrarMaisComer.addEventListener(
-    "click",
-    () => {
-      limiteComer +=
-        LIMITE_INCREMENTO;
-
-      renderizarComercios();
-    }
-  );
-}
-
-document
-  .querySelectorAll(
-    ".comer-filtro"
-  )
-  .forEach(
-    botao => {
-      botao.addEventListener(
-        "click",
-        () => {
-          categoriaComerFiltro =
-            botao.dataset.filter ||
-            "Todos";
-
-          limiteComer =
-            LIMITE_INICIAL;
-
-          document
-            .querySelectorAll(
-              ".comer-filtro"
-            )
-            .forEach(
-              item => {
-                item.classList.remove(
-                  "active"
-                );
-              }
-            );
-
-          botao.classList.add(
-            "active"
-          );
-
-          renderizarComercios();
-        }
-      );
-    }
-  );
-
-if (filtroAberto) {
-  filtroAberto.addEventListener(
-    "click",
-    () => {
-      mostrarSomenteAbertos =
-        !mostrarSomenteAbertos;
-
-      limiteComer =
-        LIMITE_INICIAL;
-
-      filtroAberto.dataset.status =
-        mostrarSomenteAbertos
-          ? "abertos"
-          : "todos";
-
-      filtroAberto.classList.toggle(
-        "selecionado",
-        mostrarSomenteAbertos
-      );
-
-      renderizarComercios();
-    }
-  );
-}
-
-/* =========================================================
-   COMÉRCIO LOCAL
-   ========================================================= */
-
-const comercioList =
-  document.getElementById(
-    "comercioList"
-  );
-
-const mostrarMaisComercio =
-  document.getElementById(
-    "mostrarMaisComercio"
-  );
-
-const pesquisaComercio =
-  document.getElementById(
-    "pesquisaComercio"
-  );
-
-const filtroAbertoComercio =
-  document.getElementById(
-    "filtroAbertoComercio"
-  );
-
-const textoStatusComercio =
-  document.getElementById(
-    "textoStatusComercio"
-  );
-
-let pesquisaComercioTexto =
-  "";
-
-let mostrarSomenteComercioAbertos =
-  false;
-
-let limiteComercio =
-  LIMITE_INICIAL;
-
-function distanciaLevenshtein(
-  textoA,
-  textoB
-) {
-  const a =
-    normalizarTexto(
-      textoA
     );
 
-  const b =
-    normalizarTexto(
-      textoB
-    );
+  lista.innerHTML = "";
 
-  if (!a) {
-    return b.length;
-  }
-
-  if (!b) {
-    return a.length;
-  }
-
-  const matriz =
-    Array.from(
-      {
-        length:
-          a.length + 1
-      },
-      () =>
-        new Array(
-          b.length + 1
-        ).fill(0)
-    );
-
-  for (
-    let i = 0;
-    i <= a.length;
-    i++
-  ) {
-    matriz[i][0] = i;
-  }
-
-  for (
-    let j = 0;
-    j <= b.length;
-    j++
-  ) {
-    matriz[0][j] = j;
-  }
-
-  for (
-    let i = 1;
-    i <= a.length;
-    i++
-  ) {
-    for (
-      let j = 1;
-      j <= b.length;
-      j++
-    ) {
-      const custo =
-        a[i - 1] ===
-        b[j - 1]
-          ? 0
-          : 1;
-
-      matriz[i][j] =
-        Math.min(
-          matriz[i - 1][j] +
-            1,
-
-          matriz[i][j - 1] +
-            1,
-
-          matriz[i - 1][
-            j - 1
-          ] +
-            custo
-        );
-    }
-  }
-
-  return matriz[
-    a.length
-  ][
-    b.length
-  ];
-}
-
-function palavraCombina(
-  palavraPesquisa,
-  texto
-) {
-  const palavra =
-    normalizarTexto(
-      palavraPesquisa
-    );
-
-  const alvo =
-    normalizarTexto(
-      texto
-    );
-
-  if (!palavra) {
-    return true;
-  }
-
-  if (
-    alvo.includes(
-      palavra
-    )
-  ) {
-    return true;
-  }
-
-  const palavras =
-    alvo.split(
-      /\s+/
-    );
-
-  let tolerancia = 1;
-
-  if (palavra.length >= 6) {
-    tolerancia = 2;
-  }
-
-  return palavras.some(
-    palavraAlvo => {
-      if (
-        palavraAlvo.includes(
-          palavra
-        )
-      ) {
-        return true;
-      }
-
-      if (
-        Math.abs(
-          palavraAlvo.length -
-            palavra.length
-        ) >
-        tolerancia
-      ) {
-        return false;
-      }
-
-      return (
-        distanciaLevenshtein(
-          palavra,
-          palavraAlvo
-        ) <=
-        tolerancia
-      );
-    }
-  );
-}
-
-function comercioCombinaPesquisa(
-  comercio,
-  pesquisa
-) {
-  const busca =
-    normalizarTexto(
-      pesquisa
-    );
-
-  if (!busca) {
-    return true;
-  }
-
-  const nome =
-    normalizarTexto(
-      comercio.nome
-    );
-
-  const categoria =
-    normalizarTexto(
-      comercio.categoria
-    );
-
-  const textoCompleto =
-    `${nome} ${categoria}`;
-
-  if (
-    textoCompleto.includes(
-      busca
-    )
-  ) {
-    return true;
-  }
-
-  const palavras =
-    busca
-      .split(/\s+/)
-      .filter(Boolean);
-
-  return palavras.every(
-    palavra => {
-      return (
-        palavraCombina(
-          palavra,
-          nome
-        ) ||
-        palavraCombina(
-          palavra,
-          categoria
-        )
-      );
-    }
-  );
-}
-
-function obterComerciosPesquisa() {
-  return dadosComercios.filter(
+  itens.forEach(
     comercio => {
-      const pesquisaOk =
-        comercioCombinaPesquisa(
-          comercio,
-          pesquisaComercioTexto
+
+      const imagem =
+        obterImagem(
+          comercio
         );
 
       const aberto =
@@ -2213,789 +1815,562 @@ function obterComerciosPesquisa() {
           comercio
         );
 
-      const abertoOk =
-        !mostrarSomenteComercioAbertos ||
-        aberto;
+      const textoStatusCard =
+        aberto
+          ? "Aberto agora"
+          : "Fechado";
 
-      return (
-        pesquisaOk &&
-        abertoOk
-      );
-    }
-  );
-}
+      const classeStatusCard =
+        aberto
+          ? "aberto"
+          : "fechado";
 
-function criarCardComercioLocal(
-  comercio
-) {
-  const aberto =
-    comercioEstaAberto(
-      comercio
-    );
-
-  const nome =
-    comercio.nome ||
-    "Comércio";
-
-  const categoria =
-    comercio.categoria ||
-    "Comércio";
-
-  const endereco =
-    comercio.endereco ||
-    comercio.endereço ||
-    "Andrelândia - MG";
-
-  const elemento =
-    document.createElement(
-      "a"
-    );
-
-  elemento.className =
-    "comer-item comercio-item";
-
-  elemento.href =
-    criarLinkLocal(
-      comercio.id
-    );
-
-  elemento.innerHTML = `
-    <div class="comer-image">
-
-      <img
-        src="${escaparHTML(
-          obterImagem(
-            comercio
-          )
-        )}"
-        alt="${escaparHTML(nome)}"
-        loading="lazy"
-        onerror="this.src='${FALLBACK_IMAGE}'"
-      >
-
-    </div>
-
-    <div class="comer-info">
-
-      <h3 class="comer-nome">
-        ${escaparHTML(nome)}
-      </h3>
-
-      <div class="comer-categoria">
-        ${escaparHTML(categoria)}
-      </div>
-
-      <div class="comer-endereco">
-        ${escaparHTML(endereco)}
-      </div>
-
-      <div
-        class="comer-horario ${
-          aberto
-            ? "aberto"
-            : "fechado"
-        }"
-      >
-        ${
-          aberto
-            ? "Aberto agora"
-            : "Fechado"
-        }
-      </div>
-
-    </div>
-
-    <div class="comer-arrow">
-
-      <img
-        src="img/icones/seta2.png"
-        alt=""
-      >
-
-    </div>
-  `;
-
-  return elemento;
-}
-
-function renderizarComercioLocal() {
-  if (!comercioList) {
-    return;
-  }
-
-  comercioList.innerHTML =
-    "";
-
-  const filtrados =
-    obterComerciosPesquisa();
-
-  if (
-    filtrados.length === 0
-  ) {
-    comercioList.innerHTML = `
-      <div class="comer-empty">
-        ${
-          pesquisaComercioTexto
-            ? "Nenhum comércio encontrado para essa pesquisa."
-            : "Nenhum comércio encontrado."
-        }
-      </div>
-    `;
-
-    if (mostrarMaisComercio) {
-      mostrarMaisComercio.hidden =
-        true;
-    }
-
-    return;
-  }
-
-  const quantidade =
-    Math.min(
-      limiteComercio,
-      filtrados.length
-    );
-
-  filtrados
-    .slice(
-      0,
-      quantidade
-    )
-    .forEach(
-      comercio => {
-        comercioList.appendChild(
-          criarCardComercioLocal(
-            comercio
-          )
+      const avaliacaoHTML =
+        criarHTMLAvaliacao(
+          comercio.id
         );
-      }
-    );
 
-  configurarMostrarMais({
-    botao:
-      mostrarMaisComercio,
+      const article =
+        document.createElement(
+          "article"
+        );
 
-    total:
-      filtrados.length,
+      article.className =
+        "comer-card";
 
-    limite:
-      limiteComercio
-  });
-}
+      article.innerHTML = `
 
-if (pesquisaComercio) {
-  pesquisaComercio.addEventListener(
-    "input",
-    () => {
-      pesquisaComercioTexto =
-        pesquisaComercio.value.trim();
-
-      limiteComercio =
-        LIMITE_INICIAL;
-
-      renderizarComercioLocal();
-    }
-  );
-}
-
-function atualizarStatusComercio() {
-  if (
-    !filtroAbertoComercio
-  ) {
-    return;
-  }
-
-  const algumAberto =
-    dadosComercios.some(
-      comercio =>
-        comercioEstaAberto(
-          comercio
-        )
-    );
-
-  if (algumAberto) {
-    if (
-      textoStatusComercio
-    ) {
-      textoStatusComercio.textContent =
-        "Aberto agora";
-    }
-
-    filtroAbertoComercio.classList.remove(
-      "fechado"
-    );
-  } else {
-    if (
-      textoStatusComercio
-    ) {
-      textoStatusComercio.textContent =
-        "Fechado";
-    }
-
-    filtroAbertoComercio.classList.add(
-      "fechado"
-    );
-  }
-}
-
-if (
-  filtroAbertoComercio
-) {
-  filtroAbertoComercio.addEventListener(
-    "click",
-    () => {
-      mostrarSomenteComercioAbertos =
-        !mostrarSomenteComercioAbertos;
-
-      limiteComercio =
-        LIMITE_INICIAL;
-
-      filtroAbertoComercio.dataset.status =
-        mostrarSomenteComercioAbertos
-          ? "abertos"
-          : "todos";
-
-      filtroAbertoComercio.classList.toggle(
-        "selecionado",
-        mostrarSomenteComercioAbertos
-      );
-
-      renderizarComercioLocal();
-    }
-  );
-}
-
-if (
-  mostrarMaisComercio
-) {
-  mostrarMaisComercio.addEventListener(
-    "click",
-    () => {
-      limiteComercio +=
-        LIMITE_INCREMENTO;
-
-      renderizarComercioLocal();
-    }
-  );
-}
-
-/* =========================================================
-   ONDE FICAR
-   ========================================================= */
-
-const ficarList =
-  document.getElementById(
-    "ficarList"
-  );
-
-const mostrarMaisFicar =
-  document.getElementById(
-    "mostrarMaisFicar"
-  );
-
-let limiteFicar =
-  LIMITE_INICIAL;
-
-function criarCardHospedagem(
-  hospedagem
-) {
-  const nome =
-    hospedagem.nome ||
-    "Hospedagem";
-
-  const endereco =
-    hospedagem.endereco ||
-    hospedagem.endereço ||
-    "Andrelândia - MG";
-
-  const nota =
-    formatarNota(
-      hospedagem.id,
-
-      hospedagem.nota ??
-        hospedagem.avaliacao ??
-        hospedagem.avaliação ??
-        ""
-    );
-
-  const elemento =
-    document.createElement(
-      "a"
-    );
-
-  elemento.className =
-    "ficar-item";
-
-  elemento.href =
-    criarLinkLocal(
-      hospedagem.id
-    );
-
-  elemento.innerHTML = `
-    <div class="ficar-image">
-
-      <img
-        src="${escaparHTML(
-          obterImagem(
-            hospedagem
-          )
-        )}"
-        alt="${escaparHTML(nome)}"
-        loading="lazy"
-        onerror="this.src='${FALLBACK_IMAGE}'"
-      >
-
-    </div>
-
-    <div class="ficar-info">
-
-      <h3 class="ficar-nome">
-        ${escaparHTML(nome)}
-      </h3>
-
-      <div class="ficar-endereco">
-        ${escaparHTML(endereco)}
-      </div>
-
-      <div class="ficar-nota">
-
-        <img
-          src="img/icones/estrela.png"
-          alt="Avaliação"
+        <a
+          href="${criarLinkLocal(comercio.id)}"
+          class="comer-card-link"
         >
 
-        <span>
-          ${escaparHTML(nota)}
-        </span>
+          <img
+            src="${escaparHTML(imagem)}"
+            alt="${escaparHTML(comercio.nome || "Comércio")}"
+            class="comer-card-image"
+            onerror="this.src='${FALLBACK_IMAGE}'"
+          >
 
-      </div>
+          <div class="comer-card-content">
 
-    </div>
+            <h3>
+              ${escaparHTML(comercio.nome || "")}
+            </h3>
 
-    <div class="ficar-arrow">
+            ${
+              comercio.categoria
+                ? `
+                  <div class="comer-categoria">
+                    ${escaparHTML(comercio.categoria)}
+                  </div>
+                `
+                : ""
+            }
 
-      <img
-        src="img/icones/seta2.png"
-        alt=""
-      >
+            <div class="comer-status-linha">
 
-    </div>
-  `;
+              <div
+                class="comer-horario ${classeStatusCard}"
+              >
+                ${textoStatusCard}
+              </div>
 
-  return elemento;
-}
+              ${avaliacaoHTML}
 
-function renderizarHospedagens() {
-  if (!ficarList) {
-    return;
-  }
+            </div>
 
-  ficarList.innerHTML =
-    "";
+          </div>
 
-  if (
-    dadosHospedagem.length ===
-    0
-  ) {
-    ficarList.innerHTML = `
-      <div class="ficar-empty">
-        Nenhuma hospedagem encontrada.
-      </div>
-    `;
+        </a>
 
-    if (mostrarMaisFicar) {
-      mostrarMaisFicar.hidden =
-        true;
-    }
+      `;
 
-    return;
-  }
+      lista.appendChild(
+        article
+      );
 
-  const quantidade =
-    Math.min(
-      limiteFicar,
-      dadosHospedagem.length
-    );
-
-  dadosHospedagem
-    .slice(
-      0,
-      quantidade
-    )
-    .forEach(
-      hospedagem => {
-        ficarList.appendChild(
-          criarCardHospedagem(
-            hospedagem
-          )
-        );
-      }
-    );
-
-  configurarMostrarMais({
-    botao:
-      mostrarMaisFicar,
-
-    total:
-      dadosHospedagem.length,
-
-    limite:
-      limiteFicar
-  });
-}
-
-if (mostrarMaisFicar) {
-  mostrarMaisFicar.addEventListener(
-    "click",
-    () => {
-      limiteFicar +=
-        LIMITE_INCREMENTO;
-
-      renderizarHospedagens();
     }
   );
+
+  const botao =
+    document.getElementById(
+      "mostrarMaisComer"
+    );
+
+  if (botao) {
+
+    botao.style.display =
+      limiteComer <
+      dados.length
+        ? ""
+        : "none";
+
+  }
+
 }
 
+
 /* =========================================================
-   CARREGAR JSON
+   RENDERIZAÇÃO — COMÉRCIO LOCAL
    ========================================================= */
 
-async function carregarJSON(
-  caminho,
-  nome
+function renderizarComercio() {
+
+  const lista =
+    document.getElementById(
+      "comercioList"
+    );
+
+  if (!lista) {
+    return;
+  }
+
+  const termo =
+    normalizarTexto(
+      document.getElementById(
+        "pesquisaComercio"
+      )?.value
+    );
+
+  const filtro =
+    normalizarTexto(
+      document.getElementById(
+        "filtroAbertoComercio"
+      )?.value
+    );
+
+  let dados =
+    dadosComercios.slice();
+
+  if (termo) {
+
+    dados =
+      dados.filter(
+        comercio => {
+
+          const texto =
+            normalizarTexto(
+              [
+                comercio.nome,
+                comercio.categoria,
+                comercio.descricao,
+                comercio.endereco
+              ]
+                .filter(Boolean)
+                .join(" ")
+            );
+
+          return texto.includes(
+            termo
+          );
+
+        }
+      );
+
+  }
+
+  if (
+    filtro === "aberto" ||
+    filtro === "abertos"
+  ) {
+
+    dados =
+      dados.filter(
+        comercio =>
+          comercioEstaAberto(
+            comercio
+          )
+      );
+
+  }
+
+  if (
+    filtro === "fechado" ||
+    filtro === "fechados"
+  ) {
+
+    dados =
+      dados.filter(
+        comercio =>
+          !comercioEstaAberto(
+            comercio
+          )
+      );
+
+  }
+
+  const itens =
+    dados.slice(
+      0,
+      limiteComercio
+    );
+
+  lista.innerHTML = "";
+
+  itens.forEach(
+    comercio => {
+
+      const imagem =
+        obterImagem(
+          comercio
+        );
+
+      const aberto =
+        comercioEstaAberto(
+          comercio
+        );
+
+      const avaliacao =
+        criarHTMLAvaliacao(
+          comercio.id
+        );
+
+      const card =
+        document.createElement(
+          "article"
+        );
+
+      card.className =
+        "comercio-card";
+
+      card.innerHTML = `
+
+        <a
+          href="${criarLinkLocal(comercio.id)}"
+          class="comercio-card-link"
+        >
+
+          <img
+            src="${escaparHTML(imagem)}"
+            alt="${escaparHTML(comercio.nome || "Comércio")}"
+            class="comercio-card-image"
+            onerror="this.src='${FALLBACK_IMAGE}'"
+          >
+
+          <div class="comercio-card-content">
+
+            <h3>
+              ${escaparHTML(comercio.nome || "")}
+            </h3>
+
+            ${
+              comercio.categoria
+                ? `
+                  <div class="comercio-categoria">
+                    ${escaparHTML(comercio.categoria)}
+                  </div>
+                `
+                : ""
+            }
+
+            <div class="comercio-status">
+
+              <span
+                class="${aberto ? "aberto" : "fechado"}"
+              >
+                ${aberto ? "Aberto agora" : "Fechado"}
+              </span>
+
+              ${
+                avaliacao
+                  ? avaliacao
+                  : ""
+              }
+
+            </div>
+
+          </div>
+
+        </a>
+
+      `;
+
+      lista.appendChild(
+        card
+      );
+
+    }
+  );
+
+  const botao =
+    document.getElementById(
+      "mostrarMaisComercio"
+    );
+
+  if (botao) {
+
+    botao.style.display =
+      limiteComercio <
+      dados.length
+        ? ""
+        : "none";
+
+  }
+
+}
+
+
+/* =========================================================
+   HOSPEDAGEM
+   ========================================================= */
+
+function identificarHospedagem(
+  item
 ) {
+
+  const texto =
+    normalizarTexto(
+      [
+        item.nome,
+        item.categoria,
+        item.tipo
+      ]
+        .filter(Boolean)
+        .join(" ")
+    );
+
+  return (
+    texto.includes("hotel") ||
+    texto.includes("pousada") ||
+    texto.includes("hosped")
+  );
+
+}
+
+
+function renderizarHospedagem() {
+
+  const lista =
+    document.getElementById(
+      "ficarList"
+    );
+
+  if (!lista) {
+    return;
+  }
+
+  const dados =
+    dadosHospedagem.length
+      ? dadosHospedagem
+      : dadosComercios.filter(
+          identificarHospedagem
+        );
+
+  lista.innerHTML = "";
+
+  dados.forEach(
+    hospedagem => {
+
+      const imagem =
+        obterImagem(
+          hospedagem
+        );
+
+      const nota =
+        obterAvaliacaoLocal(
+          hospedagem.id
+        );
+
+      const card =
+        document.createElement(
+          "article"
+        );
+
+      card.className =
+        "ficar-card";
+
+      card.innerHTML = `
+
+        <a
+          href="${criarLinkLocal(hospedagem.id)}"
+          class="ficar-card-link"
+        >
+
+          <img
+            src="${escaparHTML(imagem)}"
+            alt="${escaparHTML(hospedagem.nome || "Hospedagem")}"
+            class="ficar-card-image"
+            onerror="this.src='${FALLBACK_IMAGE}'"
+          >
+
+          <div class="ficar-card-content">
+
+            <h3>
+              ${escaparHTML(hospedagem.nome || "")}
+            </h3>
+
+            ${
+              hospedagem.categoria
+                ? `
+                  <div class="ficar-categoria">
+                    ${escaparHTML(hospedagem.categoria)}
+                  </div>
+                `
+                : ""
+            }
+
+            ${
+              nota !== null
+                ? `
+                  <div class="ficar-nota">
+                    <img
+                      src="img/icones/estrela.png"
+                      alt="Avaliação"
+                    >
+                    <span>
+                      ${formatarNumero(nota)}
+                    </span>
+                  </div>
+                `
+                : ""
+            }
+
+          </div>
+
+        </a>
+
+      `;
+
+      lista.appendChild(
+        card
+      );
+
+    }
+  );
+
+}
+
+
+/* =========================================================
+   MURAL — CARREGAR PESSOAS
+   ========================================================= */
+
+async function carregarPessoas() {
+
   try {
+
     const resposta =
       await fetch(
-        caminho
+        `./DATA/pessoas.json?v=${Date.now()}`,
+        {
+          cache: "no-store"
+        }
       );
 
     if (!resposta.ok) {
       throw new Error(
-        `${nome}: HTTP ${resposta.status}`
+        `HTTP ${resposta.status}`
       );
     }
 
     const dados =
       await resposta.json();
 
-    if (
-      !Array.isArray(
-        dados
-      )
-    ) {
-      throw new Error(
-        `${nome} não contém um array JSON`
-      );
-    }
-
-    console.log(
-      `${nome} carregado:`,
-      dados
-    );
-
-    return dados;
-  } catch (erro) {
-    console.error(
-      `Erro ao carregar ${nome}:`,
-      erro
-    );
-
-    return [];
-  }
-}
-
-/* =========================================================
-   CARREGAR AVALIAÇÕES SUPABASE
-   ========================================================= */
-
-async function carregarAvaliacoes() {
-  if (!supabaseClient) {
-    return;
-  }
-
-  try {
-    const {
-      data,
-      error
-    } =
-      await supabaseClient
-        .from("avaliacoes")
-        .select(
-          "local_id, nota"
-        );
-
-    if (error) {
-      console.error(
-        "Erro ao carregar avaliações:",
-        error
-      );
-
-      return;
-    }
-
-    avaliacoes =
-      Array.isArray(data)
-        ? data
-        : [];
-  } catch (erro) {
-    console.error(
-      "Erro nas avaliações:",
-      erro
-    );
-  }
-}
-
-/* =========================================================
-   CARREGAMENTO DOS JSONs
-   ========================================================= */
-
-async function carregarDados() {
-  const resultados =
-    await Promise.all([
-      carregarJSON(
-        "./DATA/locais.json",
-        "locais.json"
-      ),
-
-      carregarJSON(
-        "./DATA/comercios.json",
-        "comercios.json"
-      ),
-
-      carregarJSON(
-        "./DATA/hospedagem.json",
-        "hospedagem.json"
-      )
-    ]);
-
-  dadosLocais =
-    resultados[0];
-
-  dadosComercios =
-    resultados[1];
-
-  dadosHospedagem =
-    resultados[2];
-
-  await carregarAvaliacoes();
-
-  console.log(
-    "TOTAL DE LOCAIS:",
-    dadosLocais.length
-  );
-
-  console.log(
-    "TOTAL DE COMÉRCIOS:",
-    dadosComercios.length
-  );
-
-  console.log(
-    "TOTAL DE HOSPEDAGENS:",
-    dadosHospedagem.length
-  );
-
-  [
-    ...dadosLocais,
-    ...dadosComercios,
-    ...dadosHospedagem
-  ].forEach(
-    adicionarMarcador
-  );
-
-  renderizarOQueVisitar();
-
-  atualizarStatusBotao();
-
-  renderizarComercios();
-
-  atualizarStatusComercio();
-
-  renderizarComercioLocal();
-
-  renderizarHospedagens();
-
-  if (homeMap) {
-    setTimeout(() => {
-      homeMap.invalidateSize();
-    }, 500);
-  }
-}
-
-/* =========================================================
-   MURAL — CONFIGURAÇÕES
-   ========================================================= */
-
-const pessoasList =
-  document.getElementById(
-    "pessoasList"
-  );
-
-const mostrarMaisPessoas =
-  document.getElementById(
-    "mostrarMaisPessoas"
-  );
-
-let limitePessoas = 10;
-
-/* =========================================================
-   CARREGAR PESSOAS
-   ========================================================= */
-
-async function carregarPessoas() {
-  if (!pessoasList) {
-    return;
-  }
-
-  try {
-    const resposta =
-      await fetch(
-        "./DATA/pessoas.json"
-      );
-
-    if (!resposta.ok) {
-      throw new Error(
-        "Não foi possível carregar pessoas.json"
-      );
-    }
-
     pessoas =
-      await resposta.json();
+      Array.isArray(dados)
+        ? dados
+        : [];
 
-    if (
-      !Array.isArray(
-        pessoas
-      )
-    ) {
-      throw new Error(
-        "pessoas.json não contém um array"
-      );
-    }
-
-    console.log(
-      "PESSOAS CARREGADAS:",
-      pessoas
-    );
-
-    await carregarVotosPessoas();
-
-    renderizarPessoas();
   } catch (erro) {
+
     console.error(
       "Erro ao carregar pessoas:",
       erro
     );
 
-    pessoasList.innerHTML = `
-      <p class="lista-vazia">
-        Não foi possível carregar o mural.
-      </p>
-    `;
+    pessoas = [];
 
-    if (mostrarMaisPessoas) {
-      mostrarMaisPessoas.hidden =
-        true;
-    }
   }
+
 }
 
+
 /* =========================================================
-   CARREGAR VOTOS
+   MURAL — VOTOS
    ========================================================= */
 
 async function carregarVotosPessoas() {
-  if (!supabaseClient) {
-    votosPessoas = [];
-    return;
-  }
 
   try {
+
     const {
       data,
       error
     } =
       await supabaseClient
-        .from(
-          "votos_pessoas"
-        )
+        .from("votos_pessoas")
         .select(
           "pessoa_id, usuario_id, voto"
         );
 
     if (error) {
+
       console.error(
-        "Erro ao carregar votos do mural:",
+        "Erro ao carregar votos:",
         error
       );
 
       votosPessoas = [];
-
       return;
+
     }
 
     votosPessoas =
       Array.isArray(data)
         ? data
         : [];
+
   } catch (erro) {
+
     console.error(
-      "Erro ao carregar votos:",
+      "Erro inesperado ao carregar votos:",
       erro
     );
 
     votosPessoas = [];
+
   }
+
 }
 
-/* =========================================================
-   CONTAGEM DE VOTOS
-   ========================================================= */
 
-function obterResumoVotos(
+function obterContagemVotos(
   pessoaId
 ) {
+
   const votos =
     votosPessoas.filter(
       voto =>
-        String(
-          voto.pessoa_id
-        ) ===
-        String(
-          pessoaId
-        )
+        String(voto.pessoa_id) ===
+        String(pessoaId)
     );
 
-  let likes = 0;
-  let dislikes = 0;
+  const sobe =
+    votos.filter(
+      voto =>
+        Number(voto.voto) === 1
+    ).length;
 
-  votos.forEach(
-    voto => {
-      if (
-        Number(voto.voto) ===
-        1
-      ) {
-        likes++;
-      } else if (
-        Number(voto.voto) ===
-        -1
-      ) {
-        dislikes++;
-      }
-    }
-  );
+  const desce =
+    votos.filter(
+      voto =>
+        Number(voto.voto) === -1
+    ).length;
 
   return {
-    likes,
-    dislikes,
-    score:
-      likes -
-      dislikes
+    sobe,
+    desce,
+    total: sobe - desce
   };
+
 }
+
 
 function obterVotoDoUsuario(
   pessoaId
 ) {
+
   if (!usuarioAtual) {
     return 0;
   }
@@ -3003,453 +2378,331 @@ function obterVotoDoUsuario(
   const voto =
     votosPessoas.find(
       item =>
-        String(
-          item.pessoa_id
-        ) ===
-          String(
-            pessoaId
-          ) &&
-        String(
-          item.usuario_id
-        ) ===
-          String(
-            usuarioAtual.id
-          )
+        String(item.pessoa_id) ===
+          String(pessoaId) &&
+        String(item.usuario_id) ===
+          String(usuarioAtual.id)
     );
 
-  return voto
-    ? Number(
-        voto.voto
-      )
-    : 0;
+  if (!voto) {
+    return 0;
+  }
+
+  return Number(voto.voto);
+
 }
 
+
 /* =========================================================
-   ORDENAR MURAL
+   MURAL — RENDERIZAÇÃO
    ========================================================= */
 
-function ordenarPessoasPorVotos(
-  lista
-) {
-  return [
-    ...lista
-  ].sort(
-    (
-      a,
-      b
-    ) => {
-      const votoA =
-        obterResumoVotos(
-          a.id
+function renderizarPessoas() {
+
+  const lista =
+    document.getElementById(
+      "pessoasList"
+    );
+
+  if (!lista) {
+    return;
+  }
+
+  const itens =
+    pessoas.slice(
+      0,
+      limitePessoas
+    );
+
+  lista.innerHTML = "";
+
+  itens.forEach(
+    pessoa => {
+
+      const imagem =
+        pessoa.capa ||
+        pessoa.imagem ||
+        FALLBACK_IMAGE;
+
+      const contagem =
+        obterContagemVotos(
+          pessoa.id
         );
 
-      const votoB =
-        obterResumoVotos(
-          b.id
+      const votoUsuario =
+        obterVotoDoUsuario(
+          pessoa.id
         );
 
-      /*
-       * Primeiro: maior pontuação.
-       * Em caso de empate: mais curtidas.
-       * Depois: nome.
-       */
-
-      if (
-        votoB.score !==
-        votoA.score
-      ) {
-        return (
-          votoB.score -
-          votoA.score
+      const card =
+        document.createElement(
+          "article"
         );
-      }
 
-      if (
-        votoB.likes !==
-        votoA.likes
-      ) {
-        return (
-          votoB.likes -
-          votoA.likes
-        );
-      }
+      card.className =
+        "pessoa-item";
 
-      return String(
-        a.nome || ""
-      ).localeCompare(
-        String(
-          b.nome || ""
-        ),
-        "pt-BR"
+      card.innerHTML = `
+
+        <a
+          href="./pages/pessoa.html?id=${encodeURIComponent(pessoa.id)}"
+          class="pessoa-link"
+        >
+
+          <img
+            src="${escaparHTML(imagem)}"
+            alt="${escaparHTML(pessoa.nome || "Pessoa")}"
+            class="pessoa-image"
+            onerror="this.src='${FALLBACK_IMAGE}'"
+          >
+
+          <div class="pessoa-info">
+
+            <h3 class="pessoa-name">
+              ${escaparHTML(pessoa.nome || "")}
+            </h3>
+
+            ${
+              pessoa.categoria
+                ? `
+                  <div class="pessoa-category">
+                    ${escaparHTML(pessoa.categoria)}
+                  </div>
+                `
+                : ""
+            }
+
+            <div class="pessoa-votos">
+
+              <button
+                type="button"
+                class="pessoa-voto"
+                data-pessoa="${escaparHTML(pessoa.id)}"
+                data-voto="1"
+                aria-label="Voto positivo"
+              >
+                <img
+                  src="${
+                    votoUsuario === 1
+                      ? "./img/icones/sobe-ativa.png"
+                      : "./img/icones/sobe.png"
+                  }"
+                  alt=""
+                >
+              </button>
+
+              <span class="pessoa-like-count">
+                ${contagem.total}
+              </span>
+
+              <button
+                type="button"
+                class="pessoa-voto"
+                data-pessoa="${escaparHTML(pessoa.id)}"
+                data-voto="-1"
+                aria-label="Voto negativo"
+              >
+                <img
+                  src="${
+                    votoUsuario === -1
+                      ? "./img/icones/desce-ativa.png"
+                      : "./img/icones/desce.png"
+                  }"
+                  alt=""
+                >
+              </button>
+
+            </div>
+
+          </div>
+
+        </a>
+
+      `;
+
+      lista.appendChild(
+        card
       );
+
     }
   );
-}
 
-/* =========================================================
-   CRIAR CARTÃO DE PESSOA
-   ========================================================= */
-
-function criarPessoaCard(
-  pessoa
-) {
-  const link =
-    document.createElement(
-      "a"
-    );
-
-  link.className =
-    "pessoa-item";
-
-  link.href =
-    `./pages/pessoa.html?id=${encodeURIComponent(
-      pessoa.id
-    )}`;
-
-  const imagem =
-    pessoa.capa ||
-    FALLBACK_IMAGE;
-
-  const nome =
-    pessoa.nome ||
-    "Pessoa";
-
-  const categoria =
-    pessoa.categoria ||
-    "Personalidade";
-
-  const resumo =
-    obterResumoVotos(
-      pessoa.id
-    );
-
-  const votoUsuario =
-    obterVotoDoUsuario(
-      pessoa.id
-    );
-    
-    const iconeSobe =
-    
-    votoUsuario === 1
-    ? "img/icones/sobe-ativa.png"
-    : "img/icones/sobe.png";
-    
-    const iconeDesce =
-    
-    votoUsuario === -1
-    ? "img/icones/desce-ativa.png"
-    : "img/icones/desce.png";
-
-  link.innerHTML = `
-    <div class="pessoa-image">
-
-      <img
-        src="${escaparHTML(imagem)}"
-        alt="${escaparHTML(nome)}"
-        loading="lazy"
-        onerror="this.src='${FALLBACK_IMAGE}'"
-      >
-
-    </div>
-
-    <div class="pessoa-info">
-
-      <h3 class="pessoa-name">
-        ${escaparHTML(nome)}
-      </h3>
-
-      <span class="pessoa-category">
-        ${escaparHTML(categoria)}
-      </span>
-
-      <div
-        class="pessoa-votos"
-        data-pessoa-id="${escaparHTML(
-          pessoa.id
-        )}"
-      >
-
-        <button
-          type="button"
-          class="pessoa-voto pessoa-voto-like ${
-            votoUsuario === 1
-              ? "selecionado"
-              : ""
-          }"
-          data-voto="1"
-          aria-label="Curtir ${escaparHTML(nome)}"
-          title="Curtir"
-        >
-
-         <img
-         src="${iconeSobe}"
-         alt=""
-         >
-
-          <span class="pessoa-like-count">
-            ${resumo.likes}
-          </span>
-
-        </button>
-
-        <button
-          type="button"
-          class="pessoa-voto pessoa-voto-dislike ${
-            votoUsuario === -1
-              ? "selecionado"
-              : ""
-          }"
-          data-voto="-1"
-          aria-label="Não curtir ${escaparHTML(nome)}"
-          title="Não curtir"
-        >
-
-         <img
-         src="${iconeDesce}"
-         alt=""
-         >
-
-        </button>
-
-      </div>
-
-    </div>
-  `;
-
-  /*
-   * Impede que clicar no botão de voto abra a página da pessoa.
-   */
-
-  link
+  lista
     .querySelectorAll(
       ".pessoa-voto"
     )
     .forEach(
       botao => {
+
         botao.addEventListener(
           "click",
           event => {
+
             event.preventDefault();
             event.stopPropagation();
 
-            processarVotoPessoa(
-              pessoa.id,
+            const pessoaId =
+              botao.dataset.pessoa;
+
+            const voto =
               Number(
                 botao.dataset.voto
-              )
+              );
+
+            processarVotoPessoa(
+              pessoaId,
+              voto
             );
+
           }
         );
+
       }
     );
 
-  return link;
-}
-
-/* =========================================================
-   RENDERIZAR PESSOAS
-   ========================================================= */
-
-function renderizarPessoas() {
-  if (!pessoasList) {
-    return;
-  }
-
-  pessoasList.innerHTML =
-    "";
-
-  if (
-    !Array.isArray(
-      pessoas
-    ) ||
-    pessoas.length === 0
-  ) {
-    pessoasList.innerHTML = `
-      <p class="lista-vazia">
-        Ainda não há pessoas cadastradas no mural.
-      </p>
-    `;
-
-    if (mostrarMaisPessoas) {
-      mostrarMaisPessoas.hidden =
-        true;
-    }
-
-    return;
-  }
-
-  const pessoasOrdenadas =
-    ordenarPessoasPorVotos(
-      pessoas
+  const botaoMais =
+    document.getElementById(
+      "mostrarMaisPessoas"
     );
 
-  const pessoasVisiveis =
-    pessoasOrdenadas.slice(
-      0,
-      limitePessoas
-    );
+  if (botaoMais) {
 
-  const fragmento =
-    document.createDocumentFragment();
+    botaoMais.style.display =
+      limitePessoas <
+      pessoas.length
+        ? ""
+        : "none";
 
-  pessoasVisiveis.forEach(
-    pessoa => {
-      fragmento.appendChild(
-        criarPessoaCard(
-          pessoa
-        )
-      );
-    }
-  );
-
-  pessoasList.appendChild(
-    fragmento
-  );
-
-  if (mostrarMaisPessoas) {
-    mostrarMaisPessoas.hidden =
-      pessoas.length <=
-      limitePessoas;
   }
+
 }
 
+
 /* =========================================================
-   PROCESSAR VOTO
+   MURAL — PROCESSAR VOTO
    ========================================================= */
 
 async function processarVotoPessoa(
   pessoaId,
-  novoVoto
+  voto
 ) {
-  /*
-   * Usuário precisa estar logado.
-   */
 
   if (!usuarioAtual) {
-    abrirLogin();
-    return;
-  }
 
-  if (!supabaseClient) {
-    alert(
-      "Não foi possível conectar ao sistema de votação."
+    abrirModalAuth(
+      "login"
     );
 
     return;
+
   }
 
-  const votoExistente =
-    votosPessoas.find(
-      voto =>
-        String(
-          voto.pessoa_id
-        ) ===
-          String(
-            pessoaId
-          ) &&
-        String(
-          voto.usuario_id
-        ) ===
-          String(
-            usuarioAtual.id
-          )
-    );
+  const usuarioId =
+    usuarioAtual.id;
 
   try {
-    /*
-     * Se clicou no mesmo voto: remove.
-     */
 
-    if (
-      votoExistente &&
-      Number(
-        votoExistente.voto
-      ) === novoVoto
-    ) {
-      const {
-        error
-      } =
-        await supabaseClient
-          .from(
-            "votos_pessoas"
-          )
-          .delete()
-          .eq(
-            "pessoa_id",
-            pessoaId
-          )
-          .eq(
-            "usuario_id",
-            usuarioAtual.id
-          );
+    const {
+      data: votoExistente,
+      error: erroBusca
+    } =
+      await supabaseClient
+        .from("votos_pessoas")
+        .select(
+          "pessoa_id, usuario_id, voto"
+        )
+        .eq(
+          "pessoa_id",
+          pessoaId
+        )
+        .eq(
+          "usuario_id",
+          usuarioId
+        )
+        .maybeSingle();
 
-      if (error) {
-        throw error;
+    if (erroBusca) {
+      throw erroBusca;
+    }
+
+    if (votoExistente) {
+
+      if (
+        Number(votoExistente.voto) ===
+        voto
+      ) {
+
+        const {
+          error
+        } =
+          await supabaseClient
+            .from("votos_pessoas")
+            .delete()
+            .eq(
+              "pessoa_id",
+              pessoaId
+            )
+            .eq(
+              "usuario_id",
+              usuarioId
+            );
+
+        if (error) {
+          throw error;
+        }
+
+      } else {
+
+        const {
+          error
+        } =
+          await supabaseClient
+            .from("votos_pessoas")
+            .update({
+              voto
+            })
+            .eq(
+              "pessoa_id",
+              pessoaId
+            )
+            .eq(
+              "usuario_id",
+              usuarioId
+            );
+
+        if (error) {
+          throw error;
+        }
+
       }
-
-      /*
-       * Se clicou no voto contrário: altera.
-       */
-
-    } else if (
-      votoExistente
-    ) {
-      const {
-        error
-      } =
-        await supabaseClient
-          .from(
-            "votos_pessoas"
-          )
-          .update({
-            voto:
-              novoVoto
-          })
-          .eq(
-            "pessoa_id",
-            pessoaId
-          )
-          .eq(
-            "usuario_id",
-            usuarioAtual.id
-          );
-
-      if (error) {
-        throw error;
-      }
-
-      /*
-       * Se ainda não votou: cria.
-       */
 
     } else {
+
       const {
         error
       } =
         await supabaseClient
-          .from(
-            "votos_pessoas"
-          )
+          .from("votos_pessoas")
           .insert({
             pessoa_id:
               pessoaId,
-
             usuario_id:
-              usuarioAtual.id,
-
-            voto:
-              novoVoto
+              usuarioId,
+            voto
           });
 
       if (error) {
         throw error;
       }
+
     }
 
     await carregarVotosPessoas();
 
     renderizarPessoas();
+
   } catch (erro) {
+
     console.error(
       "Erro ao registrar voto:",
       erro
@@ -3458,978 +2711,1369 @@ async function processarVotoPessoa(
     alert(
       "Não foi possível registrar seu voto."
     );
+
   }
+
 }
 
+
 /* =========================================================
-   MOSTRAR MAIS PESSOAS
+   AUTENTICAÇÃO — ELEMENTOS
    ========================================================= */
 
-if (mostrarMaisPessoas) {
-  mostrarMaisPessoas.addEventListener(
-    "click",
-    () => {
-      limitePessoas += 10;
+function obterElementoAuth(
+  id
+) {
 
-      renderizarPessoas();
-    }
+  return document.getElementById(
+    id
   );
+
 }
 
+
 /* =========================================================
-   LOGIN — ESTILO
+   AUTENTICAÇÃO — MODAL
    ========================================================= */
 
-function adicionarEstiloLogin() {
+function criarModalAuthSeNecessario() {
+
   if (
     document.getElementById(
-      "estiloLoginMural"
+      "authModal"
     )
   ) {
     return;
   }
 
-  const style =
-    document.createElement(
-      "style"
-    );
-
-  style.id =
-    "estiloLoginMural";
-
-  style.textContent = `
-    .login-mural-overlay {
-      position: fixed;
-      inset: 0;
-      z-index: 99999;
-      display: none;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-      background: rgba(0,0,0,.58);
-    }
-
-    .login-mural-overlay.aberto {
-      display: flex;
-    }
-
-    .login-mural-box {
-      width: min(100%, 420px);
-      background: #ffffff;
-      border-radius: 18px;
-      padding: 28px;
-      box-shadow: 0 20px 60px rgba(0,0,0,.28);
-      position: relative;
-    }
-
-    .login-mural-fechar {
-      position: absolute;
-      top: 12px;
-      right: 14px;
-      border: 0;
-      background: transparent;
-      font-size: 28px;
-      line-height: 1;
-      cursor: pointer;
-      color: #555;
-    }
-
-    .login-mural-tag {
-      display: block;
-      color: #194138;
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 1.2px;
-      margin-bottom: 8px;
-    }
-
-    .login-mural-box h2 {
-      margin: 0 0 8px;
-      color: #091D1C;
-      font-size: 24px;
-    }
-
-    .login-mural-box p {
-      margin: 0 0 20px;
-      color: #666;
-      line-height: 1.5;
-      font-size: 14px;
-    }
-
-    .login-mural-form {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-
-    .login-mural-form input {
-      width: 100%;
-      box-sizing: border-box;
-      padding: 13px 14px;
-      border: 1px solid #d5d5d5;
-      border-radius: 10px;
-      font: inherit;
-      outline: none;
-    }
-
-    .login-mural-form input:focus {
-      border-color: #194138;
-    }
-
-    .login-mural-entrar,
-    .login-mural-cadastrar,
-    .login-mural-sair {
-      width: 100%;
-      border: 0;
-      border-radius: 10px;
-      padding: 13px 16px;
-      cursor: pointer;
-      font: inherit;
-      font-weight: 600;
-    }
-
-    .login-mural-entrar {
-      background: #194138;
-      color: #ffffff;
-    }
-
-    .login-mural-cadastrar {
-      background: #f1f1f1;
-      color: #194138;
-    }
-
-    .login-mural-mensagem {
-      min-height: 20px;
-      margin-top: 4px;
-      font-size: 13px;
-      color: #555;
-    }
-
-    .login-mural-conta {
-      margin-top: 16px;
-      padding-top: 16px;
-      border-top: 1px solid #e5e5e5;
-    }
-
-    .login-mural-conta strong {
-      display: block;
-      margin-bottom: 8px;
-      color: #091D1C;
-    }
-
-    .login-mural-status {
-      display: none;
-    }
-
-    .login-mural-status.aberto {
-      display: block;
-    }
-
-    .login-mural-status-email {
-      display: block;
-      margin-bottom: 12px;
-      color: #555;
-      font-size: 13px;
-      word-break: break-word;
-    }
-
-    .pessoa-votos {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-top: 8px;
-    }
-
-    .pessoa-voto {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      padding: 3px;
-      border: 0;
-      background: transparent;
-      cursor: pointer;
-    }
-
-    .pessoa-voto img {
-      width: 22px;
-      height: 22px;
-      object-fit: contain;
-    }
-
-    .pessoa-voto-like .pessoa-like-count {
-      font-size: 12px;
-      font-weight: 600;
-      color: #194138;
-    }
-  `;
-
-  document.head.appendChild(
-    style
-  );
-}
-
-/* =========================================================
-   CRIAR LOGIN
-   ========================================================= */
-
-function criarInterfaceLogin() {
-  adicionarEstiloLogin();
-
-  if (
-    document.getElementById(
-      "loginMuralOverlay"
-    )
-  ) {
-    return;
-  }
-
-  const overlay =
+  const modal =
     document.createElement(
       "div"
     );
 
-  overlay.id =
-    "loginMuralOverlay";
+  modal.id =
+    "authModal";
 
-  overlay.className =
-    "login-mural-overlay";
+  modal.innerHTML = `
 
-  overlay.innerHTML = `
-    <div
-      class="login-mural-box"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="loginMuralTitulo"
-    >
+    <div class="auth-modal-overlay">
 
-      <button
-        type="button"
-        class="login-mural-fechar"
-        id="loginMuralFechar"
-        aria-label="Fechar"
-      >
-        ×
-      </button>
-
-      <div
-        id="loginMuralFormulario"
-      >
-
-        <span class="login-mural-tag">
-          MURAL DE ANDRELÂNDIA
-        </span>
-
-        <h2 id="loginMuralTitulo">
-          Entre para votar
-        </h2>
-
-        <p>
-          Faça login para participar do mural e votar nas pessoas de Andrelândia.
-        </p>
-
-        <form
-          class="login-mural-form"
-          id="formLoginMural"
-        >
-
-          <input
-            type="email"
-            id="loginMuralEmail"
-            placeholder="Seu e-mail"
-            autocomplete="email"
-            required
-          >
-
-          <input
-            type="password"
-            id="loginMuralSenha"
-            placeholder="Sua senha"
-            autocomplete="current-password"
-            minlength="6"
-            required
-          >
-
-          <button
-            type="submit"
-            class="login-mural-entrar"
-          >
-            Entrar
-          </button>
-
-        </form>
-
-        <div class="login-mural-conta">
-
-          <strong>
-            Ainda não possui conta?
-          </strong>
-
-          <button
-            type="button"
-            class="login-mural-cadastrar"
-            id="loginMuralCadastrar"
-          >
-            Criar conta
-          </button>
-
-        </div>
-
-        <div
-          class="login-mural-mensagem"
-          id="loginMuralMensagem"
-        ></div>
-
-      </div>
-
-      <div
-        class="login-mural-status"
-        id="loginMuralStatus"
-      >
-
-        <span class="login-mural-tag">
-          CONTA
-        </span>
-
-        <h2>
-          Você está conectado
-        </h2>
-
-        <span
-          class="login-mural-status-email"
-          id="loginMuralStatusEmail"
-        ></span>
+      <div class="auth-modal-box">
 
         <button
           type="button"
-          class="login-mural-sair"
-          id="loginMuralSair"
+          id="fecharAuth"
+          class="auth-fechar"
         >
-          Sair
+          ×
         </button>
+
+        <div class="auth-conteudo">
+
+          <form
+            id="formLogin"
+            class="auth-form"
+          >
+
+            <h2>
+              Entrar
+            </h2>
+
+            <div
+              id="erroLogin"
+              class="auth-erro"
+            ></div>
+
+            <input
+              type="email"
+              id="loginEmail"
+              placeholder="E-mail"
+              autocomplete="email"
+              required
+            >
+
+            <input
+              type="password"
+              id="loginSenha"
+              placeholder="Senha"
+              autocomplete="current-password"
+              required
+            >
+
+            <button
+              type="submit"
+              id="botaoLogin"
+            >
+              Entrar
+            </button>
+
+            <button
+              type="button"
+              id="trocarCadastro"
+              class="auth-link"
+            >
+              Ainda não tenho conta
+            </button>
+
+          </form>
+
+
+          <form
+            id="formCadastro"
+            class="auth-form"
+            style="display:none"
+          >
+
+            <h2>
+              Criar conta
+            </h2>
+
+            <div
+              id="erroCadastro"
+              class="auth-erro"
+            ></div>
+
+            <input
+              type="text"
+              id="cadastroNome"
+              placeholder="Nome"
+              autocomplete="name"
+              required
+            >
+
+            <input
+              type="email"
+              id="cadastroEmail"
+              placeholder="E-mail"
+              autocomplete="email"
+              required
+            >
+
+            <input
+              type="password"
+              id="cadastroSenha"
+              placeholder="Senha"
+              autocomplete="new-password"
+              required
+            >
+
+            <input
+              type="password"
+              id="cadastroConfirmarSenha"
+              placeholder="Confirmar senha"
+              autocomplete="new-password"
+              required
+            >
+
+            <button
+              type="submit"
+              id="botaoCadastro"
+            >
+              Criar conta
+            </button>
+
+            <button
+              type="button"
+              id="trocarLogin"
+              class="auth-link"
+            >
+              Já tenho uma conta
+            </button>
+
+          </form>
+
+        </div>
 
       </div>
 
     </div>
+
   `;
 
   document.body.appendChild(
-    overlay
+    modal
   );
 
-  const fechar =
-    document.getElementById(
-      "loginMuralFechar"
-    );
-
-  const formulario =
-    document.getElementById(
-      "formLoginMural"
-    );
-
-  const cadastrar =
-    document.getElementById(
-      "loginMuralCadastrar"
-    );
-
-  const sair =
-    document.getElementById(
-      "loginMuralSair"
-    );
-
-  fechar.addEventListener(
-    "click",
-    fecharLogin
-  );
-
-  overlay.addEventListener(
-    "click",
-    event => {
-      if (
-        event.target ===
-        overlay
-      ) {
-        fecharLogin();
-      }
-    }
-  );
-
-  formulario.addEventListener(
-    "submit",
-    async event => {
-      event.preventDefault();
-
-      await fazerLogin();
-    }
-  );
-
-  cadastrar.addEventListener(
-    "click",
-    fazerCadastro
-  );
-
-  sair.addEventListener(
-    "click",
-    fazerLogout
-  );
 }
+
 
 /* =========================================================
-   ABRIR LOGIN
+   AUTENTICAÇÃO — ABRIR
    ========================================================= */
 
-function abrirLogin() {
-  criarInterfaceLogin();
-
-  const overlay =
-    document.getElementById(
-      "loginMuralOverlay"
-    );
-
-  if (!overlay) {
-    return;
-  }
-
-  overlay.classList.add(
-    "aberto"
-  );
-
-  atualizarInterfaceLogin();
-
-  setTimeout(() => {
-    document
-      .getElementById(
-        "loginMuralEmail"
-      )
-      ?.focus();
-  }, 50);
-}
-
-function fecharLogin() {
-  const overlay =
-    document.getElementById(
-      "loginMuralOverlay"
-    );
-
-  if (!overlay) {
-    return;
-  }
-
-  overlay.classList.remove(
-    "aberto"
-  );
-}
-
-/* =========================================================
-   MENSAGEM DO LOGIN
-   ========================================================= */
-
-function mostrarMensagemLogin(
-  mensagem
+function abrirModalAuth(
+  tipo = "login"
 ) {
-  const elemento =
-    document.getElementById(
-      "loginMuralMensagem"
+
+  criarModalAuthSeNecessario();
+
+  const modal =
+    obterElementoAuth(
+      "authModal"
     );
 
-  if (elemento) {
-    elemento.textContent =
-      mensagem;
+  const formLogin =
+    obterElementoAuth(
+      "formLogin"
+    );
+
+  const formCadastro =
+    obterElementoAuth(
+      "formCadastro"
+    );
+
+  if (!modal) {
+    return;
   }
+
+  modal.classList.add(
+    "ativo"
+  );
+
+  if (
+    tipo === "cadastro"
+  ) {
+
+    if (formLogin) {
+      formLogin.style.display =
+        "none";
+    }
+
+    if (formCadastro) {
+      formCadastro.style.display =
+        "";
+    }
+
+  } else {
+
+    if (formLogin) {
+      formLogin.style.display =
+        "";
+    }
+
+    if (formCadastro) {
+      formCadastro.style.display =
+        "none";
+    }
+
+  }
+
 }
 
+
 /* =========================================================
-   FAZER LOGIN
+   AUTENTICAÇÃO — FECHAR
    ========================================================= */
 
-async function fazerLogin() {
-  if (!supabaseClient) {
-    mostrarMensagemLogin(
-      "Sistema de login indisponível."
+function fecharModalAuth() {
+
+  const modal =
+    obterElementoAuth(
+      "authModal"
     );
 
+  if (!modal) {
     return;
   }
 
-  const email =
-    document
-      .getElementById(
-        "loginMuralEmail"
-      )
-      ?.value
-      .trim();
-
-  const senha =
-    document
-      .getElementById(
-        "loginMuralSenha"
-      )
-      ?.value;
-
-  if (
-    !email ||
-    !senha
-  ) {
-    mostrarMensagemLogin(
-      "Preencha e-mail e senha."
-    );
-
-    return;
-  }
-
-  mostrarMensagemLogin(
-    "Entrando..."
+  modal.classList.remove(
+    "ativo"
   );
 
-  const {
-    data,
-    error
-  } =
-    await supabaseClient.auth.signInWithPassword(
-      {
-        email,
-        password:
-          senha
-      }
-    );
-
-  if (error) {
-    console.error(
-      error
-    );
-
-    mostrarMensagemLogin(
-      "E-mail ou senha incorretos."
-    );
-
-    return;
-  }
-
-  usuarioAtual =
-    data.user;
-
-  mostrarMensagemLogin(
-    "Login realizado."
-  );
-
-  await carregarVotosPessoas();
-
-  renderizarPessoas();
-
-  atualizarInterfaceLogin();
-
-  setTimeout(
-    fecharLogin,
-    500
-  );
 }
 
+
 /* =========================================================
-   CADASTRO
+   AUTENTICAÇÃO — LOGIN
    ========================================================= */
 
-async function fazerCadastro() {
-  if (!supabaseClient) {
-    mostrarMensagemLogin(
-      "Sistema de cadastro indisponível."
-    );
+async function realizarLogin(
+  event
+) {
 
-    return;
-  }
+  event.preventDefault();
 
   const email =
-    document
-      .getElementById(
-        "loginMuralEmail"
-      )
-      ?.value
-      .trim();
+    obterElementoAuth(
+      "loginEmail"
+    )?.value.trim();
 
   const senha =
-    document
-      .getElementById(
-        "loginMuralSenha"
-      )
-      ?.value;
+    obterElementoAuth(
+      "loginSenha"
+    )?.value;
 
-  if (
-    !email ||
-    !senha
-  ) {
-    mostrarMensagemLogin(
-      "Informe e-mail e uma senha com pelo menos 6 caracteres."
+  const erro =
+    obterElementoAuth(
+      "erroLogin"
     );
 
-    return;
+  const botao =
+    obterElementoAuth(
+      "botaoLogin"
+    );
+
+  if (erro) {
+    erro.textContent = "";
   }
 
-  if (
-    senha.length <
-    6
-  ) {
-    mostrarMensagemLogin(
-      "A senha precisa ter pelo menos 6 caracteres."
-    );
-
-    return;
+  if (botao) {
+    botao.disabled = true;
+    botao.textContent =
+      "Entrando...";
   }
 
-  mostrarMensagemLogin(
-    "Criando sua conta..."
-  );
+  try {
 
-  const {
-    data,
-    error
-  } =
-    await supabaseClient.auth.signUp(
-      {
-        email,
-        password:
-          senha
-      }
-    );
-
-  if (error) {
-    console.error(
+    const {
+      data,
       error
-    );
+    } =
+      await supabaseClient.auth
+        .signInWithPassword({
+          email,
+          password: senha
+        });
 
-    mostrarMensagemLogin(
-      error.message ||
-        "Não foi possível criar a conta."
-    );
+    if (error) {
+      throw error;
+    }
 
-    return;
-  }
-
-  /*
-   * Dependendo da configuração do Supabase, a confirmação de e-mail pode estar ativada.
-   */
-
-  if (
-    data.session &&
-    data.user
-  ) {
     usuarioAtual =
       data.user;
 
-    mostrarMensagemLogin(
-      "Conta criada e login realizado."
-    );
+    window.usuarioAtualSupabase =
+      usuarioAtual;
 
-    await carregarVotosPessoas();
+    fecharModalAuth();
 
     renderizarPessoas();
 
-    atualizarInterfaceLogin();
+  } catch (erroLogin) {
 
-    setTimeout(
-      fecharLogin,
-      700
-    );
-  } else {
-    mostrarMensagemLogin(
-      "Conta criada. Verifique seu e-mail para confirmar o cadastro e depois faça login."
-    );
-  }
-}
-
-/* =========================================================
-   LOGOUT
-   ========================================================= */
-
-async function fazerLogout() {
-  if (!supabaseClient) {
-    return;
-  }
-
-  const {
-    error
-  } =
-    await supabaseClient.auth.signOut();
-
-  if (error) {
     console.error(
-      "Erro ao sair:",
-      error
+      "Erro no login:",
+      erroLogin
     );
 
-    return;
+    if (erro) {
+      erro.textContent =
+        "E-mail ou senha incorretos.";
+    }
+
+  } finally {
+
+    if (botao) {
+      botao.disabled = false;
+      botao.textContent =
+        "Entrar";
+    }
+
   }
 
-  usuarioAtual =
-    null;
-
-  await carregarVotosPessoas();
-
-  renderizarPessoas();
-
-  atualizarInterfaceLogin();
-
-  fecharLogin();
 }
 
+
 /* =========================================================
-   INTERFACE DE LOGIN
+   AUTENTICAÇÃO — CADASTRO
    ========================================================= */
 
-function atualizarInterfaceLogin() {
-  const formulario =
-    document.getElementById(
-      "loginMuralFormulario"
-    );
+async function realizarCadastro(
+  event
+) {
 
-  const status =
-    document.getElementById(
-      "loginMuralStatus"
-    );
+  event.preventDefault();
+
+  const nome =
+    obterElementoAuth(
+      "cadastroNome"
+    )?.value.trim();
 
   const email =
-    document.getElementById(
-      "loginMuralStatusEmail"
+    obterElementoAuth(
+      "cadastroEmail"
+    )?.value.trim();
+
+  const senha =
+    obterElementoAuth(
+      "cadastroSenha"
+    )?.value;
+
+  const confirmar =
+    obterElementoAuth(
+      "cadastroConfirmarSenha"
+    )?.value;
+
+  const erro =
+    obterElementoAuth(
+      "erroCadastro"
     );
 
-  if (
-    !formulario ||
-    !status
-  ) {
-    return;
+  const botao =
+    obterElementoAuth(
+      "botaoCadastro"
+    );
+
+  if (erro) {
+    erro.textContent = "";
   }
 
-  if (usuarioAtual) {
-    formulario.style.display =
-      "none";
+  if (nome.length < 2) {
 
-    status.classList.add(
-      "aberto"
-    );
-
-    if (email) {
-      email.textContent =
-        usuarioAtual.email ||
-        "";
+    if (erro) {
+      erro.textContent =
+        "Digite seu nome.";
     }
-  } else {
-    formulario.style.display =
-      "block";
 
-    status.classList.remove(
-      "aberto"
-    );
-  }
-}
-
-/* =========================================================
-   ESTADO DE AUTENTICAÇÃO
-   ========================================================= */
-
-async function inicializarAutenticacao() {
-  if (!supabaseClient) {
     return;
+
   }
 
-  const {
-    data
-  } =
-    await supabaseClient.auth.getSession();
+  if (senha.length < 6) {
 
-  usuarioAtual =
-    data?.session?.user ||
-    null;
+    if (erro) {
+      erro.textContent =
+        "A senha precisa ter pelo menos 6 caracteres.";
+    }
 
-  criarInterfaceLogin();
+    return;
 
-  atualizarInterfaceLogin();
+  }
 
-  supabaseClient.auth.onAuthStateChange(
-    async (
-      evento,
-      sessao
-    ) => {
+  if (senha !== confirmar) {
+
+    if (erro) {
+      erro.textContent =
+        "As senhas não coincidem.";
+    }
+
+    return;
+
+  }
+
+  if (botao) {
+    botao.disabled = true;
+    botao.textContent =
+      "Criando conta...";
+  }
+
+  try {
+
+    const {
+      data,
+      error
+    } =
+      await supabaseClient.auth
+        .signUp({
+
+          email,
+
+          password: senha,
+
+          options: {
+
+            data: {
+              nome
+            }
+
+          }
+
+        });
+
+    if (error) {
+      throw error;
+    }
+
+    if (data.session) {
+
       usuarioAtual =
-        sessao?.user ||
-        null;
+        data.user;
 
-      atualizarInterfaceLogin();
+      window.usuarioAtualSupabase =
+        usuarioAtual;
 
-      /*
-       * Recarrega os votos porque o destaque do voto depende do usuário logado.
-       */
-
-      await carregarVotosPessoas();
+      fecharModalAuth();
 
       renderizarPessoas();
+
+    } else {
+
+      const erroLogin =
+        obterElementoAuth(
+          "erroLogin"
+        );
+
+      if (erroLogin) {
+
+        erroLogin.textContent =
+          "Conta criada. Agora faça login.";
+
+      }
+
+      const formLogin =
+        obterElementoAuth(
+          "formLogin"
+        );
+
+      const formCadastro =
+        obterElementoAuth(
+          "formCadastro"
+        );
+
+      if (formLogin) {
+        formLogin.style.display =
+          "";
+      }
+
+      if (formCadastro) {
+        formCadastro.style.display =
+          "none";
+      }
+
     }
-  );
+
+  } catch (erroCadastro) {
+
+    console.error(
+      "Erro no cadastro:",
+      erroCadastro
+    );
+
+    if (erro) {
+
+      erro.textContent =
+        erroCadastro?.message ||
+        "Não foi possível criar a conta.";
+
+    }
+
+  } finally {
+
+    if (botao) {
+      botao.disabled = false;
+      botao.textContent =
+        "Criar conta";
+    }
+
+  }
+
 }
 
+
 /* =========================================================
-   BOTÃO DE LOGIN NO MURAL
+   AUTENTICAÇÃO — LOGOUT
    ========================================================= */
 
-function adicionarBotaoLoginMural() {
-  const secao =
-    document.getElementById(
-      "pessoas"
+async function realizarLogout() {
+
+  try {
+
+    const {
+      error
+    } =
+      await supabaseClient.auth
+        .signOut();
+
+    if (error) {
+      throw error;
+    }
+
+    usuarioAtual = null;
+
+    window.usuarioAtualSupabase =
+      null;
+
+    renderizarPessoas();
+
+  } catch (erro) {
+
+    console.error(
+      "Erro ao sair:",
+      erro
     );
 
-  if (!secao) {
-    return;
   }
 
-  if (
-    document.getElementById(
-      "botaoLoginMural"
-    )
-  ) {
-    return;
-  }
-
-  const header =
-    secao.querySelector(
-      ".content-header"
-    );
-
-  if (!header) {
-    return;
-  }
-
-  const area =
-    document.createElement(
-      "div"
-    );
-
-  area.id =
-    "botaoLoginMural";
-
-  area.style.marginTop =
-    "14px";
-
-  area.innerHTML = `
-    <button
-      type="button"
-      class="status-filtro"
-      id="abrirLoginMuralBotao"
-    >
-      Entrar para votar
-    </button>
-  `;
-
-  header.appendChild(
-    area
-  );
-
-  const botao =
-    document.getElementById(
-      "abrirLoginMuralBotao"
-    );
-
-  botao.addEventListener(
-    "click",
-    abrirLogin
-  );
-
-  atualizarBotaoLoginMural();
 }
 
-function atualizarBotaoLoginMural() {
-  const botao =
-    document.getElementById(
-      "abrirLoginMuralBotao"
-    );
-
-  if (!botao) {
-    return;
-  }
-
-  if (usuarioAtual) {
-    botao.textContent =
-      "Minha conta";
-  } else {
-    botao.textContent =
-      "Entrar para votar";
-  }
-}
 
 /* =========================================================
-   INICIALIZAÇÃO DO SITE
+   AUTENTICAÇÃO — ESTADO
+   ========================================================= */
+
+async function verificarUsuarioAtual() {
+
+  try {
+
+    const {
+      data,
+      error
+    } =
+      await supabaseClient.auth
+        .getSession();
+
+    if (error) {
+      throw error;
+    }
+
+    usuarioAtual =
+      data?.session?.user ||
+      null;
+
+    window.usuarioAtualSupabase =
+      usuarioAtual;
+
+  } catch (erro) {
+
+    console.error(
+      "Erro ao verificar sessão:",
+      erro
+    );
+
+    usuarioAtual = null;
+
+    window.usuarioAtualSupabase =
+      null;
+
+  }
+
+}
+
+
+function configurarAutenticacao() {
+
+  criarModalAuthSeNecessario();
+
+  const formLogin =
+    obterElementoAuth(
+      "formLogin"
+    );
+
+  const formCadastro =
+    obterElementoAuth(
+      "formCadastro"
+    );
+
+  const fechar =
+    obterElementoAuth(
+      "fecharAuth"
+    );
+
+  const trocarCadastro =
+    obterElementoAuth(
+      "trocarCadastro"
+    );
+
+  const trocarLogin =
+    obterElementoAuth(
+      "trocarLogin"
+    );
+
+  const abrirLogin =
+    obterElementoAuth(
+      "abrirLogin"
+    );
+
+  const abrirCadastro =
+    obterElementoAuth(
+      "abrirCadastro"
+    );
+
+  const botaoSair =
+    obterElementoAuth(
+      "botaoSair"
+    );
+
+  if (formLogin) {
+
+    formLogin.addEventListener(
+      "submit",
+      realizarLogin
+    );
+
+  }
+
+  if (formCadastro) {
+
+    formCadastro.addEventListener(
+      "submit",
+      realizarCadastro
+    );
+
+  }
+
+  if (fechar) {
+
+    fechar.addEventListener(
+      "click",
+      fecharModalAuth
+    );
+
+  }
+
+  if (trocarCadastro) {
+
+    trocarCadastro.addEventListener(
+      "click",
+      () =>
+        abrirModalAuth(
+          "cadastro"
+        )
+    );
+
+  }
+
+  if (trocarLogin) {
+
+    trocarLogin.addEventListener(
+      "click",
+      () =>
+        abrirModalAuth(
+          "login"
+        )
+    );
+
+  }
+
+  if (abrirLogin) {
+
+    abrirLogin.addEventListener(
+      "click",
+      event => {
+
+        event.preventDefault();
+
+        abrirModalAuth(
+          "login"
+        );
+
+      }
+    );
+
+  }
+
+  if (abrirCadastro) {
+
+    abrirCadastro.addEventListener(
+      "click",
+      event => {
+
+        event.preventDefault();
+
+        abrirModalAuth(
+          "cadastro"
+        );
+
+      }
+    );
+
+  }
+
+  if (botaoSair) {
+
+    botaoSair.addEventListener(
+      "click",
+      event => {
+
+        event.preventDefault();
+
+        realizarLogout();
+
+      }
+    );
+
+  }
+
+  supabaseClient.auth.onAuthStateChange(
+    (_evento, session) => {
+
+      usuarioAtual =
+        session?.user ||
+        null;
+
+      window.usuarioAtualSupabase =
+        usuarioAtual;
+
+      renderizarPessoas();
+
+    }
+  );
+
+}
+
+
+/* =========================================================
+   BOTÕES "MOSTRAR MAIS"
+   ========================================================= */
+
+function configurarBotoesMostrarMais() {
+
+  const visitar =
+    document.getElementById(
+      "mostrarMaisVisitar"
+    );
+
+  if (visitar) {
+
+    visitar.addEventListener(
+      "click",
+      () => {
+
+        limiteVisitar +=
+          LIMITE_INCREMENTO;
+
+        renderizarVisitar();
+
+      }
+    );
+
+  }
+
+  const comer =
+    document.getElementById(
+      "mostrarMaisComer"
+    );
+
+  if (comer) {
+
+    comer.addEventListener(
+      "click",
+      () => {
+
+        limiteComer +=
+          LIMITE_INCREMENTO;
+
+        renderizarComer();
+
+      }
+    );
+
+  }
+
+  const comercio =
+    document.getElementById(
+      "mostrarMaisComercio"
+    );
+
+  if (comercio) {
+
+    comercio.addEventListener(
+      "click",
+      () => {
+
+        limiteComercio +=
+          LIMITE_INCREMENTO;
+
+        renderizarComercio();
+
+      }
+    );
+
+  }
+
+  const pessoasBotao =
+    document.getElementById(
+      "mostrarMaisPessoas"
+    );
+
+  if (pessoasBotao) {
+
+    pessoasBotao.addEventListener(
+      "click",
+      () => {
+
+        limitePessoas +=
+          LIMITE_INCREMENTO;
+
+        renderizarPessoas();
+
+      }
+    );
+
+  }
+
+}
+
+
+/* =========================================================
+   FILTROS / PESQUISAS
+   ========================================================= */
+
+function configurarFiltros() {
+
+  const pesquisaComer =
+    document.getElementById(
+      "pesquisaComer"
+    );
+
+  if (pesquisaComer) {
+
+    pesquisaComer.addEventListener(
+      "input",
+      () => {
+
+        limiteComer =
+          LIMITE_INICIAL;
+
+        renderizarComer();
+
+      }
+    );
+
+  }
+
+
+  const filtroAberto =
+    document.getElementById(
+      "filtroAberto"
+    );
+
+  if (filtroAberto) {
+
+    filtroAberto.addEventListener(
+      "change",
+      () => {
+
+        limiteComer =
+          LIMITE_INICIAL;
+
+        renderizarComer();
+
+      }
+    );
+
+  }
+
+
+  const pesquisaComercio =
+    document.getElementById(
+      "pesquisaComercio"
+    );
+
+  if (pesquisaComercio) {
+
+    pesquisaComercio.addEventListener(
+      "input",
+      () => {
+
+        limiteComercio =
+          LIMITE_INICIAL;
+
+        renderizarComercio();
+
+      }
+    );
+
+  }
+
+
+  const filtroAbertoComercio =
+    document.getElementById(
+      "filtroAbertoComercio"
+    );
+
+  if (filtroAbertoComercio) {
+
+    filtroAbertoComercio.addEventListener(
+      "change",
+      () => {
+
+        limiteComercio =
+          LIMITE_INICIAL;
+
+        renderizarComercio();
+
+      }
+    );
+
+  }
+
+}
+
+
+/* =========================================================
+   CARREGAMENTO DE JSON
+   ========================================================= */
+
+async function carregarJSON(
+  caminho
+) {
+
+  const resposta =
+    await fetch(
+      `${caminho}?v=${Date.now()}`,
+      {
+        cache: "no-store"
+      }
+    );
+
+  if (!resposta.ok) {
+
+    throw new Error(
+      `Erro HTTP ${resposta.status} ao carregar ${caminho}`
+    );
+
+  }
+
+  return resposta.json();
+
+}
+
+
+async function carregarDados() {
+
+  try {
+
+    const [
+      locais,
+      comercios,
+      hospedagem
+    ] =
+      await Promise.all([
+
+        carregarJSON(
+          "./DATA/locais.json"
+        ),
+
+        carregarJSON(
+          "./DATA/comercios.json"
+        ),
+
+        carregarJSON(
+          "./DATA/hospedagem.json"
+        ).catch(
+          () => []
+        )
+
+      ]);
+
+    dadosLocais =
+      Array.isArray(locais)
+        ? locais
+        : [];
+
+    dadosComercios =
+      Array.isArray(comercios)
+        ? comercios
+        : [];
+
+    dadosHospedagem =
+      Array.isArray(hospedagem)
+        ? hospedagem
+        : [];
+
+    /*
+       Se hospedagem.json estiver vazio
+       ou não existir, tenta encontrar
+       hospedagens dentro de comercios.json.
+    */
+
+    if (
+      dadosHospedagem.length === 0
+    ) {
+
+      dadosHospedagem =
+        dadosComercios.filter(
+          identificarHospedagem
+        );
+
+    }
+
+    await carregarAvaliacoes();
+
+    console.log(
+      "Dados carregados:",
+      {
+        locais:
+          dadosLocais.length,
+
+        comercios:
+          dadosComercios.length,
+
+        hospedagem:
+          dadosHospedagem.length,
+
+        avaliacoes:
+          avaliacoes.length
+      }
+    );
+
+    /*
+       IMPORTANTE:
+       Remove os marcadores antigos
+       antes de criar novamente.
+    */
+
+    limparMarcadoresMapa();
+
+    dadosLocais.forEach(
+      local =>
+        adicionarMarcador(
+          local,
+          "local"
+        )
+    );
+
+    dadosComercios.forEach(
+      comercio =>
+        adicionarMarcador(
+          comercio,
+          "comercio"
+        )
+    );
+
+    dadosHospedagem.forEach(
+      hospedagem =>
+        adicionarMarcador(
+          hospedagem,
+          "hospedagem"
+        )
+    );
+
+    renderizarVisitar();
+
+    renderizarComer();
+
+    renderizarComercio();
+
+    renderizarHospedagem();
+
+    renderizarPessoas();
+
+    /*
+       Garante que o filtro atualmente
+       selecionado continue aplicado
+       depois de os marcadores serem criados.
+    */
+
+    const botaoAtivo =
+      document.querySelector(
+        ".map-filter.active"
+      );
+
+    if (botaoAtivo) {
+
+      aplicarFiltroMapa(
+        obterCategoriaDoBotaoMapa(
+          botaoAtivo
+        )
+      );
+
+    } else {
+
+      aplicarFiltroMapa(
+        "todos"
+      );
+
+    }
+
+  } catch (erro) {
+
+    console.error(
+      "Erro ao carregar dados do site:",
+      erro
+    );
+
+  }
+
+}
+
+
+/* =========================================================
+   REDIMENSIONAR MAPA
+   ========================================================= */
+
+function corrigirTamanhoMapa() {
+
+  if (!homeMap) {
+    return;
+  }
+
+  setTimeout(
+    () => {
+
+      homeMap.invalidateSize();
+
+    },
+    200
+  );
+
+}
+
+
+/* =========================================================
+   EVENTOS DO HERO
+   ========================================================= */
+
+function configurarGestosHero() {
+
+  const carousel =
+    document.getElementById(
+      "heroCarousel"
+    );
+
+  if (!carousel) {
+    return;
+  }
+
+  let inicioX = 0;
+  let finalX = 0;
+
+  carousel.addEventListener(
+    "touchstart",
+    event => {
+
+      inicioX =
+        event.changedTouches[0].screenX;
+
+    },
+    {
+      passive: true
+    }
+  );
+
+  carousel.addEventListener(
+    "touchend",
+    event => {
+
+      finalX =
+        event.changedTouches[0].screenX;
+
+      const diferenca =
+        finalX - inicioX;
+
+      if (
+        Math.abs(diferenca) < 50
+      ) {
+        return;
+      }
+
+      const slides =
+        document.querySelectorAll(
+          ".hero-slide"
+        );
+
+      if (slides.length <= 1) {
+        return;
+      }
+
+      if (diferenca < 0) {
+
+        mostrarSlideHero(
+          (indiceSlideHero + 1) %
+          slides.length
+        );
+
+      } else {
+
+        mostrarSlideHero(
+          (
+            indiceSlideHero -
+            1 +
+            slides.length
+          ) %
+          slides.length
+        );
+
+      }
+
+      reiniciarCarrosselHero();
+
+    },
+    {
+      passive: true
+    }
+  );
+
+}
+
+
+/* =========================================================
+   ATUALIZAÇÃO PERIÓDICA DE STATUS
+   ========================================================= */
+
+function iniciarAtualizacaoStatus() {
+
+  setInterval(
+    () => {
+
+      renderizarComer();
+
+      renderizarComercio();
+
+    },
+    60000
+  );
+
+}
+
+
+/* =========================================================
+   INICIALIZAÇÃO
    ========================================================= */
 
 async function iniciarSite() {
-  adicionarEstiloMarcadorGenerico();
+
+  console.log(
+    "Iniciando Andrelândia — Guia Turístico..."
+  );
 
   inicializarMapa();
 
-  descobrirSlidesHero();
+  configurarFiltrosMapa();
 
-  criarInterfaceLogin();
+  configurarAutenticacao();
 
-  adicionarBotaoLoginMural();
+  configurarBotoesMostrarMais();
 
-  await inicializarAutenticacao();
+  configurarFiltros();
 
-  atualizarBotaoLoginMural();
+  configurarGestosHero();
+
+  await verificarUsuarioAtual();
+
+  await descobrirSlidesHero();
+
+  await carregarPessoas();
+
+  await carregarVotosPessoas();
 
   await carregarDados();
 
-  await carregarPessoas();
+  renderizarPessoas();
+
+  iniciarAtualizacaoStatus();
+
+  corrigirTamanhoMapa();
+
+  window.addEventListener(
+    "resize",
+    corrigirTamanhoMapa
+  );
+
+  console.log(
+    "Site inicializado."
+  );
+
 }
 
-/* =========================================================
-   INICIAR
-   ========================================================= */
-
-iniciarSite();
 
 /* =========================================================
-   ATUALIZAR HORÁRIOS A CADA MINUTO
+   DOM READY
    ========================================================= */
 
-setInterval(
-  () => {
-    if (
-      dadosComercios.length ===
-      0
-    ) {
-      return;
-    }
+if (
+  document.readyState ===
+  "loading"
+) {
 
-    atualizarStatusBotao();
+  document.addEventListener(
+    "DOMContentLoaded",
+    iniciarSite
+  );
 
-    atualizarStatusComercio();
+} else {
 
-    renderizarComercios();
+  iniciarSite();
 
-    renderizarComercioLocal();
-  },
-  60000
-);
-
-/* =========================================================
-   ATUALIZAR TAMANHO DO MAPA
-   ========================================================= */
-
-window.addEventListener(
-  "resize",
-  () => {
-    if (homeMap) {
-      homeMap.invalidateSize();
-    }
-  }
-);
-
-/* =========================================================
-   TECLA ESC — LOGIN
-   ========================================================= */
-
-document.addEventListener(
-  "keydown",
-  event => {
-    if (
-      event.key ===
-      "Escape"
-    ) {
-      fecharLogin();
-    }
-  }
-);
+}
