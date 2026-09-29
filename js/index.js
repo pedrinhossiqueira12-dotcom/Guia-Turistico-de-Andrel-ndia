@@ -229,12 +229,19 @@ function configurarMostrarMais({
 const HERO_MAXIMO = 3;
 
 const TEXTOS_HERO = [
-  "Descubra Andrelândia",
-  "Conheça a história de Andrelândia",
-  "Explore as belezas de Andrelândia",
-  "Viva Andrelândia",
-  "Descubra novos lugares",
-  "Um destino para conhecer"
+
+"Descubra Andrelândia",
+
+"Conheça a história de Andrelândia",
+
+"Explore as belezas de Andrelândia",
+
+"Viva Andrelândia",
+
+"Descubra novos lugares",
+
+"Um destino para conhecer"
+
 ];
 
 const CAMINHOS_HERO = [
