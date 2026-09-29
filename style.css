@@ -1,6 +1,6 @@
 /* =========================================================
    ANDRELÂNDIA — GUIA TURÍSTICO
-   CSS RESPONSIVO
+   STYLE.CSS — INDEX.HTML
 ========================================================= */
 
 :root {
@@ -11,10 +11,12 @@
   --fundo: #f5f3ef;
   --texto: #202522;
   --texto-claro: #777;
+
   --altura-navbar: 76px;
   --espaco: clamp(15px, 4vw, 28px);
   --largura-max: 1100px;
 }
+
 
 /* =========================================================
    RESET
@@ -32,13 +34,16 @@ html {
 body {
   margin: 0;
   padding-bottom: var(--altura-navbar);
+
   background: var(--fundo);
   color: var(--texto);
+
   font-family:
     "Roboto",
     Arial,
     Helvetica,
     sans-serif;
+
   overflow-x: hidden;
 }
 
@@ -59,6 +64,7 @@ button {
   display: none !important;
 }
 
+
 /* =========================================================
    CONTAINER PRINCIPAL
 ========================================================= */
@@ -67,10 +73,14 @@ button {
   width: 100%;
   max-width: var(--largura-max);
   min-height: 100vh;
+
   margin: 0 auto;
+
   background: var(--fundo);
+
   overflow: hidden;
 }
+
 
 /* =========================================================
    HERO / CARROSSEL
@@ -78,30 +88,38 @@ button {
 
 .hero {
   position: relative;
+
   width: 100%;
   height: clamp(400px, 62vw, 620px);
   min-height: 400px;
+
   overflow: hidden;
+
   background: var(--verde-escuro);
 }
 
 .hero-carousel {
   position: absolute;
   inset: 0;
+
   width: 100%;
   height: 100%;
+
   overflow: hidden;
 }
 
+
 /* =========================================================
-   SLIDE
+   SLIDES
 ========================================================= */
 
 .hero-slide {
   position: absolute;
   inset: 0;
+
   width: 100%;
   height: 100%;
+
   opacity: 0;
   visibility: hidden;
 
@@ -110,15 +128,14 @@ button {
   background-size: cover;
   background-color: var(--verde-escuro);
 
-  transform: none;
   transition: opacity 1.2s ease;
 }
 
 .hero-slide.active {
   opacity: 1;
   visibility: visible;
-  transform: none;
 }
+
 
 /* =========================================================
    DEGRADÊ DO HERO
@@ -138,13 +155,14 @@ button {
     linear-gradient(
       to bottom,
       rgba(0, 0, 0, 0.08) 0%,
-      rgba(0, 0, 0, 0.00) 35%,
+      rgba(0, 0, 0, 0) 35%,
       rgba(0, 0, 0, 0.08) 55%,
       rgba(9, 29, 28, 0.42) 76%,
       rgba(245, 243, 239, 0.82) 94%,
       var(--fundo) 100%
     );
 }
+
 
 /* =========================================================
    CONTEÚDO DO HERO
@@ -168,21 +186,15 @@ button {
   flex-direction: column;
 
   align-items: center;
-
   justify-content: center;
 
   text-align: center;
 
   pointer-events: none;
 
-  /*
-    Antes o conteúdo era deslocado muito para cima.
-    Isso também contribuía para a sensação de
-    enquadramento incorreto.
-  */
-
   transform: translateY(-90px);
 }
+
 
 /* =========================================================
    LOGO DO HERO
@@ -208,6 +220,7 @@ button {
       rgba(0, 0, 0, 0.28)
     );
 }
+
 
 /* =========================================================
    TEXTO DO CARROSSEL
@@ -245,8 +258,9 @@ button {
     transform .4s ease;
 }
 
+
 /* =========================================================
-   INDICADORES
+   INDICADORES DO HERO
 ========================================================= */
 
 .hero-indicators {
@@ -275,7 +289,6 @@ button {
   padding: 0;
 
   border: 0;
-
   border-radius: 50%;
 
   background:
@@ -298,6 +311,7 @@ button {
 
   opacity: 1;
 }
+
 
 /* =========================================================
    O QUE FAZER HOJE?
@@ -333,7 +347,6 @@ button {
     );
 
   background: var(--verde);
-
   color: var(--branco);
 
   border:
@@ -442,8 +455,9 @@ button {
   line-height: 1;
 }
 
+
 /* =========================================================
-   6 BOTÕES PRINCIPAIS
+   BOTÕES PRINCIPAIS
 ========================================================= */
 
 .section {
@@ -494,7 +508,6 @@ button {
   flex-direction: column;
 
   align-items: center;
-
   justify-content: center;
 
   padding:
@@ -505,7 +518,6 @@ button {
     );
 
   background: var(--branco);
-
   color: var(--verde);
 
   border:
@@ -580,6 +592,7 @@ button {
   line-height: 1.2;
 }
 
+
 /* =========================================================
    NAVBAR INFERIOR
 ========================================================= */
@@ -594,7 +607,6 @@ button {
   bottom: 0;
 
   width: 100%;
-
   height: var(--altura-navbar);
 
   display: grid;
@@ -623,7 +635,6 @@ button {
   flex-direction: column;
 
   align-items: center;
-
   justify-content: center;
 
   gap: 5px;
@@ -672,6 +683,7 @@ button {
   color: var(--branco);
 }
 
+
 /* =========================================================
    MAPA
 ========================================================= */
@@ -699,7 +711,6 @@ button {
   display: flex;
 
   align-items: flex-end;
-
   justify-content: space-between;
 
   gap:
@@ -780,7 +791,6 @@ button {
     );
 
   background: var(--verde);
-
   color: var(--branco);
 
   border-radius:
@@ -836,8 +846,9 @@ button {
     rgba(0, 0, 0, 0.08);
 }
 
+
 /* =========================================================
-   MARCADORES
+   MARCADORES DO MAPA
 ========================================================= */
 
 .leaflet-marker-icon {
@@ -848,8 +859,9 @@ button {
     );
 }
 
+
 /* =========================================================
-   POPUP
+   POPUP DO MAPA
 ========================================================= */
 
 .leaflet-popup-content-wrapper {
@@ -975,6 +987,7 @@ button {
   text-decoration: none;
 }
 
+
 /* =========================================================
    FILTROS DO MAPA
 ========================================================= */
@@ -1053,7 +1066,6 @@ button {
   display: flex;
 
   align-items: center;
-
   justify-content: center;
 
   background: transparent;
@@ -1132,6 +1144,7 @@ button {
   transform: scale(.92);
 }
 
+
 /* =========================================================
    SEÇÕES DE CONTEÚDO
 ========================================================= */
@@ -1207,6 +1220,7 @@ button {
   line-height: 1.5;
 }
 
+
 /* =========================================================
    FILTROS — ONDE COMER
 ========================================================= */
@@ -1272,8 +1286,9 @@ button {
   transform: scale(.96);
 }
 
+
 /* =========================================================
-   STATUS
+   STATUS DOS COMÉRCIOS
 ========================================================= */
 
 .comer-status {
@@ -1330,68 +1345,6 @@ button {
   transform: scale(.97);
 }
 
-.status-bolinha {
-  display: none;
-}
-
-/* =========================================================
-   NOTA / AVALIAÇÃO
-========================================================= */
-
-.nota-avaliacao {
-  display: none;
-
-  align-items: center;
-
-  gap: 5px;
-
-  margin-top: 7px;
-
-  white-space: nowrap;
-}
-
-.nota-avaliacao.visivel {
-  display: inline-flex;
-}
-
-.nota-avaliacao img {
-  width: 17px;
-  height: 17px;
-
-  display: block;
-
-  object-fit: contain;
-}
-
-.nota-avaliacao span {
-  color: #555;
-
-  font-size: 12px;
-
-  font-weight: 600;
-
-  line-height: 1;
-}
-
-.card-status-avaliacao {
-  display: flex;
-
-  align-items: center;
-
-  flex-wrap: wrap;
-
-  gap: 8px;
-
-  margin-top: 7px;
-}
-
-.card-status-avaliacao .comer-horario {
-  margin-top: 0;
-}
-
-.card-status-avaliacao .nota-avaliacao {
-  margin-top: 0;
-}
 
 /* =========================================================
    BUSCA
@@ -1453,6 +1406,7 @@ button {
   cursor: pointer;
 }
 
+
 /* =========================================================
    LISTAS
 ========================================================= */
@@ -1464,6 +1418,7 @@ button {
 
   gap: 12px;
 }
+
 
 /* =========================================================
    CARTÕES
@@ -1529,8 +1484,9 @@ button {
   transform: scale(.985);
 }
 
+
 /* =========================================================
-   FOTOS
+   FOTOS DOS CARTÕES
 ========================================================= */
 
 .visitar-image,
@@ -1569,7 +1525,6 @@ button {
 .comer-image img,
 .ficar-image img {
   width: 100%;
-
   height: 100%;
 
   display: block;
@@ -1577,8 +1532,9 @@ button {
   object-fit: cover;
 }
 
+
 /* =========================================================
-   INFORMAÇÕES
+   INFORMAÇÕES DOS CARTÕES
 ========================================================= */
 
 .visitar-info,
@@ -1666,21 +1622,20 @@ button {
   line-height: 1.2;
 }
 
+
 /* =========================================================
-   STATUS
+   STATUS DOS CARTÕES
 ========================================================= */
 
 .comer-horario {
   display: inline-flex;
 
   align-items: center;
-
   justify-content: center;
 
   width: fit-content;
 
   min-width: 88px;
-
   height: 25px;
 
   margin-top: 7px;
@@ -1708,6 +1663,108 @@ button {
 .comer-horario.fechado {
   background: #d32f2f;
 }
+
+
+/* =========================================================
+   STATUS + AVALIAÇÃO DO LOCAL
+========================================================= */
+
+.comer-status-linha {
+  display: flex;
+
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 8px;
+}
+
+.avaliacao-local {
+  display: inline-flex;
+
+  align-items: center;
+
+  gap: 4px;
+
+  white-space: nowrap;
+}
+
+.avaliacao-local img {
+  width: 15px;
+  height: 15px;
+
+  object-fit: contain;
+}
+
+.avaliacao-local span {
+  color: #555;
+
+  font-size: 12px;
+
+  font-weight: 600;
+
+  line-height: 1;
+}
+
+
+/* =========================================================
+   NOTA / AVALIAÇÃO
+========================================================= */
+
+.nota-avaliacao {
+  display: none;
+
+  align-items: center;
+
+  gap: 5px;
+
+  margin-top: 7px;
+
+  white-space: nowrap;
+}
+
+.nota-avaliacao.visivel {
+  display: inline-flex;
+}
+
+.nota-avaliacao img {
+  width: 17px;
+  height: 17px;
+
+  display: block;
+
+  object-fit: contain;
+}
+
+.nota-avaliacao span {
+  color: #555;
+
+  font-size: 12px;
+
+  font-weight: 600;
+
+  line-height: 1;
+}
+
+.card-status-avaliacao {
+  display: flex;
+
+  align-items: center;
+
+  flex-wrap: wrap;
+
+  gap: 8px;
+
+  margin-top: 7px;
+}
+
+.card-status-avaliacao .comer-horario {
+  margin-top: 0;
+}
+
+.card-status-avaliacao .nota-avaliacao {
+  margin-top: 0;
+}
+
 
 /* =========================================================
    AVALIAÇÃO — HOSPEDAGEM
@@ -1742,8 +1799,9 @@ button {
   line-height: 1;
 }
 
+
 /* =========================================================
-   SETA
+   SETAS DOS CARTÕES
 ========================================================= */
 
 .visitar-arrow,
@@ -1753,13 +1811,11 @@ button {
     0 0 34px;
 
   width: 34px;
-
   height: 34px;
 
   display: flex;
 
   align-items: center;
-
   justify-content: center;
 }
 
@@ -1767,13 +1823,13 @@ button {
 .comer-arrow img,
 .ficar-arrow img {
   width: 20px;
-
   height: 20px;
 
   display: block;
 
   object-fit: contain;
 }
+
 
 /* =========================================================
    ESTADOS VAZIOS
@@ -1792,6 +1848,7 @@ button {
   font-size: 13px;
 }
 
+
 /* =========================================================
    MOSTRAR MAIS
 ========================================================= */
@@ -1800,7 +1857,6 @@ button {
   display: flex;
 
   align-items: center;
-
   justify-content: center;
 
   width: 100%;
@@ -1848,6 +1904,7 @@ button {
   transform: scale(.98);
 }
 
+
 /* =========================================================
    MURAL
 ========================================================= */
@@ -1876,6 +1933,7 @@ button {
 
   width: 100%;
 }
+
 
 /* =========================================================
    CARD POLAROID
@@ -1921,8 +1979,7 @@ button {
       .10
     );
 
-  transform:
-    rotate(0deg);
+  transform: rotate(0deg);
 
   transition:
     transform .25s ease,
@@ -1961,7 +2018,6 @@ button {
 
 .pessoa-image img {
   width: 100%;
-
   height: 100%;
 
   display: block;
@@ -2009,15 +2065,15 @@ button {
   letter-spacing: .7px;
 }
 
+
 /* =========================================================
-   VOTOS
+   VOTOS DO MURAL
 ========================================================= */
 
 .pessoa-votos {
   display: flex;
 
   align-items: center;
-
   justify-content: center;
 
   gap: 13px;
@@ -2029,11 +2085,9 @@ button {
   display: inline-flex;
 
   align-items: center;
-
   justify-content: center;
 
   min-width: 35px;
-
   height: 30px;
 
   padding:
@@ -2071,7 +2125,6 @@ button {
 
 .pessoa-voto img {
   width: 21px;
-
   height: 21px;
 
   display: block;
@@ -2159,6 +2212,7 @@ button {
   text-align: center;
 }
 
+
 /* =========================================================
    CONTATO
 ========================================================= */
@@ -2196,11 +2250,9 @@ button {
   position: absolute;
 
   width: 180px;
-
   height: 180px;
 
   top: -90px;
-
   right: -60px;
 
   border:
@@ -2221,11 +2273,9 @@ button {
   position: absolute;
 
   width: 130px;
-
   height: 130px;
 
   bottom: -75px;
-
   left: -45px;
 
   border:
@@ -2309,7 +2359,6 @@ button {
   display: inline-flex;
 
   align-items: center;
-
   justify-content: center;
 
   gap: 10px;
@@ -2345,171 +2394,122 @@ button {
 
 .contato-guia-botao img {
   width: 15px;
-
   height: 15px;
 
   object-fit: contain;
 }
 
+
 /* =========================================================
-   PÁGINA DA PESSOA
+   RODAPÉ
 ========================================================= */
 
-.pessoa-detalhe {
-  max-width: 900px;
-
-  margin: 0 auto;
-
-  padding:
-    25px 18px 60px;
-}
-
-.pessoa-hero {
+footer {
   width: 100%;
 
-  max-width: 700px;
-
-  margin:
-    25px auto 0;
-
-  overflow: hidden;
-
-  border-radius: 16px;
-
-  background: #eee;
-}
-
-.pessoa-hero img {
-  width: 100%;
-
-  display: block;
-
-  max-height: 620px;
-
-  object-fit: cover;
-}
-
-.pessoa-texto {
-  max-width: 700px;
-
-  margin:
-    25px auto 0;
-}
-
-.pessoa-detalhe-categoria {
-  display: block;
-
-  margin-bottom: 7px;
-
-  color: var(--verde);
-
-  font-size: 12px;
-
-  font-weight: 700;
-
-  text-transform: uppercase;
-
-  letter-spacing: .8px;
-}
-
-.pessoa-texto h1 {
-  margin: 0;
-
-  color: #222;
-
-  font-size: 32px;
-
-  line-height: 1.2;
-}
-
-.pessoa-texto p {
-  margin:
-    15px 0 0;
-
-  color: #555;
-
-  font-size: 15px;
-
-  line-height: 1.7;
-}
-
-.pessoa-instagram {
-  display: inline-flex;
-
-  margin-top: 20px;
+  margin-top: 50px;
 
   padding:
-    11px 17px;
+    32px 20px 28px;
 
-  border-radius: 9px;
+  background:
+    var(--verde-escuro);
 
-  background: var(--verde);
+  color:
+    rgba(
+      255,
+      255,
+      255,
+      0.72
+    );
 
-  color: var(--branco);
+  text-align: center;
+
+  border-top:
+    1px solid
+    rgba(
+      255,
+      255,
+      255,
+      0.08
+    );
+}
+
+
+/* =========================================================
+   LINKS DO RODAPÉ
+========================================================= */
+
+footer .footer-links {
+  display: flex;
+
+  align-items: center;
+  justify-content: center;
+
+  flex-wrap: wrap;
+
+  gap:
+    8px 18px;
+
+  margin-bottom: 18px;
+}
+
+footer .footer-links a {
+  position: relative;
+
+  color:
+    rgba(
+      255,
+      255,
+      255,
+      0.88
+    );
+
+  text-decoration: none;
 
   font-size: 13px;
 
-  font-weight: 700;
+  font-weight: 500;
 
-  text-decoration: none;
+  transition:
+    color 0.2s ease,
+    opacity 0.2s ease;
 }
 
-/* =========================================================
-   GALERIA
-========================================================= */
-
-.pessoa-galeria {
-  margin-top: 45px;
+footer .footer-links a:hover {
+  color: #ffffff;
 }
 
-.pessoa-galeria-list {
-  display: grid;
-
-  grid-template-columns:
-    repeat(
-      3,
-      1fr
+footer .footer-links span {
+  color:
+    rgba(
+      255,
+      255,
+      255,
+      0.25
     );
 
-  gap: 10px;
+  font-size: 12px;
 
-  margin-top: 18px;
+  user-select: none;
 }
 
-.pessoa-galeria-list img {
-  width: 100%;
-
-  aspect-ratio: 1 / 1;
-
-  display: block;
-
-  object-fit: cover;
-
-  border-radius: 10px;
-}
-
-/* =========================================================
-   ERRO
-========================================================= */
-
-.pessoa-erro {
-  padding:
-    60px 20px;
-
-  text-align: center;
-}
-
-.pessoa-erro h1 {
+footer .footer-copy {
   margin: 0;
 
-  font-size: 25px;
+  color:
+    rgba(
+      255,
+      255,
+      255,
+      0.48
+    );
+
+  font-size: 12px;
+
+  line-height: 1.5;
 }
 
-.pessoa-erro p {
-  margin-top: 10px;
-
-  color: #666;
-}
 
 /* =========================================================
    CELULAR
@@ -2524,11 +2524,6 @@ button {
   .hero {
     width: 100%;
 
-    /*
-      Altura baseada na largura da tela.
-      Evita um hero exageradamente alto.
-    */
-
     height:
       clamp(
         360px,
@@ -2540,12 +2535,6 @@ button {
 
     background:
       var(--verde-escuro);
-  }
-
-  .hero-slide {
-    align-items: center;
-
-    justify-content: center;
   }
 
   .hero-content {
@@ -2584,8 +2573,9 @@ button {
     bottom: 25px;
   }
 
+
   /* =======================================================
-     MAPA
+     MAPA MOBILE
   ======================================================= */
 
   .map-filters {
@@ -2637,8 +2627,9 @@ button {
     margin: 0 auto;
   }
 
+
   /* =======================================================
-     MURAL
+     MURAL MOBILE
   ======================================================= */
 
   .pessoas-list {
@@ -2712,7 +2703,6 @@ button {
 
   .pessoa-voto img {
     width: 17px;
-
     height: 17px;
   }
 
@@ -2736,8 +2726,9 @@ button {
     margin-top: 18px;
   }
 
+
   /* =======================================================
-     CONTATO
+     CONTATO MOBILE
   ======================================================= */
 
   .contato-guia {
@@ -2761,31 +2752,9 @@ button {
     font-size: 13px;
   }
 
-  /* =======================================================
-     PESSOA
-  ======================================================= */
-
-  .pessoa-detalhe {
-    padding:
-      20px 15px 45px;
-  }
-
-  .pessoa-texto h1 {
-    font-size: 26px;
-  }
-
-  .pessoa-galeria-list {
-    grid-template-columns:
-      repeat(
-        2,
-        1fr
-      );
-
-    gap: 8px;
-  }
 
   /* =======================================================
-     FILTROS
+     FILTROS MOBILE
   ======================================================= */
 
   .content-filters {
@@ -2808,7 +2777,6 @@ button {
   .nota-avaliacao img,
   .ficar-nota img {
     width: 15px;
-
     height: 15px;
   }
 
@@ -2824,7 +2792,35 @@ button {
   .comer-horario {
     min-width: 78px;
   }
+
+
+  /* =======================================================
+     RODAPÉ MOBILE
+  ======================================================= */
+
+  footer {
+    margin-top: 40px;
+
+    padding:
+      28px 16px 24px;
+  }
+
+  footer .footer-links {
+    gap:
+      10px 14px;
+
+    margin-bottom: 16px;
+  }
+
+  footer .footer-links a {
+    font-size: 12px;
+  }
+
+  footer .footer-copy {
+    font-size: 11px;
+  }
 }
+
 
 /* =========================================================
    CELULARES MUITO PEQUENOS
@@ -2857,17 +2853,14 @@ button {
 
   .route-card {
     margin-left: 12px;
-
     margin-right: 12px;
 
     padding-left: 10px;
-
     padding-right: 10px;
   }
 
   .route-icon {
     width: 38px;
-
     height: 38px;
 
     flex-basis: 38px;
@@ -2894,7 +2887,6 @@ button {
 
   .quick-box img {
     width: 30px;
-
     height: 30px;
 
     margin-bottom: 5px;
@@ -2917,13 +2909,11 @@ button {
 
   .filter-icon {
     width: 48px;
-
     height: 48px;
   }
 
   .filter-icon img {
     width: 24px;
-
     height: 24px;
   }
 
@@ -2963,7 +2953,6 @@ button {
 
   .pessoa-voto img {
     width: 15px;
-
     height: 15px;
   }
 
@@ -2971,6 +2960,7 @@ button {
     font-size: 8px;
   }
 }
+
 
 /* =========================================================
    TELAS GRANDES DE CELULAR
@@ -2984,7 +2974,6 @@ button {
 
   .quick-box img {
     width: 48px;
-
     height: 48px;
   }
 
@@ -3003,7 +2992,6 @@ button {
 
   .pessoa-voto img {
     width: 19px;
-
     height: 19px;
   }
 
@@ -3011,6 +2999,7 @@ button {
     font-size: 10px;
   }
 }
+
 
 /* =========================================================
    TABLET
@@ -3055,6 +3044,7 @@ button {
       );
   }
 
+
   /* =======================================================
      HERO TABLET
   ======================================================= */
@@ -3075,6 +3065,11 @@ button {
       translateY(-100px);
   }
 
+
+  /* =======================================================
+     MAPA TABLET
+  ======================================================= */
+
   .home-map {
     height:
       clamp(
@@ -3083,6 +3078,11 @@ button {
         500px
       );
   }
+
+
+  /* =======================================================
+     CARTÕES TABLET
+  ======================================================= */
 
   .content-list {
     gap: 14px;
@@ -3100,7 +3100,6 @@ button {
     flex-basis: 110px;
 
     width: 110px;
-
     height: 110px;
   }
 
@@ -3116,7 +3115,6 @@ button {
     flex-basis: 42px;
 
     width: 42px;
-
     height: 42px;
   }
 
@@ -3124,7 +3122,6 @@ button {
   .comer-arrow img,
   .ficar-arrow img {
     width: 23px;
-
     height: 23px;
   }
 
@@ -3147,9 +3144,13 @@ button {
 
   .ficar-nota img {
     width: 18px;
-
     height: 18px;
   }
+
+
+  /* =======================================================
+     FILTROS DO MAPA TABLET
+  ======================================================= */
 
   .map-filters {
     justify-content: center;
@@ -3168,9 +3169,13 @@ button {
 
   .filter-icon {
     width: 60px;
-
     height: 60px;
   }
+
+
+  /* =======================================================
+     MURAL TABLET
+  ======================================================= */
 
   .pessoas-list {
     grid-template-columns:
@@ -3196,10 +3201,10 @@ button {
 
   .pessoa-voto img {
     width: 21px;
-
     height: 21px;
   }
 }
+
 
 /* =========================================================
    DESKTOP
@@ -3224,14 +3229,12 @@ button {
 
   .section {
     padding-left: 35px;
-
     padding-right: 35px;
   }
 
   .content-section,
   .home-map-section {
     padding-left: 35px;
-
     padding-right: 35px;
   }
 
@@ -3266,6 +3269,7 @@ button {
   }
 }
 
+
 /* =========================================================
    TELAS MUITO GRANDES
 ========================================================= */
@@ -3286,10 +3290,10 @@ button {
   .content-section,
   .home-map-section {
     padding-left: 45px;
-
     padding-right: 45px;
   }
 }
+
 
 /* =========================================================
    ACESSIBILIDADE
@@ -3308,169 +3312,4 @@ button {
   .quick-box {
     transition: none;
   }
-}
-.comer-status-linha {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.avaliacao-local {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  white-space: nowrap;
-}
-
-.avaliacao-local img {
-  width: 15px;
-  height: 15px;
-  object-fit: contain;
-}
-
-.avaliacao-local span {
-  font-size: 12px;
-  font-weight: 600;
-  color: #555;
-}
-/* =========================================================
-   AVALIAÇÃO DOS LOCAIS
-   ========================================================= */
-
-.comer-status-linha {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.avaliacao-local {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  white-space: nowrap;
-}
-
-.avaliacao-local img {
-  width: 15px;
-  height: 15px;
-  object-fit: contain;
-}
-
-.avaliacao-local span {
-  font-size: 12px;
-  font-weight: 600;
-  color: #555;
-}
-/* =========================================================
-   RODAPÉ
-========================================================= */
-
-footer {
-  width: 100%;
-  margin-top: 50px;
-  padding: 32px 20px 28px;
-
-  background: var(--verde-escuro);
-  color: rgba(255, 255, 255, 0.72);
-
-  text-align: center;
-
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-
-/* =========================================================
-   LINKS DO RODAPÉ
-========================================================= */
-
-footer .footer-links {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-wrap: wrap;
-
-  gap: 8px 18px;
-
-  margin-bottom: 18px;
-}
-
-
-footer .footer-links a {
-  position: relative;
-
-  color: rgba(255, 255, 255, 0.88);
-
-  text-decoration: none;
-
-  font-size: 13px;
-  font-weight: 500;
-
-  transition:
-    color 0.2s ease,
-    opacity 0.2s ease;
-}
-
-
-footer .footer-links a:hover {
-  color: #ffffff;
-}
-
-
-/* =========================================================
-   SEPARADORES
-========================================================= */
-
-footer .footer-links span {
-  color: rgba(255, 255, 255, 0.25);
-
-  font-size: 12px;
-
-  user-select: none;
-}
-
-
-/* =========================================================
-   COPYRIGHT
-========================================================= */
-
-footer .footer-copy {
-  margin: 0;
-
-  color: rgba(255, 255, 255, 0.48);
-
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-
-/* =========================================================
-   MOBILE
-========================================================= */
-
-@media (max-width: 600px) {
-
-  footer {
-    margin-top: 40px;
-    padding: 28px 16px 24px;
-  }
-
-
-  footer .footer-links {
-    gap: 10px 14px;
-
-    margin-bottom: 16px;
-  }
-
-
-  footer .footer-links a {
-    font-size: 12px;
-  }
-
-
-  footer .footer-copy {
-    font-size: 11px;
-  }
-
 }
