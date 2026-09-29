@@ -1,0 +1,28 @@
+[
+  {
+    "id": "Pedrox",
+    "nome": "Pedrox o criador",
+    "categoria": "Artista",
+    "descricao": "Breve descrição que aparecerá no mural.",
+    "sobre": "Texto mais completo sobre a pessoa, sua trajetória e sua relação com Andrelândia.",
+    "instagram": "https://www.instagram.com/usuario",
+    "capa": "./img/pessoas/ednaldo.jpeg",
+    "galeria": [
+      "./img/pessoas/ednaldo.jpeg",
+      "./img/pessoas/ednaldo.jpeg"
+    ]
+  },
+    {
+    "id": "pessoa",
+    "nome": "exemplo",
+    "categoria": "Artista",
+    "descricao": "Breve descrição que aparecerá no mural.",
+    "sobre": "Texto mais completo sobre a pessoa, sua trajetória e sua relação com Andrelândia.",
+    "instagram": "https://www.instagram.com/usuario",
+    "capa": "./img/sem-foto.png",
+    "galeria": [
+      "./img/sem-foto.png",
+      "./img/sem-foto.png"
+    ]
+  }
+]

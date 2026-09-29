@@ -1,0 +1,29 @@
+[
+  {
+    "id": "pousada-exemplo",
+    "nome": "Pousada Exemplo",
+    "categoria": "Hospedagem",
+    "descricao": "Uma opção de hospedagem confortável em Andrelândia.",
+    "historia": "",
+    "curiosidades": "",
+    "endereco": "Rua Exemplo, 123, Centro, Andrelândia - MG",
+    "horario": "",
+    "entrada": "",
+    "telefone": "(35) 99999-9999",
+    "whatsapp": "5535999999999",
+    "site": "",
+    "instagram": "https://www.instagram.com/pousadaexemplo/",
+    "latitude": -21.740000,
+    "longitude": -44.309000,
+    "x": 47795,
+    "y": 32280,
+    "nota": "4,8",
+    "capa": "./img/igreja-matriz/capa.png",
+    "galeria": [
+      "./img/igreja-matriz/capa.png",
+      "./img/igreja-matriz/capa.png",
+      "./img/igreja-matriz/capa.png"
+    ],
+    "pagina": "local.html"
+  }
+]
