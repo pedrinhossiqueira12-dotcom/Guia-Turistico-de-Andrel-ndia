@@ -3309,3 +3309,57 @@ button {
     transition: none;
   }
 }
+.comer-status-linha {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.avaliacao-local {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.avaliacao-local img {
+  width: 15px;
+  height: 15px;
+  object-fit: contain;
+}
+
+.avaliacao-local span {
+  font-size: 12px;
+  font-weight: 600;
+  color: #555;
+}
+/* =========================================================
+   AVALIAÇÃO DOS LOCAIS
+   ========================================================= */
+
+.comer-status-linha {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.avaliacao-local {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.avaliacao-local img {
+  width: 15px;
+  height: 15px;
+  object-fit: contain;
+}
+
+.avaliacao-local span {
+  font-size: 12px;
+  font-weight: 600;
+  color: #555;
+}
