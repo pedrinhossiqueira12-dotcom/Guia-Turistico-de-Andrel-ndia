@@ -95,6 +95,8 @@ let mostrarMaisFicar = null;
 
 let pessoasList = null;
 let mostrarMaisPessoas = null;
+let pesquisaComer = null;
+let pesquisaComerTexto = "";
 
 
 /* =========================================================
@@ -224,7 +226,7 @@ function configurarMostrarMais({
    HERO / CARROSSEL
 ========================================================= */
 
-const HERO_MAXIMO = 20;
+const HERO_MAXIMO = 3;
 
 const TEXTOS_HERO = [
   "Descubra Andrelândia",
@@ -1644,97 +1646,145 @@ function comercioEhAlimentacao(comercio) {
 }
 
 
-function comercioPertenceCategoria(
-  comercio,
-  filtro
-) {
-  if (
-    normalizarTexto(filtro) ===
-    "todos"
-  ) {
+function comercioPertenceCategoria(comercio, filtro) {
+
+  if (!comercio) {
+    return false;
+  }
+
+  if (!filtro || filtro === "Todos") {
     return true;
   }
 
-  const categoria =
-    normalizarTexto(
-      comercio?.categoria
+  const categoria = normalizarTexto(
+    comercio.categoria || ""
+  );
+
+  const nome = normalizarTexto(
+    comercio.nome || ""
+  );
+
+
+  /* ==================================================
+     RESTAURANTE
+  ================================================== */
+
+  if (filtro === "Restaurante") {
+
+    return (
+      categoria.includes("restaurante") ||
+      categoria.includes("pizzaria") ||
+      categoria.includes("hamburgueria")
     );
 
-  const nome =
-    normalizarTexto(
-      comercio?.nome
-    );
-
-  const texto =
-    `${categoria} ${nome}`;
-
-  switch (
-    normalizarTexto(filtro)
-  ) {
-    case "restaurante":
-      return texto.includes(
-        "restaurante"
-      );
-
-    case "lanchonete":
-      return texto.includes(
-        "lanch"
-      );
-
-    case "cafe":
-      return (
-        texto.includes("cafe") ||
-        texto.includes("cafeteria")
-      );
-
-    case "sorvete":
-      return texto.includes(
-        "sorvete"
-      );
-
-    case "acai":
-      return texto.includes(
-        "acai"
-      );
-
-    default:
-      return true;
   }
+
+
+  /* ==================================================
+     LANCHONETES
+  ================================================== */
+
+  if (filtro === "Lanchonetes") {
+
+    return (
+      categoria.includes("lanchonete") ||
+      categoria.includes("lancheria")
+    );
+
+  }
+
+
+  /* ==================================================
+     CAFETERIA
+  ================================================== */
+
+  if (filtro === "Cafeteria") {
+
+    return (
+      categoria.includes("cafe") ||
+      categoria.includes("cafeteria")
+    );
+
+  }
+
+
+  /* ==================================================
+     SORVETE / AÇAÍ
+  ================================================== */
+
+  if (filtro === "Sorvete/Açaí") {
+
+    return (
+      categoria.includes("sorvete") ||
+      categoria.includes("sorveteria") ||
+      categoria.includes("acai")
+    );
+
+  }
+
+
+  return false;
+
 }
 
-
 function obterComerciosFiltrados() {
-  return dadosComercios.filter(
-    comercio => {
-      if (
-        !comercioEhAlimentacao(
-          comercio
-        )
-      ) {
-        return false;
-      }
 
-      if (
-        !comercioPertenceCategoria(
-          comercio,
-          categoriaComerFiltro
-        )
-      ) {
-        return false;
-      }
+  return dadosComercios.filter(comercio => {
 
-      if (
-        mostrarSomenteAbertos &&
-        !comercioEstaAberto(
-          comercio
-        )
-      ) {
-        return false;
-      }
+    /* ================================================
+       SOMENTE ALIMENTAÇÃO
+    ================================================= */
 
-      return true;
+    if (!comercioEhAlimentacao(comercio)) {
+      return false;
     }
-  );
+
+
+    /* ================================================
+       FILTRO POR CATEGORIA
+    ================================================= */
+
+    if (
+      !comercioPertenceCategoria(
+        comercio,
+        categoriaComerFiltro
+      )
+    ) {
+      return false;
+    }
+
+
+    /* ================================================
+       PESQUISA
+    ================================================= */
+
+    if (
+      pesquisaComerTexto &&
+      !comercioCombinaPesquisa(
+        comercio,
+        pesquisaComerTexto
+      )
+    ) {
+      return false;
+    }
+
+
+    /* ================================================
+       ABERTO AGORA
+    ================================================= */
+
+    if (
+      mostrarSomenteAbertos &&
+      !comercioEstaAberto(comercio)
+    ) {
+      return false;
+    }
+
+
+    return true;
+
+  });
+
 }
 
 
@@ -2076,57 +2126,62 @@ function renderizarComercios() {
 ========================================================= */
 
 function configurarFiltrosComer() {
-  document
-    .querySelectorAll(
-      ".comer-filtro"
-    )
-    .forEach(botao => {
-      botao.onclick = () => {
-        document
-          .querySelectorAll(
-            ".comer-filtro"
-          )
-          .forEach(
-            item =>
-              item.classList.remove(
-                "active"
-              )
-          );
 
-        botao.classList.add(
-          "active"
-        );
+  const filtros = document.querySelectorAll(
+    ".comer-filtro"
+  );
 
-        categoriaComerFiltro =
-          botao.dataset.categoria ||
-          botao.dataset.category ||
-          botao.textContent.trim();
+  filtros.forEach(filtro => {
 
-        limiteComer =
-          LIMITE_INICIAL;
+    filtro.addEventListener("click", () => {
 
-        renderizarComercios();
-      };
+      filtros.forEach(item => {
+        item.classList.remove("active");
+      });
+
+      filtro.classList.add("active");
+
+      categoriaComerFiltro =
+        filtro.dataset.filter || "Todos";
+
+      limiteComer = LIMITE_INICIAL;
+
+      renderizarComercios();
+
     });
+
+  });
+
 }
 
 
 function configurarBotaoFiltroAberto() {
+
   if (!filtroAberto) {
     return;
   }
 
-  filtroAberto.onclick = () => {
+  filtroAberto.addEventListener("click", () => {
+
     mostrarSomenteAbertos =
       !mostrarSomenteAbertos;
 
-    limiteComer =
-      LIMITE_INICIAL;
+    filtroAberto.classList.toggle(
+      "active",
+      mostrarSomenteAbertos
+    );
 
-    atualizarStatusBotao();
+    textoStatus.textContent =
+      mostrarSomenteAbertos
+        ? "Aberto agora"
+        : "Aberto agora";
+
+    limiteComer = LIMITE_INICIAL;
 
     renderizarComercios();
-  };
+
+  });
+
 }
 
 
@@ -2272,6 +2327,31 @@ function comercioCombinaPesquisa(
             )
       )
   );
+}
+
+
+function configurarPesquisaComer() {
+
+  if (!pesquisaComer) {
+    return;
+  }
+
+  pesquisaComer.addEventListener("input", () => {
+
+    pesquisaComerTexto = pesquisaComer.value
+      .trim()
+      .toLowerCase();
+
+    /*
+     * Sempre que o usuário pesquisar,
+     * voltamos para os primeiros resultados.
+     */
+    limiteComer = LIMITE_INICIAL;
+
+    renderizarComercios();
+
+  });
+
 }
 
 
@@ -3530,1223 +3610,6 @@ async function processarVotoPessoa(
 
 
 /* =========================================================
-   AUTENTICAÇÃO
-========================================================= */
-
-function adicionarEstiloAuth() {
-  if (
-    document.getElementById(
-      "estiloAuthIndex"
-    )
-  ) {
-    return;
-  }
-
-  const style =
-    document.createElement("style");
-
-  style.id =
-    "estiloAuthIndex";
-
-  style.textContent = `
-    #authModal {
-      position: fixed;
-      inset: 0;
-      z-index: 100000;
-      display: none;
-    }
-
-    #authModal.open {
-      display: block;
-    }
-
-    .auth-modal-overlay {
-      position: absolute;
-      inset: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 18px;
-      background: rgba(0,0,0,.58);
-      overflow-y: auto;
-    }
-
-    .auth-modal-box {
-      position: relative;
-      width: min(100%, 420px);
-      max-height: calc(100vh - 36px);
-      overflow-y: auto;
-      padding: 28px;
-      background: #ffffff;
-      border-radius: 18px;
-      box-shadow: 0 20px 60px rgba(0,0,0,.28);
-    }
-
-    .auth-fechar {
-      position: absolute;
-      top: 10px;
-      right: 13px;
-      width: 35px;
-      height: 35px;
-      border: 0;
-      background: transparent;
-      color: #666;
-      font-size: 29px;
-      line-height: 1;
-      cursor: pointer;
-    }
-
-    .auth-tag {
-      display: block;
-      margin-bottom: 8px;
-      color: #194138;
-      font-size: 10px;
-      font-weight: 700;
-      letter-spacing: 1.2px;
-    }
-
-    .auth-formulario h2 {
-      margin: 0 0 8px;
-      color: #091D1C;
-      font-size: 25px;
-      line-height: 1.2;
-    }
-
-    .auth-formulario p {
-      margin: 0 0 20px;
-      color: #777;
-      font-size: 13px;
-      line-height: 1.5;
-    }
-
-    .auth-label {
-      display: block;
-      margin: 12px 0 5px;
-      color: #333;
-      font-size: 12px;
-      font-weight: 600;
-    }
-
-    .auth-input {
-      display: block;
-      width: 100%;
-      min-height: 43px;
-      padding: 10px 13px;
-      border: 1px solid #d3d3d3;
-      border-radius: 10px;
-      background: #fff;
-      color: #202522;
-      font-family: inherit;
-      font-size: 13px;
-      outline: none;
-      box-sizing: border-box;
-    }
-
-    .auth-input:focus {
-      border-color: #194138;
-      box-shadow: 0 0 0 3px rgba(25,65,56,.08);
-    }
-
-    .auth-erro {
-      min-height: 19px;
-      margin-top: 9px;
-      color: #d32f2f;
-      font-size: 12px;
-      line-height: 1.4;
-    }
-
-    .auth-botao-principal,
-    .auth-botao-secundario {
-      width: 100%;
-      min-height: 43px;
-      border-radius: 10px;
-      font-family: inherit;
-      font-size: 13px;
-      font-weight: 700;
-      cursor: pointer;
-    }
-
-    .auth-botao-principal {
-      border: 0;
-      background: #194138;
-      color: #ffffff;
-    }
-
-    .auth-botao-principal:disabled {
-      opacity: .6;
-      cursor: wait;
-    }
-
-    .auth-botao-secundario {
-      margin-top: 9px;
-      border: 1px solid #d3d3d3;
-      background: #ffffff;
-      color: #194138;
-    }
-
-    @media (max-width: 430px) {
-      .auth-modal-overlay {
-        padding: 12px;
-      }
-
-      .auth-modal-box {
-        padding: 23px 19px;
-        border-radius: 15px;
-      }
-    }
-  `;
-
-  document.head.appendChild(style);
-}
-
-
-function criarInterfaceAuth() {
-  let modal =
-    document.getElementById(
-      "authModal"
-    );
-
-  if (modal) {
-    adicionarEstiloAuth();
-    return;
-  }
-
-  modal =
-    document.createElement("div");
-
-  modal.id =
-    "authModal";
-
-  modal.setAttribute(
-    "aria-hidden",
-    "true"
-  );
-
-  modal.innerHTML = `
-    <div
-      class="auth-modal-overlay"
-      data-auth-fechar
-    >
-
-      <div
-        class="auth-modal-box"
-        role="dialog"
-        aria-modal="true"
-      >
-
-        <button
-          type="button"
-          id="fecharAuth"
-          class="auth-fechar"
-          aria-label="Fechar"
-        >
-          ×
-        </button>
-
-        <div
-          id="formLogin"
-          class="auth-formulario"
-        >
-
-          <span class="auth-tag">
-            ANDRELÂNDIA — GUIA TURÍSTICO
-          </span>
-
-          <h2>
-            Entrar
-          </h2>
-
-          <p>
-            Entre na sua conta para participar do mural e avaliar os locais.
-          </p>
-
-          <label
-            class="auth-label"
-            for="loginEmail"
-          >
-            E-mail
-          </label>
-
-          <input
-            type="email"
-            id="loginEmail"
-            class="auth-input"
-            placeholder="Seu e-mail"
-            autocomplete="email"
-          >
-
-          <label
-            class="auth-label"
-            for="loginSenha"
-          >
-            Senha
-          </label>
-
-          <input
-            type="password"
-            id="loginSenha"
-            class="auth-input"
-            placeholder="Sua senha"
-            autocomplete="current-password"
-          >
-
-          <div
-            id="erroLogin"
-            class="auth-erro"
-          ></div>
-
-          <button
-            type="button"
-            id="botaoLogin"
-            class="auth-botao-principal"
-          >
-            Entrar
-          </button>
-
-          <button
-            type="button"
-            id="trocarCadastro"
-            class="auth-botao-secundario"
-          >
-            Criar uma conta
-          </button>
-
-        </div>
-
-        <div
-          id="formCadastro"
-          class="auth-formulario"
-          style="display:none"
-        >
-
-          <span class="auth-tag">
-            CRIAR CONTA
-          </span>
-
-          <h2>
-            Criar conta
-          </h2>
-
-          <p>
-            Cadastre-se para participar do Guia Turístico de Andrelândia.
-          </p>
-
-          <label
-            class="auth-label"
-            for="cadastroNome"
-          >
-            Nome
-          </label>
-
-          <input
-            type="text"
-            id="cadastroNome"
-            class="auth-input"
-            placeholder="Seu nome"
-            autocomplete="name"
-          >
-
-          <label
-            class="auth-label"
-            for="cadastroEmail"
-          >
-            E-mail
-          </label>
-
-          <input
-            type="email"
-            id="cadastroEmail"
-            class="auth-input"
-            placeholder="Seu e-mail"
-            autocomplete="email"
-          >
-
-          <label
-            class="auth-label"
-            for="cadastroSenha"
-          >
-            Senha
-          </label>
-
-          <input
-            type="password"
-            id="cadastroSenha"
-            class="auth-input"
-            placeholder="Mínimo de 6 caracteres"
-            autocomplete="new-password"
-          >
-
-          <label
-            class="auth-label"
-            for="cadastroConfirmarSenha"
-          >
-            Confirmar senha
-          </label>
-
-          <input
-            type="password"
-            id="cadastroConfirmarSenha"
-            class="auth-input"
-            placeholder="Digite a senha novamente"
-            autocomplete="new-password"
-          >
-
-          <div
-            id="erroCadastro"
-            class="auth-erro"
-          ></div>
-
-          <button
-            type="button"
-            id="botaoCadastro"
-            class="auth-botao-principal"
-          >
-            Criar conta
-          </button>
-
-          <button
-            type="button"
-            id="trocarLogin"
-            class="auth-botao-secundario"
-          >
-            Já tenho uma conta
-          </button>
-
-        </div>
-
-      </div>
-
-    </div>
-  `;
-
-  document.body.appendChild(modal);
-
-  adicionarEstiloAuth();
-}
-
-
-function mostrarFormularioAuth(modo) {
-  const formLogin =
-    document.getElementById(
-      "formLogin"
-    );
-
-  const formCadastro =
-    document.getElementById(
-      "formCadastro"
-    );
-
-  if (!formLogin || !formCadastro) {
-    return;
-  }
-
-  const erroLogin =
-    document.getElementById(
-      "erroLogin"
-    );
-
-  const erroCadastro =
-    document.getElementById(
-      "erroCadastro"
-    );
-
-  if (erroLogin) {
-    erroLogin.textContent = "";
-  }
-
-  if (erroCadastro) {
-    erroCadastro.textContent = "";
-  }
-
-  if (modo === "cadastro") {
-    formLogin.style.display =
-      "none";
-
-    formCadastro.style.display =
-      "block";
-
-    return;
-  }
-
-  formLogin.style.display =
-    "block";
-
-  formCadastro.style.display =
-    "none";
-}
-
-
-function abrirModalAuth(
-  modo = "login"
-) {
-  criarInterfaceAuth();
-
-  const modal =
-    document.getElementById(
-      "authModal"
-    );
-
-  if (!modal) {
-    return;
-  }
-
-  modal.classList.add("open");
-
-  modal.setAttribute(
-    "aria-hidden",
-    "false"
-  );
-
-  mostrarFormularioAuth(
-    modo
-  );
-
-  document.body.style.overflow =
-    "hidden";
-}
-
-
-function abrirLogin() {
-  abrirModalAuth("login");
-}
-
-
-function fecharModalAuth() {
-  const modal =
-    document.getElementById(
-      "authModal"
-    );
-
-  if (!modal) {
-    return;
-  }
-
-  modal.classList.remove("open");
-
-  modal.setAttribute(
-    "aria-hidden",
-    "true"
-  );
-
-  document.body.style.overflow =
-    "";
-}
-
-
-function fecharLogin() {
-  fecharModalAuth();
-}
-
-
-/* =========================================================
-   INTERFACE DE AUTENTICAÇÃO
-========================================================= */
-
-async function mostrarUsuarioLogado(
-  user
-) {
-  usuarioAtual =
-    user || null;
-
-  window.usuarioAtualSupabase =
-    usuarioAtual;
-
-  const areaAutenticacao =
-    document.getElementById(
-      "areaAutenticacao"
-    );
-
-  const areaAvaliacao =
-    document.getElementById(
-      "areaAvaliacao"
-    );
-
-  const nomeUsuarioLogado =
-    document.getElementById(
-      "nomeUsuarioLogado"
-    );
-
-  const nome =
-    user?.user_metadata?.nome ||
-    user?.email?.split("@")[0] ||
-    "Usuário";
-
-  if (areaAutenticacao) {
-    areaAutenticacao.style.display =
-      "none";
-  }
-
-  if (areaAvaliacao) {
-    areaAvaliacao.style.display =
-      "block";
-  }
-
-  if (nomeUsuarioLogado) {
-    nomeUsuarioLogado.textContent =
-      nome;
-  }
-
-  await carregarVotosPessoas();
-
-  renderizarPessoas();
-
-  atualizarBotaoLoginMural();
-}
-
-
-function mostrarUsuarioDeslogado() {
-  usuarioAtual = null;
-
-  window.usuarioAtualSupabase =
-    null;
-
-  const areaAutenticacao =
-    document.getElementById(
-      "areaAutenticacao"
-    );
-
-  const areaAvaliacao =
-    document.getElementById(
-      "areaAvaliacao"
-    );
-
-  if (areaAutenticacao) {
-    areaAutenticacao.style.display =
-      "block";
-  }
-
-  if (areaAvaliacao) {
-    areaAvaliacao.style.display =
-      "none";
-  }
-
-  atualizarBotaoLoginMural();
-}
-
-
-/* =========================================================
-   ERROS DE AUTENTICAÇÃO
-========================================================= */
-
-function mostrarErroAuth(
-  elemento,
-  mensagem
-) {
-  if (!elemento) {
-    return;
-  }
-
-  elemento.textContent =
-    mensagem || "";
-}
-
-
-function traduzirErroAuth(error) {
-  const mensagem =
-    normalizarTexto(
-      error?.message || ""
-    );
-
-  if (
-    mensagem.includes(
-      "user already registered"
-    ) ||
-    mensagem.includes(
-      "already been registered"
-    )
-  ) {
-    return "Este e-mail já possui uma conta.";
-  }
-
-  if (
-    mensagem.includes(
-      "invalid login credentials"
-    )
-  ) {
-    return "E-mail ou senha incorretos.";
-  }
-
-  if (
-    mensagem.includes(
-      "password should be at least"
-    )
-  ) {
-    return "A senha precisa ter pelo menos 6 caracteres.";
-  }
-
-  if (
-    mensagem.includes(
-      "email rate limit"
-    )
-  ) {
-    return "Muitas tentativas. Aguarde alguns instantes e tente novamente.";
-  }
-
-  return (
-    error?.message ||
-    "Não foi possível concluir a operação."
-  );
-}
-
-
-/* =========================================================
-   CADASTRO
-========================================================= */
-
-async function cadastrarUsuario() {
-  const erro =
-    document.getElementById(
-      "erroCadastro"
-    );
-
-  const botao =
-    document.getElementById(
-      "botaoCadastro"
-    );
-
-  if (!supabaseClient) {
-    mostrarErroAuth(
-      erro,
-      "Sistema de cadastro indisponível."
-    );
-
-    return;
-  }
-
-  const nome =
-    document
-      .getElementById(
-        "cadastroNome"
-      )
-      ?.value
-      .trim();
-
-  const email =
-    document
-      .getElementById(
-        "cadastroEmail"
-      )
-      ?.value
-      .trim();
-
-  const senha =
-    document
-      .getElementById(
-        "cadastroSenha"
-      )
-      ?.value || "";
-
-  const confirmarSenha =
-    document
-      .getElementById(
-        "cadastroConfirmarSenha"
-      )
-      ?.value || "";
-
-  mostrarErroAuth(
-    erro,
-    ""
-  );
-
-  if (!nome || nome.length < 2) {
-    mostrarErroAuth(
-      erro,
-      "Digite seu nome."
-    );
-
-    return;
-  }
-
-  if (
-    !email ||
-    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
-      email
-    )
-  ) {
-    mostrarErroAuth(
-      erro,
-      "Digite um e-mail válido."
-    );
-
-    return;
-  }
-
-  if (senha.length < 6) {
-    mostrarErroAuth(
-      erro,
-      "A senha precisa ter pelo menos 6 caracteres."
-    );
-
-    return;
-  }
-
-  if (
-    senha !==
-    confirmarSenha
-  ) {
-    mostrarErroAuth(
-      erro,
-      "As senhas não coincidem."
-    );
-
-    return;
-  }
-
-  if (botao) {
-    botao.disabled = true;
-    botao.textContent =
-      "Criando conta...";
-  }
-
-  try {
-    const {
-      data,
-      error
-    } =
-      await supabaseClient.auth.signUp({
-        email,
-        password: senha,
-
-        options: {
-          data: {
-            nome
-          }
-        }
-      });
-
-    if (error) {
-      throw error;
-    }
-
-    if (
-      data?.session &&
-      data?.user
-    ) {
-      await mostrarUsuarioLogado(
-        data.user
-      );
-
-      fecharModalAuth();
-
-      return;
-    }
-
-    mostrarFormularioAuth(
-      "login"
-    );
-
-    const loginEmail =
-      document.getElementById(
-        "loginEmail"
-      );
-
-    if (loginEmail) {
-      loginEmail.value =
-        email;
-    }
-
-    mostrarErroAuth(
-      document.getElementById(
-        "erroLogin"
-      ),
-      "Conta criada. Agora faça login."
-    );
-  } catch (error) {
-    console.error(
-      "Erro ao criar conta:",
-      error
-    );
-
-    mostrarErroAuth(
-      erro,
-      traduzirErroAuth(error)
-    );
-  } finally {
-    if (botao) {
-      botao.disabled = false;
-      botao.textContent =
-        "Criar conta";
-    }
-  }
-}
-
-
-/* =========================================================
-   LOGIN
-========================================================= */
-
-async function fazerLogin() {
-  const erro =
-    document.getElementById(
-      "erroLogin"
-    );
-
-  const botao =
-    document.getElementById(
-      "botaoLogin"
-    );
-
-  if (!supabaseClient) {
-    mostrarErroAuth(
-      erro,
-      "Sistema de login indisponível."
-    );
-
-    return;
-  }
-
-  const email =
-    document
-      .getElementById(
-        "loginEmail"
-      )
-      ?.value
-      .trim();
-
-  const senha =
-    document
-      .getElementById(
-        "loginSenha"
-      )
-      ?.value || "";
-
-  mostrarErroAuth(
-    erro,
-    ""
-  );
-
-  if (
-    !email ||
-    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
-      email
-    )
-  ) {
-    mostrarErroAuth(
-      erro,
-      "Digite um e-mail válido."
-    );
-
-    return;
-  }
-
-  if (!senha) {
-    mostrarErroAuth(
-      erro,
-      "Digite sua senha."
-    );
-
-    return;
-  }
-
-  if (botao) {
-    botao.disabled = true;
-    botao.textContent =
-      "Entrando...";
-  }
-
-  try {
-    const {
-      data,
-      error
-    } =
-      await supabaseClient.auth.signInWithPassword({
-        email,
-        password: senha
-      });
-
-    if (error) {
-      throw error;
-    }
-
-    await mostrarUsuarioLogado(
-      data.user
-    );
-
-    fecharModalAuth();
-  } catch (error) {
-    console.error(
-      "Erro ao fazer login:",
-      error
-    );
-
-    mostrarErroAuth(
-      erro,
-      "E-mail ou senha incorretos."
-    );
-  } finally {
-    if (botao) {
-      botao.disabled = false;
-      botao.textContent =
-        "Entrar";
-    }
-  }
-}
-
-
-/* =========================================================
-   LOGOUT
-========================================================= */
-
-async function sairUsuario() {
-  if (!supabaseClient) {
-    return;
-  }
-
-  try {
-    const {
-      error
-    } =
-      await supabaseClient.auth.signOut();
-
-    if (error) {
-      throw error;
-    }
-
-    mostrarUsuarioDeslogado();
-
-    await carregarVotosPessoas();
-
-    renderizarPessoas();
-
-    fecharModalAuth();
-  } catch (erro) {
-    console.error(
-      "Erro ao sair:",
-      erro
-    );
-
-    alert(
-      "Não foi possível sair da conta."
-    );
-  }
-}
-
-
-async function fazerLogout() {
-  await sairUsuario();
-}
-
-
-/* =========================================================
-   EVENTOS DE AUTENTICAÇÃO
-========================================================= */
-
-function configurarEventosAuth() {
-  criarInterfaceAuth();
-
-  const abrirLoginBotao =
-    document.getElementById(
-      "abrirLogin"
-    );
-
-  const abrirCadastroBotao =
-    document.getElementById(
-      "abrirCadastro"
-    );
-
-  const fecharAuthBotao =
-    document.getElementById(
-      "fecharAuth"
-    );
-
-  const trocarCadastroBotao =
-    document.getElementById(
-      "trocarCadastro"
-    );
-
-  const trocarLoginBotao =
-    document.getElementById(
-      "trocarLogin"
-    );
-
-  const botaoLogin =
-    document.getElementById(
-      "botaoLogin"
-    );
-
-  const botaoCadastro =
-    document.getElementById(
-      "botaoCadastro"
-    );
-
-  const botaoSair =
-    document.getElementById(
-      "botaoSair"
-    );
-
-  if (abrirLoginBotao) {
-    abrirLoginBotao.onclick =
-      () =>
-        abrirModalAuth("login");
-  }
-
-  if (abrirCadastroBotao) {
-    abrirCadastroBotao.onclick =
-      () =>
-        abrirModalAuth("cadastro");
-  }
-
-  if (fecharAuthBotao) {
-    fecharAuthBotao.onclick =
-      fecharModalAuth;
-  }
-
-  if (trocarCadastroBotao) {
-    trocarCadastroBotao.onclick =
-      () =>
-        mostrarFormularioAuth(
-          "cadastro"
-        );
-  }
-
-  if (trocarLoginBotao) {
-    trocarLoginBotao.onclick =
-      () =>
-        mostrarFormularioAuth(
-          "login"
-        );
-  }
-
-  if (botaoLogin) {
-    botaoLogin.onclick =
-      fazerLogin;
-  }
-
-  if (botaoCadastro) {
-    botaoCadastro.onclick =
-      cadastrarUsuario;
-  }
-
-  if (botaoSair) {
-    botaoSair.onclick =
-      sairUsuario;
-  }
-
-  const formLogin =
-    document.getElementById(
-      "formLogin"
-    );
-
-  const formCadastro =
-    document.getElementById(
-      "formCadastro"
-    );
-
-  if (formLogin) {
-    formLogin.onsubmit =
-      event => {
-        event.preventDefault();
-        fazerLogin();
-      };
-  }
-
-  if (formCadastro) {
-    formCadastro.onsubmit =
-      event => {
-        event.preventDefault();
-        cadastrarUsuario();
-      };
-  }
-
-  const modal =
-    document.getElementById(
-      "authModal"
-    );
-
-  if (modal) {
-    modal.onclick =
-      event => {
-        if (
-          event.target ===
-            modal ||
-          event.target?.hasAttribute(
-            "data-auth-fechar"
-          )
-        ) {
-          fecharModalAuth();
-        }
-      };
-  }
-}
-
-
-/* =========================================================
-   AUTENTICAÇÃO — ESTADO INICIAL
-========================================================= */
-
-async function inicializarAutenticacao() {
-  if (!supabaseClient) {
-    return;
-  }
-
-  try {
-    const {
-      data,
-      error
-    } =
-      await supabaseClient.auth.getSession();
-
-    if (error) {
-      throw error;
-    }
-
-    usuarioAtual =
-      data?.session?.user ||
-      null;
-
-    window.usuarioAtualSupabase =
-      usuarioAtual;
-
-    if (usuarioAtual) {
-      await mostrarUsuarioLogado(
-        usuarioAtual
-      );
-    } else {
-      mostrarUsuarioDeslogado();
-    }
-  } catch (erro) {
-    console.error(
-      "Erro ao verificar sessão:",
-      erro
-    );
-
-    usuarioAtual = null;
-
-    window.usuarioAtualSupabase =
-      null;
-  }
-
-  supabaseClient.auth.onAuthStateChange(
-    (evento, sessao) => {
-      setTimeout(
-        async () => {
-          usuarioAtual =
-            sessao?.user ||
-            null;
-
-          window.usuarioAtualSupabase =
-            usuarioAtual;
-
-          if (usuarioAtual) {
-            await mostrarUsuarioLogado(
-              usuarioAtual
-            );
-          } else {
-            mostrarUsuarioDeslogado();
-
-            await carregarVotosPessoas();
-
-            renderizarPessoas();
-          }
-        },
-        0
-      );
-    }
-  );
-}
-
-
-/* =========================================================
    BOTÃO DO MURAL
 ========================================================= */
 
@@ -4954,6 +3817,11 @@ function capturarElementos() {
       "pesquisaComercio"
     );
 
+  pesquisaComer =
+    document.getElementById(
+      "pesquisaComer"
+    );
+
   filtroAbertoComercio =
     document.getElementById(
       "filtroAbertoComercio"
@@ -5035,25 +3903,6 @@ function configurarResizeMapa() {
 
 
 /* =========================================================
-   TECLA ESC
-========================================================= */
-
-function configurarTeclaEscape() {
-  document.addEventListener(
-    "keydown",
-    event => {
-      if (
-        event.key ===
-        "Escape"
-      ) {
-        fecharModalAuth();
-      }
-    }
-  );
-}
-
-
-/* =========================================================
    INICIALIZAÇÃO
 ========================================================= */
 
@@ -5075,6 +3924,8 @@ async function iniciarSite() {
    * para que os eventos já estejam prontos.
    */
 
+  configurarPesquisaComer();
+
   configurarFiltrosMapa();
 
   configurarFiltrosComer();
@@ -5086,12 +3937,6 @@ async function iniciarSite() {
   configurarPaginacao();
 
   configurarResizeMapa();
-
-  configurarTeclaEscape();
-
-  configurarEventosAuth();
-
-  await inicializarAutenticacao();
 
   adicionarBotaoLoginMural();
 
