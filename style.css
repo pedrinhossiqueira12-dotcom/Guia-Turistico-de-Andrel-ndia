@@ -3,18 +3,30 @@
    STYLE.CSS — INDEX.HTML
 ========================================================= */
 
+
+/* =========================================================
+   VARIÁVEIS
+========================================================= */
+
 :root {
+
   --verde: #194138;
   --verde-escuro: #091d1c;
   --branco: #ffffff;
+
   --cinza-borda: #c8c8c8;
+
   --fundo: #f5f3ef;
+
   --texto: #202522;
   --texto-claro: #777;
 
   --altura-navbar: 76px;
+
   --espaco: clamp(15px, 4vw, 28px);
+
   --largura-max: 1100px;
+
 }
 
 
@@ -32,11 +44,17 @@ html {
 }
 
 body {
-  margin: 0;
-  padding-bottom: var(--altura-navbar);
 
-  background: var(--fundo);
-  color: var(--texto);
+  margin: 0;
+
+  padding-bottom:
+    var(--altura-navbar);
+
+  background:
+    var(--fundo);
+
+  color:
+    var(--texto);
 
   font-family:
     "Roboto",
@@ -70,36 +88,57 @@ button {
 ========================================================= */
 
 .page {
+
   width: 100%;
-  max-width: var(--largura-max);
+
+  max-width:
+    var(--largura-max);
+
   min-height: 100vh;
 
   margin: 0 auto;
 
-  background: var(--fundo);
+  background:
+    var(--fundo);
 
   overflow: hidden;
 }
 
 
 /* =========================================================
-   HERO / CARROSSEL
+   HERO
 ========================================================= */
 
 .hero {
+
   position: relative;
 
   width: 100%;
-  height: clamp(400px, 62vw, 620px);
+
+  height:
+    clamp(
+      400px,
+      62vw,
+      620px
+    );
+
   min-height: 400px;
 
   overflow: hidden;
 
-  background: var(--branco);
+  background:
+    var(--branco);
 }
 
+
+/* =========================================================
+   CARROSSEL
+========================================================= */
+
 .hero-carousel {
+
   position: absolute;
+
   inset: 0;
 
   width: 100%;
@@ -114,7 +153,9 @@ button {
 ========================================================= */
 
 .hero-slide {
+
   position: absolute;
+
   inset: 0;
 
   width: 100%;
@@ -126,13 +167,18 @@ button {
   background-repeat: no-repeat;
   background-position: center center;
   background-size: cover;
-  background-color: var(--branco);
 
-  transition: opacity 1.2s ease;
+  background-color:
+    var(--branco);
+
+  transition:
+    opacity 1.2s ease;
 }
 
 .hero-slide.active {
+
   opacity: 1;
+
   visibility: visible;
 }
 
@@ -142,9 +188,11 @@ button {
 ========================================================= */
 
 .hero-carousel::after {
+
   content: "";
 
   position: absolute;
+
   inset: 0;
 
   z-index: 5;
@@ -154,11 +202,17 @@ button {
   background:
     linear-gradient(
       to bottom,
+
       rgba(0, 0, 0, 0.08) 0%,
+
       rgba(0, 0, 0, 0) 35%,
+
       rgba(0, 0, 0, 0.08) 55%,
+
       rgba(9, 29, 28, 0.42) 76%,
+
       rgba(245, 243, 239, 0.82) 94%,
+
       var(--fundo) 100%
     );
 }
@@ -169,6 +223,7 @@ button {
 ========================================================= */
 
 .hero-content {
+
   position: relative;
 
   z-index: 10;
@@ -186,13 +241,15 @@ button {
   flex-direction: column;
 
   align-items: center;
+
   justify-content: center;
 
   text-align: center;
 
   pointer-events: none;
 
-  transform: translateY(-90px);
+  transform:
+    translateY(-90px);
 }
 
 
@@ -201,6 +258,7 @@ button {
 ========================================================= */
 
 .hero-logo {
+
   display: block;
 
   width:
@@ -223,11 +281,13 @@ button {
 
 
 /* =========================================================
-   TEXTO DO CARROSSEL
+   TEXTO DO HERO
 ========================================================= */
 
-.hero-caption {
-  margin-top: 16px;
+.hero-text {
+
+  margin:
+    16px 0 0;
 
   max-width:
     clamp(
@@ -236,7 +296,8 @@ button {
       620px
     );
 
-  color: var(--verde);
+  color:
+    var(--branco);
 
   font-size:
     clamp(
@@ -252,72 +313,15 @@ button {
   text-shadow:
     0 2px 7px
     rgba(0, 0, 0, 0.5);
-
-  transition:
-    opacity .4s ease,
-    transform .4s ease;
 }
 
 
 /* =========================================================
-   INDICADORES DO HERO
-========================================================= */
-
-.hero-indicators {
-  position: absolute;
-
-  z-index: 20;
-
-  left: 50%;
-  bottom: 35px;
-
-  transform: translateX(-50%);
-
-  display: flex;
-
-  align-items: center;
-
-  gap: 7px;
-
-  pointer-events: none;
-}
-
-.hero-indicator {
-  width: 6px;
-  height: 6px;
-
-  padding: 0;
-
-  border: 0;
-  border-radius: 50%;
-
-  background:
-    rgba(255, 255, 255, 0.55);
-
-  opacity: .75;
-
-  transition:
-    width .25s ease,
-    opacity .25s ease,
-    background .25s ease;
-}
-
-.hero-indicator.active {
-  width: 18px;
-
-  border-radius: 999px;
-
-  background: var(--branco);
-
-  opacity: 1;
-}
-
-
-/* =========================================================
-   O QUE FAZER HOJE?
+   O QUE FAZER HOJE
 ========================================================= */
 
 .route-card {
+
   position: relative;
 
   z-index: 50;
@@ -346,8 +350,11 @@ button {
       20px
     );
 
-  background: var(--verde);
-  color: var(--branco);
+  background:
+    var(--verde);
+
+  color:
+    var(--branco);
 
   border:
     1px solid
@@ -366,6 +373,7 @@ button {
 }
 
 .route-icon {
+
   width:
     clamp(
       42px,
@@ -392,7 +400,8 @@ button {
 
   place-items: center;
 
-  color: var(--branco);
+  color:
+    var(--branco);
 
   font-size:
     clamp(
@@ -403,6 +412,7 @@ button {
 }
 
 .route-text {
+
   display: flex;
 
   flex-direction: column;
@@ -413,6 +423,7 @@ button {
 }
 
 .route-text strong {
+
   font-size:
     clamp(
       14px,
@@ -424,9 +435,11 @@ button {
 }
 
 .route-text span {
+
   margin-top: 3px;
 
-  color: var(--branco);
+  color:
+    var(--branco);
 
   font-size:
     clamp(
@@ -439,11 +452,13 @@ button {
 }
 
 .route-arrow {
+
   margin-left: auto;
 
   padding-left: 10px;
 
-  color: var(--branco);
+  color:
+    var(--branco);
 
   font-size:
     clamp(
@@ -457,10 +472,11 @@ button {
 
 
 /* =========================================================
-   BOTÕES PRINCIPAIS
+   CATEGORIAS PRINCIPAIS
 ========================================================= */
 
 .section {
+
   padding:
     clamp(
       22px,
@@ -472,6 +488,7 @@ button {
 }
 
 .quick-grid {
+
   display: grid;
 
   grid-template-columns:
@@ -489,14 +506,17 @@ button {
 }
 
 .quick-item {
+
   display: block;
 
   min-width: 0;
 
-  color: var(--verde);
+  color:
+    var(--verde);
 }
 
 .quick-box {
+
   width: 100%;
 
   aspect-ratio: 1 / 1;
@@ -508,6 +528,7 @@ button {
   flex-direction: column;
 
   align-items: center;
+
   justify-content: center;
 
   padding:
@@ -517,8 +538,11 @@ button {
       14px
     );
 
-  background: var(--branco);
-  color: var(--verde);
+  background:
+    var(--branco);
+
+  color:
+    var(--verde);
 
   border:
     2px solid
@@ -537,7 +561,9 @@ button {
 }
 
 .quick-box:hover {
-  transform: translateY(-2px);
+
+  transform:
+    translateY(-2px);
 
   box-shadow:
     0 6px 18px
@@ -545,10 +571,13 @@ button {
 }
 
 .quick-box:active {
-  transform: scale(.97);
+
+  transform:
+    scale(.97);
 }
 
 .quick-box img {
+
   width:
     clamp(
       32px,
@@ -574,9 +603,11 @@ button {
 }
 
 .quick-box span {
+
   width: 100%;
 
-  color: var(--verde);
+  color:
+    var(--verde);
 
   text-align: center;
 
@@ -598,6 +629,7 @@ button {
 ========================================================= */
 
 .bottom-nav {
+
   position: fixed;
 
   z-index: 9999;
@@ -607,7 +639,9 @@ button {
   bottom: 0;
 
   width: 100%;
-  height: var(--altura-navbar);
+
+  height:
+    var(--altura-navbar);
 
   display: grid;
 
@@ -616,7 +650,8 @@ button {
 
   align-items: center;
 
-  background: var(--verde-escuro);
+  background:
+    var(--verde-escuro);
 
   border-top:
     1px solid
@@ -628,6 +663,7 @@ button {
 }
 
 .nav-item {
+
   height: 100%;
 
   display: flex;
@@ -635,11 +671,13 @@ button {
   flex-direction: column;
 
   align-items: center;
+
   justify-content: center;
 
   gap: 5px;
 
-  color: var(--branco);
+  color:
+    var(--branco);
 
   font-size:
     clamp(
@@ -658,10 +696,12 @@ button {
 
 .nav-item:hover,
 .nav-item.active {
+
   opacity: 1;
 }
 
 .nav-icon img {
+
   width:
     clamp(
       12px,
@@ -680,7 +720,9 @@ button {
 }
 
 .nav-item > span:last-child {
-  color: var(--branco);
+
+  color:
+    var(--branco);
 }
 
 
@@ -689,6 +731,7 @@ button {
 ========================================================= */
 
 .home-map-section {
+
   position: relative;
 
   z-index: 0;
@@ -708,9 +751,11 @@ button {
 }
 
 .home-map-header {
+
   display: flex;
 
   align-items: flex-end;
+
   justify-content: space-between;
 
   gap:
@@ -729,13 +774,16 @@ button {
 }
 
 .home-map-header > div {
+
   min-width: 0;
 }
 
 .home-map-header span {
+
   display: block;
 
-  color: var(--texto-claro);
+  color:
+    var(--texto-claro);
 
   font-size:
     clamp(
@@ -753,9 +801,12 @@ button {
 }
 
 .home-map-header h2 {
-  margin: 4px 0 0;
 
-  color: var(--verde);
+  margin:
+    4px 0 0;
+
+  color:
+    var(--verde);
 
   font-size:
     clamp(
@@ -768,14 +819,18 @@ button {
 }
 
 .home-map-header p {
-  margin: 4px 0 0;
 
-  color: var(--texto-claro);
+  margin:
+    4px 0 0;
+
+  color:
+    var(--texto-claro);
 
   line-height: 1.1;
 }
 
 .map-full-button {
+
   flex-shrink: 0;
 
   padding:
@@ -790,8 +845,11 @@ button {
       14px
     );
 
-  background: var(--verde);
-  color: var(--branco);
+  background:
+    var(--verde);
+
+  color:
+    var(--branco);
 
   border-radius:
     clamp(
@@ -813,6 +871,7 @@ button {
 }
 
 .home-map {
+
   position: relative;
 
   z-index: 1;
@@ -852,6 +911,7 @@ button {
 ========================================================= */
 
 .leaflet-marker-icon {
+
   filter:
     drop-shadow(
       0 3px 4px
@@ -865,6 +925,7 @@ button {
 ========================================================= */
 
 .leaflet-popup-content-wrapper {
+
   padding: 0;
 
   overflow: hidden;
@@ -878,6 +939,7 @@ button {
 }
 
 .leaflet-popup-content {
+
   width:
     min(
       260px,
@@ -890,10 +952,12 @@ button {
 }
 
 .popup {
+
   padding-bottom: 14px;
 }
 
 .popup-image {
+
   display: block;
 
   width: 100%;
@@ -909,11 +973,13 @@ button {
 }
 
 .popup-content {
+
   padding:
     12px 14px 0;
 }
 
 .popup-category {
+
   color: #777;
 
   font-size: 9px;
@@ -924,10 +990,12 @@ button {
 }
 
 .popup h3 {
+
   margin:
     3px 0 5px;
 
-  color: var(--verde);
+  color:
+    var(--verde);
 
   font-size:
     clamp(
@@ -940,6 +1008,7 @@ button {
 }
 
 .popup p {
+
   margin:
     0 0 12px;
 
@@ -956,6 +1025,7 @@ button {
 }
 
 .popup-button {
+
   display: block;
 
   width: 100%;
@@ -967,9 +1037,11 @@ button {
       10px
     );
 
-  background: var(--verde);
+  background:
+    var(--verde);
 
-  color: #fff !important;
+  color:
+    var(--branco) !important;
 
   text-align: center;
 
@@ -993,6 +1065,7 @@ button {
 ========================================================= */
 
 .map-filters {
+
   display: flex;
 
   flex-wrap: wrap;
@@ -1008,6 +1081,7 @@ button {
 }
 
 .map-filter {
+
   flex:
     0 0
     clamp(
@@ -1049,6 +1123,7 @@ button {
 }
 
 .filter-icon {
+
   width:
     clamp(
       52px,
@@ -1066,6 +1141,7 @@ button {
   display: flex;
 
   align-items: center;
+
   justify-content: center;
 
   background: transparent;
@@ -1085,6 +1161,7 @@ button {
 }
 
 .filter-icon img {
+
   width:
     clamp(
       25px,
@@ -1100,12 +1177,10 @@ button {
     );
 
   object-fit: contain;
-
-  transition:
-    transform .18s ease;
 }
 
 .map-filter > span:last-child {
+
   white-space: nowrap;
 
   line-height: 1.1;
@@ -1117,9 +1192,12 @@ button {
 }
 
 .map-filter.active .filter-icon {
-  background: var(--branco);
 
-  border-color: var(--verde);
+  background:
+    var(--branco);
+
+  border-color:
+    var(--verde);
 
   box-shadow:
     0 5px 14px
@@ -1135,13 +1213,17 @@ button {
 }
 
 .map-filter.active > span:last-child {
-  color: var(--verde);
+
+  color:
+    var(--verde);
 
   font-weight: 700;
 }
 
 .map-filter:active .filter-icon {
-  transform: scale(.92);
+
+  transform:
+    scale(.92);
 }
 
 
@@ -1150,6 +1232,7 @@ button {
 ========================================================= */
 
 .content-section {
+
   padding:
     clamp(
       25px,
@@ -1165,6 +1248,7 @@ button {
 }
 
 .content-header {
+
   margin-bottom:
     clamp(
       14px,
@@ -1174,9 +1258,11 @@ button {
 }
 
 .content-header span {
+
   display: block;
 
-  color: var(--texto-claro);
+  color:
+    var(--texto-claro);
 
   font-size:
     clamp(
@@ -1194,10 +1280,12 @@ button {
 }
 
 .content-header h2 {
+
   margin:
     4px 0 0;
 
-  color: var(--verde);
+  color:
+    var(--verde);
 
   font-size:
     clamp(
@@ -1210,6 +1298,7 @@ button {
 }
 
 .content-header p {
+
   margin:
     8px 0 0;
 
@@ -1226,6 +1315,7 @@ button {
 ========================================================= */
 
 .content-filters {
+
   display: flex;
 
   flex-wrap: wrap;
@@ -1237,6 +1327,7 @@ button {
 }
 
 .comer-filtro {
+
   flex:
     0 0 auto;
 
@@ -1249,7 +1340,8 @@ button {
 
   border-radius: 999px;
 
-  background: var(--branco);
+  background:
+    var(--branco);
 
   color: #666;
 
@@ -1275,15 +1367,21 @@ button {
 }
 
 .comer-filtro.active {
-  background: var(--verde);
 
-  border-color: var(--verde);
+  background:
+    var(--verde);
 
-  color: var(--branco);
+  border-color:
+    var(--verde);
+
+  color:
+    var(--branco);
 }
 
 .comer-filtro:active {
-  transform: scale(.96);
+
+  transform:
+    scale(.96);
 }
 
 
@@ -1292,6 +1390,7 @@ button {
 ========================================================= */
 
 .comer-status {
+
   display: flex;
 
   align-items: center;
@@ -1301,6 +1400,7 @@ button {
 }
 
 .status-filtro {
+
   display: inline-flex;
 
   align-items: center;
@@ -1334,75 +1434,96 @@ button {
 }
 
 .status-filtro.fechado {
-  color: #d32f2f;
+
+  color:
+    #d32f2f;
 }
 
 .status-filtro.selecionado {
-  color: var(--verde);
+
+  color:
+    var(--verde);
 }
 
 .status-filtro:active {
-  transform: scale(.97);
+
+  transform:
+    scale(.97);
 }
 
 
 /* =========================================================
-   BUSCA
+   PESQUISA
 ========================================================= */
 
 .comercio-pesquisa {
-width: 100%;
+
+  width: 100%;
 }
 
 .comercio-pesquisa input {
-width: 100%;
-min-height: 40px;
 
-padding: 10px 14px;
+  width: 100%;
 
-border: 1px solid var(--cinza-borda);
+  min-height: 40px;
 
-border-radius: 999px;
+  padding:
+    10px 14px;
 
-background: var(--branco);
+  border:
+    1px solid
+    var(--cinza-borda);
 
-color: var(--texto);
+  border-radius: 999px;
 
-font-family:
-"Roboto",
-Arial,
-Helvetica,
-sans-serif;
+  background:
+    var(--branco);
 
-font-size: 12px;
+  color:
+    var(--texto);
 
-font-weight: 500;
+  font-family:
+    "Roboto",
+    Arial,
+    Helvetica,
+    sans-serif;
 
-outline: none;
+  font-size: 12px;
 
-box-shadow: none;
+  font-weight: 500;
 
-appearance: none;
+  outline: none;
 
--webkit-appearance: none;
+  box-shadow: none;
 
-transition:
-border-color .2s ease,
-box-shadow .2s ease;
+  appearance: none;
+
+  -webkit-appearance: none;
+
+  transition:
+    border-color .2s ease,
+    box-shadow .2s ease;
 }
 
 .comercio-pesquisa input::placeholder {
-color: #999;
+
+  color:
+    #999;
 }
 
 .comercio-pesquisa input:focus {
-outline: none;
-border: 1px solid var(--verde);
-box-shadow: none;
+
+  outline: none;
+
+  border-color:
+    var(--verde);
+
+  box-shadow: none;
 }
 
 .comercio-pesquisa input::-webkit-search-cancel-button {
-cursor: pointer;
+
+  cursor: pointer;
 }
 
 
@@ -1411,6 +1532,7 @@ cursor: pointer;
 ========================================================= */
 
 .content-list {
+
   display: flex;
 
   flex-direction: column;
@@ -1426,6 +1548,7 @@ cursor: pointer;
 .visitar-item,
 .comer-item,
 .ficar-item {
+
   display: flex;
 
   align-items: center;
@@ -1436,7 +1559,8 @@ cursor: pointer;
 
   padding: 10px;
 
-  background: var(--branco);
+  background:
+    var(--branco);
 
   border:
     1px solid
@@ -1465,7 +1589,9 @@ cursor: pointer;
 .visitar-item:hover,
 .comer-item:hover,
 .ficar-item:hover {
-  transform: translateY(-2px);
+
+  transform:
+    translateY(-2px);
 
   box-shadow:
     0 6px 18px
@@ -1480,7 +1606,9 @@ cursor: pointer;
 .visitar-item:active,
 .comer-item:active,
 .ficar-item:active {
-  transform: scale(.985);
+
+  transform:
+    scale(.985);
 }
 
 
@@ -1491,6 +1619,7 @@ cursor: pointer;
 .visitar-image,
 .comer-image,
 .ficar-image {
+
   flex:
     0 0
     clamp(
@@ -1517,12 +1646,14 @@ cursor: pointer;
 
   border-radius: 10px;
 
-  background: #e5e5e5;
+  background:
+    #e5e5e5;
 }
 
 .visitar-image img,
 .comer-image img,
 .ficar-image img {
+
   width: 100%;
   height: 100%;
 
@@ -1539,6 +1670,7 @@ cursor: pointer;
 .visitar-info,
 .comer-info,
 .ficar-info {
+
   flex: 1;
 
   min-width: 0;
@@ -1550,9 +1682,11 @@ cursor: pointer;
 .visitar-nome,
 .comer-nome,
 .ficar-nome {
+
   margin: 0;
 
-  color: var(--verde);
+  color:
+    var(--verde);
 
   font-size:
     clamp(
@@ -1569,6 +1703,7 @@ cursor: pointer;
 .visitar-local,
 .comer-endereco,
 .ficar-endereco {
+
   margin-top: 5px;
 
   color: #777;
@@ -1590,6 +1725,7 @@ cursor: pointer;
 }
 
 .visitar-resumo {
+
   margin:
     6px 0 0;
 
@@ -1612,6 +1748,7 @@ cursor: pointer;
 }
 
 .comer-categoria {
+
   margin-top: 4px;
 
   color: #888;
@@ -1627,14 +1764,17 @@ cursor: pointer;
 ========================================================= */
 
 .comer-horario {
+
   display: inline-flex;
 
   align-items: center;
+
   justify-content: center;
 
   width: fit-content;
 
   min-width: 88px;
+
   height: 25px;
 
   margin-top: 7px;
@@ -1644,7 +1784,8 @@ cursor: pointer;
 
   border-radius: 5px;
 
-  color: var(--branco);
+  color:
+    var(--branco);
 
   font-size: 10px;
 
@@ -1656,28 +1797,35 @@ cursor: pointer;
 }
 
 .comer-horario.aberto {
-  background: #24a148;
+
+  background:
+    #24a148;
 }
 
 .comer-horario.fechado {
-  background: #d32f2f;
+
+  background:
+    #d32f2f;
 }
 
 
 /* =========================================================
-   STATUS + AVALIAÇÃO DO LOCAL
+   STATUS + AVALIAÇÃO
 ========================================================= */
 
 .comer-status-linha {
+
   display: flex;
 
   align-items: center;
+
   justify-content: space-between;
 
   gap: 8px;
 }
 
 .avaliacao-local {
+
   display: inline-flex;
 
   align-items: center;
@@ -1688,6 +1836,7 @@ cursor: pointer;
 }
 
 .avaliacao-local img {
+
   width: 15px;
   height: 15px;
 
@@ -1695,6 +1844,7 @@ cursor: pointer;
 }
 
 .avaliacao-local span {
+
   color: #555;
 
   font-size: 12px;
@@ -1710,6 +1860,7 @@ cursor: pointer;
 ========================================================= */
 
 .nota-avaliacao {
+
   display: none;
 
   align-items: center;
@@ -1722,10 +1873,12 @@ cursor: pointer;
 }
 
 .nota-avaliacao.visivel {
+
   display: inline-flex;
 }
 
 .nota-avaliacao img {
+
   width: 17px;
   height: 17px;
 
@@ -1735,6 +1888,7 @@ cursor: pointer;
 }
 
 .nota-avaliacao span {
+
   color: #555;
 
   font-size: 12px;
@@ -1745,6 +1899,7 @@ cursor: pointer;
 }
 
 .card-status-avaliacao {
+
   display: flex;
 
   align-items: center;
@@ -1757,10 +1912,12 @@ cursor: pointer;
 }
 
 .card-status-avaliacao .comer-horario {
+
   margin-top: 0;
 }
 
 .card-status-avaliacao .nota-avaliacao {
+
   margin-top: 0;
 }
 
@@ -1770,6 +1927,7 @@ cursor: pointer;
 ========================================================= */
 
 .ficar-nota {
+
   display: flex;
 
   align-items: center;
@@ -1780,6 +1938,7 @@ cursor: pointer;
 }
 
 .ficar-nota img {
+
   width: 17px;
   height: 17px;
 
@@ -1789,6 +1948,7 @@ cursor: pointer;
 }
 
 .ficar-nota span {
+
   color: #555;
 
   font-size: 12px;
@@ -1806,6 +1966,7 @@ cursor: pointer;
 .visitar-arrow,
 .comer-arrow,
 .ficar-arrow {
+
   flex:
     0 0 34px;
 
@@ -1815,12 +1976,14 @@ cursor: pointer;
   display: flex;
 
   align-items: center;
+
   justify-content: center;
 }
 
 .visitar-arrow img,
 .comer-arrow img,
 .ficar-arrow img {
+
   width: 20px;
   height: 20px;
 
@@ -1838,6 +2001,7 @@ cursor: pointer;
 .comer-empty,
 .ficar-empty,
 .lista-vazia {
+
   padding: 20px;
 
   text-align: center;
@@ -1853,9 +2017,11 @@ cursor: pointer;
 ========================================================= */
 
 .mostrar-mais {
+
   display: flex;
 
   align-items: center;
+
   justify-content: center;
 
   width: 100%;
@@ -1871,9 +2037,11 @@ cursor: pointer;
 
   border-radius: 10px;
 
-  background: var(--branco);
+  background:
+    var(--branco);
 
-  color: var(--verde);
+  color:
+    var(--verde);
 
   font-family:
     "Roboto",
@@ -1894,13 +2062,18 @@ cursor: pointer;
 }
 
 .mostrar-mais:hover {
-  background: var(--verde);
 
-  color: var(--branco);
+  background:
+    var(--verde);
+
+  color:
+    var(--branco);
 }
 
 .mostrar-mais:active {
-  transform: scale(.98);
+
+  transform:
+    scale(.98);
 }
 
 
@@ -1909,14 +2082,17 @@ cursor: pointer;
 ========================================================= */
 
 .pessoas-section {
+
   overflow: hidden;
 }
 
 .pessoas-section .content-header {
+
   margin-bottom: 18px;
 }
 
 .pessoas-list {
+
   display: grid;
 
   grid-template-columns:
@@ -1939,6 +2115,7 @@ cursor: pointer;
 ========================================================= */
 
 .pessoa-item {
+
   position: relative;
 
   display: flex;
@@ -1952,7 +2129,8 @@ cursor: pointer;
   padding:
     10px 10px 13px;
 
-  background: #ffffff;
+  background:
+    var(--branco);
 
   border:
     1px solid
@@ -1967,7 +2145,8 @@ cursor: pointer;
 
   text-decoration: none;
 
-  color: var(--texto);
+  color:
+    var(--texto);
 
   box-shadow:
     0 4px 12px
@@ -1978,7 +2157,8 @@ cursor: pointer;
       .10
     );
 
-  transform: rotate(0deg);
+  transform:
+    rotate(0deg);
 
   transition:
     transform .25s ease,
@@ -1986,21 +2166,25 @@ cursor: pointer;
 }
 
 .pessoa-item:nth-child(3n + 1) {
+
   transform:
     rotate(-0.7deg);
 }
 
 .pessoa-item:nth-child(3n + 2) {
+
   transform:
     rotate(0.5deg);
 }
 
 .pessoa-item:nth-child(3n) {
+
   transform:
     rotate(-0.3deg);
 }
 
 .pessoa-image {
+
   position: relative;
 
   width: 100%;
@@ -2010,12 +2194,14 @@ cursor: pointer;
 
   overflow: hidden;
 
-  background: #eeeeee;
+  background:
+    #eeeeee;
 
   border-radius: 0;
 }
 
 .pessoa-image img {
+
   width: 100%;
   height: 100%;
 
@@ -2028,6 +2214,7 @@ cursor: pointer;
 }
 
 .pessoa-info {
+
   position: relative;
 
   padding:
@@ -2037,9 +2224,11 @@ cursor: pointer;
 }
 
 .pessoa-name {
+
   margin: 0;
 
-  color: #252525;
+  color:
+    #252525;
 
   font-size: 15px;
 
@@ -2049,6 +2238,7 @@ cursor: pointer;
 }
 
 .pessoa-category {
+
   display: block;
 
   margin-top: 5px;
@@ -2070,9 +2260,11 @@ cursor: pointer;
 ========================================================= */
 
 .pessoa-votos {
+
   display: flex;
 
   align-items: center;
+
   justify-content: center;
 
   gap: 13px;
@@ -2081,12 +2273,15 @@ cursor: pointer;
 }
 
 .pessoa-voto {
+
   display: inline-flex;
 
   align-items: center;
+
   justify-content: center;
 
   min-width: 35px;
+
   height: 30px;
 
   padding:
@@ -2094,7 +2289,8 @@ cursor: pointer;
 
   border: 0;
 
-  background: transparent;
+  background:
+    transparent;
 
   border-radius: 8px;
 
@@ -2109,6 +2305,7 @@ cursor: pointer;
 }
 
 .pessoa-voto:hover {
+
   background:
     rgba(
       0,
@@ -2119,10 +2316,13 @@ cursor: pointer;
 }
 
 .pessoa-voto:active {
-  transform: scale(.90);
+
+  transform:
+    scale(.90);
 }
 
 .pessoa-voto img {
+
   width: 21px;
   height: 21px;
 
@@ -2132,6 +2332,7 @@ cursor: pointer;
 }
 
 .pessoa-like-area {
+
   display: inline-flex;
 
   align-items: center;
@@ -2140,9 +2341,11 @@ cursor: pointer;
 }
 
 .pessoa-like-count {
+
   min-width: 13px;
 
-  color: var(--verde);
+  color:
+    var(--verde);
 
   font-size: 12px;
 
@@ -2154,6 +2357,7 @@ cursor: pointer;
 }
 
 .pessoa-voto.ativo {
+
   background:
     rgba(
       25,
@@ -2164,6 +2368,7 @@ cursor: pointer;
 }
 
 .pessoa-voto.deslike.ativo {
+
   background:
     rgba(
       211,
@@ -2174,10 +2379,12 @@ cursor: pointer;
 }
 
 .pessoa-voto.bloqueado {
+
   opacity: .55;
 }
 
 .pessoa-item:hover {
+
   transform:
     translateY(-5px)
     rotate(0deg);
@@ -2194,10 +2401,13 @@ cursor: pointer;
 
 .pessoa-item:hover
 .pessoa-image img {
-  transform: scale(1.035);
+
+  transform:
+    scale(1.035);
 }
 
 .pessoa-login-msg {
+
   width: 100%;
 
   margin-top: 9px;
@@ -2217,6 +2427,7 @@ cursor: pointer;
 ========================================================= */
 
 .contato-guia {
+
   margin-top: 45px;
 
   padding:
@@ -2224,6 +2435,7 @@ cursor: pointer;
 }
 
 .contato-guia-conteudo {
+
   position: relative;
 
   max-width: 760px;
@@ -2244,6 +2456,7 @@ cursor: pointer;
 }
 
 .contato-guia-conteudo::before {
+
   content: "";
 
   position: absolute;
@@ -2267,6 +2480,7 @@ cursor: pointer;
 }
 
 .contato-guia-conteudo::after {
+
   content: "";
 
   position: absolute;
@@ -2290,6 +2504,7 @@ cursor: pointer;
 }
 
 .contato-guia-tag {
+
   position: relative;
 
   z-index: 1;
@@ -2314,13 +2529,15 @@ cursor: pointer;
 }
 
 .contato-guia h2 {
+
   position: relative;
 
   z-index: 1;
 
   margin: 0;
 
-  color: var(--branco);
+  color:
+    var(--branco);
 
   font-size: 24px;
 
@@ -2328,6 +2545,7 @@ cursor: pointer;
 }
 
 .contato-guia p {
+
   position: relative;
 
   z-index: 1;
@@ -2351,6 +2569,7 @@ cursor: pointer;
 }
 
 .contato-guia-botao {
+
   position: relative;
 
   z-index: 1;
@@ -2358,6 +2577,7 @@ cursor: pointer;
   display: inline-flex;
 
   align-items: center;
+
   justify-content: center;
 
   gap: 10px;
@@ -2367,11 +2587,13 @@ cursor: pointer;
   padding:
     0 18px;
 
-  background: var(--branco);
+  background:
+    var(--branco);
 
   border-radius: 10px;
 
-  color: var(--verde);
+  color:
+    var(--verde);
 
   font-size: 13px;
 
@@ -2385,13 +2607,16 @@ cursor: pointer;
 }
 
 .contato-guia-botao:hover {
+
   transform:
     translateY(-2px);
 
-  background: #f2f2f2;
+  background:
+    #f2f2f2;
 }
 
 .contato-guia-botao img {
+
   width: 15px;
   height: 15px;
 
@@ -2404,6 +2629,7 @@ cursor: pointer;
 ========================================================= */
 
 footer {
+
   width: 100%;
 
   margin-top: 50px;
@@ -2434,15 +2660,12 @@ footer {
     );
 }
 
-
-/* =========================================================
-   LINKS DO RODAPÉ
-========================================================= */
-
 footer .footer-links {
+
   display: flex;
 
   align-items: center;
+
   justify-content: center;
 
   flex-wrap: wrap;
@@ -2454,7 +2677,6 @@ footer .footer-links {
 }
 
 footer .footer-links a {
-  position: relative;
 
   color:
     rgba(
@@ -2471,15 +2693,18 @@ footer .footer-links a {
   font-weight: 500;
 
   transition:
-    color 0.2s ease,
-    opacity 0.2s ease;
+    color .2s ease,
+    opacity .2s ease;
 }
 
 footer .footer-links a:hover {
-  color: #ffffff;
+
+  color:
+    var(--branco);
 }
 
 footer .footer-links span {
+
   color:
     rgba(
       255,
@@ -2494,6 +2719,7 @@ footer .footer-links span {
 }
 
 footer .footer-copy {
+
   margin: 0;
 
   color:
@@ -2516,11 +2742,13 @@ footer .footer-copy {
 
 @media (max-width: 699px) {
 
+
   /* =======================================================
      HERO MOBILE
   ======================================================= */
 
   .hero {
+
     width: 100%;
 
     height:
@@ -2537,6 +2765,7 @@ footer .footer-copy {
   }
 
   .hero-content {
+
     transform:
       translateY(-75px);
 
@@ -2545,6 +2774,7 @@ footer .footer-copy {
   }
 
   .hero-logo {
+
     width:
       clamp(
         145px,
@@ -2555,7 +2785,8 @@ footer .footer-copy {
     max-height: 150px;
   }
 
-  .hero-caption {
+  .hero-text {
+
     max-width: 82%;
 
     margin-top: 12px;
@@ -2568,16 +2799,13 @@ footer .footer-copy {
       );
   }
 
-  .hero-indicators {
-    bottom: 25px;
-  }
-
 
   /* =======================================================
      MAPA MOBILE
   ======================================================= */
 
   .map-filters {
+
     display: grid;
 
     grid-template-columns:
@@ -2601,6 +2829,7 @@ footer .footer-copy {
   }
 
   .map-filter {
+
     width: 100%;
 
     flex: none;
@@ -2609,6 +2838,7 @@ footer .footer-copy {
   }
 
   .filter-icon {
+
     width:
       clamp(
         50px,
@@ -2632,6 +2862,7 @@ footer .footer-copy {
   ======================================================= */
 
   .pessoas-list {
+
     display: grid;
 
     grid-template-columns:
@@ -2655,6 +2886,7 @@ footer .footer-copy {
   }
 
   .pessoa-item {
+
     width: 100%;
 
     padding:
@@ -2664,20 +2896,24 @@ footer .footer-copy {
   }
 
   .pessoa-image {
+
     aspect-ratio:
       1 / 1.08;
   }
 
   .pessoa-info {
+
     padding:
       8px 2px 0;
   }
 
   .pessoa-name {
+
     font-size: 11px;
   }
 
   .pessoa-category {
+
     margin-top: 4px;
 
     font-size: 7px;
@@ -2686,12 +2922,14 @@ footer .footer-copy {
   }
 
   .pessoa-votos {
+
     gap: 4px;
 
     margin-top: 5px;
   }
 
   .pessoa-voto {
+
     min-width: 26px;
 
     height: 26px;
@@ -2701,23 +2939,28 @@ footer .footer-copy {
   }
 
   .pessoa-voto img {
+
     width: 17px;
     height: 17px;
   }
 
   .pessoa-like-area {
+
     gap: 3px;
   }
 
   .pessoa-like-count {
+
     font-size: 9px;
   }
 
   .pessoa-login-msg {
+
     font-size: 7px;
   }
 
   #mostrarMaisPessoas {
+
     display: flex;
 
     width: 100%;
@@ -2731,12 +2974,14 @@ footer .footer-copy {
   ======================================================= */
 
   .contato-guia {
+
     margin-top: 30px;
 
     padding-bottom: 30px;
   }
 
   .contato-guia-conteudo {
+
     padding:
       28px 20px;
 
@@ -2744,10 +2989,12 @@ footer .footer-copy {
   }
 
   .contato-guia h2 {
+
     font-size: 21px;
   }
 
   .contato-guia p {
+
     font-size: 13px;
   }
 
@@ -2757,6 +3004,7 @@ footer .footer-copy {
   ======================================================= */
 
   .content-filters {
+
     display: flex;
 
     flex-wrap: wrap;
@@ -2767,6 +3015,7 @@ footer .footer-copy {
   }
 
   .comer-filtro {
+
     padding:
       8px 12px;
 
@@ -2775,20 +3024,24 @@ footer .footer-copy {
 
   .nota-avaliacao img,
   .ficar-nota img {
+
     width: 15px;
     height: 15px;
   }
 
   .nota-avaliacao span,
   .ficar-nota span {
+
     font-size: 10px;
   }
 
   .card-status-avaliacao {
+
     gap: 6px;
   }
 
   .comer-horario {
+
     min-width: 78px;
   }
 
@@ -2798,6 +3051,7 @@ footer .footer-copy {
   ======================================================= */
 
   footer {
+
     margin-top: 40px;
 
     padding:
@@ -2805,6 +3059,7 @@ footer .footer-copy {
   }
 
   footer .footer-links {
+
     gap:
       10px 14px;
 
@@ -2812,12 +3067,15 @@ footer .footer-copy {
   }
 
   footer .footer-links a {
+
     font-size: 12px;
   }
 
   footer .footer-copy {
+
     font-size: 11px;
   }
+
 }
 
 
@@ -2828,56 +3086,70 @@ footer .footer-copy {
 @media (max-width: 350px) {
 
   :root {
+
     --altura-navbar: 70px;
   }
 
   .hero {
+
     height: 360px;
 
     min-height: 360px;
   }
 
   .hero-content {
+
     transform:
       translateY(-65px);
   }
 
   .hero-logo {
+
     width: 140px;
   }
 
-  .hero-caption {
+  .hero-text {
+
     font-size: 11px;
   }
 
   .route-card {
+
     margin-left: 12px;
+
     margin-right: 12px;
 
     padding-left: 10px;
+
     padding-right: 10px;
   }
 
   .route-icon {
+
     width: 38px;
+
     height: 38px;
 
     flex-basis: 38px;
   }
 
   .route-text strong {
+
     font-size: 13px;
   }
 
   .route-text span {
+
     font-size: 10px;
   }
 
   .quick-grid {
+
     gap: 8px;
   }
 
   .quick-box {
+
     padding:
       5px 3px;
 
@@ -2885,6 +3157,7 @@ footer .footer-copy {
   }
 
   .quick-box img {
+
     width: 30px;
     height: 30px;
 
@@ -2892,72 +3165,90 @@ footer .footer-copy {
   }
 
   .quick-box span {
+
     font-size: 8px;
   }
 
   .home-map {
+
     min-height: 260px;
 
     height: 75vw;
   }
 
   .map-filters {
+
     gap:
       12px 4px;
   }
 
   .filter-icon {
+
     width: 48px;
+
     height: 48px;
   }
 
   .filter-icon img {
+
     width: 24px;
+
     height: 24px;
   }
 
   .map-filter {
+
     font-size: 8px;
   }
 
   .pessoas-list {
+
     gap:
       12px 5px;
   }
 
   .pessoa-item {
+
     padding:
       5px 5px 8px;
   }
 
   .pessoa-name {
+
     font-size: 9px;
   }
 
   .pessoa-category {
+
     font-size: 6px;
   }
 
   .pessoa-votos {
+
     margin-top: 4px;
 
     gap: 1px;
   }
 
   .pessoa-voto {
+
     min-width: 22px;
 
     height: 23px;
   }
 
   .pessoa-voto img {
+
     width: 15px;
+
     height: 15px;
   }
 
   .pessoa-like-count {
+
     font-size: 8px;
   }
+
 }
 
 
@@ -2968,35 +3259,45 @@ footer .footer-copy {
 @media (min-width: 500px) and (max-width: 699px) {
 
   .quick-grid {
+
     gap: 16px;
   }
 
   .quick-box img {
+
     width: 48px;
+
     height: 48px;
   }
 
   .pessoa-item {
+
     padding:
       9px 9px 12px;
   }
 
   .pessoa-name {
+
     font-size: 14px;
   }
 
   .pessoa-category {
+
     font-size: 8px;
   }
 
   .pessoa-voto img {
+
     width: 19px;
+
     height: 19px;
   }
 
   .pessoa-like-count {
+
     font-size: 10px;
   }
+
 }
 
 
@@ -3007,14 +3308,17 @@ footer .footer-copy {
 @media (min-width: 700px) {
 
   body {
+
     padding:
       30px 0
       var(--altura-navbar);
 
-    background: #e7e4dc;
+    background:
+      #e7e4dc;
   }
 
   .page {
+
     min-height:
       calc(
         100vh - 60px
@@ -3033,6 +3337,7 @@ footer .footer-copy {
   }
 
   .quick-grid {
+
     grid-template-columns:
       repeat(
         6,
@@ -3049,6 +3354,7 @@ footer .footer-copy {
   ======================================================= */
 
   .hero {
+
     height:
       clamp(
         450px,
@@ -3060,6 +3366,7 @@ footer .footer-copy {
   }
 
   .hero-content {
+
     transform:
       translateY(-100px);
   }
@@ -3070,6 +3377,7 @@ footer .footer-copy {
   ======================================================= */
 
   .home-map {
+
     height:
       clamp(
         350px,
@@ -3084,47 +3392,57 @@ footer .footer-copy {
   ======================================================= */
 
   .content-list {
+
     gap: 14px;
   }
 
   .visitar-item,
   .comer-item,
   .ficar-item {
+
     padding: 12px;
   }
 
   .visitar-image,
   .comer-image,
   .ficar-image {
+
     flex-basis: 110px;
 
     width: 110px;
+
     height: 110px;
   }
 
   .visitar-info,
   .comer-info,
   .ficar-info {
+
     padding-left: 16px;
   }
 
   .visitar-arrow,
   .comer-arrow,
   .ficar-arrow {
+
     flex-basis: 42px;
 
     width: 42px;
+
     height: 42px;
   }
 
   .visitar-arrow img,
   .comer-arrow img,
   .ficar-arrow img {
+
     width: 23px;
+
     height: 23px;
   }
 
   .comer-horario {
+
     min-width: 95px;
 
     height: 27px;
@@ -3138,11 +3456,14 @@ footer .footer-copy {
   }
 
   .status-filtro {
+
     font-size: 13px;
   }
 
   .ficar-nota img {
+
     width: 18px;
+
     height: 18px;
   }
 
@@ -3152,9 +3473,8 @@ footer .footer-copy {
   ======================================================= */
 
   .map-filters {
-    justify-content: center;
 
-    grid-template-columns: none;
+    justify-content: center;
 
     flex-wrap: wrap;
 
@@ -3162,12 +3482,15 @@ footer .footer-copy {
   }
 
   .map-filter {
+
     flex:
       0 0 72px;
   }
 
   .filter-icon {
+
     width: 60px;
+
     height: 60px;
   }
 
@@ -3177,6 +3500,7 @@ footer .footer-copy {
   ======================================================= */
 
   .pessoas-list {
+
     grid-template-columns:
       repeat(
         4,
@@ -3190,18 +3514,23 @@ footer .footer-copy {
   }
 
   .pessoa-item {
+
     padding:
       10px 10px 13px;
   }
 
   .pessoa-name {
+
     font-size: 15px;
   }
 
   .pessoa-voto img {
+
     width: 21px;
+
     height: 21px;
   }
+
 }
 
 
@@ -3212,40 +3541,50 @@ footer .footer-copy {
 @media (min-width: 1000px) {
 
   .page {
+
     max-width: 1100px;
   }
 
   .hero {
+
     height: 600px;
 
     min-height: 600px;
   }
 
   .hero-content {
+
     transform:
       translateY(-100px);
   }
 
   .section {
+
     padding-left: 35px;
+
     padding-right: 35px;
   }
 
   .content-section,
   .home-map-section {
+
     padding-left: 35px;
+
     padding-right: 35px;
   }
 
   .quick-grid {
+
     gap: 18px;
   }
 
   .home-map {
+
     height: 480px;
   }
 
   .pessoas-list {
+
     grid-template-columns:
       repeat(
         4,
@@ -3259,13 +3598,16 @@ footer .footer-copy {
   }
 
   .pessoa-item {
+
     padding:
       11px 11px 14px;
   }
 
   .pessoa-name {
+
     font-size: 15px;
   }
+
 }
 
 
@@ -3276,10 +3618,12 @@ footer .footer-copy {
 @media (min-width: 1400px) {
 
   .page {
+
     max-width: 1200px;
   }
 
   .hero {
+
     height: 650px;
 
     min-height: 650px;
@@ -3288,9 +3632,12 @@ footer .footer-copy {
   .section,
   .content-section,
   .home-map-section {
+
     padding-left: 45px;
+
     padding-right: 45px;
   }
+
 }
 
 
@@ -3301,14 +3648,16 @@ footer .footer-copy {
 @media (prefers-reduced-motion: reduce) {
 
   html {
+
     scroll-behavior: auto;
   }
 
   .hero-slide,
-  .hero-caption,
   .pessoa-item,
   .pessoa-image img,
   .quick-box {
+
     transition: none;
   }
+
 }
