@@ -1,35 +1,54 @@
 /* =========================================================
-ANDRELÂNDIA — GUIA TURÍSTICO
-LOCAL.JS
+   ANDRELÂNDIA — GUIA TURÍSTICO
+
+   LOCAL.JS
+
+   RESPONSABILIDADES:
+   - Carregar local
+   - Galeria
+   - Mapa
+   - Google Maps
+   - Instagram
+   - WhatsApp
+   - Avaliações
+   - Comentários
+
+   AUTENTICAÇÃO:
+   - NÃO fica mais neste arquivo.
+   - Utiliza o login.js compartilhado.
 ========================================================= */
+
 
 /* =========================================================
-SUPABASE
+   SUPABASE COMPARTILHADO
 ========================================================= */
 
-const SUPABASE_URL =
-"https://xdmbkflufsfqziixzpxc.supabase.co";
-
-const SUPABASE_KEY =
-"sb_publishable_dvwNkLDf3oZrCqvZ5uAaRA_VsfiuZFy";
+/*
+ * O login.js é carregado antes deste arquivo.
+ *
+ * Ele disponibiliza:
+ *
+ * window.supabaseLoginClient
+ *
+ * Dessa forma, index.html e local.html utilizam
+ * o mesmo cliente Supabase.
+ */
 
 const supabaseClient =
-window.supabase.createClient(
-SUPABASE_URL,
-SUPABASE_KEY
-);
+  window.supabaseLoginClient;
+
 
 /* =========================================================
-VARIÁVEIS
+   VARIÁVEIS
 ========================================================= */
 
 const params =
-new URLSearchParams(
-window.location.search
-);
+  new URLSearchParams(
+    window.location.search
+  );
 
 const idLocal =
-params.get("id");
+  params.get("id");
 
 let localAtual = null;
 
@@ -39,496 +58,643 @@ let notaSelecionada = 0;
 
 let avaliacaoAtual = null;
 
+
 /* =========================================================
-VOLTAR
+   VOLTAR
 ========================================================= */
 
 function voltarPagina() {
 
-if (
-document.referrer &&
-document.referrer.includes(
-window.location.hostname
-)
-) {
+  if (
+    document.referrer &&
+    document.referrer.includes(
+      window.location.hostname
+    )
+  ) {
 
-history.back();
+    history.back();
 
-return;
+    return;
+
+  }
+
+  window.location.href =
+    "../index.html";
 
 }
 
-window.location.href =
-"../index.html";
-}
 
 /* =========================================================
-SEGURANÇA
+   SEGURANÇA
 ========================================================= */
 
 function escaparHTML(valor) {
-  if (valor === null || valor === undefined) {
+
+  if (
+    valor === null ||
+    valor === undefined
+  ) {
+
     return "";
+
   }
 
   return String(valor)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
+
+    .replace(
+      /&/g,
+      "&amp;"
+    )
+
+    .replace(
+      /</g,
+      "&lt;"
+    )
+
+    .replace(
+      />/g,
+      "&gt;"
+    )
+
+    .replace(
+      /"/g,
+      "&quot;"
+    )
+
+    .replace(
+      /'/g,
+      "&#039;"
+    );
+
 }
 
+
 /* =========================================================
-CAMINHO DAS IMAGENS
+   CAMINHO DAS IMAGENS
 ========================================================= */
 
-function corrigirCaminhoImagem(caminho) {
-
-if (!caminho) {
-return "";
-}
-
-caminho =
-String(caminho).trim();
-
-if (
-caminho.startsWith("http://") ||
-caminho.startsWith("https://") ||
-caminho.startsWith("data:")
+function corrigirCaminhoImagem(
+  caminho
 ) {
-return caminho;
+
+  if (!caminho) {
+
+    return "";
+
+  }
+
+  caminho =
+    String(caminho).trim();
+
+
+  if (
+    caminho.startsWith("http://") ||
+    caminho.startsWith("https://") ||
+    caminho.startsWith("data:")
+  ) {
+
+    return caminho;
+
+  }
+
+
+  if (
+    caminho.startsWith("/")
+  ) {
+
+    return caminho;
+
+  }
+
+
+  if (
+    caminho.startsWith("./img/")
+  ) {
+
+    return (
+      "../" +
+      caminho.substring(2)
+    );
+
+  }
+
+
+  if (
+    caminho.startsWith("img/")
+  ) {
+
+    return (
+      "../" +
+      caminho
+    );
+
+  }
+
+
+  return caminho;
+
 }
 
-if (
-caminho.startsWith("/")
-) {
-return caminho;
-}
-
-if (
-caminho.startsWith("./img/")
-) {
-return "../" +
-caminho.substring(2);
-}
-
-if (
-caminho.startsWith("img/")
-) {
-return "../" +
-caminho;
-}
-
-return caminho;
-}
 
 /* =========================================================
-CARREGAR LOCAL
+   CARREGAR LOCAL
 ========================================================= */
 
 async function carregarLocal() {
 
-if (!idLocal) {
+  if (!idLocal) {
 
-mostrarErro(
-  "Local não informado."
-);
+    mostrarErro(
+      "Local não informado."
+    );
 
-return;
+    return;
+
+  }
+
+
+  try {
+
+    const [
+      locaisResponse,
+      comerciosResponse,
+      hospedagemResponse
+    ] = await Promise.all([
+
+      fetch(
+        "../DATA/locais.json"
+      ),
+
+      fetch(
+        "../DATA/comercios.json"
+      ),
+
+      fetch(
+        "../DATA/hospedagem.json"
+      )
+
+    ]);
+
+
+    if (
+      !locaisResponse.ok
+    ) {
+
+      throw new Error(
+        "Não foi possível carregar locais.json"
+      );
+
+    }
+
+
+    if (
+      !comerciosResponse.ok
+    ) {
+
+      throw new Error(
+        "Não foi possível carregar comercios.json"
+      );
+
+    }
+
+
+    if (
+      !hospedagemResponse.ok
+    ) {
+
+      throw new Error(
+        "Não foi possível carregar hospedagem.json"
+      );
+
+    }
+
+
+    const locais =
+      await locaisResponse.json();
+
+
+    const comercios =
+      await comerciosResponse.json();
+
+
+    const hospedagens =
+      await hospedagemResponse.json();
+
+
+    const todos = [
+
+      ...(
+        Array.isArray(locais)
+          ? locais
+          : []
+      ),
+
+      ...(
+        Array.isArray(comercios)
+          ? comercios
+          : []
+      ),
+
+      ...(
+        Array.isArray(hospedagens)
+          ? hospedagens
+          : []
+      )
+
+    ];
+
+
+    localAtual =
+      todos.find(
+        item =>
+          String(item.id) ===
+          String(idLocal)
+      );
+
+
+    if (!localAtual) {
+
+      console.error(
+        "ID não encontrado:",
+        idLocal
+      );
+
+      mostrarErro(
+        "Local não encontrado."
+      );
+
+      return;
+
+    }
+
+
+    console.log(
+      "Local carregado:",
+      localAtual
+    );
+
+
+    preencherPagina(
+      localAtual
+    );
+
+
+    await carregarAvaliacoes();
+
+    /*
+     * O login.js é responsável por verificar
+     * a sessão do usuário.
+     *
+     * Aqui verificamos apenas a avaliação
+     * específica desse usuário.
+     */
+
+    await verificarAvaliacaoUsuario();
+
+
+  } catch (erro) {
+
+    console.error(
+      "Erro ao carregar local:",
+      erro
+    );
+
+    mostrarErro(
+      "Não foi possível carregar as informações deste lugar."
+    );
+
+  }
 
 }
 
-try {
-
-const [
-  locaisResponse,
-  comerciosResponse,
-  hospedagemResponse
-] = await Promise.all([
-
-  fetch("../DATA/locais.json"),
-
-  fetch("../DATA/comercios.json"),
-
-  fetch("../DATA/hospedagem.json")
-
-]);
-
-
-if (!locaisResponse.ok) {
-
-  throw new Error(
-    "Não foi possível carregar locais.json"
-  );
-
-}
-
-
-if (!comerciosResponse.ok) {
-
-  throw new Error(
-    "Não foi possível carregar comercios.json"
-  );
-
-}
-
-
-if (!hospedagemResponse.ok) {
-
-  throw new Error(
-    "Não foi possível carregar hospedagem.json"
-  );
-
-}
-
-
-const locais =
-  await locaisResponse.json();
-
-
-const comercios =
-  await comerciosResponse.json();
-
-
-const hospedagens =
-  await hospedagemResponse.json();
-
-
-const todos = [
-
-  ...(Array.isArray(locais)
-    ? locais
-    : []),
-
-  ...(Array.isArray(comercios)
-    ? comercios
-    : []),
-
-  ...(Array.isArray(hospedagens)
-    ? hospedagens
-    : [])
-
-];
-
-
-localAtual =
-  todos.find(
-    item =>
-      String(item.id) ===
-      String(idLocal)
-  );
-
-
-if (!localAtual) {
-
-  console.error(
-    "ID não encontrado:",
-    idLocal
-  );
-
-  mostrarErro(
-    "Local não encontrado."
-  );
-
-  return;
-}
-
-
-console.log(
-  "Local carregado:",
-  localAtual
-);
-
-
-preencherPagina(
-  localAtual
-);
-
-
-await carregarAvaliacoes();
-
-await verificarUsuario();
-
-} catch (erro) {
-
-console.error(
-  "Erro ao carregar local:",
-  erro
-);
-
-mostrarErro(
-  "Não foi possível carregar as informações deste lugar."
-);
-
-}
-
-}
 
 /* =========================================================
-PREENCHER PÁGINA
+   PREENCHER PÁGINA
 ========================================================= */
 
 function preencherPagina(item) {
 
-document.title =
-document.title = `${item.nome || "Local"} — Guia Turístico de Andrelândia`;
-const nomeElemento =
-document.getElementById(
-"nomeLocal"
-);
+  document.title =
+    `${item.nome || "Local"} — Guia Turístico de Andrelândia`;
 
-if (nomeElemento) {
 
-nomeElemento.textContent =
-  item.nome || "Local";
+  const nomeElemento =
+    document.getElementById(
+      "nomeLocal"
+    );
 
-}
 
-const categoriaElemento =
-document.getElementById(
-"categoriaLocal"
-);
+  if (nomeElemento) {
 
-if (categoriaElemento) {
+    nomeElemento.textContent =
+      item.nome || "Local";
 
-categoriaElemento.textContent =
-  item.categoria || "LOCAL";
+  }
 
-}
 
-const descricao =
-item.descricao ||
-item.historia ||
-"Conheça este lugar em Andrelândia.";
+  const categoriaElemento =
+    document.getElementById(
+      "categoriaLocal"
+    );
 
-const descricaoElemento =
-document.getElementById(
-"descricaoLocal"
-);
 
-if (descricaoElemento) {
+  if (categoriaElemento) {
 
-descricaoElemento.textContent =
-  descricao;
+    categoriaElemento.textContent =
+      item.categoria || "LOCAL";
 
-}
+  }
 
-const historiaElemento =
-document.getElementById(
-"historiaLocal"
-);
 
-if (historiaElemento) {
+  const descricao =
+    item.descricao ||
+    item.historia ||
+    "Conheça este lugar em Andrelândia.";
 
-if (item.historia) {
 
-  historiaElemento.textContent =
-    item.historia;
+  const descricaoElemento =
+    document.getElementById(
+      "descricaoLocal"
+    );
 
-} else {
 
-  historiaElemento.parentElement.style.display =
-    "none";
+  if (descricaoElemento) {
 
-}
+    descricaoElemento.textContent =
+      descricao;
 
-}
+  }
 
-const curiosidadesElemento =
-document.getElementById(
-"curiosidadesLocal"
-);
 
-if (curiosidadesElemento) {
+  const historiaElemento =
+    document.getElementById(
+      "historiaLocal"
+    );
 
-if (item.curiosidades) {
 
-  curiosidadesElemento.textContent =
-    item.curiosidades;
+  if (historiaElemento) {
 
-} else {
+    if (item.historia) {
 
-  curiosidadesElemento.parentElement.style.display =
-    "none";
+      historiaElemento.textContent =
+        item.historia;
 
-}
+    } else {
 
-}
+      if (
+        historiaElemento.parentElement
+      ) {
 
-const horarioElemento =
-document.getElementById(
-"horarioLocal"
-);
+        historiaElemento.parentElement.style.display =
+          "none";
 
-if (horarioElemento) {
-
-horarioElemento.innerHTML =
-  formatarHorario(
-    item.horario
-  );
-
-}
-
-const enderecoElemento =
-document.getElementById(
-"enderecoLocal"
-);
-
-if (enderecoElemento) {
-
-enderecoElemento.textContent =
-  item.endereco ||
-  item.endereço ||
-  "Endereço não informado";
-
-}
-
-const entradaElemento =
-document.getElementById(
-"entradaLocal"
-);
-
-if (entradaElemento) {
-
-entradaElemento.textContent =
-  item.entrada ||
-  "Não informado";
-
-}
-
-const telefoneElemento =
-document.getElementById(
-"telefoneLocal"
-);
-
-if (telefoneElemento) {
-
-if (item.telefone) {
-
-  telefoneElemento.textContent =
-    item.telefone;
-
-} else {
-
-  telefoneElemento.parentElement.style.display =
-    "none";
-
-}
-
-}
-
-const siteElemento =
-document.getElementById(
-"siteLocal"
-);
-
-if (siteElemento) {
-
-if (item.site) {
-
-  siteElemento.href =
-    item.site;
-
-  siteElemento.style.display =
-    "flex";
-
-} else {
-
-  siteElemento.style.display =
-    "none";
-
-}
-
-}
-
-configurarInstagram(item);
-
-configurarWhatsApp(item);
-
-configurarGaleria(item);
-
-configurarMapa(item);
-
-configurarGoogleMaps(item);
-
-}
-
-/* =========================================================
-HORÁRIO
-========================================================= */
-
-function formatarHorario(horario) {
-
-if (!horario) {
-
-return "Horário não informado";
-
-}
-
-if (
-typeof horario === "string"
-) {
-
-return escaparHTML(
-  horario
-);
-
-}
-
-if (
-typeof horario === "object"
-) {
-
-return Object.entries(
-  horario
-)
-  .map(
-    ([dia, hora]) => {
-
-      return `
-        <div>
-          <strong>
-            ${escaparHTML(dia)}:
-          </strong>
-          ${escaparHTML(hora)}
-        </div>
-      `;
+      }
 
     }
-  )
-  .join("");
+
+  }
+
+
+  const curiosidadesElemento =
+    document.getElementById(
+      "curiosidadesLocal"
+    );
+
+
+  if (curiosidadesElemento) {
+
+    if (item.curiosidades) {
+
+      curiosidadesElemento.textContent =
+        item.curiosidades;
+
+    } else {
+
+      if (
+        curiosidadesElemento.parentElement
+      ) {
+
+        curiosidadesElemento.parentElement.style.display =
+          "none";
+
+      }
+
+    }
+
+  }
+
+
+  const horarioElemento =
+    document.getElementById(
+      "horarioLocal"
+    );
+
+
+  if (horarioElemento) {
+
+    horarioElemento.innerHTML =
+      formatarHorario(
+        item.horario
+      );
+
+  }
+
+
+  const enderecoElemento =
+    document.getElementById(
+      "enderecoLocal"
+    );
+
+
+  if (enderecoElemento) {
+
+    enderecoElemento.textContent =
+      item.endereco ||
+      item.endereço ||
+      "Endereço não informado";
+
+  }
+
+
+  const entradaElemento =
+    document.getElementById(
+      "entradaLocal"
+    );
+
+
+  if (entradaElemento) {
+
+    entradaElemento.textContent =
+      item.entrada ||
+      "Não informado";
+
+  }
+
+
+  const telefoneElemento =
+    document.getElementById(
+      "telefoneLocal"
+    );
+
+
+  if (telefoneElemento) {
+
+    if (item.telefone) {
+
+      telefoneElemento.textContent =
+        item.telefone;
+
+    } else {
+
+      if (
+        telefoneElemento.parentElement
+      ) {
+
+        telefoneElemento.parentElement.style.display =
+          "none";
+
+      }
+
+    }
+
+  }
+
+
+  const siteElemento =
+    document.getElementById(
+      "siteLocal"
+    );
+
+
+  if (siteElemento) {
+
+    if (item.site) {
+
+      siteElemento.href =
+        item.site;
+
+      siteElemento.style.display =
+        "flex";
+
+    } else {
+
+      siteElemento.style.display =
+        "none";
+
+    }
+
+  }
+
+
+  configurarInstagram(item);
+
+  configurarWhatsApp(item);
+
+  configurarGaleria(item);
+
+  configurarMapa(item);
+
+  configurarGoogleMaps(item);
 
 }
 
-return "Horário não informado";
-
-}
 
 /* =========================================================
-INSTAGRAM
+   HORÁRIO
 ========================================================= */
 
-function configurarInstagram(item) {
+function formatarHorario(
+  horario
+) {
+
+  if (!horario) {
+
+    return "Horário não informado";
+
+  }
+
+
+  if (
+    typeof horario === "string"
+  ) {
+
+    return escaparHTML(
+      horario
+    );
+
+  }
+
+
+  if (
+    typeof horario === "object"
+  ) {
+
+    return Object.entries(
+      horario
+    )
+
+      .map(
+        ([dia, hora]) => {
+
+          return `
+
+            <div>
+
+              <strong>
+                ${escaparHTML(dia)}:
+              </strong>
+
+              ${escaparHTML(hora)}
+
+            </div>
+
+          `;
+
+        }
+      )
+
+      .join("");
+
+  }
+
+
+  return "Horário não informado";
+
+}
+
+
+/* =========================================================
+   INSTAGRAM
+========================================================= */
+
+function configurarInstagram(
+  item
+) {
 
   const link =
     document.getElementById(
       "instagramLocal"
     );
 
+
   const nome =
     document.getElementById(
       "instagramNome"
     );
 
+
   if (!link) {
+
     return;
+
   }
+
 
   const instagram =
     String(
       item.instagram || ""
     ).trim();
+
 
   if (!instagram) {
 
@@ -536,19 +702,23 @@ function configurarInstagram(item) {
       "none";
 
     return;
+
   }
 
-  let url = instagram;
+
+  let url =
+    instagram;
+
 
   /*
-    Aceita tanto:
-
-    https://www.instagram.com/vagaolanches_/
-
-    quanto:
-
-    vagaolanches_
-  */
+   * Aceita:
+   *
+   * https://www.instagram.com/vagaolanches_/
+   *
+   * ou:
+   *
+   * vagaolanches_
+   */
 
   if (
     !/^https?:\/\//i.test(
@@ -561,10 +731,6 @@ function configurarInstagram(item) {
 
   }
 
-  /*
-    Texto visual do botão.
-    Nunca mostra a URL.
-  */
 
   if (nome) {
 
@@ -572,6 +738,7 @@ function configurarInstagram(item) {
       "Instagram";
 
   }
+
 
   link.href =
     url;
@@ -586,30 +753,40 @@ function configurarInstagram(item) {
     "flex";
 
 }
+
+
 /* =========================================================
-WHATSAPP
+   WHATSAPP
 ========================================================= */
 
-function configurarWhatsApp(item) {
+function configurarWhatsApp(
+  item
+) {
 
   const link =
     document.getElementById(
       "whatsappLocal"
     );
 
+
   const nome =
     document.getElementById(
       "whatsappNome"
     );
 
+
   if (!link) {
+
     return;
+
   }
+
 
   const telefone =
     item.telefone ||
     item.whatsapp ||
     "";
+
 
   if (
     !String(telefone).trim()
@@ -619,11 +796,17 @@ function configurarWhatsApp(item) {
       "none";
 
     return;
+
   }
+
 
   let numero =
     String(telefone)
-      .replace(/\D/g, "");
+      .replace(
+        /\D/g,
+        ""
+      );
+
 
   if (!numero) {
 
@@ -631,7 +814,9 @@ function configurarWhatsApp(item) {
       "none";
 
     return;
+
   }
+
 
   if (
     !numero.startsWith("55")
@@ -642,12 +827,14 @@ function configurarWhatsApp(item) {
 
   }
 
+
   if (nome) {
 
     nome.textContent =
       "WhatsApp";
 
   }
+
 
   link.href =
     `https://wa.me/${numero}`;
@@ -660,259 +847,316 @@ function configurarWhatsApp(item) {
 
   link.style.display =
     "flex";
+
 }
+
 
 /* =========================================================
-GALERIA
+   GALERIA
 ========================================================= */
 
-function configurarGaleria(item) {
-
-const principal =
-document.getElementById(
-"fotoPrincipal"
-);
-
-const miniaturas =
-document.getElementById(
-"miniaturas"
-);
-
-if (
-!principal ||
-!miniaturas
+function configurarGaleria(
+  item
 ) {
 
-return;
-
-}
-
-let fotos = [];
-
-if (item.capa) {
-
-const capa =
-  corrigirCaminhoImagem(
-    item.capa
-  );
-
-if (capa) {
-
-  fotos.push(capa);
-
-}
-
-}
-
-if (
-Array.isArray(
-item.galeria
-)
-) {
-
-item.galeria.forEach(
-  foto => {
-
-    const caminho =
-      corrigirCaminhoImagem(
-        foto
-      );
-
-    if (
-      caminho &&
-      !fotos.includes(
-        caminho
-      )
-    ) {
-
-      fotos.push(
-        caminho
-      );
-
-    }
-
-  }
-);
-
-}
-
-if (
-Array.isArray(
-item.fotos
-)
-) {
-
-item.fotos.forEach(
-  foto => {
-
-    const caminho =
-      corrigirCaminhoImagem(
-        foto
-      );
-
-    if (
-      caminho &&
-      !fotos.includes(
-        caminho
-      )
-    ) {
-
-      fotos.push(
-        caminho
-      );
-
-    }
-
-  }
-);
-
-}
-
-if (
-fotos.length === 0
-) {
-
-principal.style.display =
-  "none";
-
-miniaturas.innerHTML = `
-
-  <div class="empty-comments">
-    Nenhuma foto disponível.
-  </div>
-
-`;
-
-return;
-
-}
-
-principal.style.display =
-"";
-
-principal.src =
-fotos[0];
-
-principal.alt =
-item.nome ||
-"Foto do local";
-
-principal.onerror =
-() => {
-
-  console.error(
-    "Erro ao carregar imagem:",
-    principal.src
-  );
-
-};
-
-miniaturas.innerHTML =
-"";
-
-fotos.forEach(
-(foto, index) => {
-
-  const button =
-    document.createElement(
-      "button"
+  const principal =
+    document.getElementById(
+      "fotoPrincipal"
     );
 
 
-  button.className =
-    "thumbnail";
+  const miniaturas =
+    document.getElementById(
+      "miniaturas"
+    );
 
 
   if (
-    index === 0
+    !principal ||
+    !miniaturas
   ) {
 
-    button.classList.add(
-      "active"
+    return;
+
+  }
+
+
+  let fotos = [];
+
+
+  /*
+   * CAPA
+   */
+
+  if (item.capa) {
+
+    const capa =
+      corrigirCaminhoImagem(
+        item.capa
+      );
+
+
+    if (capa) {
+
+      fotos.push(
+        capa
+      );
+
+    }
+
+  }
+
+
+  /*
+   * GALERIA
+   */
+
+  if (
+    Array.isArray(
+      item.galeria
+    )
+  ) {
+
+    item.galeria.forEach(
+      foto => {
+
+        const caminho =
+          corrigirCaminhoImagem(
+            foto
+          );
+
+
+        if (
+          caminho &&
+          !fotos.includes(
+            caminho
+          )
+        ) {
+
+          fotos.push(
+            caminho
+          );
+
+        }
+
+      }
     );
 
   }
 
 
-  const imagem =
-    document.createElement(
-      "img"
+  /*
+   * FOTOS
+   */
+
+  if (
+    Array.isArray(
+      item.fotos
+    )
+  ) {
+
+    item.fotos.forEach(
+      foto => {
+
+        const caminho =
+          corrigirCaminhoImagem(
+            foto
+          );
+
+
+        if (
+          caminho &&
+          !fotos.includes(
+            caminho
+          )
+        ) {
+
+          fotos.push(
+            caminho
+          );
+
+        }
+
+      }
     );
 
-  imagem.src =
-    foto;
-
-  imagem.alt =
-    `Foto ${index + 1}`;
+  }
 
 
-  button.appendChild(
-    imagem
-  );
+  /*
+   * SEM FOTOS
+   */
+
+  if (
+    fotos.length === 0
+  ) {
+
+    principal.style.display =
+      "none";
 
 
-  button.addEventListener(
-    "click",
+    miniaturas.innerHTML = `
+
+      <div class="empty-comments">
+        Nenhuma foto disponível.
+      </div>
+
+    `;
+
+    return;
+
+  }
+
+
+  /*
+   * FOTO PRINCIPAL
+   */
+
+  principal.style.display =
+    "";
+
+  principal.src =
+    fotos[0];
+
+  principal.alt =
+    item.nome ||
+    "Foto do local";
+
+
+  principal.onerror =
     () => {
 
-      principal.src =
-        foto;
+      console.error(
+        "Erro ao carregar imagem:",
+        principal.src
+      );
+
+    };
 
 
-      document
-        .querySelectorAll(
-          ".thumbnail"
-        )
-        .forEach(
-          item =>
-            item.classList.remove(
-              "active"
-            )
+  /*
+   * MINIATURAS
+   */
+
+  miniaturas.innerHTML =
+    "";
+
+
+  fotos.forEach(
+    (
+      foto,
+      index
+    ) => {
+
+      const button =
+        document.createElement(
+          "button"
         );
 
 
-      button.classList.add(
-        "active"
+      button.className =
+        "thumbnail";
+
+
+      if (
+        index === 0
+      ) {
+
+        button.classList.add(
+          "active"
+        );
+
+      }
+
+
+      const imagem =
+        document.createElement(
+          "img"
+        );
+
+
+      imagem.src =
+        foto;
+
+      imagem.alt =
+        `Foto ${index + 1}`;
+
+
+      button.appendChild(
+        imagem
+      );
+
+
+      button.addEventListener(
+        "click",
+        () => {
+
+          principal.src =
+            foto;
+
+
+          document
+            .querySelectorAll(
+              ".thumbnail"
+            )
+            .forEach(
+              item =>
+                item.classList.remove(
+                  "active"
+                )
+            );
+
+
+          button.classList.add(
+            "active"
+          );
+
+        }
+      );
+
+
+      miniaturas.appendChild(
+        button
       );
 
     }
   );
 
-
-  miniaturas.appendChild(
-    button
-  );
-
 }
 
-);
-
-}
 
 /* =========================================================
-MAPA
+   MAPA
 ========================================================= */
 
-function configurarMapa(item) {
+function configurarMapa(
+  item
+) {
 
   const latitude =
     Number(
       item.latitude
     );
 
+
   const longitude =
     Number(
       item.longitude
     );
+
 
   const elementoMapa =
     document.getElementById(
       "localMap"
     );
 
+
   if (!elementoMapa) {
+
     return;
+
   }
+
 
   if (
     !Number.isFinite(latitude) ||
@@ -937,11 +1181,16 @@ function configurarMapa(item) {
     `;
 
     return;
+
   }
 
+
   if (mapaLocal) {
+
     mapaLocal.remove();
+
   }
+
 
   mapaLocal =
     L.map(
@@ -960,22 +1209,29 @@ function configurarMapa(item) {
       18
     );
 
+
   L.tileLayer(
     "https://{s}.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
     {
+
       subdomains: [
         "server",
         "services"
       ],
+
       maxNativeZoom: 19,
+
       maxZoom: 22,
+
       attribution:
         "Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community"
+
     }
   )
   .addTo(
     mapaLocal
   );
+
 
   const marcador =
     L.marker(
@@ -988,36 +1244,49 @@ function configurarMapa(item) {
       mapaLocal
     );
 
+
   marcador.bindPopup(
     `<strong>${escaparHTML(item.nome || "Local")}</strong>`
   );
 
+
   marcador.openPopup();
+
 }
+
+
 /* =========================================================
-GOOGLE MAPS
+   GOOGLE MAPS
 ========================================================= */
 
-function configurarGoogleMaps(item) {
+function configurarGoogleMaps(
+  item
+) {
 
   const latitude =
     Number(
       item.latitude
     );
 
+
   const longitude =
     Number(
       item.longitude
     );
+
 
   const botao =
     document.getElementById(
       "comoChegar"
     );
 
+
   if (!botao) {
+
     return;
+
   }
+
 
   if (
     !Number.isFinite(latitude) ||
@@ -1028,1971 +1297,1394 @@ function configurarGoogleMaps(item) {
       "none";
 
     return;
+
   }
+
 
   const destino =
     `${latitude},${longitude}`;
 
+
   botao.href =
     `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destino)}`;
+
 
   botao.target =
     "_blank";
 
+
   botao.rel =
     "noopener noreferrer";
+
 }
 
+
 /* =========================================================
-FOTO EM TELA CHEIA
+   FOTO EM TELA CHEIA
 ========================================================= */
 
 function abrirFotoTelaCheia() {
 
-const principal =
-document.getElementById(
-"fotoPrincipal"
-);
-
-const viewer =
-document.getElementById(
-"photoViewer"
-);
-
-const viewerImage =
-document.getElementById(
-"viewerImage"
-);
-
-if (
-!principal ||
-!viewer ||
-!viewerImage ||
-!principal.src
-) {
-
-return;
-
-}
-
-viewerImage.src =
-principal.src;
-
-viewer.classList.add(
-"open"
-);
-
-document.body.style.overflow =
-"hidden";
-
-}
-
-function fecharFotoTelaCheia() {
-
-const viewer =
-document.getElementById(
-"photoViewer"
-);
-
-if (!viewer) {
-return;
-}
-
-viewer.classList.remove(
-"open"
-);
-
-document.body.style.overflow =
-"";
-
-}
-
-document.addEventListener(
-"keydown",
-event => {
-
-if (
-  event.key ===
-  "Escape"
-) {
-
-  fecharFotoTelaCheia();
-
-}
-
-}
-);
-
-/* =========================================================
-AUTENTICAÇÃO
-========================================================= */
-
-async function verificarUsuario() {
-
-const {
-data,
-error
-} =
-await supabaseClient.auth.getSession();
-
-if (error) {
-
-console.error(
-  "Erro ao verificar usuário:",
-  error
-);
-
-mostrarUsuarioDeslogado();
-
-return;
-
-}
-
-if (
-data.session &&
-data.session.user
-) {
-
-await mostrarUsuarioLogado(
-  data.session.user
-);
-
-} else {
-
-mostrarUsuarioDeslogado();
-
-}
-
-}
-
-/* =========================================================
-USUÁRIO LOGADO
-========================================================= */
-
-async function mostrarUsuarioLogado(user) {
-
-const areaAuth =
-document.getElementById(
-"areaAutenticacao"
-);
-
-const areaAvaliacao =
-document.getElementById(
-"areaAvaliacao"
-);
-
-const nomeElemento =
-document.getElementById(
-"nomeUsuarioLogado"
-);
-
-const nome =
-user.user_metadata?.nome ||
-user.email?.split("@")[0] ||
-"Usuário";
-
-if (nomeElemento) {
-
-nomeElemento.textContent =
-  nome;
-
-}
-
-if (areaAuth) {
-
-areaAuth.style.display =
-  "none";
-
-}
-
-if (areaAvaliacao) {
-
-areaAvaliacao.style.display =
-  "block";
-
-}
-
-await verificarAvaliacaoUsuario();
-
-}
-
-/* =========================================================
-USUÁRIO DESLOGADO
-========================================================= */
-
-function mostrarUsuarioDeslogado() {
-
-const areaAuth =
-document.getElementById(
-"areaAutenticacao"
-);
-
-const areaAvaliacao =
-document.getElementById(
-"areaAvaliacao"
-);
-
-if (areaAuth) {
-
-areaAuth.style.display =
-  "block";
-
-}
-
-if (areaAvaliacao) {
-
-areaAvaliacao.style.display =
-  "none";
-
-}
-
-}
-
-/* =========================================================
-MODAL
-========================================================= */
-
-function abrirModalAuth(modo = "login") {
-
-const modal =
-document.getElementById(
-"authModal"
-);
-
-if (!modal) {
-return;
-}
-
-modal.classList.add(
-"open"
-);
-
-modal.setAttribute(
-"aria-hidden",
-"false"
-);
-
-mostrarFormularioAuth(
-modo
-);
-
-document.body.style.overflow =
-"hidden";
-
-}
-
-function fecharModalAuth() {
-
-const modal =
-document.getElementById(
-"authModal"
-);
-
-if (!modal) {
-return;
-}
-
-modal.classList.remove(
-"open"
-);
-
-modal.setAttribute(
-"aria-hidden",
-"true"
-);
-
-document.body.style.overflow =
-"";
-
-}
-
-function mostrarFormularioAuth(
-modo
-) {
-
-const login =
-document.getElementById(
-"formLogin"
-);
-
-const cadastro =
-document.getElementById(
-"formCadastro"
-);
-
-if (!login || !cadastro) {
-return;
-}
-
-if (
-modo === "cadastro"
-) {
-
-login.style.display =
-  "none";
-
-cadastro.style.display =
-  "block";
-
-} else {
-
-login.style.display =
-  "block";
-
-cadastro.style.display =
-  "none";
-
-}
-
-}
-
-/* =========================================================
-CADASTRO
-========================================================= */
-
-async function cadastrarUsuario() {
-
-const nomeInput =
-document.getElementById(
-"cadastroNome"
-);
-
-const emailInput =
-document.getElementById(
-"cadastroEmail"
-);
-
-const senhaInput =
-document.getElementById(
-"cadastroSenha"
-);
-
-const confirmarInput =
-document.getElementById(
-"cadastroConfirmarSenha"
-);
-
-const erro =
-document.getElementById(
-"erroCadastro"
-);
-
-if (
-!nomeInput ||
-!emailInput ||
-!senhaInput ||
-!confirmarInput
-) {
-return;
-}
-
-const nome =
-nomeInput.value.trim();
-
-const email =
-emailInput.value.trim();
-
-const senha =
-senhaInput.value;
-
-const confirmar =
-confirmarInput.value;
-
-if (!nome) {
-
-mostrarErroAuth(
-  erro,
-  "Digite seu nome."
-);
-
-nomeInput.focus();
-
-return;
-
-}
-
-if (
-nome.length < 2
-) {
-
-mostrarErroAuth(
-  erro,
-  "Digite um nome válido."
-);
-
-nomeInput.focus();
-
-return;
-
-}
-
-if (!email) {
-
-mostrarErroAuth(
-  erro,
-  "Digite seu e-mail."
-);
-
-emailInput.focus();
-
-return;
-
-}
-
-if (
-senha.length < 6
-) {
-
-mostrarErroAuth(
-  erro,
-  "A senha precisa ter pelo menos 6 caracteres."
-);
-
-senhaInput.focus();
-
-return;
-
-}
-
-if (
-senha !== confirmar
-) {
-
-mostrarErroAuth(
-  erro,
-  "As senhas não são iguais."
-);
-
-confirmarInput.focus();
-
-return;
-
-}
-
-mostrarErroAuth(
-erro,
-""
-);
-
-const botao =
-document.getElementById(
-"botaoCadastro"
-);
-
-if (botao) {
-
-botao.disabled =
-  true;
-
-botao.textContent =
-  "Criando conta...";
-
-}
-
-const {
-data,
-error
-} =
-await supabaseClient.auth.signUp({
-
-  email: email,
-
-  password: senha,
-
-  options: {
-
-    data: {
-      nome: nome
-    }
-
-  }
-
-});
-
-if (botao) {
-
-botao.disabled =
-  false;
-
-botao.textContent =
-  "Criar conta";
-
-}
-
-if (error) {
-
-console.error(
-  "Erro ao criar conta:",
-  error
-);
-
-
-mostrarErroAuth(
-  erro,
-  traduzirErroAuth(
-    error
-  )
-);
-
-return;
-
-}
-
-if (
-data.session
-) {
-
-fecharModalAuth();
-
-await verificarUsuario();
-
-return;
-
-}
-
-mostrarErroAuth(
-erro,
-"Conta criada. Agora faça login."
-);
-
-mostrarFormularioAuth(
-"login"
-);
-
-const loginEmail =
-document.getElementById(
-"loginEmail"
-);
-
-if (loginEmail) {
-
-loginEmail.value =
-  email;
-
-}
-
-}
-
-/* =========================================================
-LOGIN
-========================================================= */
-
-async function fazerLogin() {
-
-const emailInput =
-document.getElementById(
-"loginEmail"
-);
-
-const senhaInput =
-document.getElementById(
-"loginSenha"
-);
-
-const erro =
-document.getElementById(
-"erroLogin"
-);
-
-if (
-!emailInput ||
-!senhaInput
-) {
-return;
-}
-
-const email =
-emailInput.value.trim();
-
-const senha =
-senhaInput.value;
-
-if (!email) {
-
-mostrarErroAuth(
-  erro,
-  "Digite seu e-mail."
-);
-
-emailInput.focus();
-
-return;
-
-}
-
-if (!senha) {
-
-mostrarErroAuth(
-  erro,
-  "Digite sua senha."
-);
-
-senhaInput.focus();
-
-return;
-
-}
-
-mostrarErroAuth(
-erro,
-""
-);
-
-const botao =
-document.getElementById(
-"botaoLogin"
-);
-
-if (botao) {
-
-botao.disabled =
-  true;
-
-botao.textContent =
-  "Entrando...";
-
-}
-
-const {
-data,
-error
-} =
-await supabaseClient.auth.signInWithPassword({
-
-  email: email,
-
-  password: senha
-
-});
-
-if (botao) {
-
-botao.disabled =
-  false;
-
-botao.textContent =
-  "Entrar";
-
-}
-
-if (error) {
-
-console.error(
-  "Erro ao entrar:",
-  error
-);
-
-
-mostrarErroAuth(
-  erro,
-  "E-mail ou senha incorretos."
-);
-
-return;
-
-}
-
-fecharModalAuth();
-
-await mostrarUsuarioLogado(
-data.user
-);
-
-}
-
-/* =========================================================
-LOGOUT
-========================================================= */
-
-async function sairUsuario() {
-
-const {
-error
-} =
-await supabaseClient.auth.signOut();
-
-if (error) {
-
-console.error(
-  "Erro ao sair:",
-  error
-);
-
-return;
-
-}
-
-notaSelecionada =
-0;
-
-avaliacaoAtual =
-null;
-
-atualizarEstrelas(
-0
-);
-
-mostrarUsuarioDeslogado();
-
-}
-
-/* =========================================================
-ERROS DE AUTENTICAÇÃO
-========================================================= */
-
-function mostrarErroAuth(
-elemento,
-mensagem
-) {
-
-if (!elemento) {
-return;
-}
-
-elemento.textContent =
-mensagem || "";
-
-}
-
-/* =========================================================
-TRADUZIR ERROS
-========================================================= */
-
-function traduzirErroAuth(
-error
-) {
-
-const mensagem =
-String(
-error?.message || ""
-).toLowerCase();
-
-if (
-mensagem.includes(
-"user already registered"
-)
-) {
-
-return "Este e-mail já possui uma conta.";
-
-}
-
-if (
-mensagem.includes(
-"invalid login credentials"
-)
-) {
-
-return "E-mail ou senha incorretos.";
-
-}
-
-if (
-mensagem.includes(
-"password should be at least"
-)
-) {
-
-return "A senha precisa ter pelo menos 6 caracteres.";
-
-}
-
-return (
-error?.message ||
-"Não foi possível realizar a operação."
-);
-
-}
-
-/* =========================================================
-ESTRELAS
-========================================================= */
-
-function atualizarEstrelas(
-quantidade
-) {
-
-const botoes =
-document.querySelectorAll(
-".star-button"
-);
-
-botoes.forEach(
-botao => {
-
-  const valor =
-    Number(
-      botao.dataset.rating
-    );
-
-  const imagem =
-    botao.querySelector(
-      "img"
+  const principal =
+    document.getElementById(
+      "fotoPrincipal"
     );
 
 
-  if (!imagem) {
-    return;
-  }
+  const viewer =
+    document.getElementById(
+      "photoViewer"
+    );
+
+
+  const viewerImage =
+    document.getElementById(
+      "viewerImage"
+    );
 
 
   if (
-    valor <= quantidade
+    !principal ||
+    !viewer ||
+    !viewerImage ||
+    !principal.src
   ) {
 
-    imagem.src =
-      "../img/icones/estrela.png";
+    return;
 
-  } else {
+  }
+
+
+  viewerImage.src =
+    principal.src;
+
+
+  viewer.classList.add(
+    "open"
+  );
+
+
+  document.body.style.overflow =
+    "hidden";
+
+}
+
+
+function fecharFotoTelaCheia() {
+
+  const viewer =
+    document.getElementById(
+      "photoViewer"
+    );
+
+
+  if (!viewer) {
+
+    return;
+
+  }
+
+
+  viewer.classList.remove(
+    "open"
+  );
+
+
+  document.body.style.overflow =
+    "";
+
+}
+
+
+document.addEventListener(
+  "keydown",
+  event => {
+
+    if (
+      event.key ===
+      "Escape"
+    ) {
+
+      fecharFotoTelaCheia();
+
+    }
+
+  }
+);
+
+
+/* =========================================================
+   ESTRELAS
+========================================================= */
+
+function atualizarEstrelas(
+  quantidade
+) {
+
+  const botoes =
+    document.querySelectorAll(
+      ".star-button"
+    );
+
+
+  botoes.forEach(
+    botao => {
+
+      const valor =
+        Number(
+          botao.dataset.rating
+        );
+
+
+      const imagem =
+        botao.querySelector(
+          "img"
+        );
+
+
+      if (!imagem) {
+
+        return;
+
+      }
+
+
+      if (
+        valor <= quantidade
+      ) {
+
+        imagem.src =
+          "../img/icones/estrela.png";
+
+      } else {
+
+        imagem.src =
+          "../img/icones/estrela2.png";
+
+      }
+
+    }
+  );
+
+}
+
+
+/* =========================================================
+   ESTRELAS DA MÉDIA
+========================================================= */
+
+function criarEstrelasMedia(
+  media
+) {
+
+  const container =
+    document.getElementById(
+      "estrelasMedia"
+    );
+
+
+  if (!container) {
+
+    return;
+
+  }
+
+
+  container.innerHTML =
+    "";
+
+
+  for (
+    let i = 1;
+    i <= 5;
+    i++
+  ) {
+
+    const imagem =
+      document.createElement(
+        "img"
+      );
+
+
+    imagem.className =
+      "rating-star";
+
 
     imagem.src =
-      "../img/icones/estrela2.png";
+      i <= Math.round(media)
+        ? "../img/icones/estrela.png"
+        : "../img/icones/estrela2.png";
+
+
+    imagem.alt =
+      "";
+
+
+    container.appendChild(
+      imagem
+    );
 
   }
 
 }
 
-);
-
-}
 
 /* =========================================================
-ESTRELAS DA MÉDIA
+   USUÁRIO ATUAL
 ========================================================= */
 
-function criarEstrelasMedia(
-media
-) {
+/*
+ * IMPORTANTE:
+ *
+ * O usuário agora pertence ao login.js.
+ *
+ * Não existe mais uma segunda variável de usuário
+ * dentro do local.js.
+ */
 
-const container =
-document.getElementById(
-"estrelasMedia"
-);
+function obterUsuarioAtual() {
 
-if (!container) {
-return;
-}
-
-container.innerHTML =
-"";
-
-for (
-let i = 1;
-i <= 5;
-i++
-) {
-
-const imagem =
-  document.createElement(
-    "img"
+  return (
+    window.usuarioAtualSupabase ||
+    null
   );
 
-
-imagem.className =
-  "rating-star";
-
-
-imagem.src =
-  i <= Math.round(media)
-    ? "../img/icones/estrela.png"
-    : "../img/icones/estrela2.png";
-
-
-imagem.alt =
-  "";
-
-
-container.appendChild(
-  imagem
-);
-
 }
 
-}
 
 /* =========================================================
-VERIFICAR AVALIAÇÃO DO USUÁRIO
+   VERIFICAR AVALIAÇÃO DO USUÁRIO
 ========================================================= */
 
 async function verificarAvaliacaoUsuario() {
 
-const {
-data: sessionData
-} =
-await supabaseClient.auth.getSession();
-
-const user =
-sessionData?.session?.user;
-
-if (!user || !idLocal) {
-return;
-}
-
-const {
-data,
-error
-} =
-await supabaseClient
-.from("avaliacoes")
-.select(
-"id, nota, comentario"
-)
-.eq(
-"local_id",
-idLocal
-)
-.eq(
-"usuario_id",
-user.id
-)
-.maybeSingle();
-
-if (error) {
-
-console.error(
-  "Erro ao verificar avaliação:",
-  error
-);
-
-return;
-
-}
-
-avaliacaoAtual =
-data || null;
-
-if (data) {
-
-notaSelecionada =
-  data.nota;
-
-
-atualizarEstrelas(
-  data.nota
-);
-
-
-const texto =
-  document.getElementById(
-    "textoComentario"
-  );
-
-
-if (texto) {
-
-  texto.value =
-    data.comentario;
-
-}
-
-
-const botao =
-  document.getElementById(
-    "publicarComentario"
-  );
-
-
-if (botao) {
-
-  botao.textContent =
-    "Atualizar avaliação";
-
-}
-
-} else {
-
-notaSelecionada =
-  0;
-
-
-atualizarEstrelas(
-  0
-);
-
-}
-
-}
-
-/* =========================================================
-CARREGAR AVALIAÇÕES
-========================================================= */
-
-async function carregarAvaliacoes() {
-
-const lista =
-document.getElementById(
-"listaComentarios"
-);
-
-if (
-!lista ||
-!idLocal
-) {
-return;
-}
-
-const {
-data,
-error
-} =
-await supabaseClient
-.from("avaliacoes")
-.select(
-"id, local_id, usuario_id, nome_usuario, nota, comentario, criado_em"
-)
-.eq(
-"local_id",
-idLocal
-)
-.order(
-"criado_em",
-{
-ascending: false
-}
-);
-
-if (error) {
-
-console.error(
-  "Erro ao carregar avaliações:",
-  error
-);
-
-
-lista.innerHTML = `
-
-  <div class="empty-comments">
-    Não foi possível carregar as avaliações.
-  </div>
-
-`;
-
-return;
-
-}
-
-atualizarResumoAvaliacoes(
-data || []
-);
-
-lista.innerHTML =
-"";
-
-if (
-!data ||
-data.length === 0
-) {
-
-lista.innerHTML = `
-
-  <div class="empty-comments">
-    Ainda não há avaliações.
-    Seja o primeiro a avaliar!
-  </div>
-
-`;
-
-return;
-
-}
-
-data.forEach(
-avaliacao => {
-
-  const elemento =
-    document.createElement(
-      "div"
-    );
-
-
-  elemento.className =
-    "comment";
-
-
-  const dataFormatada =
-    formatarData(
-      avaliacao.criado_em
-    );
-
-
-  const estrelas =
-    criarHTMLestrelas(
-      avaliacao.nota
-    );
-
-
-  elemento.innerHTML = `
-
-    <div class="comment-header">
-
-      <strong>
-        ${escaparHTML(
-          avaliacao.nome_usuario
-        )}
-      </strong>
-
-      <span>
-        ${escaparHTML(
-          dataFormatada
-        )}
-      </span>
-
-    </div>
-
-
-    <div class="comment-stars">
-      ${estrelas}
-    </div>
-
-
-    <p>
-      ${escaparHTML(
-        avaliacao.comentario
-      )}
-    </p>
-
-  `;
-
-
-  const usuarioAtual =
+  const user =
     obterUsuarioAtual();
 
 
   if (
-    usuarioAtual &&
-    usuarioAtual.id ===
-    avaliacao.usuario_id
+    !user ||
+    !idLocal
   ) {
 
-    const acoes =
-      document.createElement(
-        "div"
-      );
-
-
-    acoes.className =
-      "comment-actions";
-
-
-    const editar =
-      document.createElement(
-        "button"
-      );
-
-
-    editar.type =
-      "button";
-
-    editar.className =
-      "delete-comment";
-
-    editar.textContent =
-      "Editar";
-
-    editar.addEventListener(
-      "click",
-      () => {
-
-        editarAvaliacao(
-          avaliacao
-        );
-
-      }
-    );
-
-
-    const excluir =
-      document.createElement(
-        "button"
-      );
-
-
-    excluir.type =
-      "button";
-
-    excluir.className =
-      "delete-comment";
-
-    excluir.textContent =
-      "Excluir";
-
-    excluir.addEventListener(
-      "click",
-      () => {
-
-        excluirAvaliacao(
-          avaliacao.id
-        );
-
-      }
-    );
-
-
-    acoes.appendChild(
-      editar
-    );
-
-    acoes.appendChild(
-      excluir
-    );
-
-
-    elemento.appendChild(
-      acoes
-    );
+    return;
 
   }
 
 
-  lista.appendChild(
-    elemento
+  const {
+    data,
+    error
+  } =
+    await supabaseClient
+
+      .from("avaliacoes")
+
+      .select(
+        "id, nota, comentario"
+      )
+
+      .eq(
+        "local_id",
+        idLocal
+      )
+
+      .eq(
+        "usuario_id",
+        user.id
+      )
+
+      .maybeSingle();
+
+
+  if (error) {
+
+    console.error(
+      "Erro ao verificar avaliação:",
+      error
+    );
+
+    return;
+
+  }
+
+
+  avaliacaoAtual =
+    data || null;
+
+
+  if (data) {
+
+    notaSelecionada =
+      data.nota;
+
+
+    atualizarEstrelas(
+      data.nota
+    );
+
+
+    const texto =
+      document.getElementById(
+        "textoComentario"
+      );
+
+
+    if (texto) {
+
+      texto.value =
+        data.comentario || "";
+
+    }
+
+
+    const botao =
+      document.getElementById(
+        "publicarComentario"
+      );
+
+
+    if (botao) {
+
+      botao.textContent =
+        "Atualizar avaliação";
+
+    }
+
+  } else {
+
+    notaSelecionada =
+      0;
+
+
+    atualizarEstrelas(
+      0
+    );
+
+  }
+
+}
+
+
+/* =========================================================
+   CARREGAR AVALIAÇÕES
+========================================================= */
+
+async function carregarAvaliacoes() {
+
+  const lista =
+    document.getElementById(
+      "listaComentarios"
+    );
+
+
+  if (
+    !lista ||
+    !idLocal
+  ) {
+
+    return;
+
+  }
+
+
+  const {
+    data,
+    error
+  } =
+    await supabaseClient
+
+      .from("avaliacoes")
+
+      .select(
+        "id, local_id, usuario_id, nome_usuario, nota, comentario, criado_em"
+      )
+
+      .eq(
+        "local_id",
+        idLocal
+      )
+
+      .order(
+        "criado_em",
+        {
+          ascending: false
+        }
+      );
+
+
+  if (error) {
+
+    console.error(
+      "Erro ao carregar avaliações:",
+      error
+    );
+
+
+    lista.innerHTML = `
+
+      <div class="empty-comments">
+        Não foi possível carregar as avaliações.
+      </div>
+
+    `;
+
+    return;
+
+  }
+
+
+  atualizarResumoAvaliacoes(
+    data || []
+  );
+
+
+  lista.innerHTML =
+    "";
+
+
+  if (
+    !data ||
+    data.length === 0
+  ) {
+
+    lista.innerHTML = `
+
+      <div class="empty-comments">
+        Ainda não há avaliações.
+        Seja o primeiro a avaliar!
+      </div>
+
+    `;
+
+    return;
+
+  }
+
+
+  data.forEach(
+    avaliacao => {
+
+      const elemento =
+        document.createElement(
+          "div"
+        );
+
+
+      elemento.className =
+        "comment";
+
+
+      const dataFormatada =
+        formatarData(
+          avaliacao.criado_em
+        );
+
+
+      const estrelas =
+        criarHTMLestrelas(
+          avaliacao.nota
+        );
+
+
+      elemento.innerHTML = `
+
+        <div class="comment-header">
+
+          <strong>
+            ${escaparHTML(
+              avaliacao.nome_usuario
+            )}
+          </strong>
+
+          <span>
+            ${escaparHTML(
+              dataFormatada
+            )}
+          </span>
+
+        </div>
+
+
+        <div class="comment-stars">
+          ${estrelas}
+        </div>
+
+
+        <p>
+          ${escaparHTML(
+            avaliacao.comentario
+          )}
+        </p>
+
+      `;
+
+
+      const usuarioAtual =
+        obterUsuarioAtual();
+
+
+      if (
+        usuarioAtual &&
+        usuarioAtual.id ===
+        avaliacao.usuario_id
+      ) {
+
+        const acoes =
+          document.createElement(
+            "div"
+          );
+
+
+        acoes.className =
+          "comment-actions";
+
+
+        const editar =
+          document.createElement(
+            "button"
+          );
+
+
+        editar.type =
+          "button";
+
+        editar.className =
+          "delete-comment";
+
+        editar.textContent =
+          "Editar";
+
+
+        editar.addEventListener(
+          "click",
+          () => {
+
+            editarAvaliacao(
+              avaliacao
+            );
+
+          }
+        );
+
+
+        const excluir =
+          document.createElement(
+            "button"
+          );
+
+
+        excluir.type =
+          "button";
+
+        excluir.className =
+          "delete-comment";
+
+        excluir.textContent =
+          "Excluir";
+
+
+        excluir.addEventListener(
+          "click",
+          () => {
+
+            excluirAvaliacao(
+              avaliacao.id
+            );
+
+          }
+        );
+
+
+        acoes.appendChild(
+          editar
+        );
+
+
+        acoes.appendChild(
+          excluir
+        );
+
+
+        elemento.appendChild(
+          acoes
+        );
+
+      }
+
+
+      lista.appendChild(
+        elemento
+      );
+
+    }
   );
 
 }
 
-);
-
-}
 
 /* =========================================================
-RESUMO
+   RESUMO
 ========================================================= */
 
 function atualizarResumoAvaliacoes(
-avaliacoes
+  avaliacoes
 ) {
 
-const mediaElemento =
-document.getElementById(
-"mediaAvaliacoes"
-);
-
-const quantidadeElemento =
-document.getElementById(
-"quantidadeAvaliacoes"
-);
-
-const quantidade =
-avaliacoes.length;
-
-let media =
-0;
-
-if (quantidade > 0) {
-
-const soma =
-  avaliacoes.reduce(
-    (
-      total,
-      item
-    ) =>
-      total +
-      Number(item.nota || 0),
-    0
-  );
-
-
-media =
-  soma / quantidade;
-
-}
-
-if (mediaElemento) {
-
-mediaElemento.textContent =
-  media.toFixed(1)
-    .replace(
-      ".",
-      ","
+  const mediaElemento =
+    document.getElementById(
+      "mediaAvaliacoes"
     );
 
+
+  const quantidadeElemento =
+    document.getElementById(
+      "quantidadeAvaliacoes"
+    );
+
+
+  const quantidade =
+    avaliacoes.length;
+
+
+  let media =
+    0;
+
+
+  if (
+    quantidade > 0
+  ) {
+
+    const soma =
+      avaliacoes.reduce(
+        (
+          total,
+          item
+        ) =>
+
+          total +
+          Number(
+            item.nota || 0
+          ),
+
+        0
+      );
+
+
+    media =
+      soma / quantidade;
+
+  }
+
+
+  if (mediaElemento) {
+
+    mediaElemento.textContent =
+      media
+        .toFixed(1)
+        .replace(
+          ".",
+          ","
+        );
+
+  }
+
+
+  if (
+    quantidadeElemento
+  ) {
+
+    quantidadeElemento.textContent =
+
+      quantidade === 0
+
+        ? "Nenhuma avaliação"
+
+        : quantidade === 1
+
+          ? "1 avaliação"
+
+          : `${quantidade} avaliações`;
+
+  }
+
+
+  criarEstrelasMedia(
+    media
+  );
+
 }
 
-if (quantidadeElemento) {
-
-quantidadeElemento.textContent =
-  quantidade === 0
-    ? "Nenhuma avaliação"
-    : quantidade === 1
-      ? "1 avaliação"
-      : `${quantidade} avaliações`;
-
-}
-
-criarEstrelasMedia(
-media
-);
-
-}
 
 /* =========================================================
-CRIAR ESTRELAS HTML
+   CRIAR ESTRELAS HTML
 ========================================================= */
 
 function criarHTMLestrelas(
-nota
+  nota
 ) {
 
-let html =
-"";
+  let html =
+    "";
 
-for (
-let i = 1;
-i <= 5;
-i++
-) {
 
-html += `
+  for (
+    let i = 1;
+    i <= 5;
+    i++
+  ) {
 
-  <img
-    class="comment-star"
-    src="${
-      i <= nota
-        ? "../img/icones/estrela.png"
-        : "../img/icones/estrela2.png"
-    }"
-    alt=""
-  >
+    html += `
 
-`;
+      <img
+        class="comment-star"
+        src="${
+          i <= nota
+            ? "../img/icones/estrela.png"
+            : "../img/icones/estrela2.png"
+        }"
+        alt=""
+      >
+
+    `;
+
+  }
+
+
+  return html;
 
 }
 
-return html;
-
-}
 
 /* =========================================================
-DATA
+   DATA
 ========================================================= */
 
 function formatarData(
-valor
+  valor
 ) {
 
-if (!valor) {
-return "";
+  if (!valor) {
+
+    return "";
+
+  }
+
+
+  const data =
+    new Date(
+      valor
+    );
+
+
+  if (
+    Number.isNaN(
+      data.getTime()
+    )
+  ) {
+
+    return "";
+
+  }
+
+
+  return data.toLocaleDateString(
+    "pt-BR"
+  );
+
 }
 
-const data =
-new Date(
-valor
-);
-
-if (
-Number.isNaN(
-data.getTime()
-)
-) {
-
-return "";
-
-}
-
-return data.toLocaleDateString(
-"pt-BR"
-);
-
-}
 
 /* =========================================================
-USUÁRIO ATUAL
-========================================================= */
-
-function obterUsuarioAtual() {
-
-return window.usuarioAtualSupabase ||
-null;
-
-}
-
-/* =========================================================
-PUBLICAR / ATUALIZAR
+   PUBLICAR / ATUALIZAR
 ========================================================= */
 
 async function publicarComentario() {
 
-const textoInput =
-document.getElementById(
-"textoComentario"
-);
-
-if (
-!textoInput ||
-!idLocal
-) {
-return;
-}
-
-const texto =
-textoInput.value.trim();
-
-if (
-notaSelecionada < 1 ||
-notaSelecionada > 5
-) {
-
-alert(
-  "Escolha uma nota de 1 a 5 estrelas."
-);
-
-return;
-
-}
-
-if (!texto) {
-
-alert(
-  "Escreva um comentário."
-);
-
-textoInput.focus();
-
-return;
-
-}
-
-if (
-texto.length > 500
-) {
-
-alert(
-  "O comentário pode ter no máximo 500 caracteres."
-);
-
-return;
-
-}
-
-const {
-data: sessionData
-} =
-await supabaseClient.auth.getSession();
-
-const user =
-sessionData?.session?.user;
-
-if (!user) {
-
-abrirModalAuth(
-  "login"
-);
-
-return;
-
-}
-
-const nome =
-user.user_metadata?.nome ||
-user.email?.split("@")[0] ||
-"Usuário";
-
-const botao =
-document.getElementById(
-"publicarComentario"
-);
-
-if (botao) {
-
-botao.disabled =
-  true;
-
-botao.textContent =
-  avaliacaoAtual
-    ? "Atualizando..."
-    : "Publicando...";
-
-}
-
-let resultado;
-
-if (avaliacaoAtual) {
-
-resultado =
-  await supabaseClient
-    .from("avaliacoes")
-    .update({
-
-      nota:
-        notaSelecionada,
-
-      comentario:
-        texto,
-
-      nome_usuario:
-        nome
-
-    })
-    .eq(
-      "id",
-      avaliacaoAtual.id
-    )
-    .eq(
-      "usuario_id",
-      user.id
+  const textoInput =
+    document.getElementById(
+      "textoComentario"
     );
 
-} else {
 
-resultado =
-  await supabaseClient
-    .from("avaliacoes")
-    .insert({
+  if (
+    !textoInput ||
+    !idLocal
+  ) {
 
-      local_id:
-        idLocal,
+    return;
 
-      usuario_id:
-        user.id,
+  }
 
-      nome_usuario:
-        nome,
 
-      nota:
-        notaSelecionada,
+  const texto =
+    textoInput.value.trim();
 
-      comentario:
-        texto
 
-    });
+  if (
+    notaSelecionada < 1 ||
+    notaSelecionada > 5
+  ) {
+
+    alert(
+      "Escolha uma nota de 1 a 5 estrelas."
+    );
+
+    return;
+
+  }
+
+
+  if (!texto) {
+
+    alert(
+      "Escreva um comentário."
+    );
+
+    textoInput.focus();
+
+    return;
+
+  }
+
+
+  if (
+    texto.length > 500
+  ) {
+
+    alert(
+      "O comentário pode ter no máximo 500 caracteres."
+    );
+
+    return;
+
+  }
+
+
+  /*
+   * Usuário vem do login.js.
+   */
+
+  const user =
+    obterUsuarioAtual();
+
+
+  if (!user) {
+
+    abrirModalAuth(
+      "login"
+    );
+
+    return;
+
+  }
+
+
+  const nome =
+    user.user_metadata?.nome ||
+    user.email?.split("@")[0] ||
+    "Usuário";
+
+
+  const botao =
+    document.getElementById(
+      "publicarComentario"
+    );
+
+
+  if (botao) {
+
+    botao.disabled =
+      true;
+
+    botao.textContent =
+      avaliacaoAtual
+        ? "Atualizando..."
+        : "Publicando...";
+
+  }
+
+
+  let resultado;
+
+
+  if (
+    avaliacaoAtual
+  ) {
+
+    resultado =
+      await supabaseClient
+
+        .from("avaliacoes")
+
+        .update({
+
+          nota:
+            notaSelecionada,
+
+          comentario:
+            texto,
+
+          nome_usuario:
+            nome
+
+        })
+
+        .eq(
+          "id",
+          avaliacaoAtual.id
+        )
+
+        .eq(
+          "usuario_id",
+          user.id
+        );
+
+  } else {
+
+    resultado =
+      await supabaseClient
+
+        .from("avaliacoes")
+
+        .insert({
+
+          local_id:
+            idLocal,
+
+          usuario_id:
+            user.id,
+
+          nome_usuario:
+            nome,
+
+          nota:
+            notaSelecionada,
+
+          comentario:
+            texto
+
+        });
+
+  }
+
+
+  if (botao) {
+
+    botao.disabled =
+      false;
+
+    botao.textContent =
+      avaliacaoAtual
+        ? "Atualizar avaliação"
+        : "Publicar avaliação";
+
+  }
+
+
+  if (
+    resultado.error
+  ) {
+
+    console.error(
+      "Erro ao salvar avaliação:",
+      resultado.error
+    );
+
+
+    alert(
+      "Não foi possível salvar sua avaliação."
+    );
+
+    return;
+
+  }
+
+
+  alert(
+    avaliacaoAtual
+      ? "Sua avaliação foi atualizada!"
+      : "Sua avaliação foi publicada!"
+  );
+
+
+  textoInput.value =
+    "";
+
+
+  notaSelecionada =
+    0;
+
+
+  avaliacaoAtual =
+    null;
+
+
+  atualizarEstrelas(
+    0
+  );
+
+
+  if (botao) {
+
+    botao.textContent =
+      "Publicar avaliação";
+
+  }
+
+
+  await carregarAvaliacoes();
+
+  await verificarAvaliacaoUsuario();
 
 }
 
-if (botao) {
-
-botao.disabled =
-  false;
-
-botao.textContent =
-  avaliacaoAtual
-    ? "Atualizar avaliação"
-    : "Publicar avaliação";
-
-}
-
-if (resultado.error) {
-
-console.error(
-  "Erro ao salvar avaliação:",
-  resultado.error
-);
-
-
-alert(
-  "Não foi possível salvar sua avaliação."
-);
-
-return;
-
-}
-
-alert(
-avaliacaoAtual
-? "Sua avaliação foi atualizada!"
-: "Sua avaliação foi publicada!"
-);
-
-textoInput.value =
-"";
-
-notaSelecionada =
-0;
-
-avaliacaoAtual =
-null;
-
-atualizarEstrelas(
-0
-);
-
-if (botao) {
-
-botao.textContent =
-  "Publicar avaliação";
-
-}
-
-await carregarAvaliacoes();
-
-await verificarAvaliacaoUsuario();
-
-}
 
 /* =========================================================
-EDITAR
+   EDITAR
 ========================================================= */
 
 function editarAvaliacao(
-avaliacao
+  avaliacao
 ) {
 
-const area =
-document.getElementById(
-"areaAvaliacao"
-);
+  const area =
+    document.getElementById(
+      "areaAvaliacao"
+    );
 
-if (area) {
 
-area.scrollIntoView({
-  behavior: "smooth",
-  block: "center"
-});
+  if (area) {
+
+    area.scrollIntoView({
+
+      behavior:
+        "smooth",
+
+      block:
+        "center"
+
+    });
+
+  }
+
+
+  notaSelecionada =
+    avaliacao.nota;
+
+
+  atualizarEstrelas(
+    avaliacao.nota
+  );
+
+
+  const texto =
+    document.getElementById(
+      "textoComentario"
+    );
+
+
+  if (texto) {
+
+    texto.value =
+      avaliacao.comentario;
+
+
+    texto.focus();
+
+  }
+
+
+  avaliacaoAtual =
+    avaliacao;
+
+
+  const botao =
+    document.getElementById(
+      "publicarComentario"
+    );
+
+
+  if (botao) {
+
+    botao.textContent =
+      "Atualizar avaliação";
+
+  }
 
 }
 
-notaSelecionada =
-avaliacao.nota;
-
-atualizarEstrelas(
-avaliacao.nota
-);
-
-const texto =
-document.getElementById(
-"textoComentario"
-);
-
-if (texto) {
-
-texto.value =
-  avaliacao.comentario;
-
-texto.focus();
-
-}
-
-avaliacaoAtual =
-avaliacao;
-
-const botao =
-document.getElementById(
-"publicarComentario"
-);
-
-if (botao) {
-
-botao.textContent =
-  "Atualizar avaliação";
-
-}
-
-}
 
 /* =========================================================
-EXCLUIR
+   EXCLUIR
 ========================================================= */
 
 async function excluirAvaliacao(
-id
+  id
 ) {
 
-const confirmar =
-window.confirm(
-"Deseja realmente excluir sua avaliação?"
-);
+  const confirmar =
+    window.confirm(
+      "Deseja realmente excluir sua avaliação?"
+    );
 
-if (!confirmar) {
-return;
+
+  if (!confirmar) {
+
+    return;
+
+  }
+
+
+  const user =
+    obterUsuarioAtual();
+
+
+  if (!user) {
+
+    abrirModalAuth(
+      "login"
+    );
+
+    return;
+
+  }
+
+
+  const {
+    error
+  } =
+    await supabaseClient
+
+      .from("avaliacoes")
+
+      .delete()
+
+      .eq(
+        "id",
+        id
+      )
+
+      .eq(
+        "usuario_id",
+        user.id
+      );
+
+
+  if (error) {
+
+    console.error(
+      "Erro ao excluir avaliação:",
+      error
+    );
+
+
+    alert(
+      "Não foi possível excluir a avaliação."
+    );
+
+    return;
+
+  }
+
+
+  avaliacaoAtual =
+    null;
+
+
+  notaSelecionada =
+    0;
+
+
+  atualizarEstrelas(
+    0
+  );
+
+
+  const texto =
+    document.getElementById(
+      "textoComentario"
+    );
+
+
+  if (texto) {
+
+    texto.value =
+      "";
+
+  }
+
+
+  await carregarAvaliacoes();
+
 }
 
-const {
-data: sessionData
-} =
-await supabaseClient.auth.getSession();
-
-const user =
-sessionData?.session?.user;
-
-if (!user) {
-return;
-}
-
-const {
-error
-} =
-await supabaseClient
-.from("avaliacoes")
-.delete()
-.eq(
-"id",
-id
-)
-.eq(
-"usuario_id",
-user.id
-);
-
-if (error) {
-
-console.error(
-  "Erro ao excluir avaliação:",
-  error
-);
-
-
-alert(
-  "Não foi possível excluir a avaliação."
-);
-
-return;
-
-}
-
-avaliacaoAtual =
-null;
-
-notaSelecionada =
-0;
-
-atualizarEstrelas(
-0
-);
-
-const texto =
-document.getElementById(
-"textoComentario"
-);
-
-if (texto) {
-
-texto.value =
-  "";
-
-}
-
-await carregarAvaliacoes();
-
-}
 
 /* =========================================================
-ERRO
+   ERRO
 ========================================================= */
 
 function mostrarErro(
-mensagem
+  mensagem
 ) {
 
-const pagina =
-document.querySelector(
-".local-page"
-);
+  const pagina =
+    document.querySelector(
+      ".local-page"
+    );
 
-if (!pagina) {
-return;
+
+  if (!pagina) {
+
+    return;
+
+  }
+
+
+  pagina.innerHTML = `
+
+    <div style="
+      min-height:100vh;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      padding:30px;
+      text-align:center;
+    ">
+
+      <h1 style="
+        color:#091D1C;
+        font-family:Georgia,serif;
+      ">
+
+        Ops!
+
+      </h1>
+
+
+      <p style="
+        color:#666;
+        line-height:1.6;
+      ">
+
+        ${escaparHTML(
+          mensagem
+        )}
+
+      </p>
+
+
+      <a
+        href="../index.html"
+        style="
+          margin-top:15px;
+          padding:12px 20px;
+          background:#091D1C;
+          color:#fff;
+          border-radius:9px;
+          font-weight:bold;
+        "
+      >
+
+        Voltar ao início
+
+      </a>
+
+    </div>
+
+  `;
+
 }
 
-pagina.innerHTML = `
-
-<div style="
-  min-height:100vh;
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  justify-content:center;
-  padding:30px;
-  text-align:center;
-">
-
-  <h1 style="
-    color:#091D1C;
-    font-family:Georgia,serif;
-  ">
-    Ops!
-  </h1>
-
-  <p style="
-    color:#666;
-    line-height:1.6;
-  ">
-    ${escaparHTML(
-      mensagem
-    )}
-  </p>
-
-  <a
-    href="../index.html"
-    style="
-      margin-top:15px;
-      padding:12px 20px;
-      background:#091D1C;
-      color:#fff;
-      border-radius:9px;
-      font-weight:bold;
-    "
-  >
-    Voltar ao início
-  </a>
-
-</div>
-
-`;
-
-}
 
 /* =========================================================
-EVENTOS
+   EVENTOS DA PÁGINA
 ========================================================= */
 
 function configurarEventos() {
 
-const abrirLogin =
-document.getElementById(
-"abrirLogin"
-);
-
-const abrirCadastro =
-document.getElementById(
-"abrirCadastro"
-);
-
-const fecharAuth =
-document.getElementById(
-"fecharAuth"
-);
-
-const trocarCadastro =
-document.getElementById(
-"trocarCadastro"
-);
-
-const trocarLogin =
-document.getElementById(
-"trocarLogin"
-);
-
-const botaoLogin =
-document.getElementById(
-"botaoLogin"
-);
-
-const botaoCadastro =
-document.getElementById(
-"botaoCadastro"
-);
-
-const botaoSair =
-document.getElementById(
-"botaoSair"
-);
-
-const botaoPublicar =
-document.getElementById(
-"publicarComentario"
-);
-
-if (abrirLogin) {
-
-abrirLogin.addEventListener(
-  "click",
-  () => abrirModalAuth(
-    "login"
-  )
-);
-
-}
-
-if (abrirCadastro) {
-
-abrirCadastro.addEventListener(
-  "click",
-  () => abrirModalAuth(
-    "cadastro"
-  )
-);
-
-}
-
-if (fecharAuth) {
-
-fecharAuth.addEventListener(
-  "click",
-  fecharModalAuth
-);
-
-}
-
-if (trocarCadastro) {
-
-trocarCadastro.addEventListener(
-  "click",
-  () => {
-
-    mostrarFormularioAuth(
-      "cadastro"
+  const botaoPublicar =
+    document.getElementById(
+      "publicarComentario"
     );
 
-  }
-);
 
-}
+  /*
+   * PUBLICAR AVALIAÇÃO
+   */
 
-if (trocarLogin) {
+  if (botaoPublicar) {
 
-trocarLogin.addEventListener(
-  "click",
-  () => {
-
-    mostrarFormularioAuth(
-      "login"
-    );
-
-  }
-);
-
-}
-
-if (botaoLogin) {
-
-botaoLogin.addEventListener(
-  "click",
-  fazerLogin
-);
-
-}
-
-if (botaoCadastro) {
-
-botaoCadastro.addEventListener(
-  "click",
-  cadastrarUsuario
-);
-
-}
-
-if (botaoSair) {
-
-botaoSair.addEventListener(
-  "click",
-  sairUsuario
-);
-
-}
-
-if (botaoPublicar) {
-
-botaoPublicar.addEventListener(
-  "click",
-  publicarComentario
-);
-
-}
-
-document
-.querySelectorAll(
-".star-button"
-)
-.forEach(
-botao => {
-
-    botao.addEventListener(
+    botaoPublicar.addEventListener(
       "click",
+      publicarComentario
+    );
+
+  }
+
+
+  /*
+   * ESTRELAS
+   */
+
+  document
+    .querySelectorAll(
+      ".star-button"
+    )
+    .forEach(
+      botao => {
+
+        botao.addEventListener(
+          "click",
+          () => {
+
+            notaSelecionada =
+              Number(
+                botao.dataset.rating
+              );
+
+
+            atualizarEstrelas(
+              notaSelecionada
+            );
+
+          }
+        );
+
+
+        botao.addEventListener(
+          "mouseenter",
+          () => {
+
+            atualizarEstrelas(
+              Number(
+                botao.dataset.rating
+              )
+            );
+
+          }
+        );
+
+      }
+    );
+
+
+  /*
+   * VOLTAR DAS ESTRELAS
+   */
+
+  const seletor =
+    document.getElementById(
+      "seletorEstrelas"
+    );
+
+
+  if (seletor) {
+
+    seletor.addEventListener(
+      "mouseleave",
       () => {
-
-        notaSelecionada =
-          Number(
-            botao.dataset.rating
-          );
-
 
         atualizarEstrelas(
           notaSelecionada
@@ -3001,133 +2693,139 @@ botao => {
       }
     );
 
+  }
 
-    botao.addEventListener(
-      "mouseenter",
-      () => {
 
-        atualizarEstrelas(
-          Number(
-            botao.dataset.rating
-          )
-        );
+  /*
+   * FOTO PRINCIPAL
+   */
+
+  const fotoPrincipal =
+    document.getElementById(
+      "fotoPrincipal"
+    );
+
+
+  if (fotoPrincipal) {
+
+    fotoPrincipal.addEventListener(
+      "click",
+      abrirFotoTelaCheia
+    );
+
+  }
+
+
+  /*
+   * FECHAR VISUALIZADOR
+   */
+
+  const photoViewer =
+    document.getElementById(
+      "photoViewer"
+    );
+
+
+  if (photoViewer) {
+
+    photoViewer.addEventListener(
+      "click",
+      event => {
+
+        if (
+          event.target ===
+          photoViewer
+        ) {
+
+          fecharFotoTelaCheia();
+
+        }
 
       }
     );
 
   }
-);
-
-const seletor =
-document.getElementById(
-"seletorEstrelas"
-);
-
-if (seletor) {
-
-seletor.addEventListener(
-  "mouseleave",
-  () => {
-
-    atualizarEstrelas(
-      notaSelecionada
-    );
-
-  }
-);
 
 }
 
-const modal =
-document.getElementById(
-"authModal"
-);
-
-if (modal) {
-
-modal.addEventListener(
-  "click",
-  event => {
-
-    if (
-      event.target ===
-      modal
-    ) {
-
-      fecharModalAuth();
-
-    }
-
-  }
-);
-
-}
-
-document.addEventListener(
-"keydown",
-event => {
-
-  if (
-    event.key ===
-    "Escape"
-  ) {
-
-    fecharModalAuth();
-
-  }
-
-}
-
-);
-
-}
 
 /* =========================================================
-MONITORAR LOGIN
+   MONITORAR ALTERAÇÃO DE LOGIN
 ========================================================= */
 
-supabaseClient.auth.onAuthStateChange(
-async (
-event,
-session
-) => {
-
-window.usuarioAtualSupabase =
-  session?.user ||
-  null;
-
+/*
+ * O login.js é o responsável pelo Supabase Auth.
+ *
+ * Aqui não criamos outro onAuthStateChange.
+ *
+ * Apenas atualizamos a avaliação quando o estado
+ * do usuário mudar.
+ */
 
 if (
-  session?.user
+  supabaseClient &&
+  supabaseClient.auth
 ) {
 
-  await mostrarUsuarioLogado(
-    session.user
+  supabaseClient.auth.onAuthStateChange(
+    async (
+      event,
+      session
+    ) => {
+
+      /*
+       * O login.js já atualiza:
+       *
+       * window.usuarioAtualSupabase
+       */
+
+      if (
+        session?.user
+      ) {
+
+        await verificarAvaliacaoUsuario();
+
+        /*
+         * Recarrega os comentários para que
+         * apareçam os botões Editar/Excluir
+         * do usuário recém-logado.
+         */
+
+        await carregarAvaliacoes();
+
+      } else {
+
+        avaliacaoAtual =
+          null;
+
+        notaSelecionada =
+          0;
+
+        atualizarEstrelas(
+          0
+        );
+
+        await carregarAvaliacoes();
+
+      }
+
+    }
   );
 
-} else {
-
-  mostrarUsuarioDeslogado();
-
 }
 
-}
-);
 
 /* =========================================================
-INICIAR
+   INICIAR
 ========================================================= */
 
 document.addEventListener(
-"DOMContentLoaded",
-async () => {
+  "DOMContentLoaded",
+  async () => {
 
-configurarEventos();
+    configurarEventos();
 
-window.usuarioAtualSupabase =
-  null;
+    await carregarLocal();
 
-await carregarLocal();
-
-}
+  }
 );
