@@ -510,32 +510,82 @@ INSTAGRAM
 ========================================================= */
 
 function configurarInstagram(item) {
-  const link = document.getElementById("instagramLocal");
-  const nome = document.getElementById("instagramNome");
 
-  if (!link || !nome) {
+  const link =
+    document.getElementById(
+      "instagramLocal"
+    );
+
+  const nome =
+    document.getElementById(
+      "instagramNome"
+    );
+
+  if (!link) {
     return;
   }
 
-  const usuario = item.instagram || "";
+  const instagram =
+    String(
+      item.instagram || ""
+    ).trim();
 
-  if (!usuario) {
-    link.style.display = "none";
+  if (!instagram) {
+
+    link.style.display =
+      "none";
+
     return;
   }
 
-  const url = `https://www.instagram.com/${usuario}/`;
+  let url = instagram;
 
-  nome.textContent = usuario
-    ? `@${usuario}`
-    : "Instagram";
+  /*
+    Aceita tanto:
 
-  link.href = url;
-  link.target = "_blank";
-  link.rel = "noopener noreferrer";
-  link.style.display = "flex";
+    https://www.instagram.com/vagaolanches_/
+
+    quanto:
+
+    vagaolanches_
+  */
+
+  if (
+    !/^https?:\/\//i.test(
+      url
+    )
+  ) {
+
+    url =
+      `https://www.instagram.com/${url.replace(/^@/, "")}/`;
+
+  }
+
+  /*
+    Texto visual do botão.
+    Nunca mostra a URL.
+  */
+
+  if (nome) {
+
+    nome.textContent =
+      "Instagram";
+
+  }
+
+  link.href =
+    url;
+
+  link.target =
+    "_blank";
+
+  link.rel =
+    "noopener noreferrer";
+
+  link.style.display =
+    "flex";
+
 }
-
 /* =========================================================
 WHATSAPP
 ========================================================= */
