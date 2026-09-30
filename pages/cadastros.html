@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <meta
+    name="theme-color"
+    content="#091D1C"
+  >
+
+  <title>Cadastros — Administração</title>
+
+  <style>
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: Arial, sans-serif;
+      background: #f5f3ef;
+      color: #222;
+      min-height: 100vh;
+    }
+
+    header {
+      background: #091D1C;
+      color: #fff;
+      padding: 22px 20px;
+    }
+
+    .header-content {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+    }
+
+    header h1 {
+      font-size: 22px;
+      margin-bottom: 5px;
+    }
+
+    header p {
+      font-size: 13px;
+      opacity: 0.75;
+    }
+
+    #botao-sair {
+      border: 1px solid rgba(255,255,255,0.3);
+      background: transparent;
+      color: #fff;
+      padding: 9px 15px;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+
+    #botao-sair:hover {
+      background: rgba(255,255,255,0.1);
+    }
+
+    main {
+      width: 100%;
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 25px 15px 50px;
+    }
+
+    .barra-topo {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+
+    .barra-topo h2 {
+      font-size: 20px;
+    }
+
+    #botao-atualizar {
+      border: none;
+      background: #194138;
+      color: #fff;
+      padding: 10px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+
+    #botao-atualizar:hover {
+      opacity: 0.9;
+    }
+
+    #mensagem {
+      display: none;
+      padding: 13px 15px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      font-size: 14px;
+    }
+
+    #mensagem.sucesso {
+      display: block;
+      background: #e6f4ea;
+      color: #1b5e20;
+    }
+
+    #mensagem.erro {
+      display: block;
+      background: #fdecea;
+      color: #b71c1c;
+    }
+
+    #carregando {
+      text-align: center;
+      padding: 40px 10px;
+      color: #666;
+    }
+
+    #sem-cadastros {
+      display: none;
+      text-align: center;
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 12px;
+      padding: 45px 20px;
+      color: #666;
+    }
+
+    .cadastro {
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 12px;
+      margin-bottom: 20px;
+      overflow: hidden;
+    }
+
+    .cadastro-header {
+      background: #fafafa;
+      border-bottom: 1px solid #ddd;
+      padding: 16px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 15px;
+    }
+
+    .cadastro-header h3 {
+      font-size: 18px;
+      color: #194138;
+    }
+
+    .status {
+      background: #fff3cd;
+      color: #856404;
+      padding: 5px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: bold;
+      white-space: nowrap;
+    }
+
+    .cadastro-conteudo {
+      padding: 18px;
+    }
+
+    .campo {
+      margin-bottom: 16px;
+    }
+
+    .campo label {
+      display: block;
+      font-size: 12px;
+      font-weight: bold;
+      color: #666;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+    }
+
+    .campo input,
+    .campo textarea,
+    .campo select {
+      width: 100%;
+      border: 1px solid #ccc;
+      border-radius: 7px;
+      padding: 10px 11px;
+      font-family: inherit;
+      font-size: 14px;
+      background: #fff;
+    }
+
+    .campo textarea {
+      min-height: 80px;
+      resize: vertical;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 15px;
+    }
+
+    .acoes {
+      border-top: 1px solid #eee;
+      padding: 15px 18px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .acoes button {
+      border: none;
+      border-radius: 8px;
+      padding: 10px 17px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    .btn-salvar {
+      background: #194138;
+      color: #fff;
+    }
+
+    .btn-aprovar {
+      background: #2e7d32;
+      color: #fff;
+    }
+
+    .btn-rejeitar {
+      background: #c62828;
+      color: #fff;
+    }
+
+    .btn-cancelar {
+      background: #e0e0e0;
+      color: #333;
+    }
+
+    .imagem-preview {
+      max-width: 220px;
+      max-height: 150px;
+      border-radius: 8px;
+      object-fit: cover;
+      margin-top: 8px;
+      display: none;
+    }
+
+    @media (max-width: 700px) {
+
+      .header-content {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .barra-topo {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .grid {
+        grid-template-columns: 1fr;
+      }
+
+      .acoes button {
+        width: 100%;
+      }
+
+    }
+
+  </style>
+
+</head>
+
+<body>
+
+  <header>
+
+    <div class="header-content">
+
+      <div>
+        <h1>Andrelândia — Administração</h1>
+        <p>Gerenciamento de cadastros comerciais</p>
+      </div>
+
+      <button id="botao-sair">
+        Sair
+      </button>
+
+    </div>
+
+  </header>
+
+
+  <main>
+
+    <div class="barra-topo">
+
+      <h2>
+        Cadastros pendentes
+      </h2>
+
+      <button id="botao-atualizar">
+        ↻ Atualizar
+      </button>
+
+    </div>
+
+
+    <div id="mensagem"></div>
+
+
+    <div id="carregando">
+      Verificando acesso...
+    </div>
+
+
+    <div id="sem-cadastros">
+      <h3>Nenhum cadastro pendente</h3>
+
+      <p style="margin-top:8px;">
+        Quando um comércio concluir o cadastro pelo WhatsApp,
+        ele aparecerá aqui para revisão.
+      </p>
+    </div>
+
+
+    <div id="lista-cadastros"></div>
+
+  </main>
+
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <script src="../JS/admin-cadastros.js"></script>
+
+</body>
+
+</html>
