@@ -2,17 +2,15 @@
    ANDRELÂNDIA — GUIA TURÍSTICO
    ADMIN-CADASTROS.JS
 
-   RESPONSABILIDADE:
+   PAINEL ADMINISTRATIVO
+
+   RESPONSABILIDADES:
    - Verificar usuário logado
    - Listar cadastros pendentes
    - Editar dados
    - Salvar alterações
-   - Testar aprovação via Edge Function
+   - Aprovar e publicar via Edge Function
    - Rejeitar cadastro
-
-   PUBLICAÇÃO:
-   - A publicação NÃO é feita diretamente pelo navegador.
-   - A aprovação será feita pela Edge Function.
    ========================================================= */
 
 
@@ -94,7 +92,10 @@ function esconderMensagem() {
 
 function escaparHTML(valor) {
 
-  if (valor === null || valor === undefined) {
+  if (
+    valor === null ||
+    valor === undefined
+  ) {
     return "";
   }
 
@@ -121,6 +122,52 @@ function valorOuVazio(valor) {
 
 
 /* =========================================================
+   FORMATAÇÃO
+   ========================================================= */
+
+function formatarData(data) {
+
+  if (!data) {
+    return "-";
+  }
+
+  const dataObj =
+    new Date(data);
+
+  if (
+    Number.isNaN(
+      dataObj.getTime()
+    )
+  ) {
+    return "-";
+  }
+
+  return dataObj.toLocaleDateString(
+    "pt-BR",
+    {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit"
+    }
+  );
+}
+
+
+function formatarTelefone(
+  telefone
+) {
+
+  if (!telefone) {
+    return "-";
+  }
+
+  return telefone;
+}
+
+
+/* =========================================================
    VERIFICAR LOGIN
    ========================================================= */
 
@@ -133,17 +180,20 @@ async function verificarLogin() {
     const {
       data,
       error
-    } = await supabaseClient.auth.getSession();
+    } =
+      await supabaseClient.auth.getSession();
 
     if (error) {
       throw error;
     }
 
-    const session = data.session;
+    const session =
+      data.session;
 
     if (!session) {
 
-      window.location.href = "login.html";
+      window.location.href =
+        "login.html";
 
       return;
     }
@@ -166,21 +216,27 @@ async function verificarLogin() {
 
 
 /* =========================================================
-   CARREGAR CADASTROS PENDENTES
+   CARREGAR CADASTROS
    ========================================================= */
 
 async function carregarCadastros() {
 
   if (carregando) {
-    carregando.style.display = "block";
+
+    carregando.style.display =
+      "block";
   }
 
   if (listaCadastros) {
-    listaCadastros.innerHTML = "";
+
+    listaCadastros.innerHTML =
+      "";
   }
 
   if (semCadastros) {
-    semCadastros.style.display = "none";
+
+    semCadastros.style.display =
+      "none";
   }
 
   try {
@@ -188,36 +244,48 @@ async function carregarCadastros() {
     const {
       data,
       error
-    } = await supabaseClient
-      .from("cadastros_comercios")
-      .select("*")
-      .eq("status", "pendente")
-      .order("criado_em", {
-        ascending: true
-      });
+    } =
+      await supabaseClient
+        .from("cadastros_comercios")
+        .select("*")
+        .eq("status", "pendente")
+        .order("criado_em", {
+          ascending: true
+        });
 
     if (error) {
       throw error;
     }
 
     if (carregando) {
-      carregando.style.display = "none";
+
+      carregando.style.display =
+        "none";
     }
 
-    if (!data || data.length === 0) {
+    if (
+      !data ||
+      data.length === 0
+    ) {
 
       if (semCadastros) {
-        semCadastros.style.display = "block";
+
+        semCadastros.style.display =
+          "block";
       }
 
       return;
     }
 
-    data.forEach(cadastro => {
+    data.forEach(
+      cadastro => {
 
-      criarCadastro(cadastro);
+        criarCadastro(
+          cadastro
+        );
 
-    });
+      }
+    );
 
   } catch (erro) {
 
@@ -227,7 +295,9 @@ async function carregarCadastros() {
     );
 
     if (carregando) {
-      carregando.style.display = "none";
+
+      carregando.style.display =
+        "none";
     }
 
     mostrarMensagem(
@@ -242,14 +312,18 @@ async function carregarCadastros() {
    CRIAR CARD
    ========================================================= */
 
-function criarCadastro(cadastro) {
+function criarCadastro(
+  cadastro
+) {
 
   if (!listaCadastros) {
     return;
   }
 
   const card =
-    document.createElement("div");
+    document.createElement(
+      "article"
+    );
 
   card.className =
     "cadastro-card";
@@ -257,34 +331,73 @@ function criarCadastro(cadastro) {
   card.dataset.id =
     cadastro.id;
 
+
   const imagem =
     cadastro.imagem_url
       ? `
         <div class="cadastro-imagem">
           <img
-            src="${escaparHTML(cadastro.imagem_url)}"
-            alt="${escaparHTML(cadastro.nome)}"
+            src="${escaparHTML(
+              cadastro.imagem_url
+            )}"
+            alt="${escaparHTML(
+              cadastro.nome ||
+              "Imagem do comércio"
+            )}"
             loading="lazy"
-            onerror="this.style.display='none'"
+            onerror="
+              this.parentElement.style.display='none'
+            "
           >
         </div>
       `
-      : "";
+      : `
+        <div class="cadastro-imagem cadastro-imagem-vazia">
+          <div class="cadastro-imagem-icone">
+            🏪
+          </div>
+
+          <span>
+            Sem imagem
+          </span>
+        </div>
+      `;
 
 
   card.innerHTML = `
 
     ${imagem}
 
+
     <div class="cadastro-conteudo">
 
-      <div class="cadastro-titulo">
 
-        <h2>
-          ${escaparHTML(
-            cadastro.nome || "Sem nome"
-          )}
-        </h2>
+      <!-- CABEÇALHO -->
+
+      <div class="cadastro-topo">
+
+        <div>
+
+          <span class="cadastro-label-topo">
+            CADASTRO PENDENTE
+          </span>
+
+          <h2 class="cadastro-nome">
+            ${escaparHTML(
+              cadastro.nome ||
+              "Sem nome"
+            )}
+          </h2>
+
+          <p class="cadastro-categoria">
+            ${escaparHTML(
+              cadastro.categoria ||
+              "Categoria não informada"
+            )}
+          </p>
+
+        </div>
+
 
         <span class="cadastro-status">
           Pendente
@@ -293,134 +406,358 @@ function criarCadastro(cadastro) {
       </div>
 
 
-      <div class="cadastro-campos">
+      <!-- INFORMAÇÕES -->
 
-        <label>
-          Nome
-          <input
-            type="text"
-            id="nome-${cadastro.id}"
-            value="${escaparHTML(
-              valorOuVazio(cadastro.nome)
-            )}"
-          >
-        </label>
+      <div class="cadastro-secao">
 
+        <div class="cadastro-secao-titulo">
 
-        <label>
-          Categoria
-          <input
-            type="text"
-            id="categoria-${cadastro.id}"
-            value="${escaparHTML(
-              valorOuVazio(cadastro.categoria)
-            )}"
-          >
-        </label>
+          <span class="cadastro-secao-icone">
+            📋
+          </span>
+
+          <div>
+            <strong>
+              Informações do comércio
+            </strong>
+
+            <small>
+              Dados principais
+            </small>
+          </div>
+
+        </div>
 
 
-        <label>
-          WhatsApp
-          <input
-            type="text"
-            id="whatsapp-${cadastro.id}"
-            value="${escaparHTML(
-              valorOuVazio(cadastro.whatsapp)
-            )}"
-          >
-        </label>
+        <div class="cadastro-campos">
 
 
-        <label>
-          Instagram
-          <input
-            type="text"
-            id="instagram-${cadastro.id}"
-            value="${escaparHTML(
-              valorOuVazio(cadastro.instagram)
-            )}"
-          >
-        </label>
+          <label>
+
+            <span>
+              Nome
+            </span>
+
+            <input
+              type="text"
+              id="nome-${cadastro.id}"
+              value="${escaparHTML(
+                valorOuVazio(
+                  cadastro.nome
+                )
+              )}"
+            >
+
+          </label>
 
 
-        <label>
-          Endereço
-          <textarea
-            id="endereco-${cadastro.id}"
-          >${escaparHTML(
-            valorOuVazio(cadastro.endereco)
-          )}</textarea>
-        </label>
+          <label>
+
+            <span>
+              Categoria
+            </span>
+
+            <input
+              type="text"
+              id="categoria-${cadastro.id}"
+              value="${escaparHTML(
+                valorOuVazio(
+                  cadastro.categoria
+                )
+              )}"
+            >
+
+          </label>
 
 
-        <label>
-          Horário
-          <textarea
-            id="horario-${cadastro.id}"
-          >${escaparHTML(
-            valorOuVazio(cadastro.horario)
-          )}</textarea>
-        </label>
+          <label>
+
+            <span>
+              WhatsApp
+            </span>
+
+            <input
+              type="text"
+              id="whatsapp-${cadastro.id}"
+              value="${escaparHTML(
+                valorOuVazio(
+                  cadastro.whatsapp
+                )
+              )}"
+            >
+
+          </label>
 
 
-        <label>
-          Descrição
-          <textarea
-            id="descricao-${cadastro.id}"
-          >${escaparHTML(
-            valorOuVazio(cadastro.descricao)
-          )}</textarea>
-        </label>
+          <label>
+
+            <span>
+              Instagram
+            </span>
+
+            <input
+              type="text"
+              id="instagram-${cadastro.id}"
+              value="${escaparHTML(
+                valorOuVazio(
+                  cadastro.instagram
+                )
+              )}"
+            >
+
+          </label>
 
 
-        <label>
-          Imagem URL
-          <input
-            type="url"
-            id="imagem-${cadastro.id}"
-            value="${escaparHTML(
-              valorOuVazio(cadastro.imagem_url)
-            )}"
-          >
-        </label>
-
-
-        <label>
-          Latitude
-          <input
-            type="number"
-            step="any"
-            id="latitude-${cadastro.id}"
-            value="${escaparHTML(
-              valorOuVazio(cadastro.latitude)
-            )}"
-          >
-        </label>
-
-
-        <label>
-          Longitude
-          <input
-            type="number"
-            step="any"
-            id="longitude-${cadastro.id}"
-            value="${escaparHTML(
-              valorOuVazio(cadastro.longitude)
-            )}"
-          >
-        </label>
+        </div>
 
       </div>
 
 
+      <!-- LOCALIZAÇÃO -->
+
+      <div class="cadastro-secao">
+
+        <div class="cadastro-secao-titulo">
+
+          <span class="cadastro-secao-icone">
+            📍
+          </span>
+
+          <div>
+
+            <strong>
+              Localização
+            </strong>
+
+            <small>
+              Endereço e coordenadas
+            </small>
+
+          </div>
+
+        </div>
+
+
+        <div class="cadastro-campos">
+
+
+          <label class="campo-largo">
+
+            <span>
+              Endereço
+            </span>
+
+            <textarea
+              id="endereco-${cadastro.id}"
+              rows="2"
+            >${escaparHTML(
+              valorOuVazio(
+                cadastro.endereco
+              )
+            )}</textarea>
+
+          </label>
+
+
+          <label>
+
+            <span>
+              Latitude
+            </span>
+
+            <input
+              type="number"
+              step="any"
+              id="latitude-${cadastro.id}"
+              value="${escaparHTML(
+                valorOuVazio(
+                  cadastro.latitude
+                )
+              )}"
+            >
+
+          </label>
+
+
+          <label>
+
+            <span>
+              Longitude
+            </span>
+
+            <input
+              type="number"
+              step="any"
+              id="longitude-${cadastro.id}"
+              value="${escaparHTML(
+                valorOuVazio(
+                  cadastro.longitude
+                )
+              )}"
+            >
+
+          </label>
+
+
+        </div>
+
+      </div>
+
+
+      <!-- DETALHES -->
+
+      <div class="cadastro-secao">
+
+        <div class="cadastro-secao-titulo">
+
+          <span class="cadastro-secao-icone">
+            ✏️
+          </span>
+
+          <div>
+
+            <strong>
+              Detalhes
+            </strong>
+
+            <small>
+              Informações exibidas no guia
+            </small>
+
+          </div>
+
+        </div>
+
+
+        <div class="cadastro-campos">
+
+
+          <label>
+
+            <span>
+              Horário
+            </span>
+
+            <textarea
+              id="horario-${cadastro.id}"
+              rows="2"
+            >${escaparHTML(
+              valorOuVazio(
+                cadastro.horario
+              )
+            )}</textarea>
+
+          </label>
+
+
+          <label>
+
+            <span>
+              URL da imagem
+            </span>
+
+            <input
+              type="url"
+              id="imagem-${cadastro.id}"
+              value="${escaparHTML(
+                valorOuVazio(
+                  cadastro.imagem_url
+                )
+              )}"
+              placeholder="https://..."
+            >
+
+          </label>
+
+
+          <label class="campo-largo">
+
+            <span>
+              Descrição
+            </span>
+
+            <textarea
+              id="descricao-${cadastro.id}"
+              rows="4"
+            >${escaparHTML(
+              valorOuVazio(
+                cadastro.descricao
+              )
+            )}</textarea>
+
+          </label>
+
+
+        </div>
+
+      </div>
+
+
+      <!-- METADADOS -->
+
+      <div class="cadastro-meta">
+
+        <div>
+
+          <span>
+            ID do cadastro
+          </span>
+
+          <strong>
+            ${escaparHTML(
+              cadastro.id
+            )}
+          </strong>
+
+        </div>
+
+
+        <div>
+
+          <span>
+            Enviado em
+          </span>
+
+          <strong>
+            ${formatarData(
+              cadastro.criado_em
+            )}
+          </strong>
+
+        </div>
+
+
+        <div>
+
+          <span>
+            Telefone do cadastro
+          </span>
+
+          <strong>
+            ${escaparHTML(
+              formatarTelefone(
+                cadastro.telefone_usuario
+              )
+            )}
+          </strong>
+
+        </div>
+
+      </div>
+
+
+      <!-- AÇÕES -->
+
       <div class="cadastro-acoes">
+
 
         <button
           type="button"
           class="botao-salvar"
           onclick="salvarCadastro('${cadastro.id}')"
         >
-          Salvar alterações
+          <span>💾</span>
+          <span>Salvar alterações</span>
         </button>
 
 
@@ -429,7 +766,8 @@ function criarCadastro(cadastro) {
           class="botao-aprovar"
           onclick="aprovarCadastro('${cadastro.id}')"
         >
-          Testar aprovação
+          <span>✓</span>
+          <span>Aprovar e publicar</span>
         </button>
 
 
@@ -438,69 +776,86 @@ function criarCadastro(cadastro) {
           class="botao-rejeitar"
           onclick="rejeitarCadastro('${cadastro.id}')"
         >
-          Rejeitar
+          <span>×</span>
+          <span>Rejeitar</span>
         </button>
+
 
       </div>
 
+
     </div>
+
   `;
 
 
-  listaCadastros.appendChild(card);
+  listaCadastros.appendChild(
+    card
+  );
 }
 
 
 /* =========================================================
-   OBTER DADOS DO CARD
+   OBTER DADOS
    ========================================================= */
 
-function obterDadosCard(id) {
+function obterDadosCard(
+  id
+) {
 
   const nome =
     document.getElementById(
       `nome-${id}`
     )?.value.trim() || "";
 
+
   const categoria =
     document.getElementById(
       `categoria-${id}`
     )?.value.trim() || "";
+
 
   const whatsapp =
     document.getElementById(
       `whatsapp-${id}`
     )?.value.trim() || "";
 
+
   const instagram =
     document.getElementById(
       `instagram-${id}`
     )?.value.trim() || "";
+
 
   const endereco =
     document.getElementById(
       `endereco-${id}`
     )?.value.trim() || "";
 
+
   const horario =
     document.getElementById(
       `horario-${id}`
     )?.value.trim() || "";
+
 
   const descricao =
     document.getElementById(
       `descricao-${id}`
     )?.value.trim() || "";
 
+
   const imagem_url =
     document.getElementById(
       `imagem-${id}`
     )?.value.trim() || "";
 
+
   const latitudeTexto =
     document.getElementById(
       `latitude-${id}`
     )?.value.trim() || "";
+
 
   const longitudeTexto =
     document.getElementById(
@@ -511,12 +866,17 @@ function obterDadosCard(id) {
   const latitude =
     latitudeTexto === ""
       ? null
-      : Number(latitudeTexto);
+      : Number(
+          latitudeTexto
+        );
+
 
   const longitude =
     longitudeTexto === ""
       ? null
-      : Number(longitudeTexto);
+      : Number(
+          longitudeTexto
+        );
 
 
   return {
@@ -548,7 +908,7 @@ function obterDadosCard(id) {
 
 
 /* =========================================================
-   VALIDAR DADOS
+   VALIDAR
    ========================================================= */
 
 function validarDadosCadastro(
@@ -559,6 +919,17 @@ function validarDadosCadastro(
 
     mostrarMensagem(
       "Informe o nome do comércio.",
+      "erro"
+    );
+
+    return false;
+  }
+
+
+  if (!dados.categoria) {
+
+    mostrarMensagem(
+      "Informe a categoria do comércio.",
       "erro"
     );
 
@@ -598,6 +969,34 @@ function validarDadosCadastro(
   }
 
 
+  if (
+    dados.latitude < -90 ||
+    dados.latitude > 90
+  ) {
+
+    mostrarMensagem(
+      "Latitude inválida.",
+      "erro"
+    );
+
+    return false;
+  }
+
+
+  if (
+    dados.longitude < -180 ||
+    dados.longitude > 180
+  ) {
+
+    mostrarMensagem(
+      "Longitude inválida.",
+      "erro"
+    );
+
+    return false;
+  }
+
+
   return true;
 }
 
@@ -606,11 +1005,14 @@ function validarDadosCadastro(
    SALVAR ALTERAÇÕES
    ========================================================= */
 
-async function salvarCadastro(id) {
+async function salvarCadastro(
+  id
+) {
 
   try {
 
     esconderMensagem();
+
 
     const dados =
       obterDadosCard(id);
@@ -627,46 +1029,53 @@ async function salvarCadastro(id) {
 
     const {
       error
-    } = await supabaseClient
-      .from("cadastros_comercios")
-      .update({
+    } =
+      await supabaseClient
+        .from("cadastros_comercios")
+        .update({
 
-        nome:
-          dados.nome,
+          nome:
+            dados.nome,
 
-        categoria:
-          dados.categoria,
+          categoria:
+            dados.categoria,
 
-        whatsapp:
-          dados.whatsapp,
+          whatsapp:
+            dados.whatsapp,
 
-        instagram:
-          dados.instagram,
+          instagram:
+            dados.instagram,
 
-        endereco:
-          dados.endereco,
+          endereco:
+            dados.endereco,
 
-        horario:
-          dados.horario,
+          horario:
+            dados.horario,
 
-        descricao:
-          dados.descricao,
+          descricao:
+            dados.descricao,
 
-        imagem_url:
-          dados.imagem_url,
+          imagem_url:
+            dados.imagem_url,
 
-        latitude:
-          dados.latitude,
+          latitude:
+            dados.latitude,
 
-        longitude:
-          dados.longitude,
+          longitude:
+            dados.longitude,
 
-        atualizado_em:
-          new Date().toISOString()
+          atualizado_em:
+            new Date().toISOString()
 
-      })
-      .eq("id", id)
-      .eq("status", "pendente");
+        })
+        .eq(
+          "id",
+          id
+        )
+        .eq(
+          "status",
+          "pendente"
+        );
 
 
     if (error) {
@@ -690,6 +1099,7 @@ async function salvarCadastro(id) {
       erro
     );
 
+
     mostrarMensagem(
       "Não foi possível salvar as alterações.",
       "erro"
@@ -699,34 +1109,22 @@ async function salvarCadastro(id) {
 
 
 /* =========================================================
-   TESTAR APROVAÇÃO
-   =========================================================
-
-   IMPORTANTE:
-
-   ESTA FUNÇÃO AINDA NÃO APROVA.
-
-   Ela chama a Edge Function com:
-
-   acao: "testar_aprovacao"
-
-   A Edge Function verifica:
-   - JWT
-   - ADMIN_USER_ID
-   - cadastro pendente
-
-   E retorna os dados que seriam publicados.
-
-   NADA é alterado no banco.
-   NADA é enviado para o GitHub.
+   APROVAR E PUBLICAR
    ========================================================= */
 
-async function aprovarCadastro(id) {
+async function aprovarCadastro(
+  id
+) {
 
   const confirmar =
     confirm(
-      "Deseja testar a aprovação deste cadastro?\n\n" +
-      "Neste momento nenhum dado será publicado e o cadastro continuará pendente."
+
+      "Aprovar e publicar este comércio?\n\n" +
+
+      "O cadastro será enviado para o GitHub e poderá aparecer no Guia Turístico após a atualização do site.\n\n" +
+
+      "Essa ação não deve ser feita se os dados ainda estiverem incorretos."
+
     );
 
 
@@ -740,10 +1138,38 @@ async function aprovarCadastro(id) {
     esconderMensagem();
 
 
+    const card =
+      document.querySelector(
+        `.cadastro-card[data-id="${id}"]`
+      );
+
+
+    const botao =
+      card?.querySelector(
+        ".botao-aprovar"
+      );
+
+
+    if (botao) {
+
+      botao.disabled =
+        true;
+
+      botao.innerHTML =
+        `
+          <span>⏳</span>
+          <span>Publicando...</span>
+        `;
+    }
+
+
     const {
       data,
       error
-    } = await supabaseClient.auth.getSession();
+    } =
+      await supabaseClient
+        .auth
+        .getSession();
 
 
     if (error) {
@@ -781,15 +1207,16 @@ async function aprovarCadastro(id) {
 
           },
 
-          body: JSON.stringify({
+          body:
+            JSON.stringify({
 
-            acao:
-              "testar_aprovacao",
+              acao:
+                "aprovar_cadastro",
 
-            cadastro_id:
-              id
+              cadastro_id:
+                id
 
-          })
+            })
 
         }
       );
@@ -806,16 +1233,18 @@ async function aprovarCadastro(id) {
     } catch {
 
       resultado = {
+
         ok: false,
+
         error:
           "A Edge Function não retornou JSON válido."
-      };
 
+      };
     }
 
 
     console.log(
-      "Resposta da Edge Function:",
+      "Resposta da aprovação:",
       resultado
     );
 
@@ -826,9 +1255,11 @@ async function aprovarCadastro(id) {
     ) {
 
       throw new Error(
+
         resultado.error ||
         resultado.mensagem ||
         `Erro HTTP ${resposta.status}`
+
       );
     }
 
@@ -837,59 +1268,77 @@ async function aprovarCadastro(id) {
       resultado.comercio;
 
 
-    const resumo = [
+    alert(
 
-      `Nome: ${comercio.nome || "-"}`,
+      "Cadastro aprovado com sucesso!\n\n" +
 
-      `Categoria: ${comercio.categoria || "-"}`,
+      `Comércio: ${
+        comercio?.nome ||
+        "Comércio"
+      }\n\n` +
 
-      `Endereço: ${comercio.endereco || "-"}`,
+      "O cadastro foi publicado no GitHub."
 
-      `Latitude: ${comercio.latitude ?? "-"}`,
-
-      `Longitude: ${comercio.longitude ?? "-"}`,
-
-      "",
-
-      "TESTE CONCLUÍDO.",
-
-      "Nada foi publicado.",
-
-      "O cadastro continua pendente."
-
-    ].join("\n");
-
-
-    alert(resumo);
+    );
 
 
     mostrarMensagem(
-      "Teste de aprovação concluído. Nada foi publicado.",
+      "Cadastro aprovado e publicado com sucesso.",
       "sucesso"
     );
+
+
+    await carregarCadastros();
 
 
   } catch (erro) {
 
     console.error(
-      "Erro no teste de aprovação:",
+      "Erro ao aprovar cadastro:",
       erro
     );
 
 
     mostrarMensagem(
-      `Erro no teste: ${erro.message}`,
+      `Não foi possível aprovar: ${erro.message}`,
       "erro"
     );
+
+
+    const card =
+      document.querySelector(
+        `.cadastro-card[data-id="${id}"]`
+      );
+
+
+    const botao =
+      card?.querySelector(
+        ".botao-aprovar"
+      );
+
+
+    if (botao) {
+
+      botao.disabled =
+        false;
+
+      botao.innerHTML =
+        `
+          <span>✓</span>
+          <span>Aprovar e publicar</span>
+        `;
+    }
   }
 }
 
 
 /* =========================================================
-   REJEITAR CADASTRO
+   REJEITAR
    ========================================================= */
 
-async function rejeitarCadastro(id) {
+async function rejeitarCadastro(
+  id
+) {
 
   const motivo =
     prompt(
@@ -921,7 +1370,11 @@ async function rejeitarCadastro(id) {
 
   const confirmar =
     confirm(
-      "Deseja realmente rejeitar este cadastro?"
+
+      "Deseja realmente rejeitar este cadastro?\n\n" +
+
+      `Motivo: ${motivoFinal}`
+
     );
 
 
@@ -939,7 +1392,9 @@ async function rejeitarCadastro(id) {
       data: usuarioData,
       error: usuarioError
     } =
-      await supabaseClient.auth.getUser();
+      await supabaseClient
+        .auth
+        .getUser();
 
 
     if (usuarioError) {
@@ -962,28 +1417,35 @@ async function rejeitarCadastro(id) {
 
     const {
       error
-    } = await supabaseClient
-      .from("cadastros_comercios")
-      .update({
+    } =
+      await supabaseClient
+        .from("cadastros_comercios")
+        .update({
 
-        status:
-          "rejeitado",
+          status:
+            "rejeitado",
 
-        revisado_por:
-          usuario.id,
+          revisado_por:
+            usuario.id,
 
-        revisado_em:
-          new Date().toISOString(),
+          revisado_em:
+            new Date().toISOString(),
 
-        motivo_rejeicao:
-          motivoFinal,
+          motivo_rejeicao:
+            motivoFinal,
 
-        atualizado_em:
-          new Date().toISOString()
+          atualizado_em:
+            new Date().toISOString()
 
-      })
-      .eq("id", id)
-      .eq("status", "pendente");
+        })
+        .eq(
+          "id",
+          id
+        )
+        .eq(
+          "status",
+          "pendente"
+        );
 
 
     if (error) {
@@ -1027,7 +1489,9 @@ async function sair() {
     const {
       error
     } =
-      await supabaseClient.auth.signOut();
+      await supabaseClient
+        .auth
+        .signOut();
 
 
     if (error) {
@@ -1063,7 +1527,13 @@ if (botaoAtualizar) {
 
   botaoAtualizar.addEventListener(
     "click",
-    carregarCadastros
+    async () => {
+
+      esconderMensagem();
+
+      await carregarCadastros();
+
+    }
   );
 
 }
@@ -1080,7 +1550,7 @@ if (botaoSair) {
 
 
 /* =========================================================
-   ALTERAÇÃO DE AUTENTICAÇÃO
+   AUTENTICAÇÃO
    ========================================================= */
 
 supabaseClient.auth.onAuthStateChange(
