@@ -33,7 +33,7 @@
     "telefone": "(35) 99171-5593",
     "site": "",
     "instagram": "",
-    "latitude": -21.738670,
+    "latitude": -21.73867,
     "longitude": -44.306078,
     "x": null,
     "y": null,
@@ -419,7 +419,7 @@
     "galeria": [],
     "pagina": "local.html"
   },
-{
+  {
     "id": "fernando-auto-pecas",
     "nome": "Fernando Auto Peças",
     "categoria": "Autopeças",
@@ -2078,7 +2078,7 @@
     "galeria": [],
     "pagina": "local.html"
   },
-{
+  {
     "id": "eletrozema-andrelandia",
     "nome": "Eletrozema",
     "categoria": "Eletrodomésticos",
@@ -2897,7 +2897,7 @@
     "galeria": [],
     "pagina": "local.html"
   },
-   {
+  {
     "id": "bar-santos-dumont",
     "nome": "Bar Santos Dumont",
     "categoria": "Bar",
@@ -3317,7 +3317,7 @@
     "galeria": [],
     "pagina": "local.html"
   },
-   {
+  {
     "id": "pizzaria-andrelandia",
     "nome": "Pizzaria Andrelândia",
     "categoria": "Pizzaria",
@@ -3967,5 +3967,24 @@
     "capa": "./img/churras-grelhados/capa.png",
     "galeria": [],
     "pagina": "local.html"
+  },
+  {
+    "id": "pedroxteste",
+    "nome": "pedroxteste",
+    "categoria": "Lanchonete",
+    "descricao": "Descubra um mundo de sabores em cada opção do nosso cardápio!",
+    "historia": "",
+    "curiosidades": "",
+    "endereco": "R. São João Del Rei, 248, Andrelândia - MG",
+    "horario": "18:00 às 00:00",
+    "entrada": "",
+    "telefone": "3591354677",
+    "whatsapp": "3591354677",
+    "instagram": "https://www.instagram.com/vagaolanches_?stkn=YTBlbDMyemV1Ynk2",
+    "site": "",
+    "latitude": -21.735703,
+    "longitude": -44.306538,
+    "imagem": "",
+    "imagens": []
   }
 ]
