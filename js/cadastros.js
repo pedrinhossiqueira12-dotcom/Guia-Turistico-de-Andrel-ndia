@@ -209,6 +209,7 @@ if (descricaoFormulario) {
 
 }
 
+
 return;
 
 }
@@ -289,7 +290,10 @@ const numero =
 Number(
 String(valor)
 .trim()
-.replace(",", ".")
+.replace(
+",",
+"."
+)
 );
 
 if (
@@ -334,8 +338,8 @@ async function obterUsuarioCadastro() {
 
 /*
 
-Primeiro tenta utilizar o estado
-mantido pelo login.js.
+Primeiro tenta utilizar o usuário
+que já foi carregado pelo login.js.
 */
 
 if (
@@ -357,9 +361,17 @@ if (usuario) {
 
 /*
 
-Caso a sessão ainda não tenha sido
-disponibilizada pelo login.js,
-consultamos diretamente o Supabase.
+Se o login.js ainda não tiver
+disponibilizado o usuário, usamos
+getSession().
+
+
+IMPORTANTE:
+
+
+Não usamos getUser() aqui porque
+getUser() gera AuthSessionMissingError
+quando não existe sessão.
 */
 
 try {
@@ -368,13 +380,15 @@ const {
   data,
   error
 } =
-  await cadastrosSupabase.auth.getUser();
+  await cadastrosSupabase
+    .auth
+    .getSession();
 
 
 if (error) {
 
   console.error(
-    "Erro ao obter usuário:",
+    "Erro ao verificar sessão:",
     error
   );
 
@@ -384,14 +398,14 @@ if (error) {
 
 
 return (
-  data?.user ||
+  data?.session?.user ||
   null
 );
 
 } catch (erro) {
 
 console.error(
-  "Erro ao consultar sessão:",
+  "Erro inesperado ao verificar sessão:",
   erro
 );
 
@@ -402,22 +416,60 @@ return null;
 }
 
 /* =========================================================
-VERIFICAR LOGIN
+ABRIR LOGIN
 ========================================================= */
 
-async function verificarLoginCadastro() {
+function abrirLoginCadastro() {
 
 /*
 
-Obtém o usuário atual.
+O login.js é responsável pelo modal.
+
+
+Portanto, não criamos outro sistema
+de login aqui.
 */
+
+if (
+typeof abrirModalAuth ===
+"function"
+) {
+
+console.log(
+  "Abrindo modal de login..."
+);
+
+
+abrirModalAuth(
+  "login"
+);
+
+
+return true;
+
+}
+
+console.error(
+"abrirModalAuth() não está disponível. " +
+"Verifique se login.js foi carregado antes de cadastros.js."
+);
+
+return false;
+
+}
+
+/* =========================================================
+EXIGIR LOGIN
+========================================================= */
+
+async function verificarLoginCadastro() {
 
 const usuario =
 await obterUsuarioCadastro();
 
 /*
 
-Usuário já está logado.
+Usuário está logado.
 */
 
 if (usuario) {
@@ -429,29 +481,9 @@ return usuario;
 /*
 
 Usuário não está logado.
-
-
-Abre o mesmo modal utilizado
-pelo index.html e local.html.
 */
 
-if (
-typeof abrirModalAuth ===
-"function"
-) {
-
-abrirModalAuth(
-  "login"
-);
-
-} else {
-
-console.error(
-  "A função abrirModalAuth() não está disponível. " +
-  "Verifique se login.js foi carregado antes de cadastros.js."
-);
-
-}
+abrirLoginCadastro();
 
 mostrarAviso(
 "Para enviar um cadastro, entre na sua conta ou crie uma conta.",
@@ -468,20 +500,6 @@ OBTENER ARQUIVO DA FOTO
 
 function obterArquivoImagem() {
 
-/*
-
-O formulário utiliza normalmente:
-
-
-id="imagem"
-
-
-Também aceitamos:
-
-
-id="foto"
-*/
-
 const campoImagem =
 document.getElementById(
 "imagem"
@@ -495,6 +513,7 @@ if (!campoImagem) {
 console.warn(
   "Campo de imagem não encontrado."
 );
+
 
 return null;
 
@@ -703,7 +722,7 @@ throw new Error(
 }
 
 /* -------------------------------------------------------
-GERAR URL PÚBLICA
+URL PÚBLICA
 ------------------------------------------------------- */
 
 const {
@@ -776,6 +795,7 @@ mostrarAviso(
   "erro"
 );
 
+
 return;
 
 }
@@ -794,6 +814,7 @@ if (!botaoEnviar) {
 console.error(
   "Botão de envio do formulário não encontrado."
 );
+
 
 return;
 
@@ -861,7 +882,7 @@ const campoLongitude =
 
 
 /* -----------------------------------------------------
-   VALIDAR CAMPOS EXISTENTES
+   CAMPOS OBRIGATÓRIOS
 ----------------------------------------------------- */
 
 if (
@@ -878,7 +899,7 @@ if (
 
 
 /* -----------------------------------------------------
-   LER CAMPOS
+   VALORES
 ----------------------------------------------------- */
 
 const nome =
@@ -1012,7 +1033,7 @@ if (arquivoImagem) {
 
 
 /* -----------------------------------------------------
-   DADOS DO CADASTRO
+   OBJETO DO CADASTRO
 ----------------------------------------------------- */
 
 const cadastro = {
@@ -1075,7 +1096,7 @@ console.log(
 
 
 /* -----------------------------------------------------
-   SUPABASE
+   ENVIO SUPABASE
 ----------------------------------------------------- */
 
 botaoEnviar.textContent =
@@ -1236,12 +1257,15 @@ document.addEventListener(
 "DOMContentLoaded",
 async () => {
 
+console.log(
+  "Cadastros — verificando sessão..."
+);
+
+
 /*
  * Aguarda o login.js verificar a sessão.
  *
- * Isso evita abrir o modal de login por engano
- * enquanto o Supabase ainda está carregando
- * uma sessão existente.
+ * O login.js já possui verificarUsuario().
  */
 
 let usuario =
@@ -1264,29 +1288,38 @@ if (
 }
 
 
+console.log(
+  "Cadastros — usuário encontrado:",
+  usuario
+);
+
+
 /*
- * Se não estiver logado,
+ * Se não houver usuário,
  * abre automaticamente o modal.
  */
 
 if (!usuario) {
 
-  if (
-    typeof abrirModalAuth ===
-    "function"
-  ) {
+  console.log(
+    "Cadastros — usuário não está logado."
+  );
 
-    abrirModalAuth(
-      "login"
-    );
 
-  } else {
+  /*
+   * Pequeno atraso para garantir que
+   * o DOM do modal já esteja disponível.
+   */
 
-    console.error(
-      "A função abrirModalAuth() não está disponível."
-    );
+  setTimeout(
+    () => {
 
-  }
+      abrirLoginCadastro();
+
+    },
+    100
+  );
+
 
   return;
 
