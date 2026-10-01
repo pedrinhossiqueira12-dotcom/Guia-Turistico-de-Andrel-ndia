@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+
+<html lang="pt-BR">
+
+<head>
+
+<meta charset="UTF-8">
+
+<meta
+name="viewport"
+content="width=device-width, initial-scale=1.0"
+
+
+
+
+<meta
+name="theme-color"
+content="#091D1C"
+
+
+
+
+<title>Mural — Andrelândia — Guia Turístico</title>
+
+<link rel="stylesheet" href="../styles/login.css" >
+
+<link rel="stylesheet" href="../styles/mural.css" >
+
+</head>
+
+<body>
+
+<!-- ===================================================== CABEÇALHO ===================================================== -->
+
+<header class="cabecalho">
+
+<div class="cabecalho-conteudo">
+
+<a
+  href="../index.html"
+  class="botao-voltar"
+  aria-label="Voltar"
+>
+  ←
+</a>
+
+<div class="cabecalho-texto">
+
+  <h1>
+    Andrelândia — Guia Turístico
+  </h1>
+
+  <p>
+    Mural de pessoas de Andrelândia
+  </p>
+
+</div>
+
+</div>
+
+</header>
+
+<!-- ===================================================== CONTEÚDO ===================================================== -->
+
+<main class="pagina">
+
+<section class="introducao">
+
+<span class="mural-kicker">
+  MURAL
+</span>
+
+<h2>
+  Faça parte do mural
+</h2>
+
+<p>
+  Cadastre seu perfil para aparecer no Mural de
+  Pessoas de Andrelândia. Seu cadastro será analisado
+  antes de ser publicado.
+</p>
+
+</section>
+
+<!-- =================================================== AVISO ==================================================== -->
+
+<div class="aviso aviso-info" id="aviso" ></div>
+
+<!-- =================================================== ESTADO DO USUÁRIO ==================================================== -->
+
+<section class="usuario-box" id="usuarioBox" >
+
+<div class="usuario-box-icone">
+  ✓
+</div>
+
+<div>
+
+  <strong id="usuarioNome">
+    Conta autenticada
+  </strong>
+
+  <span id="usuarioEmail">
+    Você está conectado.
+  </span>
+
+</div>
+
+</section>
+
+<!-- =================================================== CADASTRO ==================================================== -->
+
+<section class="formulario-container" id="formularioContainer" >
+
+<div class="formulario-cabecalho">
+
+  <span class="formulario-kicker">
+    NOVO PERFIL
+  </span>
+
+  <h2>
+    Informações do seu perfil
+  </h2>
+
+  <p>
+    Preencha as informações que você gostaria de
+    apresentar no mural.
+  </p>
+
+</div>
+
+
+<form id="formularioMural">
+
+
+  <!-- ===============================================
+       NOME
+  ================================================ -->
+
+  <div class="campo">
+
+    <label for="nome">
+      Nome público *
+    </label>
+
+    <input
+      type="text"
+      id="nome"
+      name="nome"
+      maxlength="100"
+      placeholder="Ex.: Pedro Henrique"
+      required
+    >
+
+    <span class="campo-ajuda">
+      Esse será o nome exibido no mural.
+    </span>
+
+  </div>
+
+
+  <!-- ===============================================
+       CATEGORIA
+  ================================================ -->
+
+  <div class="campo">
+
+    <label for="categoria">
+      Categoria *
+    </label>
+
+    <select
+      id="categoria"
+      name="categoria"
+      required
+    >
+
+      <option value="">
+        Selecione uma categoria
+      </option>
+
+      <option value="Artista">
+        Artista
+      </option>
+
+      <option value="Artesão">
+        Artesão
+      </option>
+
+      <option value="Fotógrafo">
+        Fotógrafo
+      </option>
+
+      <option value="Músico">
+        Músico
+      </option>
+
+      <option value="Escritor">
+        Escritor
+      </option>
+
+      <option value="Empreendedor">
+        Empreendedor
+      </option>
+
+      <option value="Personalidade local">
+        Personalidade local
+      </option>
+
+      <option value="Profissional">
+        Profissional
+      </option>
+
+      <option value="Outro">
+        Outro
+      </option>
+
+    </select>
+
+  </div>
+
+
+  <!-- ===============================================
+       DESCRIÇÃO
+  ================================================ -->
+
+  <div class="campo">
+
+    <label for="descricao">
+      Descrição curta
+    </label>
+
+    <textarea
+      id="descricao"
+      name="descricao"
+      maxlength="500"
+      placeholder="Escreva uma breve apresentação que aparecerá no mural..."
+    ></textarea>
+
+    <span class="campo-ajuda">
+      Recomendamos uma descrição curta e objetiva.
+    </span>
+
+  </div>
+
+
+  <!-- ===============================================
+       SOBRE
+  ================================================ -->
+
+  <div class="campo">
+
+    <label for="sobre">
+      Sobre você
+    </label>
+
+    <textarea
+      id="sobre"
+      name="sobre"
+      maxlength="2000"
+      placeholder="Conte um pouco mais sobre sua trajetória, trabalho ou relação com Andrelândia..."
+    ></textarea>
+
+  </div>
+
+
+  <!-- ===============================================
+       INSTAGRAM
+  ================================================ -->
+
+  <div class="campo">
+
+    <label for="instagram">
+      Instagram
+    </label>
+
+    <input
+      type="text"
+      id="instagram"
+      name="instagram"
+      maxlength="200"
+      placeholder="@seuusuario ou https://instagram.com/seuusuario"
+    >
+
+  </div>
+
+
+  <!-- ===============================================
+       IMAGENS
+  ================================================ -->
+
+  <div class="campo cadastro-campo-imagens">
+
+    <label>
+      Fotos do perfil
+    </label>
+
+    <p class="cadastro-ajuda-imagens">
+
+      Adicione até 4 imagens. A primeira será utilizada
+      como capa do seu perfil.
+
+    </p>
+
+
+    <div class="cadastro-upload-imagens">
+
+      <label
+        for="mural-imagens"
+        class="cadastro-botao-imagem"
+      >
+
+        + Adicionar imagens
+
+      </label>
+
+      <input
+        type="file"
+        id="mural-imagens"
+        name="imagens"
+        accept="image/jpeg,image/png,image/webp"
+        multiple
+        hidden
+      >
+
+      <span class="cadastro-limite-imagens">
+        Máximo de 4 imagens
+      </span>
+
+    </div>
+
+
+    <div
+      id="mural-preview-imagens"
+      class="cadastro-preview-imagens"
+    ></div>
+
+
+    <span class="campo-ajuda">
+
+      JPG, PNG ou WEBP. Máximo de 5 MB por imagem.
+
+    </span>
+
+  </div>
+
+
+  <!-- ===============================================
+       AÇÕES
+  ================================================ -->
+
+  <div class="acoes-formulario">
+
+    <button
+      type="button"
+      class="botao botao-secundario"
+      id="botaoCancelar"
+    >
+      Cancelar
+    </button>
+
+    <button
+      type="submit"
+      class="botao botao-principal"
+      id="botaoEnviar"
+    >
+      Enviar para análise
+    </button>
+
+  </div>
+
+</form>
+
+</section>
+
+<!-- =================================================== RODAPÉ ==================================================== -->
+
+<div class="rodape">
+
+As informações enviadas passam por análise antes
+de aparecerem publicamente no Mural de Andrelândia.
+
+</div>
+
+</main>
+
+<!-- ===================================================== MODAL DE LOGIN / CADASTRO ===================================================== -->
+
+<div id="authModal" class="auth-modal" aria-hidden="true" >
+
+<div class="auth-modal-content">
+
+<button
+  type="button"
+  id="fecharAuth"
+  class="auth-close"
+  aria-label="Fechar"
+>
+  ×
+</button>
+
+
+<!-- =================================================
+     LOGIN
+================================================== -->
+
+<div
+  id="formLogin"
+  class="auth-form"
+>
+
+  <span class="auth-kicker">
+    BEM-VINDO
+  </span>
+
+  <h2>
+    Entrar
+  </h2>
+
+  <p>
+    Entre na sua conta para continuar.
+  </p>
+
+  <input
+    type="email"
+    id="loginEmail"
+    placeholder="Seu e-mail"
+    autocomplete="email"
+  >
+
+  <input
+    type="password"
+    id="loginSenha"
+    placeholder="Sua senha"
+    autocomplete="current-password"
+  >
+
+  <button
+    type="button"
+    id="botaoLogin"
+    class="auth-submit"
+  >
+    Entrar
+  </button>
+
+  <div
+    id="erroLogin"
+    class="auth-error"
+  ></div>
+
+  <p class="auth-switch">
+
+    Ainda não possui uma conta?
+
+    <button
+      type="button"
+      id="trocarCadastro"
+    >
+      Criar conta
+    </button>
+
+  </p>
+
+</div>
+
+
+<!-- =================================================
+     CADASTRO
+================================================== -->
+
+<div
+  id="formCadastro"
+  class="auth-form"
+  style="display:none;"
+>
+
+  <span class="auth-kicker">
+    NOVA CONTA
+  </span>
+
+  <h2>
+    Criar conta
+  </h2>
+
+  <p>
+    Crie sua conta para participar do Guia Turístico.
+  </p>
+
+  <input
+    type="text"
+    id="cadastroNome"
+    placeholder="Seu nome"
+    maxlength="40"
+    autocomplete="name"
+  >
+
+  <input
+    type="email"
+    id="cadastroEmail"
+    placeholder="Seu e-mail"
+    autocomplete="email"
+  >
+
+  <input
+    type="password"
+    id="cadastroSenha"
+    placeholder="Senha"
+    autocomplete="new-password"
+  >
+
+  <input
+    type="password"
+    id="cadastroConfirmarSenha"
+    placeholder="Confirmar senha"
+    autocomplete="new-password"
+  >
+
+  <button
+    type="button"
+    id="botaoCadastro"
+    class="auth-submit"
+  >
+    Criar conta
+  </button>
+
+  <div
+    id="erroCadastro"
+    class="auth-error"
+  ></div>
+
+  <p class="auth-switch">
+
+    Já possui uma conta?
+
+    <button
+      type="button"
+      id="trocarLogin"
+    >
+      Entrar
+    </button>
+
+  </p>
+
+</div>
+
+</div>
+
+</div>
+
+<!-- ===================================================== SUPABASE ===================================================== -->
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<!-- ===================================================== LOGIN ===================================================== -->
+
+<script src="../js/login.js"></script>
+
+<!-- ===================================================== MURAL ===================================================== -->
+
+<script src="../js/mural.js"></script>
+
+</body>
+
+</html>
