@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+
+<html lang="pt-BR">
+
+<head>
+
+<meta charset="UTF-8">
+
+<meta
+name="viewport"
+content="width=device-width, initial-scale=1.0"
+
+
+
+
+<meta
+name="theme-color"
+content="#091D1C"
+
+
+
+
+<title>Administração do Mural — Guia Turístico de Andrelândia</title>
+
+<link rel="stylesheet" href="../styles/admin.css" >
+
+<link rel="stylesheet" href="../styles/admin-mural.css" >
+
+</head>
+
+<body>
+
+<!-- ===================================================== CABEÇALHO ====================================================== -->
+
+<header class="admin-header">
+
+<div class="admin-header-inner">
+
+  <div>
+
+    <h1 class="admin-titulo">
+      Andrelândia — Administração
+    </h1>
+
+    <p class="admin-subtitulo">
+      Análise e publicação do Mural
+    </p>
+
+  </div>
+
+  <button
+    type="button"
+    id="botao-sair"
+    class="botao-sair"
+  >
+    Sair
+  </button>
+
+</div>
+
+</header>
+
+<!-- ===================================================== CONTEÚDO PRINCIPAL ====================================================== -->
+
+<main class="admin-container">
+
+<!-- ===================================================
+     INTRODUÇÃO
+==================================================== -->
+
+<div class="admin-intro">
+
+  <h1>
+    Cadastros do Mural
+  </h1>
+
+  <p>
+    Analise os perfis enviados pelos usuários antes de
+    publicá-los no Mural de Andrelândia.
+  </p>
+
+</div>
+
+
+<!-- ===================================================
+     MENSAGEM
+==================================================== -->
+
+<div
+  id="mensagem"
+  class="mensagem"
+  role="alert"
+  hidden
+></div>
+
+
+<!-- ===================================================
+     CONTROLES
+==================================================== -->
+
+<div class="admin-controles">
+
+  <span class="admin-controles-titulo">
+    Perfis aguardando análise
+  </span>
+
+  <button
+    type="button"
+    id="botao-atualizar"
+    class="botao-atualizar"
+  >
+    ↻ Atualizar
+  </button>
+
+</div>
+
+
+<!-- ===================================================
+     CARREGAMENTO
+==================================================== -->
+
+<div id="carregando">
+  Carregando cadastros do mural...
+</div>
+
+
+<!-- ===================================================
+     LISTA DE CADASTROS PENDENTES
+==================================================== -->
+
+<div id="lista-mural">
+</div>
+
+
+<!-- ===================================================
+     SEM CADASTROS
+==================================================== -->
+
+<div
+  id="sem-mural"
+  hidden
+>
+
+  <strong>
+    Nenhum cadastro pendente
+  </strong>
+
+  <span>
+    Quando alguém enviar um novo perfil para o mural,
+    ele aparecerá aqui para análise.
+  </span>
+
+</div>
+
+
+<!-- ===================================================
+     SEÇÃO DE PERFIS PUBLICADOS
+==================================================== -->
+
+<section
+  class="admin-section"
+  id="secaoMuralPublicados"
+>
+
+  <div class="section-header">
+
+    <div>
+
+      <h2>
+        Perfis publicados
+      </h2>
+
+      <p>
+        Pessoas que já estão disponíveis no Mural.
+      </p>
+
+    </div>
+
+    <span
+      class="contador-comercios"
+      id="contadorMuralPublicados"
+    >
+      0
+    </span>
+
+  </div>
+
+
+  <!-- =================================================
+       PESQUISA
+  ================================================== -->
+
+  <div class="admin-pesquisa">
+
+    <input
+      type="search"
+      id="pesquisa-mural-admin"
+      placeholder="Pesquisar perfil..."
+      autocomplete="off"
+    >
+
+  </div>
+
+
+  <!-- =================================================
+       CARREGAMENTO
+  ================================================== -->
+
+  <div
+    id="carregandoMuralPublicados"
+    class="admin-loading"
+    hidden
+  >
+    Carregando perfis publicados...
+  </div>
+
+
+  <!-- =================================================
+       ESTADO VAZIO
+  ================================================== -->
+
+  <div
+    id="semMuralPublicados"
+    class="admin-empty"
+    hidden
+  >
+    Nenhum perfil publicado encontrado.
+  </div>
+
+
+  <!-- =================================================
+       LISTA
+  ================================================== -->
+
+  <div
+    id="listaMuralPublicados"
+    class="lista-comercios"
+  >
+  </div>
+
+</section>
+
+</main>
+
+<!-- ===================================================== EDITOR DO PERFIL ====================================================== -->
+
+<div id="editor-mural-admin" class="editor-mural-admin" hidden >
+
+<div class="editor-mural-overlay"></div>
+
+<div
+  class="editor-mural-modal"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="editor-mural-titulo"
+>
+
+  <!-- ===============================================
+       CABEÇALHO DO EDITOR
+  ================================================ -->
+
+  <div class="editor-mural-topo">
+
+    <div>
+
+      <span>
+        EDITANDO PERFIL DO MURAL
+      </span>
+
+      <h2 id="editor-mural-titulo">
+        Editar perfil
+      </h2>
+
+    </div>
+
+    <button
+      type="button"
+      id="editor-mural-fechar"
+      class="editor-botao-fechar"
+      aria-label="Fechar editor"
+    >
+      ×
+    </button>
+
+  </div>
+
+
+  <!-- ===============================================
+       FORMULÁRIO
+  ================================================ -->
+
+  <form
+    id="form-editor-mural"
+    class="form-editor-mural"
+  >
+
+    <!-- =============================================
+         IDENTIFICAÇÃO
+    ============================================== -->
+
+    <div class="editor-bloco">
+
+      <div class="editor-bloco-titulo">
+        Identificação
+      </div>
+
+      <div class="editor-grid-mural">
+
+        <div class="editor-campo editor-campo-full">
+
+          <label for="editor-mural-id">
+            ID público
+          </label>
+
+          <input
+            type="text"
+            id="editor-mural-id"
+            readonly
+          >
+
+          <small class="editor-ajuda-mural">
+            O ID público deve ser preservado após a
+            publicação para não quebrar os votos existentes.
+          </small>
+
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <!-- =============================================
+         INFORMAÇÕES PRINCIPAIS
+    ============================================== -->
+
+    <div class="editor-bloco">
+
+      <div class="editor-bloco-titulo">
+        Informações principais
+      </div>
+
+      <div class="editor-grid-mural">
+
+        <div class="editor-campo editor-campo-full">
+
+          <label for="editor-mural-nome">
+            Nome
+          </label>
+
+          <input
+            type="text"
+            id="editor-mural-nome"
+            autocomplete="off"
+          >
+
+        </div>
+
+
+        <div class="editor-campo">
+
+          <label for="editor-mural-categoria">
+            Categoria
+          </label>
+
+          <input
+            type="text"
+            id="editor-mural-categoria"
+            autocomplete="off"
+          >
+
+        </div>
+
+
+        <div class="editor-campo">
+
+          <label for="editor-mural-instagram">
+            Instagram
+          </label>
+
+          <input
+            type="text"
+            id="editor-mural-instagram"
+            autocomplete="off"
+          >
+
+        </div>
+
+
+        <div class="editor-campo editor-campo-full">
+
+          <label for="editor-mural-descricao">
+            Descrição
+          </label>
+
+          <textarea
+            id="editor-mural-descricao"
+            rows="4"
+          ></textarea>
+
+        </div>
+
+
+        <div class="editor-campo editor-campo-full">
+
+          <label for="editor-mural-sobre">
+            Sobre
+          </label>
+
+          <textarea
+            id="editor-mural-sobre"
+            rows="7"
+          ></textarea>
+
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <!-- =============================================
+         IMAGENS
+    ============================================== -->
+
+    <div class="editor-bloco">
+
+      <div class="editor-bloco-titulo">
+        Imagens
+      </div>
+
+      <p class="editor-ajuda">
+        Adicione até 4 imagens. A primeira imagem será
+        utilizada como capa principal do perfil.
+      </p>
+
+
+      <!-- Estado das imagens -->
+
+      <input
+        type="hidden"
+        id="editor-mural-imagens-json"
+        value="[]"
+      >
+
+
+      <!-- Cabeçalho -->
+
+      <div class="editor-imagens-cabecalho">
+
+        <div>
+
+          <label>
+            Galeria do perfil
+          </label>
+
+          <small>
+            A primeira imagem será a capa.
+          </small>
+
+        </div>
+
+        <span
+          id="editor-mural-contador-imagens"
+          class="editor-contador-imagens"
+        >
+          0/4
+        </span>
+
+      </div>
+
+
+      <!-- Lista de imagens -->
+
+      <div
+        id="editor-mural-imagens-lista"
+        class="editor-imagens-lista"
+      >
+      </div>
+
+
+      <!-- Adicionar imagens -->
+
+      <label
+        for="editor-mural-imagem-arquivo"
+        id="editor-mural-botao-imagem"
+        class="editor-botao-imagem"
+      >
+        + Adicionar imagens
+      </label>
+
+      <input
+        type="file"
+        id="editor-mural-imagem-arquivo"
+        accept="image/jpeg,image/png,image/webp"
+        multiple
+        hidden
+      >
+
+      <small class="editor-imagens-ajuda">
+        JPG, PNG ou WEBP · máximo de 5 MB por imagem
+      </small>
+
+    </div>
+
+
+    <!-- =============================================
+         INFORMAÇÕES DO CADASTRO
+    ============================================== -->
+
+    <div class="editor-bloco">
+
+      <div class="editor-bloco-titulo">
+        Informações do cadastro
+      </div>
+
+      <div class="editor-grid-mural">
+
+        <div class="editor-campo">
+
+          <label for="editor-mural-status">
+            Status
+          </label>
+
+          <input
+            type="text"
+            id="editor-mural-status"
+            readonly
+          >
+
+        </div>
+
+
+        <div class="editor-campo">
+
+          <label for="editor-mural-usuario">
+            Usuário
+          </label>
+
+          <input
+            type="text"
+            id="editor-mural-usuario"
+            readonly
+          >
+
+        </div>
+
+
+        <div class="editor-campo">
+
+          <label for="editor-mural-criado">
+            Criado em
+          </label>
+
+          <input
+            type="text"
+            id="editor-mural-criado"
+            readonly
+          >
+
+        </div>
+
+
+        <div class="editor-campo">
+
+          <label for="editor-mural-atualizado">
+            Atualizado em
+          </label>
+
+          <input
+            type="text"
+            id="editor-mural-atualizado"
+            readonly
+          >
+
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <!-- =============================================
+         MOTIVO DA RECUSA
+    ============================================== -->
+
+    <div
+      class="editor-bloco"
+      id="editor-mural-recusa-bloco"
+    >
+
+      <div class="editor-bloco-titulo">
+        Recusa
+      </div>
+
+      <div class="editor-campo">
+
+        <label for="editor-mural-motivo-recusa">
+          Motivo da recusa
+        </label>
+
+        <textarea
+          id="editor-mural-motivo-recusa"
+          rows="4"
+          placeholder="Informe o motivo caso o cadastro seja recusado."
+        ></textarea>
+
+      </div>
+
+    </div>
+
+
+    <!-- =============================================
+         AÇÕES
+    ============================================== -->
+
+    <div class="editor-comercio-acoes editor-mural-acoes">
+
+      <button
+        type="button"
+        id="editor-mural-cancelar"
+        class="editor-botao-cancelar"
+      >
+        Cancelar
+      </button>
+
+      <button
+        type="button"
+        id="editor-mural-rejeitar"
+        class="editor-botao-rejeitar"
+      >
+        Rejeitar
+      </button>
+
+      <button
+        type="button"
+        id="editor-mural-aprovar"
+        class="editor-botao-aprovar"
+      >
+        Aprovar e publicar
+      </button>
+
+      <button
+        type="submit"
+        id="editor-mural-salvar"
+        class="editor-botao-salvar"
+      >
+        Salvar alterações
+      </button>
+
+    </div>
+
+  </form>
+
+</div>
+
+</div>
+
+<!-- ===================================================== SUPABASE ====================================================== -->
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<!-- ===================================================== ADMIN — MURAL ====================================================== -->
+
+<script src="../js/admin-mural.js"></script>
+
+</body>
+
+</html>
