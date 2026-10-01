@@ -20,231 +20,9 @@ content="#091D1C"
 
 
 
-<title>Cadastros — Andrelândia — Guia Turístico</title>
+<title>Administração — Guia Turístico de Andrelândia</title>
 
-<style> :root { --verde: #194138; --verde-escuro: #091d1c; --branco: #ffffff; --fundo: #f5f3ef; --texto: #222222; --texto-secundario: #666666; --borda: #dddddd; --cinza: #f0f0f0; } * { box-sizing: border-box; margin: 0; padding: 0; } body { font-family: Arial, Helvetica, sans-serif; background: var(--fundo); color: var(--texto); min-height: 100vh; } /* ===================================================== CABEÇALHO ===================================================== */ .cabecalho { background: var(--verde-escuro); color: var(--branco); padding: 18px 20px; } .cabecalho-conteudo { width: 100%; max-width: 900px; margin: 0 auto; display: flex; align-items: center; gap: 14px; } .botao-voltar { width: 40px; height: 40px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.08); color: white; display: flex; align-items: center; justify-content: center; text-decoration: none; font-size: 22px; flex-shrink: 0; } .cabecalho-texto h1 { font-size: 20px; font-weight: 600; margin-bottom: 4px; } .cabecalho-texto p { font-size: 13px; color: rgba(255,255,255,0.72); } /* ===================================================== CONTEÚDO ===================================================== */ .pagina { width: 100%; max-width: 900px; margin: 0 auto; padding: 28px 18px 50px; } .introducao { margin-bottom: 24px; } .introducao h2 { font-size: 25px; line-height: 1.25; margin-bottom: 9px; color: var(--verde-escuro); } .introducao p { font-size: 15px; line-height: 1.6; color: var(--texto-secundario); } /* ===================================================== OPÇÕES ===================================================== */ .opcoes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; } .opcao { background: var(--branco); border: 1px solid var(--borda); border-radius: 14px; padding: 22px; cursor: pointer; transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease; } .opcao:hover { transform: translateY(-2px); border-color: var(--verde); box-shadow: 0 6px 20px rgba(0,0,0,0.06); } .opcao-icone { width: 48px; height: 48px; border-radius: 12px; background: var(--verde); color: white; display: flex; align-items: center; justify-content: center; font-size: 23px; margin-bottom: 16px; } .opcao h3 { font-size: 18px; color: var(--verde-escuro); margin-bottom: 8px; } .opcao p { font-size: 14px; line-height: 1.55; color: var(--texto-secundario); } .opcao-seta { margin-top: 18px; color: var(--verde); font-size: 14px; font-weight: 600; } /* ===================================================== FORMULÁRIO ===================================================== */ .formulario-container { display: none; background: var(--branco); border: 1px solid var(--borda); border-radius: 14px; padding: 24px; margin-top: 20px; } .formulario-container.ativo { display: block; } .formulario-cabecalho { margin-bottom: 24px; } .formulario-cabecalho h2 { color: var(--verde-escuro); font-size: 21px; margin-bottom: 7px; } .formulario-cabecalho p { color: var(--texto-secundario); font-size: 14px; line-height: 1.5; } .campo { margin-bottom: 17px; } .campo label { display: block; font-size: 13px; font-weight: 600; color: var(--verde-escuro); margin-bottom: 7px; } .campo input, .campo select, .campo textarea { width: 100%; border: 1px solid var(--borda); border-radius: 9px; background: white; color: var(--texto); font-family: inherit; font-size: 14px; padding: 11px 12px; outline: none; } .campo input:focus, .campo select:focus, .campo textarea:focus { border-color: var(--verde); } .campo textarea { min-height: 105px; resize: vertical; } .campo-ajuda { display: block; margin-top: 5px; color: #777; font-size: 11px; line-height: 1.4; } .linha { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; } .acoes-formulario { display: flex; gap: 10px; margin-top: 24px; } .botao { border: 0; border-radius: 9px; padding: 12px 18px; font-size: 14px; font-weight: 600; cursor: pointer; } .botao-principal { background: var(--verde); color: white; flex: 1; } .botao-principal:hover { background: var(--verde-escuro); } .botao-secundario { background: var(--cinza); color: var(--texto); } /* ===================================================== AVISOS ===================================================== */ .aviso { display: none; padding: 13px 15px; border-radius: 9px; margin-bottom: 18px; font-size: 13px; line-height: 1.5; } .aviso.ativo { display: block; } .aviso-info { background: #eef4f2; color: var(--verde-escuro); border: 1px solid #d5e3df; } .aviso-erro { background: #fff1f1; color: #8a2020; border: 1px solid #edcccc; } /* ===================================================== RODAPÉ ===================================================== */ .rodape { text-align: center; color: #777; font-size: 12px; margin-top: 30px; line-height: 1.5; } /* ===================================================== RESPONSIVO ===================================================== */ @media (max-width: 650px) { .pagina { padding: 22px 14px 40px; } .opcoes { grid-template-columns: 1fr; } .linha { grid-template-columns: 1fr; gap: 0; } .formulario-container { padding: 18px; } .acoes-formulario { flex-direction: column-reverse; } .botao { width: 100%; } }/* =====================================================
-IMAGENS DO CADASTRO
-===================================================== */
-
-.cadastro-ajuda-imagens {
-margin: 4px 0 14px;
-color: var(--texto-secundario);
-font-size: 12px;
-line-height: 1.5;
-}
-
-/* =====================================================
-ÁREA DE UPLOAD
-===================================================== */
-
-.cadastro-upload-imagens {
-display: flex;
-align-items: center;
-flex-wrap: wrap;
-gap: 10px;
-margin-bottom: 15px;
-}
-
-.cadastro-botao-imagem {
-display: inline-flex;
-align-items: center;
-justify-content: center;
-
-min-height: 40px;
-
-padding: 9px 14px;
-
-border-radius: 8px;
-
-background: var(--verde);
-color: var(--branco);
-
-cursor: pointer;
-
-font-size: 13px;
-font-weight: 600;
-
-transition:
-background 0.2s ease,
-transform 0.1s ease;
-}
-
-.cadastro-botao-imagem {
-background: var(--verde-escuro);
-}
-
-.cadastro-botao-imagem {
-transform: scale(0.98);
-}
-
-.cadastro-limite-imagens {
-color: var(--texto-secundario);
-font-size: 12px;
-}
-
-/* =====================================================
-PRÉ-VISUALIZAÇÃO
-===================================================== */
-
-.cadastro-preview-imagens {
-display: grid;
-
-grid-template-columns:
-repeat(4, 120px);
-
-gap: 10px;
-
-width: 100%;
-
-margin-bottom: 12px;
-}
-
-/* =====================================================
-MINIATURA
-===================================================== */
-
-.cadastro-imagem-item {
-position: relative;
-
-width: 120px;
-height: 100px;
-
-overflow: hidden;
-
-border:
-1px solid var(--borda);
-
-border-radius: 9px;
-
-background: #eeeeee;
-}
-
-.cadastro-imagem-item img {
-display: block;
-
-width: 100%;
-height: 100%;
-
-object-fit: cover;
-}
-
-/* =====================================================
-INDICADOR DE CAPA
-===================================================== */
-
-.cadastro-imagem-capa {
-position: absolute;
-
-left: 6px;
-bottom: 6px;
-
-z-index: 2;
-
-padding: 4px 7px;
-
-border-radius: 5px;
-
-background:
-var(--verde-escuro);
-
-color:
-var(--branco);
-
-font-size: 9px;
-font-weight: 700;
-
-line-height: 1;
-}
-
-/* =====================================================
-BOTÃO REMOVER
-===================================================== */
-
-.cadastro-imagem-remover {
-position: absolute;
-
-top: 5px;
-right: 5px;
-
-z-index: 3;
-
-width: 26px;
-height: 26px;
-
-display: flex;
-align-items: center;
-justify-content: center;
-
-padding: 0;
-
-border: 0;
-border-radius: 50%;
-
-background:
-rgba(0, 0, 0, 0.72);
-
-color:
-var(--branco);
-
-cursor: pointer;
-
-font-size: 17px;
-font-weight: 400;
-line-height: 1;
-
-transition:
-background 0.2s ease,
-transform 0.1s ease;
-}
-
-.cadastro-imagem-remover {
-background:
-#b3261e;
-}
-
-.cadastro-imagem-remover {
-transform: scale(0.92);
-}
-
-/* =====================================================
-RESPONSIVO
-===================================================== */
-
-@media (max-width: 700px) {
-
-.cadastro-preview-imagens {
-grid-template-columns:
-repeat(3, 110px);
-}
-
-.cadastro-imagem-item {
-width: 110px;
-height: 90px;
-}
-
-}
-
-@media (max-width: 480px) {
-
-.cadastro-preview-imagens {
-grid-template-columns:
-repeat(2, minmax(0, 1fr));
-}
-
-.cadastro-imagem-item {
-width: 100%;
-height: 105px;
-}
-
-} </style>
-<!-- =====================================================
-     CSS DE AUTENTICAÇÃO
-====================================================== -->
-
-<link
-  rel="stylesheet"
-  href="../styles/login.css"
->
+<link rel="stylesheet" href="../styles/admin.css" >
 
 </head>
 
@@ -252,646 +30,614 @@ height: 105px;
 
 <!-- ===================================================== CABEÇALHO ====================================================== -->
 
-<header class="cabecalho">
+<header class="admin-header">
 
-<div class="cabecalho-conteudo">
+<div class="admin-header-inner">
 
-  <a
-    href="../index.html"
-    class="botao-voltar"
-    aria-label="Voltar"
-  >
-    ←
-  </a>
+  <div>
 
-  <div class="cabecalho-texto">
+    <h1 class="admin-titulo">
+      Andrelândia — Administração
+    </h1>
 
-    <h1>Andrelândia — Guia Turístico</h1>
-
-    <p>
-      Cadastro e atualização de informações
+    <p class="admin-subtitulo">
+      Análise e publicação de cadastros
     </p>
 
   </div>
+
+  <button
+    type="button"
+    id="botao-sair"
+    class="botao-sair"
+  >
+    Sair
+  </button>
 
 </div>
 
 </header>
 
-<!-- ===================================================== CONTEÚDO ====================================================== -->
+<!-- ===================================================== CONTEÚDO PRINCIPAL ====================================================== -->
 
-<main class="pagina">
+<main class="admin-container">
 
-<section class="introducao">
+<!-- ===================================================
+     INTRODUÇÃO
+==================================================== -->
 
-  <h2>
-    Ajude a atualizar o guia
-  </h2>
+<div class="admin-intro">
+
+  <h1>
+    Cadastros pendentes
+  </h1>
 
   <p>
-    Você pode cadastrar um comércio que ainda não aparece
-    no guia ou sugerir uma correção nas informações de um
-    estabelecimento já cadastrado.
+    Analise os dados enviados pelos usuários,
+    faça os ajustes necessários e aprove ou
+    rejeite cada cadastro.
   </p>
 
-</section>
+</div>
 
 
 <!-- ===================================================
-     OPÇÕES
+     COMÉRCIOS PUBLICADOS
 ==================================================== -->
 
 <section
-  class="opcoes"
-  id="opcoes"
+  class="admin-section"
+  id="secaoComercios"
 >
 
-  <button
-    type="button"
-    class="opcao"
-    id="opcaoNovo"
-  >
+  <div class="section-header">
 
-    <div class="opcao-icone">
-      +
+    <div>
+
+      <h2>
+        Comércios publicados
+      </h2>
+
+      <p>
+        Comércios que já estão disponíveis no Guia.
+      </p>
+
     </div>
 
-    <h3>
-      Cadastrar comércio
-    </h3>
-
-    <p>
-      Cadastre um restaurante, lanchonete, loja, hotel,
-      cafeteria ou outro estabelecimento de Andrelândia.
-    </p>
-
-    <div class="opcao-seta">
-      Fazer cadastro →
-    </div>
-
-  </button>
-
-
-  <button
-    type="button"
-    class="opcao"
-    id="opcaoAlteracao"
-  >
-
-    <div class="opcao-icone">
-      ✎
-    </div>
-
-    <h3>
-      Sugerir alteração
-    </h3>
-
-    <p>
-      Encontrou alguma informação incorreta em um comércio
-      que já aparece no guia? Envie a informação correta
-      para análise.
-    </p>
-
-    <div class="opcao-seta">
-      Corrigir informação →
-    </div>
-
-  </button>
-
-</section>
-
-
-<!-- ===================================================
-     AVISO
-==================================================== -->
-
-<div
-  class="aviso aviso-info"
-  id="aviso"
-></div>
-
-
-<!-- ===================================================
-     FORMULÁRIO
-==================================================== -->
-
-<section
-  class="formulario-container"
-  id="formularioContainer"
->
-
-  <div class="formulario-cabecalho">
-
-    <h2 id="tituloFormulario">
-      Cadastrar comércio
-    </h2>
-
-    <p id="descricaoFormulario">
-      Preencha as informações abaixo. O cadastro será
-      analisado antes de ser publicado no guia.
-    </p>
+    <span
+      class="contador-comercios"
+      id="contadorComercios"
+    >
+      0
+    </span>
 
   </div>
 
 
-  <form id="formularioCadastro">
+  <!-- Pesquisa -->
 
+  <div class="admin-pesquisa">
 
-    <!-- ===============================================
-         NOME
-    ================================================ -->
+    <input
+      type="search"
+      id="pesquisa-comercios-admin"
+      placeholder="Pesquisar comércio..."
+      autocomplete="off"
+    >
 
-    <div class="campo">
+  </div>
 
-      <label for="nome">
-        Nome do comércio *
-      </label>
 
-      <input
-        type="text"
-        id="nome"
-        name="nome"
-        maxlength="150"
-        placeholder="Ex.: Vagão Lanches"
-        required
-      >
+  <!-- Carregamento -->
 
-    </div>
+  <div
+    id="carregandoComercios"
+    class="admin-loading"
+  >
+    Carregando comércios...
+  </div>
 
 
-    <!-- ===============================================
-         CATEGORIA
-    ================================================ -->
+  <!-- Nenhum comércio -->
 
-    <div class="campo">
+  <div
+    id="semComercios"
+    class="admin-empty"
+    hidden
+  >
+    Nenhum comércio publicado encontrado.
+  </div>
 
-      <label for="categoria">
-        Categoria *
-      </label>
 
-      <select
-        id="categoria"
-        name="categoria"
-        required
-      >
+  <!-- Lista -->
 
-        <option value="">
-          Selecione uma categoria
-        </option>
+  <div
+    id="listaComercios"
+    class="lista-comercios"
+  >
+  </div>
 
-        <option value="Restaurante">
-          Restaurante
-        </option>
+</section>
 
-        <option value="Lanchonete">
-          Lanchonete
-        </option>
 
-        <option value="Cafeteria">
-          Cafeteria
-        </option>
+<!-- ===================================================
+     MENSAGEM
+==================================================== -->
 
-        <option value="Sorveteria">
-          Sorveteria
-        </option>
-
-        <option value="Padaria">
-          Padaria
-        </option>
-
-        <option value="Mercado">
-          Mercado
-        </option>
-
-        <option value="Loja">
-          Loja
-        </option>
-
-        <option value="Hotel/Pousada">
-          Hotel / Pousada
-        </option>
-
-        <option value="Outro">
-          Outro
-        </option>
-
-      </select>
-
-    </div>
-
-
-    <!-- ===============================================
-         WHATSAPP / INSTAGRAM
-    ================================================ -->
-
-    <div class="linha">
-
-      <div class="campo">
-
-        <label for="whatsapp">
-          WhatsApp
-        </label>
-
-        <input
-          type="tel"
-          id="whatsapp"
-          name="whatsapp"
-          placeholder="(35) 99999-9999"
-        >
-
-      </div>
-
-
-      <div class="campo">
-
-        <label for="instagram">
-          Instagram
-        </label>
-
-        <input
-          type="text"
-          id="instagram"
-          name="instagram"
-          placeholder="@nomedocomercio"
-        >
-
-      </div>
-
-    </div>
-
-
-    <!-- ===============================================
-         ENDEREÇO
-    ================================================ -->
-
-    <div class="campo">
-
-      <label for="endereco">
-        Endereço *
-      </label>
-
-      <input
-        type="text"
-        id="endereco"
-        name="endereco"
-        maxlength="250"
-        placeholder="Rua, número, bairro, Andrelândia - MG"
-        required
-      >
-
-    </div>
-
-
-    <!-- ===============================================
-         HORÁRIO
-    ================================================ -->
-
-    <div class="campo">
-
-      <label for="horario">
-        Horário de funcionamento
-      </label>
-
-      <textarea
-        id="horario"
-        name="horario"
-        placeholder="Ex.: Segunda a sábado, 18:00 às 00:00"
-      ></textarea>
-
-    </div>
-
-
-    <!-- ===============================================
-         DESCRIÇÃO
-    ================================================ -->
-
-    <div class="campo">
-
-      <label for="descricao">
-        Descrição
-      </label>
-
-      <textarea
-        id="descricao"
-        name="descricao"
-        maxlength="1000"
-        placeholder="Conte um pouco sobre o comércio..."
-      ></textarea>
-
-    </div>
-
-
-    <!-- ===============================================
-         COORDENADAS
-    ================================================ -->
-
-    <div class="linha">
-
-      <div class="campo">
-
-        <label for="latitude">
-          Latitude
-        </label>
-
-        <input
-          type="text"
-          id="latitude"
-          name="latitude"
-          placeholder="-21.740150"
-        >
-
-      </div>
-
-
-      <div class="campo">
-
-        <label for="longitude">
-          Longitude
-        </label>
-
-        <input
-          type="text"
-          id="longitude"
-          name="longitude"
-          placeholder="-44.309058"
-        >
-
-      </div>
-
-    </div>
-
-    <span class="campo-ajuda">
-      As coordenadas serão utilizadas para posicionar o
-      comércio no mapa. Se você não souber as coordenadas,
-      poderá deixar em branco.
-    </span>
-
-
-    <!-- ===============================================
-         FOTO
-    ================================================ -->
-
-<div class="campo cadastro-campo-imagens">
-
-<label> Fotos do comércio </label>
-
-<p class="cadastro-ajuda-imagens"> Adicione até 4 imagens. A primeira será usada como capa. </p>
-
-<div class="cadastro-upload-imagens">
-
-<label
-  for="cadastro-imagens"
-  class="cadastro-botao-imagem"
+<div
+  id="mensagem"
+  class="mensagem"
+  role="alert"
 >
-  + Adicionar imagens
-</label>
+</div>
 
-<input
-  type="file"
-  id="cadastro-imagens"
-  name="imagens"
-  accept="image/jpeg,image/png,image/webp"
-  multiple
-  hidden
->
 
-<span class="cadastro-limite-imagens">
-  Máximo de 4 imagens
-</span>
+<!-- ===================================================
+     CONTROLES DOS CADASTROS
+==================================================== -->
+
+<div class="admin-controles">
+
+  <span class="admin-controles-titulo">
+    Comércio aguardando análise
+  </span>
+
+  <button
+    type="button"
+    id="botao-atualizar"
+    class="botao-atualizar"
+  >
+    ↻ Atualizar
+  </button>
 
 </div>
 
-<div id="cadastro-preview-imagens" class="cadastro-preview-imagens" > </div>
 
-<span class="campo-ajuda"> As imagens serão analisadas antes de serem publicadas. </span>
+<!-- ===================================================
+     CARREGAMENTO
+==================================================== -->
+
+<div id="carregando">
+  Carregando cadastros...
+</div>
+
+
+<!-- ===================================================
+     LISTA DE CADASTROS PENDENTES
+==================================================== -->
+
+<div
+  id="lista-cadastros"
+>
+</div>
+
+
+<!-- ===================================================
+     SEM CADASTROS
+==================================================== -->
+
+<div
+  id="sem-cadastros"
+>
+
+  <strong>
+    Nenhum cadastro pendente
+  </strong>
+
+  <span>
+    Quando alguém enviar um novo cadastro,
+    ele aparecerá aqui para análise.
+  </span>
 
 </div>
 
-    <!-- ===============================================
-         AÇÕES
-    ================================================ -->
+</main>
 
-    <div class="acoes-formulario">
+<!-- ===================================================== EDITOR DE COMÉRCIO ====================================================== -->
+
+<div id="editor-comercio-admin" class="editor-comercio-admin" hidden >
+
+<div class="editor-comercio-overlay"></div>
+
+<div
+  class="editor-comercio-modal"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="editor-comercio-titulo"
+>
+
+
+  <!-- ===============================================
+       CABEÇALHO DO EDITOR
+  ================================================ -->
+
+  <div class="editor-comercio-header">
+
+    <div>
+
+      <span class="editor-comercio-label">
+        Administração
+      </span>
+
+      <h2 id="editor-comercio-titulo">
+        Editar comércio
+      </h2>
+
+      <p>
+        Altere os dados publicados no Guia.
+      </p>
+
+    </div>
+
+    <button
+      type="button"
+      id="editor-fechar"
+      class="editor-fechar"
+      aria-label="Fechar editor"
+    >
+      ×
+    </button>
+
+  </div>
+
+
+  <!-- ===============================================
+       FORMULÁRIO
+  ================================================ -->
+
+  <form
+    id="form-editor-comercio"
+    class="form-editor-comercio"
+  >
+
+    <!-- ID interno -->
+
+    <input
+      type="hidden"
+      id="editor-comercio-id"
+    >
+
+
+    <!-- =============================================
+         INFORMAÇÕES PRINCIPAIS
+    ============================================== -->
+
+    <div class="editor-bloco">
+
+      <div class="editor-bloco-titulo">
+        Informações principais
+      </div>
+
+
+      <div class="editor-grid">
+
+        <div class="editor-campo editor-campo-full">
+
+          <label for="editor-nome">
+            Nome
+          </label>
+
+          <input
+            type="text"
+            id="editor-nome"
+            autocomplete="off"
+          >
+
+        </div>
+
+
+        <div class="editor-campo">
+
+          <label for="editor-categoria">
+            Categoria
+          </label>
+
+          <input
+            type="text"
+            id="editor-categoria"
+            autocomplete="off"
+          >
+
+        </div>
+
+
+        <div class="editor-campo">
+
+          <label for="editor-telefone">
+            Telefone
+          </label>
+
+          <input
+            type="text"
+            id="editor-telefone"
+            autocomplete="off"
+          >
+
+        </div>
+
+
+        <div class="editor-campo">
+
+          <label for="editor-whatsapp">
+            WhatsApp
+          </label>
+
+          <input
+            type="text"
+            id="editor-whatsapp"
+            autocomplete="off"
+          >
+
+        </div>
+
+
+        <div class="editor-campo">
+
+          <label for="editor-instagram">
+            Instagram
+          </label>
+
+          <input
+            type="text"
+            id="editor-instagram"
+            autocomplete="off"
+          >
+
+        </div>
+
+
+        <div class="editor-campo">
+
+          <label for="editor-site">
+            Site
+          </label>
+
+          <input
+            type="text"
+            id="editor-site"
+            autocomplete="off"
+          >
+
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <!-- =============================================
+         LOCALIZAÇÃO
+    ============================================== -->
+
+    <div class="editor-bloco">
+
+      <div class="editor-bloco-titulo">
+        Localização
+      </div>
+
+
+      <div class="editor-grid">
+
+        <div class="editor-campo editor-campo-full">
+
+          <label for="editor-endereco">
+            Endereço
+          </label>
+
+          <input
+            type="text"
+            id="editor-endereco"
+            autocomplete="off"
+          >
+
+        </div>
+
+
+        <div class="editor-campo">
+
+          <label for="editor-latitude">
+            Latitude
+          </label>
+
+          <input
+            type="text"
+            id="editor-latitude"
+            inputmode="decimal"
+          >
+
+        </div>
+
+
+        <div class="editor-campo">
+
+          <label for="editor-longitude">
+            Longitude
+          </label>
+
+          <input
+            type="text"
+            id="editor-longitude"
+            inputmode="decimal"
+          >
+
+        </div>
+
+
+        <div class="editor-campo editor-campo-full">
+
+          <label for="editor-horario">
+            Horário
+          </label>
+
+          <textarea
+            id="editor-horario"
+            rows="3"
+          ></textarea>
+
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <!-- =============================================
+         TEXTOS
+    ============================================== -->
+
+    <div class="editor-bloco">
+
+      <div class="editor-bloco-titulo">
+        Conteúdo
+      </div>
+
+
+      <div class="editor-campo">
+
+        <label for="editor-descricao">
+          Descrição
+        </label>
+
+        <textarea
+          id="editor-descricao"
+          rows="5"
+        ></textarea>
+
+      </div>
+
+
+      <div class="editor-campo">
+
+        <label for="editor-historia">
+          História
+        </label>
+
+        <textarea
+          id="editor-historia"
+          rows="5"
+        ></textarea>
+
+      </div>
+
+
+      <div class="editor-campo">
+
+        <label for="editor-curiosidades">
+          Curiosidades
+        </label>
+
+        <textarea
+          id="editor-curiosidades"
+          rows="5"
+        ></textarea>
+
+      </div>
+
+    </div>
+
+
+    <!-- =============================================
+         IMAGENS
+    ============================================== -->
+
+    <div class="editor-bloco">
+
+      <div class="editor-bloco-titulo">
+        Imagens
+      </div>
+
+      <p class="editor-ajuda">
+        Adicione até 4 imagens. A primeira imagem será usada
+        como capa principal do comércio.
+      </p>
+
+
+      <!-- Campo oculto para manter estado -->
+
+      <input
+        type="hidden"
+        id="editor-imagens-json"
+        value="[]"
+      >
+
+
+      <!-- Selecionar imagens -->
+
+      <div class="editor-upload">
+
+        <label
+          for="editor-imagem-arquivo"
+          class="editor-botao-imagem"
+        >
+          <span>
+            + Adicionar imagens
+          </span>
+        </label>
+
+        <input
+          type="file"
+          id="editor-imagem-arquivo"
+          accept="image/jpeg,image/png,image/webp"
+          multiple
+          hidden
+        >
+
+        <span class="editor-limite-imagens">
+          Máximo de 4 imagens
+        </span>
+
+      </div>
+
+
+      <!-- Pré-visualização -->
+
+      <div
+        id="editor-preview-imagens"
+        class="editor-preview-imagens"
+      >
+      </div>
+
+    </div>
+
+
+    <!-- =============================================
+         BOTÕES
+    ============================================== -->
+
+    <div class="editor-acoes">
 
       <button
         type="button"
-        class="botao botao-secundario"
-        id="botaoCancelar"
+        id="editor-cancelar"
+        class="editor-botao cancelar"
       >
         Cancelar
       </button>
 
       <button
         type="submit"
-        class="botao botao-principal"
+        id="editor-salvar"
+        class="editor-botao salvar"
       >
-        Enviar para análise
+        Salvar alterações
       </button>
 
     </div>
 
+
   </form>
 
-</section>
-
-
-<div class="rodape">
-
-  As informações enviadas passam por análise antes de
-  aparecerem publicamente no Guia Turístico de Andrelândia.
-
-</div>
-
-</main>
-<!-- ======================================================= MODAL DE LOGIN / CADASTRO ======================================================== -->
-
-<div id="authModal" class="auth-modal" aria-hidden="true" >
-
-<div class="auth-modal-content">
-
-<button
-  type="button"
-  id="fecharAuth"
-  class="auth-close"
-  aria-label="Fechar"
->
-  ×
-</button>
-
-
-<!-- ===================================================
-     LOGIN
-==================================================== -->
-
-<div
-  id="formLogin"
-  class="auth-form"
->
-
-  <span class="auth-kicker">
-    BEM-VINDO
-  </span>
-
-
-  <h2>
-    Entrar
-  </h2>
-
-
-  <p>
-    Entre na sua conta para continuar.
-  </p>
-
-
-  <input
-    type="email"
-    id="loginEmail"
-    placeholder="Seu e-mail"
-    autocomplete="email"
-  >
-
-
-  <input
-    type="password"
-    id="loginSenha"
-    placeholder="Sua senha"
-    autocomplete="current-password"
-  >
-
-
-  <button
-    type="button"
-    id="botaoLogin"
-    class="auth-submit"
-  >
-    Entrar
-  </button>
-
-
-  <div
-    id="erroLogin"
-    class="auth-error"
-  ></div>
-
-
-  <p class="auth-switch">
-
-    Ainda não possui uma conta?
-
-    <button
-      type="button"
-      id="trocarCadastro"
-    >
-      Criar conta
-    </button>
-
-  </p>
-
-</div>
-
-
-<!-- ===================================================
-     CADASTRO
-==================================================== -->
-
-<div
-  id="formCadastro"
-  class="auth-form"
-  style="display:none;"
->
-
-  <span class="auth-kicker">
-    NOVA CONTA
-  </span>
-
-
-  <h2>
-    Criar conta
-  </h2>
-
-
-  <p>
-    Crie sua conta para participar do Guia Turístico.
-  </p>
-
-
-  <input
-    type="text"
-    id="cadastroNome"
-    placeholder="Seu nome"
-    maxlength="40"
-    autocomplete="name"
-  >
-
-
-  <input
-    type="email"
-    id="cadastroEmail"
-    placeholder="Seu e-mail"
-    autocomplete="email"
-  >
-
-
-  <input
-    type="password"
-    id="cadastroSenha"
-    placeholder="Senha"
-    autocomplete="new-password"
-  >
-
-
-  <input
-    type="password"
-    id="cadastroConfirmarSenha"
-    placeholder="Confirmar senha"
-    autocomplete="new-password"
-  >
-
-
-  <button
-    type="button"
-    id="botaoCadastro"
-    class="auth-submit"
-  >
-    Criar conta
-  </button>
-
-
-  <div
-    id="erroCadastro"
-    class="auth-error"
-  ></div>
-
-
-  <p class="auth-switch">
-
-    Já possui uma conta?
-
-    <button
-      type="button"
-      id="trocarLogin"
-    >
-      Entrar
-    </button>
-
-  </p>
-
 </div>
 
 </div>
 
-</div>
 <!-- ===================================================== SUPABASE ====================================================== -->
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" ></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-<!-- ===================================================== LOGIN ====================================================== -->
+<!-- ===================================================== ADMIN ====================================================== -->
 
-<script src="../js/login.js"></script>
-
-<!-- ===================================================== CADASTROS ====================================================== -->
-
-<script src="../js/cadastros.js"></script>
+<script src="../js/admin-cadastros.js"></script>
 
 </body>
 
