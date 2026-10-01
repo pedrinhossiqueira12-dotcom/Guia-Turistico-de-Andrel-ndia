@@ -1,0 +1,1096 @@
+/* =========================================================
+ANDRELÂNDIA — GUIA TURÍSTICO
+ADMIN-MURAL.CSS
+
+RESPONSABILIDADE:
+
+Estilos específicos do painel administrativo do Mural
+Complementa o styles/admin.css
+Mantém a identidade visual do painel administrativo
+========================================================= */
+
+/* =========================================================
+EDITOR DO MURAL
+========================================================= */
+
+#editor-mural-admin {
+position: fixed;
+inset: 0;
+z-index: 100000;
+display: flex;
+align-items: center;
+justify-content: center;
+padding: 20px;
+}
+
+#editor-mural-admin[hidden] {
+display: none;
+}
+
+/* =========================================================
+FUNDO DO EDITOR
+========================================================= */
+
+.editor-mural-overlay {
+position: absolute;
+inset: 0;
+background: rgba(0, 0, 0, 0.62);
+backdrop-filter: blur(3px);
+}
+
+/* =========================================================
+MODAL
+========================================================= */
+
+.editor-mural-modal {
+position: relative;
+z-index: 1;
+
+width: min(100%, 900px);
+max-height: calc(100vh - 40px);
+
+overflow-y: auto;
+
+background: var(--branco, #ffffff);
+
+border: 1px solid var(--borda, #dddddd);
+border-radius: 16px;
+
+box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+
+scrollbar-width: thin;
+}
+
+/* =========================================================
+CABEÇALHO DO EDITOR
+========================================================= */
+
+.editor-mural-topo {
+position: sticky;
+top: 0;
+z-index: 5;
+
+display: flex;
+align-items: center;
+justify-content: space-between;
+gap: 20px;
+
+padding: 20px 24px;
+
+background: var(--branco, #ffffff);
+
+border-bottom: 1px solid var(--borda-clara, #eeeeee);
+}
+
+.editor-mural-topo > div {
+min-width: 0;
+}
+
+.editor-mural-topo span {
+display: block;
+
+margin-bottom: 5px;
+
+color: var(--verde, #194138);
+
+font-size: 11px;
+font-weight: 700;
+letter-spacing: 0.08em;
+text-transform: uppercase;
+}
+
+.editor-mural-topo h2 {
+margin: 0;
+
+color: var(--verde-escuro, #091d1c);
+
+font-size: 22px;
+line-height: 1.2;
+}
+
+/* =========================================================
+BOTÃO FECHAR
+========================================================= */
+
+.editor-mural-topo .editor-botao-fechar {
+flex: 0 0 auto;
+
+width: 40px;
+height: 40px;
+
+display: flex;
+align-items: center;
+justify-content: center;
+
+padding: 0;
+
+border: 1px solid var(--borda, #dddddd);
+border-radius: 50%;
+
+background: var(--branco, #ffffff);
+
+color: var(--texto, #222222);
+
+font-size: 26px;
+line-height: 1;
+
+cursor: pointer;
+
+transition:
+background 0.2s ease,
+border-color 0.2s ease,
+color 0.2s ease;
+}
+
+.editor-mural-topo .editor-botao-fechar {
+background: var(--fundo, #f5f3ef);
+
+border-color: var(--verde, #194138);
+
+color: var(--verde-escuro, #091d1c);
+}
+
+/* =========================================================
+FORMULÁRIO
+========================================================= */
+
+.form-editor-mural {
+padding: 24px;
+}
+
+/* =========================================================
+GRID
+========================================================= */
+
+.editor-grid-mural {
+display: grid;
+
+grid-template-columns: repeat(2, minmax(0, 1fr));
+
+gap: 16px;
+}
+
+.editor-campo-full {
+grid-column: 1 / -1;
+}
+
+/* =========================================================
+BLOCOS
+========================================================= */
+
+.form-editor-mural .editor-bloco {
+margin-bottom: 24px;
+
+padding: 20px;
+
+background: var(--fundo-verde-claro, #f1f5f3);
+
+border: 1px solid var(--borda-clara, #eeeeee);
+
+border-radius: 12px;
+}
+
+.form-editor-mural .editor-bloco {
+margin-bottom: 0;
+}
+
+/* =========================================================
+TÍTULO DO BLOCO
+========================================================= */
+
+.form-editor-mural .editor-bloco-titulo {
+margin-bottom: 18px;
+
+color: var(--verde-escuro, #091d1c);
+
+font-size: 15px;
+font-weight: 700;
+}
+
+/* =========================================================
+CAMPOS
+========================================================= */
+
+.editor-grid-mural .editor-campo,
+.form-editor-mural > .editor-bloco > .editor-campo {
+display: flex;
+flex-direction: column;
+
+gap: 7px;
+}
+
+.editor-grid-mural .editor-campo label,
+.form-editor-mural > .editor-bloco > .editor-campo label {
+color: var(--texto, #222222);
+
+font-size: 13px;
+font-weight: 700;
+}
+
+.editor-grid-mural input,
+.editor-grid-mural textarea,
+.form-editor-mural textarea,
+.form-editor-mural input {
+width: 100%;
+
+box-sizing: border-box;
+
+padding: 11px 13px;
+
+border: 1px solid var(--borda, #dddddd);
+border-radius: 8px;
+
+background: var(--branco, #ffffff);
+
+color: var(--texto, #222222);
+
+font-family: inherit;
+font-size: 14px;
+
+outline: none;
+
+transition:
+border-color 0.2s ease,
+box-shadow 0.2s ease;
+}
+
+.editor-grid-mural textarea,
+.form-editor-mural textarea {
+resize: vertical;
+
+line-height: 1.5;
+}
+
+.editor-grid-mural input,
+.editor-grid-mural textarea,
+.form-editor-mural input,
+.form-editor-mural textarea {
+border-color: var(--verde, #194138);
+
+box-shadow: 0 0 0 3px rgba(25, 65, 56, 0.10);
+}
+
+/* =========================================================
+CAMPOS SOMENTE LEITURA
+========================================================= */
+
+.form-editor-mural input[readonly] {
+background: #eeeeee;
+
+color: var(--texto-suave, #6b6b6b);
+
+cursor: default;
+}
+
+/* =========================================================
+TEXTOS DE AJUDA
+========================================================= */
+
+.editor-ajuda-mural,
+.form-editor-mural .editor-ajuda {
+display: block;
+
+margin-top: 7px;
+
+color: var(--texto-suave, #6b6b6b);
+
+font-size: 12px;
+line-height: 1.5;
+}
+
+/* =========================================================
+IMAGENS
+========================================================= */
+
+.editor-imagens-cabecalho {
+display: flex;
+align-items: center;
+justify-content: space-between;
+gap: 15px;
+
+margin-bottom: 12px;
+}
+
+.editor-imagens-cabecalho label {
+display: block;
+
+color: var(--texto, #222222);
+
+font-size: 13px;
+font-weight: 700;
+}
+
+.editor-imagens-cabecalho small {
+display: block;
+
+margin-top: 4px;
+
+color: var(--texto-suave, #6b6b6b);
+
+font-size: 12px;
+}
+
+.editor-contador-imagens {
+flex: 0 0 auto;
+
+padding: 5px 9px;
+
+background: var(--verde, #194138);
+
+border-radius: 20px;
+
+color: var(--branco, #ffffff);
+
+font-size: 12px;
+font-weight: 700;
+}
+
+/* =========================================================
+LISTA DE IMAGENS
+========================================================= */
+
+.editor-imagens-lista {
+display: grid;
+
+grid-template-columns: repeat(4, minmax(0, 1fr));
+
+gap: 12px;
+
+min-height: 0;
+}
+
+.editor-imagens-lista {
+display: none;
+}
+
+/* =========================================================
+ITEM DA IMAGEM
+========================================================= */
+
+.editor-imagem-item {
+position: relative;
+
+aspect-ratio: 1 / 1;
+
+overflow: hidden;
+
+background: #e9e9e9;
+
+border: 1px solid var(--borda, #dddddd);
+
+border-radius: 10px;
+}
+
+.editor-imagem-preview {
+width: 100%;
+height: 100%;
+
+display: block;
+
+object-fit: cover;
+}
+
+/* =========================================================
+IMAGEM PRINCIPAL
+========================================================= */
+
+.editor-imagem-principal {
+position: absolute;
+top: 8px;
+left: 8px;
+
+z-index: 2;
+
+padding: 5px 8px;
+
+background: var(--verde-escuro, #091d1c);
+
+border-radius: 5px;
+
+color: var(--branco, #ffffff);
+
+font-size: 10px;
+font-weight: 700;
+
+text-transform: uppercase;
+}
+
+/* =========================================================
+NÚMERO DA IMAGEM
+========================================================= */
+
+.editor-imagem-numero {
+position: absolute;
+left: 8px;
+bottom: 8px;
+
+padding: 4px 7px;
+
+background: rgba(0, 0, 0, 0.68);
+
+border-radius: 5px;
+
+color: #ffffff;
+
+font-size: 11px;
+font-weight: 700;
+}
+
+/* =========================================================
+BOTÃO REMOVER IMAGEM
+========================================================= */
+
+.editor-imagem-remover {
+position: absolute;
+top: 8px;
+right: 8px;
+
+z-index: 3;
+
+width: 30px;
+height: 30px;
+
+display: flex;
+align-items: center;
+justify-content: center;
+
+padding: 0;
+
+border: 0;
+border-radius: 50%;
+
+background: rgba(0, 0, 0, 0.72);
+
+color: #ffffff;
+
+font-size: 17px;
+font-weight: 700;
+
+cursor: pointer;
+
+transition:
+background 0.2s ease,
+transform 0.2s ease;
+}
+
+.editor-imagem-remover {
+background: #000000;
+
+transform: scale(1.05);
+}
+
+/* =========================================================
+BOTÃO ADICIONAR IMAGEM
+========================================================= */
+
+.editor-botao-imagem {
+display: inline-flex;
+align-items: center;
+justify-content: center;
+
+min-height: 42px;
+
+margin-top: 14px;
+padding: 0 16px;
+
+background: var(--branco, #ffffff);
+
+border: 1px dashed var(--verde, #194138);
+border-radius: 8px;
+
+color: var(--verde, #194138);
+
+font-size: 13px;
+font-weight: 700;
+
+cursor: pointer;
+
+transition:
+background 0.2s ease,
+border-color 0.2s ease;
+}
+
+.editor-botao-imagem {
+background: #edf3f0;
+
+border-color: var(--verde-escuro, #091d1c);
+}
+
+.editor-botao-imagem.editor-imagem-desativado {
+opacity: 0.45;
+
+cursor: not-allowed;
+}
+
+/* =========================================================
+AJUDA DAS IMAGENS
+========================================================= */
+
+.editor-imagens-ajuda {
+display: block;
+
+margin-top: 8px;
+
+color: var(--texto-suave, #6b6b6b);
+
+font-size: 12px;
+line-height: 1.5;
+}
+
+/* =========================================================
+INFORMAÇÕES DO CADASTRO
+========================================================= */
+
+#editor-mural-status {
+text-transform: capitalize;
+}
+
+/* =========================================================
+BLOCO DE RECUSA
+========================================================= */
+
+#editor-mural-recusa-bloco {
+background: #fff8f7;
+
+border-color: #f0d3cf;
+}
+
+#editor-mural-recusa-bloco .editor-bloco-titulo {
+color: var(--erro, #b3261e);
+}
+
+/* =========================================================
+AÇÕES DO EDITOR
+========================================================= */
+
+.editor-mural-acoes {
+position: sticky;
+bottom: 0;
+z-index: 5;
+
+display: flex;
+align-items: center;
+justify-content: flex-end;
+flex-wrap: wrap;
+
+gap: 10px;
+
+margin: 24px -24px -24px;
+
+padding: 16px 24px;
+
+background: rgba(255, 255, 255, 0.97);
+
+border-top: 1px solid var(--borda-clara, #eeeeee);
+}
+
+/* =========================================================
+BOTÕES DO EDITOR
+========================================================= */
+
+.editor-mural-acoes button {
+min-height: 42px;
+
+padding: 0 16px;
+
+border-radius: 8px;
+
+font-family: inherit;
+
+font-size: 13px;
+font-weight: 700;
+
+cursor: pointer;
+
+transition:
+background 0.2s ease,
+border-color 0.2s ease,
+opacity 0.2s ease;
+}
+
+.editor-mural-acoes button {
+opacity: 0.5;
+
+cursor: not-allowed;
+}
+
+/* =========================================================
+CANCELAR
+========================================================= */
+
+.editor-mural-acoes .editor-botao-cancelar {
+background: var(--branco, #ffffff);
+
+border: 1px solid var(--borda, #dddddd);
+
+color: var(--texto, #222222);
+}
+
+.editor-mural-acoes .editor-botao-cancelar {
+background: var(--fundo, #f5f3ef);
+}
+
+/* =========================================================
+REJEITAR
+========================================================= */
+
+.editor-mural-acoes .editor-botao-rejeitar {
+background: #fff5f3;
+
+border: 1px solid #e4bbb5;
+
+color: var(--erro, #b3261e);
+}
+
+.editor-mural-acoes .editor-botao-rejeitar {
+background: #fce8e5;
+}
+
+/* =========================================================
+APROVAR
+========================================================= */
+
+.editor-mural-acoes .editor-botao-aprovar {
+background: var(--verde, #194138);
+
+border: 1px solid var(--verde, #194138);
+
+color: var(--branco, #ffffff);
+}
+
+.editor-mural-acoes .editor-botao-aprovar {
+background: var(--verde-escuro, #091d1c);
+
+border-color: var(--verde-escuro, #091d1c);
+}
+
+/* =========================================================
+SALVAR
+========================================================= */
+
+.editor-mural-acoes .editor-botao-salvar {
+background: var(--branco, #ffffff);
+
+border: 1px solid var(--verde, #194138);
+
+color: var(--verde, #194138);
+}
+
+.editor-mural-acoes .editor-botao-salvar {
+background: #edf3f0;
+}
+
+/* =========================================================
+CARDS DE PERFIS DO MURAL
+========================================================= */
+
+.admin-mural-card {
+overflow: hidden;
+
+background: var(--branco, #ffffff);
+
+border: 1px solid var(--borda, #dddddd);
+
+border-radius: 12px;
+
+box-shadow: 0 3px 12px rgba(0, 0, 0, 0.04);
+}
+
+/* =========================================================
+GALERIA DO CARD
+========================================================= */
+
+.admin-mural-imagens {
+display: grid;
+
+grid-template-columns: repeat(4, minmax(0, 1fr));
+
+height: 180px;
+
+background: #eeeeee;
+}
+
+.admin-mural-imagem {
+position: relative;
+
+overflow: hidden;
+
+border-right: 1px solid rgba(255, 255, 255, 0.8);
+}
+
+.admin-mural-imagem {
+border-right: 0;
+}
+
+.admin-mural-imagem img {
+width: 100%;
+height: 100%;
+
+display: block;
+
+object-fit: cover;
+}
+
+/* =========================================================
+CAPA DO CARD
+========================================================= */
+
+.admin-mural-imagem-capa::after {
+content: "CAPA";
+
+position: absolute;
+left: 8px;
+bottom: 8px;
+
+padding: 4px 6px;
+
+background: rgba(9, 29, 28, 0.86);
+
+border-radius: 4px;
+
+color: #ffffff;
+
+font-size: 9px;
+font-weight: 700;
+}
+
+/* =========================================================
+CONTEÚDO DO CARD
+========================================================= */
+
+.admin-mural-conteudo {
+padding: 18px;
+}
+
+.admin-mural-conteudo h3 {
+margin: 0 0 5px;
+
+color: var(--verde-escuro, #091d1c);
+
+font-size: 18px;
+line-height: 1.3;
+}
+
+.admin-mural-categoria {
+margin-bottom: 13px;
+
+color: var(--verde, #194138);
+
+font-size: 12px;
+font-weight: 700;
+
+text-transform: uppercase;
+}
+
+.admin-mural-descricao {
+margin: 0;
+
+color: var(--texto-suave, #6b6b6b);
+
+font-size: 14px;
+line-height: 1.55;
+}
+
+/* =========================================================
+METADADOS
+========================================================= */
+
+.admin-mural-metadados {
+display: grid;
+
+gap: 7px;
+
+margin-top: 15px;
+padding-top: 15px;
+
+border-top: 1px solid var(--borda-clara, #eeeeee);
+}
+
+.admin-mural-metadado {
+color: var(--texto-suave, #6b6b6b);
+
+font-size: 12px;
+line-height: 1.45;
+}
+
+.admin-mural-metadado strong {
+color: var(--texto, #222222);
+}
+
+/* =========================================================
+STATUS
+========================================================= */
+
+.admin-mural-status {
+display: inline-flex;
+align-items: center;
+
+width: fit-content;
+
+margin-bottom: 12px;
+padding: 5px 9px;
+
+border-radius: 20px;
+
+font-size: 11px;
+font-weight: 700;
+}
+
+.admin-mural-status-pendente {
+background: #fff6dc;
+
+color: var(--pendente, #8a6500);
+}
+
+.admin-mural-status-aprovado {
+background: #e8f5e9;
+
+color: var(--sucesso, #2e7d32);
+}
+
+.admin-mural-status-recusado {
+background: #ffebee;
+
+color: var(--erro, #b3261e);
+}
+
+/* =========================================================
+AÇÕES DOS CARDS
+========================================================= */
+
+.admin-mural-acoes-card {
+display: flex;
+flex-wrap: wrap;
+
+gap: 8px;
+
+margin-top: 17px;
+}
+
+.admin-mural-acoes-card button {
+min-height: 38px;
+
+padding: 0 13px;
+
+border-radius: 7px;
+
+font-family: inherit;
+
+font-size: 12px;
+font-weight: 700;
+
+cursor: pointer;
+
+transition:
+background 0.2s ease,
+border-color 0.2s ease,
+opacity 0.2s ease;
+}
+
+.admin-mural-acoes-card button {
+opacity: 0.5;
+
+cursor: not-allowed;
+}
+
+/* =========================================================
+BOTÃO EDITAR
+========================================================= */
+
+.admin-mural-botao-editar {
+background: var(--branco, #ffffff);
+
+border: 1px solid var(--verde, #194138);
+
+color: var(--verde, #194138);
+}
+
+.admin-mural-botao-editar {
+background: #edf3f0;
+}
+
+/* =========================================================
+BOTÃO APROVAR
+========================================================= */
+
+.admin-mural-botao-aprovar {
+background: var(--verde, #194138);
+
+border: 1px solid var(--verde, #194138);
+
+color: var(--branco, #ffffff);
+}
+
+.admin-mural-botao-aprovar {
+background: var(--verde-escuro, #091d1c);
+
+border-color: var(--verde-escuro, #091d1c);
+}
+
+/* =========================================================
+BOTÃO REJEITAR
+========================================================= */
+
+.admin-mural-botao-rejeitar {
+background: #fff5f3;
+
+border: 1px solid #e4bbb5;
+
+color: var(--erro, #b3261e);
+}
+
+.admin-mural-botao-rejeitar {
+background: #fce8e5;
+}
+
+/* =========================================================
+PESQUISA DO MURAL
+========================================================= */
+
+#pesquisa-mural-admin {
+width: 100%;
+
+box-sizing: border-box;
+}
+
+/* =========================================================
+FOCO DE ACESSIBILIDADE
+========================================================= */
+
+#editor-mural-admin button,
+#editor-mural-admin input,
+#editor-mural-admin textarea,
+#pesquisa-mural-admin {
+outline: 3px solid rgba(25, 65, 56, 0.20);
+
+outline-offset: 2px;
+}
+
+/* =========================================================
+RESPONSIVO — 800PX
+========================================================= */
+
+@media (max-width: 800px) {
+
+#editor-mural-admin {
+padding: 10px;
+}
+
+.editor-mural-modal {
+max-height: calc(100vh - 20px);
+
+border-radius: 12px;
+
+}
+
+.editor-grid-mural {
+grid-template-columns: 1fr;
+}
+
+.editor-campo-full {
+grid-column: auto;
+}
+
+.editor-imagens-lista {
+grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.editor-mural-acoes {
+justify-content: stretch;
+}
+
+.editor-mural-acoes button {
+flex: 1 1 calc(50% - 10px);
+}
+
+}
+
+/* =========================================================
+RESPONSIVO — 600PX
+========================================================= */
+
+@media (max-width: 600px) {
+
+.editor-mural-topo {
+padding: 16px;
+}
+
+.editor-mural-topo h2 {
+font-size: 19px;
+}
+
+.form-editor-mural {
+padding: 16px;
+}
+
+.form-editor-mural .editor-bloco {
+padding: 15px;
+}
+
+.editor-mural-acoes {
+margin: 24px -16px -16px;
+
+padding: 14px 16px;
+
+}
+
+.editor-imagens-lista {
+grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.admin-mural-imagens {
+height: 150px;
+}
+
+}
+
+/* =========================================================
+RESPONSIVO — 450PX
+========================================================= */
+
+@media (max-width: 450px) {
+
+#editor-mural-admin {
+padding: 0;
+}
+
+.editor-mural-modal {
+width: 100%;
+max-height: 100vh;
+
+border-radius: 0;
+
+}
+
+.editor-mural-topo {
+padding: 14px;
+}
+
+.form-editor-mural {
+padding: 14px;
+}
+
+.form-editor-mural .editor-bloco {
+padding: 13px;
+}
+
+.editor-mural-acoes {
+flex-direction: column;
+}
+
+.editor-mural-acoes button {
+width: 100%;
+flex: none;
+}
+
+.admin-mural-imagens {
+grid-template-columns: repeat(2, minmax(0, 1fr));
+
+height: 220px;
+
+}
+
+.admin-mural-imagem:nth-child(n + 3) {
+  display: none;
+}
+}
