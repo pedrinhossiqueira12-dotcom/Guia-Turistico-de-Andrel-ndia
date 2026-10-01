@@ -165,7 +165,6 @@ async function verificarLogin() {
     const usuario = data.session.user;
 
     if (usuario.id !== ADMIN_USER_ID) {
-      alert("Você não possui permissão para acessar esta página.");
       window.location.href = "../index.html";
       return;
     }
