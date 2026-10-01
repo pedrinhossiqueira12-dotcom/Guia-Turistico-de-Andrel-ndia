@@ -20,17 +20,15 @@ content="#091D1C"
 
 
 
-<title> Administração — Guia Turístico de Andrelândia </title>
+<title>Administração — Guia Turístico de Andrelândia</title>
 
-<link
-  rel="stylesheet"
-  href="../styles/admin.css"
->
-
+<link rel="stylesheet" href="../styles/admin.css" >
 
 </head>
 
 <body>
+
+<!-- ===================================================== CABEÇALHO ====================================================== -->
 
 <header class="admin-header">
 
@@ -48,7 +46,6 @@ content="#091D1C"
 
   </div>
 
-
   <button
     type="button"
     id="botao-sair"
@@ -61,7 +58,13 @@ content="#091D1C"
 
 </header>
 
+<!-- ===================================================== CONTEÚDO PRINCIPAL ====================================================== -->
+
 <main class="admin-container">
+
+<!-- ===================================================
+     INTRODUÇÃO
+==================================================== -->
 
 <div class="admin-intro">
 
@@ -77,41 +80,101 @@ content="#091D1C"
 
 </div>
 
-<section class="admin-section" id="secaoComercios">
 
-<div class="section-header">
+<!-- ===================================================
+     COMÉRCIOS PUBLICADOS
+==================================================== -->
 
-<div>
-  <h2>Comércios publicados</h2>
-
-  <p>
-    Comércios que já estão disponíveis no Guia.
-  </p>
-</div>
-
-<span
-  class="contador-comercios"
-  id="contadorComercios"
+<section
+  class="admin-section"
+  id="secaoComercios"
 >
-  0
-</span>
 
-</div>
+  <div class="section-header">
 
-<div id="carregandoComercios" class="admin-loading" > Carregando comércios... </div>
+    <div>
 
-<div id="semComercios" class="admin-empty" hidden > Nenhum comércio publicado encontrado. </div>
+      <h2>
+        Comércios publicados
+      </h2>
 
-<div id="listaComercios" class="lista-comercios" ></div>
+      <p>
+        Comércios que já estão disponíveis no Guia.
+      </p>
+
+    </div>
+
+    <span
+      class="contador-comercios"
+      id="contadorComercios"
+    >
+      0
+    </span>
+
+  </div>
+
+
+  <!-- Pesquisa -->
+
+  <div class="admin-pesquisa">
+
+    <input
+      type="search"
+      id="pesquisa-comercios-admin"
+      placeholder="Pesquisar comércio..."
+      autocomplete="off"
+    >
+
+  </div>
+
+
+  <!-- Carregamento -->
+
+  <div
+    id="carregandoComercios"
+    class="admin-loading"
+  >
+    Carregando comércios...
+  </div>
+
+
+  <!-- Nenhum comércio -->
+
+  <div
+    id="semComercios"
+    class="admin-empty"
+    hidden
+  >
+    Nenhum comércio publicado encontrado.
+  </div>
+
+
+  <!-- Lista -->
+
+  <div
+    id="listaComercios"
+    class="lista-comercios"
+  >
+  </div>
 
 </section>
+
+
+<!-- ===================================================
+     MENSAGEM
+==================================================== -->
 
 <div
   id="mensagem"
   class="mensagem"
   role="alert"
-></div>
+>
+</div>
 
+
+<!-- ===================================================
+     CONTROLES DOS CADASTROS
+==================================================== -->
 
 <div class="admin-controles">
 
@@ -130,15 +193,28 @@ content="#091D1C"
 </div>
 
 
+<!-- ===================================================
+     CARREGAMENTO
+==================================================== -->
+
 <div id="carregando">
   Carregando cadastros...
 </div>
 
 
+<!-- ===================================================
+     LISTA DE CADASTROS PENDENTES
+==================================================== -->
+
 <div
   id="lista-cadastros"
-></div>
+>
+</div>
 
+
+<!-- ===================================================
+     SEM CADASTROS
+==================================================== -->
 
 <div
   id="sem-cadastros"
@@ -157,13 +233,411 @@ content="#091D1C"
 
 </main>
 
+<!-- ===================================================== EDITOR DE COMÉRCIO ====================================================== -->
+
+<div id="editor-comercio-admin" class="editor-comercio-admin" hidden >
+
+<div class="editor-comercio-overlay"></div>
+
+<div
+  class="editor-comercio-modal"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="editor-comercio-titulo"
+>
+
+
+  <!-- ===============================================
+       CABEÇALHO DO EDITOR
+  ================================================ -->
+
+  <div class="editor-comercio-header">
+
+    <div>
+
+      <span class="editor-comercio-label">
+        Administração
+      </span>
+
+      <h2 id="editor-comercio-titulo">
+        Editar comércio
+      </h2>
+
+      <p>
+        Altere os dados publicados no Guia.
+      </p>
+
+    </div>
+
+    <button
+      type="button"
+      id="editor-fechar"
+      class="editor-fechar"
+      aria-label="Fechar editor"
+    >
+      ×
+    </button>
+
+  </div>
+
+
+  <!-- ===============================================
+       FORMULÁRIO
+  ================================================ -->
+
+  <form
+    id="form-editor-comercio"
+    class="form-editor-comercio"
+  >
+
+    <!-- ID interno -->
+
+    <input
+      type="hidden"
+      id="editor-comercio-id"
+    >
+
+
+    <!-- =============================================
+         INFORMAÇÕES PRINCIPAIS
+    ============================================== -->
+
+    <div class="editor-bloco">
+
+      <div class="editor-bloco-titulo">
+        Informações principais
+      </div>
+
+
+      <div class="editor-grid">
+
+        <div class="editor-campo editor-campo-full">
+
+          <label for="editor-nome">
+            Nome
+          </label>
+
+          <input
+            type="text"
+            id="editor-nome"
+            autocomplete="off"
+          >
+
+        </div>
+
+
+        <div class="editor-campo">
+
+          <label for="editor-categoria">
+            Categoria
+          </label>
+
+          <input
+            type="text"
+            id="editor-categoria"
+            autocomplete="off"
+          >
+
+        </div>
+
+
+        <div class="editor-campo">
+
+          <label for="editor-telefone">
+            Telefone
+          </label>
+
+          <input
+            type="text"
+            id="editor-telefone"
+            autocomplete="off"
+          >
+
+        </div>
+
+
+        <div class="editor-campo">
+
+          <label for="editor-whatsapp">
+            WhatsApp
+          </label>
+
+          <input
+            type="text"
+            id="editor-whatsapp"
+            autocomplete="off"
+          >
+
+        </div>
+
+
+        <div class="editor-campo">
+
+          <label for="editor-instagram">
+            Instagram
+          </label>
+
+          <input
+            type="text"
+            id="editor-instagram"
+            autocomplete="off"
+          >
+
+        </div>
+
+
+        <div class="editor-campo">
+
+          <label for="editor-site">
+            Site
+          </label>
+
+          <input
+            type="text"
+            id="editor-site"
+            autocomplete="off"
+          >
+
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <!-- =============================================
+         LOCALIZAÇÃO
+    ============================================== -->
+
+    <div class="editor-bloco">
+
+      <div class="editor-bloco-titulo">
+        Localização
+      </div>
+
+
+      <div class="editor-grid">
+
+        <div class="editor-campo editor-campo-full">
+
+          <label for="editor-endereco">
+            Endereço
+          </label>
+
+          <input
+            type="text"
+            id="editor-endereco"
+            autocomplete="off"
+          >
+
+        </div>
+
+
+        <div class="editor-campo">
+
+          <label for="editor-latitude">
+            Latitude
+          </label>
+
+          <input
+            type="text"
+            id="editor-latitude"
+            inputmode="decimal"
+          >
+
+        </div>
+
+
+        <div class="editor-campo">
+
+          <label for="editor-longitude">
+            Longitude
+          </label>
+
+          <input
+            type="text"
+            id="editor-longitude"
+            inputmode="decimal"
+          >
+
+        </div>
+
+
+        <div class="editor-campo editor-campo-full">
+
+          <label for="editor-horario">
+            Horário
+          </label>
+
+          <textarea
+            id="editor-horario"
+            rows="3"
+          ></textarea>
+
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <!-- =============================================
+         TEXTOS
+    ============================================== -->
+
+    <div class="editor-bloco">
+
+      <div class="editor-bloco-titulo">
+        Conteúdo
+      </div>
+
+
+      <div class="editor-campo">
+
+        <label for="editor-descricao">
+          Descrição
+        </label>
+
+        <textarea
+          id="editor-descricao"
+          rows="5"
+        ></textarea>
+
+      </div>
+
+
+      <div class="editor-campo">
+
+        <label for="editor-historia">
+          História
+        </label>
+
+        <textarea
+          id="editor-historia"
+          rows="5"
+        ></textarea>
+
+      </div>
+
+
+      <div class="editor-campo">
+
+        <label for="editor-curiosidades">
+          Curiosidades
+        </label>
+
+        <textarea
+          id="editor-curiosidades"
+          rows="5"
+        ></textarea>
+
+      </div>
+
+    </div>
+
+
+    <!-- =============================================
+         IMAGENS
+    ============================================== -->
+
+    <div class="editor-bloco">
+
+      <div class="editor-bloco-titulo">
+        Imagens
+      </div>
+
+      <p class="editor-ajuda">
+        Adicione até 4 imagens. A primeira imagem será usada
+        como capa principal do comércio.
+      </p>
+
+
+      <!-- Campo oculto para manter estado -->
+
+      <input
+        type="hidden"
+        id="editor-imagens-json"
+        value="[]"
+      >
+
+
+      <!-- Selecionar imagens -->
+
+      <div class="editor-upload">
+
+        <label
+          for="editor-imagem-arquivo"
+          class="editor-botao-imagem"
+        >
+          <span>
+            + Adicionar imagens
+          </span>
+        </label>
+
+        <input
+          type="file"
+          id="editor-imagem-arquivo"
+          accept="image/jpeg,image/png,image/webp"
+          multiple
+          hidden
+        >
+
+        <span class="editor-limite-imagens">
+          Máximo de 4 imagens
+        </span>
+
+      </div>
+
+
+      <!-- Pré-visualização -->
+
+      <div
+        id="editor-preview-imagens"
+        class="editor-preview-imagens"
+      >
+      </div>
+
+    </div>
+
+
+    <!-- =============================================
+         BOTÕES
+    ============================================== -->
+
+    <div class="editor-acoes">
+
+      <button
+        type="button"
+        id="editor-cancelar"
+        class="editor-botao cancelar"
+      >
+        Cancelar
+      </button>
+
+      <button
+        type="submit"
+        id="editor-salvar"
+        class="editor-botao salvar"
+      >
+        Salvar alterações
+      </button>
+
+    </div>
+
+
+  </form>
+
+</div>
+
+</div>
+
 <!-- ===================================================== SUPABASE ====================================================== -->
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" ></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <!-- ===================================================== ADMIN ====================================================== -->
 
-<script src="../js/admin-cadastros.js" ></script>
+<script src="../js/admin-cadastros.js"></script>
 
 </body>
 
