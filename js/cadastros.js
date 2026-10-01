@@ -113,7 +113,10 @@ mensagem;
 aviso.className =
 "aviso ativo";
 
-if (tipo === "erro") {
+if (
+tipo ===
+"erro"
+) {
 
 aviso.classList.add(
   "aviso-erro"
@@ -166,12 +169,20 @@ limparAviso();
 tipoCadastro =
 tipo;
 
+if (formularioContainer) {
+
 formularioContainer.classList.add(
-"ativo"
+  "ativo"
 );
 
+}
+
+if (opcoes) {
+
 opcoes.style.display =
-"none";
+  "none";
+
+}
 
 /* -------------------------------------------------------
 NOVO COMÉRCIO
@@ -182,12 +193,21 @@ tipo ===
 "novo_comercio"
 ) {
 
-tituloFormulario.textContent =
-  "Cadastrar comércio";
+if (tituloFormulario) {
 
-descricaoFormulario.textContent =
-  "Preencha as informações abaixo. " +
-  "O cadastro será analisado antes de ser publicado no guia.";
+  tituloFormulario.textContent =
+    "Cadastrar comércio";
+
+}
+
+
+if (descricaoFormulario) {
+
+  descricaoFormulario.textContent =
+    "Preencha as informações abaixo. " +
+    "O cadastro será analisado antes de ser publicado no guia.";
+
+}
 
 return;
 
@@ -197,12 +217,20 @@ return;
 ALTERAÇÃO
 ------------------------------------------------------- */
 
+if (tituloFormulario) {
+
 tituloFormulario.textContent =
-"Sugerir alteração";
+  "Sugerir alteração";
+
+}
+
+if (descricaoFormulario) {
 
 descricaoFormulario.textContent =
-"A seleção do comércio existente será adicionada " +
-"na próxima etapa.";
+  "A seleção do comércio existente será adicionada " +
+  "na próxima etapa.";
+
+}
 
 mostrarAviso(
 "A função de alteração será ativada na próxima etapa. " +
@@ -305,8 +333,9 @@ OBTER USUÁRIO
 async function obterUsuarioCadastro() {
 
 /*
-Primeiro utilizamos a função já existente
-no login.js.
+
+Primeiro tenta utilizar o estado
+mantido pelo login.js.
 */
 
 if (
@@ -317,15 +346,6 @@ typeof obterUsuarioLogin ===
 const usuario =
   obterUsuarioLogin();
 
-console.log(
-  "USUÁRIO LOGADO:",
-  usuario
-);
-
-console.log(
-  "UUID DO USUÁRIO:",
-  usuario?.id
-);
 
 if (usuario) {
 
@@ -336,39 +356,69 @@ if (usuario) {
 }
 
 /*
-Caso a sessão ainda não tenha sido carregada
-pelo login.js, consultamos diretamente o Supabase.
+
+Caso a sessão ainda não tenha sido
+disponibilizada pelo login.js,
+consultamos diretamente o Supabase.
 */
 
+try {
+
 const {
-data,
-error
+  data,
+  error
 } =
-await cadastrosSupabase.auth.getUser();
+  await cadastrosSupabase.auth.getUser();
+
 
 if (error) {
 
+  console.error(
+    "Erro ao obter usuário:",
+    error
+  );
+
+  return null;
+
+}
+
+
+return (
+  data?.user ||
+  null
+);
+
+} catch (erro) {
+
 console.error(
-  "Erro ao obter usuário:",
-  error
+  "Erro ao consultar sessão:",
+  erro
 );
 
 return null;
 
 }
 
-return data?.user || null;
-
 }
 
 /* =========================================================
-EXIGIR LOGIN
+VERIFICAR LOGIN
 ========================================================= */
 
 async function verificarLoginCadastro() {
 
+/*
+
+Obtém o usuário atual.
+*/
+
 const usuario =
 await obterUsuarioCadastro();
+
+/*
+
+Usuário já está logado.
+*/
 
 if (usuario) {
 
@@ -377,9 +427,12 @@ return usuario;
 }
 
 /*
-O usuário não está conectado.
 
-Usamos o modal existente do login.js.
+Usuário não está logado.
+
+
+Abre o mesmo modal utilizado
+pelo index.html e local.html.
 */
 
 if (
@@ -389,6 +442,13 @@ typeof abrirModalAuth ===
 
 abrirModalAuth(
   "login"
+);
+
+} else {
+
+console.error(
+  "A função abrirModalAuth() não está disponível. " +
+  "Verifique se login.js foi carregado antes de cadastros.js."
 );
 
 }
@@ -403,16 +463,23 @@ return null;
 }
 
 /* =========================================================
-OBTER ARQUIVO DA FOTO
+OBTENER ARQUIVO DA FOTO
 ========================================================= */
 
 function obterArquivoImagem() {
 
 /*
-O formulário normalmente utiliza id="imagem".
 
-Também aceitamos id="foto" para evitar
-problemas caso o campo tenha esse nome.
+O formulário utiliza normalmente:
+
+
+id="imagem"
+
+
+Também aceitamos:
+
+
+id="foto"
 */
 
 const campoImagem =
@@ -433,7 +500,10 @@ return null;
 
 }
 
-return campoImagem.files?.[0] || null;
+return (
+campoImagem.files?.[0] ||
+null
+);
 
 }
 
@@ -472,9 +542,13 @@ FORMATOS PERMITIDOS
 ------------------------------------------------------- */
 
 const tiposPermitidos = [
+
 "image/jpeg",
+
 "image/png",
+
 "image/webp"
+
 ];
 
 if (
@@ -508,17 +582,20 @@ arquivo.name
 .replace(
 /[^a-z0-9]/g,
 ""
-) || "jpg";
+) ||
+"jpg";
 
 const nomeSeguro =
 String(
 arquivo.name
 )
 .replace(
-/.[^/.]+$/,
+/[.][^/.]+$/,
 ""
 )
-.normalize("NFD")
+.normalize(
+"NFD"
+)
 .replace(
 /[\u0300-\u036f]/g,
 ""
@@ -590,19 +667,23 @@ error
 } =
 await cadastrosSupabase
 .storage
-.from("cadastros")
+.from(
+"cadastros"
+)
 .upload(
 caminho,
 arquivo,
 {
-cacheControl:
-"3600",
+
+      cacheControl:
+        "3600",
 
       upsert:
         false,
 
       contentType:
         arquivo.type
+
     }
   );
 
@@ -612,6 +693,7 @@ console.error(
   "Erro ao enviar imagem:",
   error
 );
+
 
 throw new Error(
   "Não foi possível enviar a imagem: " +
@@ -629,13 +711,16 @@ data
 } =
 cadastrosSupabase
 .storage
-.from("cadastros")
+.from(
+"cadastros"
+)
 .getPublicUrl(
 caminho
 );
 
 const imagemUrl =
-data?.publicUrl || null;
+data?.publicUrl ||
+null;
 
 if (!imagemUrl) {
 
@@ -700,9 +785,19 @@ BOTÃO
 ------------------------------------------------------- */
 
 const botaoEnviar =
-formulario.querySelector(
+formulario?.querySelector(
 'button[type="submit"]'
 );
+
+if (!botaoEnviar) {
+
+console.error(
+  "Botão de envio do formulário não encontrado."
+);
+
+return;
+
+}
 
 const textoOriginal =
 botaoEnviar.textContent;
@@ -719,69 +814,124 @@ try {
    CAMPOS
 ----------------------------------------------------- */
 
+const campoNome =
+  document.getElementById(
+    "nome"
+  );
+
+const campoCategoria =
+  document.getElementById(
+    "categoria"
+  );
+
+const campoWhatsapp =
+  document.getElementById(
+    "whatsapp"
+  );
+
+const campoInstagram =
+  document.getElementById(
+    "instagram"
+  );
+
+const campoEndereco =
+  document.getElementById(
+    "endereco"
+  );
+
+const campoHorario =
+  document.getElementById(
+    "horario"
+  );
+
+const campoDescricao =
+  document.getElementById(
+    "descricao"
+  );
+
+const campoLatitude =
+  document.getElementById(
+    "latitude"
+  );
+
+const campoLongitude =
+  document.getElementById(
+    "longitude"
+  );
+
+
+/* -----------------------------------------------------
+   VALIDAR CAMPOS EXISTENTES
+----------------------------------------------------- */
+
+if (
+  !campoNome ||
+  !campoCategoria ||
+  !campoEndereco
+) {
+
+  throw new Error(
+    "Não foi possível localizar os campos obrigatórios do formulário."
+  );
+
+}
+
+
+/* -----------------------------------------------------
+   LER CAMPOS
+----------------------------------------------------- */
+
 const nome =
-  document
-    .getElementById("nome")
-    .value
+  campoNome.value
     .trim();
 
 
 const categoria =
-  document
-    .getElementById("categoria")
-    .value
+  campoCategoria.value
     .trim();
 
 
 const whatsapp =
   normalizarWhatsapp(
-    document
-      .getElementById("whatsapp")
-      .value
+    campoWhatsapp?.value ||
+    ""
   );
 
 
 const instagram =
-  document
-    .getElementById("instagram")
-    .value
-    .trim();
+  campoInstagram?.value
+    .trim() ||
+  "";
 
 
 const endereco =
-  document
-    .getElementById("endereco")
-    .value
+  campoEndereco.value
     .trim();
 
 
 const horario =
-  document
-    .getElementById("horario")
-    .value
-    .trim();
+  campoHorario?.value
+    .trim() ||
+  "";
 
 
 const descricao =
-  document
-    .getElementById("descricao")
-    .value
-    .trim();
+  campoDescricao?.value
+    .trim() ||
+  "";
 
 
 const latitude =
   converterCoordenada(
-    document
-      .getElementById("latitude")
-      .value
+    campoLatitude?.value ||
+    ""
   );
 
 
 const longitude =
   converterCoordenada(
-    document
-      .getElementById("longitude")
-      .value
+    campoLongitude?.value ||
+    ""
   );
 
 
@@ -846,9 +996,11 @@ if (arquivoImagem) {
   botaoEnviar.textContent =
     "Enviando foto...";
 
+
   mostrarAviso(
     "Enviando a foto..."
   );
+
 
   imagemUrl =
     await enviarImagem(
@@ -860,7 +1012,7 @@ if (arquivoImagem) {
 
 
 /* -----------------------------------------------------
-   DADOS
+   DADOS DO CADASTRO
 ----------------------------------------------------- */
 
 const cadastro = {
@@ -875,7 +1027,8 @@ const cadastro = {
     null,
 
   telefone_usuario:
-    whatsapp || null,
+    whatsapp ||
+    null,
 
   etapa:
     "formulario_web",
@@ -888,18 +1041,22 @@ const cadastro = {
   categoria,
 
   whatsapp:
-    whatsapp || null,
+    whatsapp ||
+    null,
 
   instagram:
-    instagram || null,
+    instagram ||
+    null,
 
   endereco,
 
   horario:
-    horario || null,
+    horario ||
+    null,
 
   descricao:
-    descricao || null,
+    descricao ||
+    null,
 
   imagem_url:
     imagemUrl,
@@ -976,14 +1133,19 @@ mostrarAviso(
 );
 
 
-formularioContainer.scrollIntoView({
-  behavior:
-    "smooth",
+if (formularioContainer) {
 
-  block:
-    "start"
+  formularioContainer.scrollIntoView({
 
-});
+    behavior:
+      "smooth",
+
+    block:
+      "start"
+
+  });
+
+}
 
 } catch (erro) {
 
@@ -994,7 +1156,7 @@ console.error(
 
 
 mostrarAviso(
-  erro.message ||
+  erro?.message ||
   "Ocorreu um erro ao enviar o cadastro.",
   "erro"
 );
@@ -1003,6 +1165,7 @@ mostrarAviso(
 
 botaoEnviar.disabled =
   false;
+
 
 botaoEnviar.textContent =
   textoOriginal;
@@ -1067,6 +1230,79 @@ enviarCadastro
 
 /* =========================================================
 INICIALIZAÇÃO
+========================================================= */
+
+document.addEventListener(
+"DOMContentLoaded",
+async () => {
+
+/*
+ * Aguarda o login.js verificar a sessão.
+ *
+ * Isso evita abrir o modal de login por engano
+ * enquanto o Supabase ainda está carregando
+ * uma sessão existente.
+ */
+
+let usuario =
+  null;
+
+
+if (
+  typeof verificarUsuario ===
+  "function"
+) {
+
+  usuario =
+    await verificarUsuario();
+
+} else {
+
+  usuario =
+    await obterUsuarioCadastro();
+
+}
+
+
+/*
+ * Se não estiver logado,
+ * abre automaticamente o modal.
+ */
+
+if (!usuario) {
+
+  if (
+    typeof abrirModalAuth ===
+    "function"
+  ) {
+
+    abrirModalAuth(
+      "login"
+    );
+
+  } else {
+
+    console.error(
+      "A função abrirModalAuth() não está disponível."
+    );
+
+  }
+
+  return;
+
+}
+
+
+console.log(
+  "Cadastros — usuário autenticado:",
+  usuario.id
+);
+
+}
+);
+
+/* =========================================================
+PÁGINA CARREGADA
 ========================================================= */
 
 console.log(
