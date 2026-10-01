@@ -84,7 +84,7 @@
     "descricao": "",
     "historia": "",
     "curiosidades": "",
-    "endereco": "Av. Nossa Sra. do Porto da Eterna Salvação, 149, Andrelândia - MG",
+    "endereco": "Av. Nossa Sra. do Porto da Eterna Salvação, 149, Andrelândia",
     "horario": "Domingo: 11:00 às 16:00",
     "entrada": "",
     "telefone": "(35) 3325-2044",
@@ -96,7 +96,12 @@
     "y": null,
     "capa": "./img/restaurante-fazenda-pasto-grande/capa.png",
     "galeria": [],
-    "pagina": "local.html"
+    "pagina": "local.html",
+    "whatsapp": "",
+    "imagem": "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/admin/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790862486268-qnry9oo-1000453061.jpg",
+    "imagens": [
+      "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/admin/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790862486268-qnry9oo-1000453061.jpg"
+    ]
   },
   {
     "id": "uaiso-gastronomia",
