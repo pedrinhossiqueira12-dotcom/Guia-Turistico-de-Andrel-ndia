@@ -18,7 +18,12 @@
     "y": null,
     "capa": "./img/vagao-lanches/capa.png",
     "galeria": [],
-    "pagina": "local.html"
+    "pagina": "local.html",
+    "whatsapp": "",
+    "imagem": "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/admin/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790861367071-mab1766-1000452987.jpg",
+    "imagens": [
+      "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/admin/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790861367071-mab1766-1000452987.jpg"
+    ]
   },
   {
     "id": "mega-lanches",
