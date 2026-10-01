@@ -922,20 +922,16 @@ const usuario =
   session.user;
 
 if (
-  !usuario ||
-  usuario.id !== ADMIN_USER_ID
+!usuario ||
+usuario.id !== ADMIN_USER_ID
 ) {
 
-  alert(
-    "Acesso restrito ao administrador."
-  );
+await supabaseClient.auth.signOut();
 
-  await supabaseClient.auth.signOut();
+window.location.href =
+"../index.html";
 
-  window.location.href =
-    "../index.html";
-
-  return false;
+return false;
 
 }
 
