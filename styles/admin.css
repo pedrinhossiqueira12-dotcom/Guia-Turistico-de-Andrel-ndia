@@ -1497,3 +1497,197 @@ width: 100%;
 }
 
 }
+/* =========================================================
+EDITOR — IMAGENS
+========================================================= */
+
+.editor-ajuda {
+margin: -5px 0 15px;
+color: var(--texto-suave);
+font-size: 12px;
+line-height: 1.5;
+}
+
+/* =========================================================
+ÁREA DE UPLOAD
+========================================================= */
+
+.editor-upload {
+display: flex;
+align-items: center;
+flex-wrap: wrap;
+gap: 10px;
+margin-bottom: 15px;
+}
+
+.editor-botao-imagem {
+display: inline-flex;
+align-items: center;
+justify-content: center;
+min-height: 40px;
+padding: 9px 14px;
+border-radius: 8px;
+background: var(--verde);
+color: var(--branco);
+cursor: pointer;
+font-size: 13px;
+font-weight: 700;
+transition:
+background 0.2s ease,
+transform 0.1s ease;
+}
+
+.editor-botao-imagem {
+background: var(--verde-escuro);
+}
+
+.editor-botao-imagem {
+transform: scale(0.98);
+}
+
+.editor-limite-imagens {
+color: var(--texto-suave);
+font-size: 12px;
+}
+
+/* =========================================================
+GRADE DE IMAGENS
+========================================================= */
+
+.editor-preview-imagens {
+display: grid;
+grid-template-columns: repeat(4, 120px);
+gap: 10px;
+width: 100%;
+}
+
+/* =========================================================
+MINIATURA
+========================================================= */
+
+.editor-imagem-item {
+position: relative;
+width: 120px;
+height: 100px;
+overflow: hidden;
+border: 1px solid var(--borda);
+border-radius: 9px;
+background: #eeeeee;
+}
+
+/* =========================================================
+IMAGEM
+========================================================= */
+
+.editor-imagem-item img {
+display: block;
+width: 100%;
+height: 100%;
+object-fit: cover;
+}
+
+/* =========================================================
+INDICAÇÃO DE CAPA
+========================================================= */
+
+.editor-imagem-capa {
+position: absolute;
+left: 6px;
+bottom: 6px;
+z-index: 2;
+
+padding: 4px 7px;
+
+border-radius: 5px;
+
+background: var(--verde-escuro);
+color: var(--branco);
+
+font-size: 9px;
+font-weight: 700;
+line-height: 1;
+}
+
+/* =========================================================
+BOTÃO REMOVER IMAGEM
+========================================================= */
+
+.editor-imagem-remover {
+position: absolute;
+top: 5px;
+right: 5px;
+z-index: 3;
+
+width: 26px;
+height: 26px;
+
+display: flex;
+align-items: center;
+justify-content: center;
+
+padding: 0;
+
+border: 0;
+border-radius: 50%;
+
+background: rgba(0, 0, 0, 0.72);
+color: var(--branco);
+
+cursor: pointer;
+
+font-size: 17px;
+font-weight: 400;
+line-height: 1;
+
+transition:
+background 0.2s ease,
+transform 0.1s ease;
+}
+
+.editor-imagem-remover {
+background: var(--erro);
+}
+
+.editor-imagem-remover {
+transform: scale(0.92);
+}
+
+/* =========================================================
+QUANDO NÃO HÁ IMAGENS
+========================================================= */
+
+.editor-preview-imagens {
+display: none;
+}
+
+/* =========================================================
+RESPONSIVO
+========================================================= */
+
+@media (max-width: 700px) {
+
+.editor-preview-imagens {
+grid-template-columns:
+repeat(3, 110px);
+}
+
+.editor-imagem-item {
+width: 110px;
+height: 90px;
+}
+
+}
+
+@media (max-width: 480px) {
+
+.editor-preview-imagens {
+grid-template-columns:
+repeat(2, minmax(0, 1fr));
+}
+
+.editor-imagem-item {
+width: 100%;
+height: 105px;
+}
+
+}
