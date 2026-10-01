@@ -3986,5 +3986,26 @@
     "longitude": -44.306538,
     "imagem": "",
     "imagens": []
+  },
+  {
+    "id": "pedrox-do-grau",
+    "nome": "pedrox do grau",
+    "categoria": "Restaurante",
+    "descricao": "",
+    "historia": "",
+    "curiosidades": "",
+    "endereco": "rerwtwert",
+    "horario": "",
+    "entrada": "",
+    "telefone": "35999638094",
+    "whatsapp": "35999638094",
+    "instagram": "",
+    "site": "",
+    "latitude": null,
+    "longitude": null,
+    "imagem": "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790816895745-nqzha32-img_20260901_183503.png",
+    "imagens": [
+      "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790816895745-nqzha32-img_20260901_183503.png"
+    ]
   }
 ]
