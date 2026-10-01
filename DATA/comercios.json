@@ -58,7 +58,7 @@
     "descricao": "",
     "historia": "",
     "curiosidades": "",
-    "endereco": "Praça Gabriel Ribeiro Salgado, 45, Centro, Andrelândia - MG",
+    "endereco": "Praça Gabriel Ribeiro Salgado, 45 - Centro, Andrelândia",
     "horario": "08:00 às 00:00",
     "entrada": "",
     "telefone": "(35) 3325-1670",
@@ -70,7 +70,12 @@
     "y": null,
     "capa": "./img/restaurante-andrelandia/capa.png",
     "galeria": [],
-    "pagina": "local.html"
+    "pagina": "local.html",
+    "whatsapp": "",
+    "imagem": "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/admin/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790862376387-nd293et-1000453060.jpg",
+    "imagens": [
+      "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/admin/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790862376387-nd293et-1000453060.jpg"
+    ]
   },
   {
     "id": "restaurante-fazenda-pasto-grande",
