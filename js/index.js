@@ -146,7 +146,83 @@ function criarLinkLocal(id) {
 
 
 function obterImagem(item) {
-  return item?.capa || FALLBACK_IMAGE;
+if (!item) {
+return FALLBACK_IMAGE;
+}
+
+if (
+item.imagem &&
+typeof item.imagem === "string" &&
+item.imagem.trim()
+) {
+return item.imagem.trim();
+}
+
+if (
+item.imagem_url &&
+typeof item.imagem_url === "string" &&
+item.imagem_url.trim()
+) {
+return item.imagem_url.trim();
+}
+
+if (
+Array.isArray(item.imagens) &&
+item.imagens.length > 0
+) {
+const primeiraImagem = item.imagens.find(
+imagem =>
+typeof imagem === "string" &&
+imagem.trim()
+);
+
+if (primeiraImagem) {
+  return primeiraImagem.trim();
+}
+
+}
+
+if (
+item.capa &&
+typeof item.capa === "string" &&
+item.capa.trim()
+) {
+return item.capa.trim();
+}
+
+if (
+Array.isArray(item.galeria) &&
+item.galeria.length > 0
+) {
+const primeiraImagem = item.galeria.find(
+imagem =>
+typeof imagem === "string" &&
+imagem.trim()
+);
+
+if (primeiraImagem) {
+  return primeiraImagem.trim();
+}
+
+}
+
+if (
+Array.isArray(item.fotos) &&
+item.fotos.length > 0
+) {
+const primeiraFoto = item.fotos.find(
+imagem =>
+typeof imagem === "string" &&
+imagem.trim()
+);
+
+if (primeiraFoto) {
+  return primeiraFoto.trim();
+}
+
+}
+
+return FALLBACK_IMAGE;
 }
 
 
