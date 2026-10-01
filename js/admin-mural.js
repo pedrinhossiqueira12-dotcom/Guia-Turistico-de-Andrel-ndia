@@ -11,13 +11,19 @@ Gerenciamento das imagens
 Aprovação
 Rejeição
 Listagem dos perfis publicados
+Exclusão de perfis publicados
 Comunicação com a Edge Function administrativa
 
 IMPORTANTE:
 
 O ID público do perfil nunca é recriado durante edição.
+
 A aprovação deve preservar o mesmo ID utilizado em
 votos_pessoas.pessoa_id.
+
+A exclusão de um perfil publicado também é feita pela
+Edge Function para que o arquivo DATA/pessoas.json e
+os dados relacionados sejam tratados no servidor.
 ========================================================= */
 
 /* =========================================================
@@ -195,12 +201,14 @@ if (!mensagem) {
 return;
 }
 
-mensagem.textContent = texto;
+mensagem.textContent =
+texto;
 
 mensagem.className =
 `mensagem ${tipo}`;
 
-mensagem.hidden = false;
+mensagem.hidden =
+false;
 
 window.scrollTo({
 top: 0,
@@ -215,9 +223,11 @@ if (!mensagem) {
 return;
 }
 
-mensagem.hidden = true;
+mensagem.hidden =
+true;
 
-mensagem.textContent = "";
+mensagem.textContent =
+"";
 
 }
 
@@ -318,11 +328,11 @@ Array.isArray(cadastro.imagens)
 ) {
 
 imagens =
-  cadastro.imagens.filter(
-    imagem =>
-      typeof imagem === "string" &&
-      imagem.trim() !== ""
-  );
+cadastro.imagens.filter(
+imagem =>
+typeof imagem === "string" &&
+imagem.trim() !== ""
+);
 
 }
 
@@ -339,14 +349,14 @@ cadastro.imagem.trim() !== ""
 ) {
 
 if (
-  !imagens.includes(
-    cadastro.imagem
-  )
+!imagens.includes(
+cadastro.imagem
+)
 ) {
 
-  imagens.unshift(
-    cadastro.imagem
-  );
+imagens.unshift(
+cadastro.imagem
+);
 
 }
 
@@ -360,14 +370,14 @@ cadastro.imagem_url.trim() !== ""
 ) {
 
 if (
-  !imagens.includes(
-    cadastro.imagem_url
-  )
+!imagens.includes(
+cadastro.imagem_url
+)
 ) {
 
-  imagens.unshift(
-    cadastro.imagem_url
-  );
+imagens.unshift(
+cadastro.imagem_url
+);
 
 }
 
@@ -393,35 +403,35 @@ LIMITE_IMAGENS
 if (editorImagensJson) {
 
 editorImagensJson.value =
-  JSON.stringify(
-    imagensMuralEditando
-  );
+JSON.stringify(
+imagensMuralEditando
+);
 
 }
 
 if (editorContadorImagens) {
 
 editorContadorImagens.textContent =
-  `${imagensMuralEditando.length}/${LIMITE_IMAGENS}`;
+`${imagensMuralEditando.length}/${LIMITE_IMAGENS}`;
 
 }
 
 if (editorBotaoImagem) {
 
 const bloqueado =
-  imagensMuralEditando.length >=
-  LIMITE_IMAGENS;
+imagensMuralEditando.length >=
+LIMITE_IMAGENS;
 
 editorBotaoImagem.classList.toggle(
-  "editor-imagem-desativado",
-  bloqueado
+"editor-imagem-desativado",
+bloqueado
 );
 
 editorBotaoImagem.setAttribute(
-  "aria-disabled",
-  bloqueado
-    ? "true"
-    : "false"
+"aria-disabled",
+bloqueado
+? "true"
+: "false"
 );
 
 }
@@ -434,116 +444,116 @@ if (!editorImagensLista) {
 return;
 }
 
-editorImagensLista.innerHTML = "";
+editorImagensLista.innerHTML =
+"";
 
 imagensMuralEditando.forEach(
 (imagem, index) => {
 
-  const item =
-    document.createElement("div");
+const item =
+document.createElement("div");
 
-  item.className =
-    "editor-imagem-item";
+item.className =
+"editor-imagem-item";
 
-  const img =
-    document.createElement("img");
+const img =
+document.createElement("img");
 
-  img.className =
-    "editor-imagem-preview";
+img.className =
+"editor-imagem-preview";
 
-  img.src = imagem;
+img.src =
+imagem;
 
-  img.alt =
-    `Imagem ${index + 1} do perfil`;
+img.alt =
+`Imagem ${index + 1} do perfil`;
 
-  img.loading = "lazy";
+img.loading =
+"lazy";
 
-  img.onerror = () => {
+img.onerror = () => {
 
-    img.style.display = "none";
+img.style.display =
+"none";
 
-  };
+};
 
+if (index === 0) {
 
-  if (index === 0) {
+const capa =
+document.createElement("span");
 
-    const capa =
-      document.createElement("span");
+capa.className =
+"editor-imagem-principal";
 
-    capa.className =
-      "editor-imagem-principal";
+capa.textContent =
+"Capa";
 
-    capa.textContent =
-      "Capa";
-
-    item.appendChild(
-      capa
-    );
-
-  }
-
-
-  const numero =
-    document.createElement("span");
-
-  numero.className =
-    "editor-imagem-numero";
-
-  numero.textContent =
-    `${index + 1}`;
-
-  item.appendChild(
-    img
-  );
-
-  item.appendChild(
-    numero
-  );
-
-
-  const remover =
-    document.createElement("button");
-
-  remover.type =
-    "button";
-
-  remover.className =
-    "editor-imagem-remover";
-
-  remover.setAttribute(
-    "aria-label",
-    `Remover imagem ${index + 1}`
-  );
-
-  remover.innerHTML =
-    "×";
-
-  remover.addEventListener(
-    "click",
-    () => {
-
-      imagensMuralEditando.splice(
-        index,
-        1
-      );
-
-      atualizarEstadoImagens();
-
-      renderizarImagensEditor();
-
-    }
-  );
-
-  item.appendChild(
-    remover
-  );
-
-  editorImagensLista.appendChild(
-    item
-  );
+item.appendChild(
+capa
+);
 
 }
 
+const numero =
+document.createElement("span");
+
+numero.className =
+"editor-imagem-numero";
+
+numero.textContent =
+`${index + 1}`;
+
+item.appendChild(
+img
+);
+
+item.appendChild(
+numero
+);
+
+const remover =
+document.createElement("button");
+
+remover.type =
+"button";
+
+remover.className =
+"editor-imagem-remover";
+
+remover.setAttribute(
+"aria-label",
+`Remover imagem ${index + 1}`
+);
+
+remover.innerHTML =
+"×";
+
+remover.addEventListener(
+"click",
+() => {
+
+imagensMuralEditando.splice(
+index,
+1
+);
+
+atualizarEstadoImagens();
+
+renderizarImagensEditor();
+
+}
+);
+
+item.appendChild(
+remover
+);
+
+editorImagensLista.appendChild(
+item
+);
+
+}
 );
 
 atualizarEstadoImagens();
@@ -558,7 +568,7 @@ usuarioId
 if (!arquivo) {
 
 throw new Error(
-  "Nenhuma imagem foi selecionada."
+"Nenhuma imagem foi selecionada."
 );
 
 }
@@ -569,7 +579,7 @@ TAMANHO_MAXIMO_IMAGEM
 ) {
 
 throw new Error(
-  `A imagem "${arquivo.name}" ultrapassa o limite de 5 MB.`
+`A imagem "${arquivo.name}" ultrapassa o limite de 5 MB.`
 );
 
 }
@@ -587,7 +597,7 @@ arquivo.type
 ) {
 
 throw new Error(
-  `O arquivo "${arquivo.name}" não é JPG, PNG ou WEBP.`
+`O arquivo "${arquivo.name}" não é JPG, PNG ou WEBP.`
 );
 
 }
@@ -667,8 +677,8 @@ LIMITE_IMAGENS
 ) {
 
 mostrarMensagem(
-  "O perfil já possui 4 imagens.",
-  "erro"
+"O perfil já possui 4 imagens.",
+"erro"
 );
 
 return;
@@ -688,8 +698,8 @@ await supabaseClient.auth.getUser();
 if (!user) {
 
 mostrarMensagem(
-  "Sua sessão expirou.",
-  "erro"
+"Sua sessão expirou.",
+"erro"
 );
 
 return;
@@ -716,8 +726,8 @@ disponiveis
 ) {
 
 mostrarMensagem(
-  `Só é possível adicionar mais ${disponiveis} imagem(ns).`,
-  "erro"
+`Só é possível adicionar mais ${disponiveis} imagem(ns).`,
+"erro"
 );
 
 }
@@ -728,69 +738,69 @@ true;
 if (editorBotaoImagem) {
 
 editorBotaoImagem.style.opacity =
-  "0.5";
+"0.5";
 
 }
 
 try {
 
 for (
-  const arquivo of arquivosProcessar
+const arquivo of arquivosProcessar
 ) {
 
-  mostrarMensagem(
-    `Enviando imagem ${imagensMuralEditando.length + 1} de ${LIMITE_IMAGENS}...`,
-    "sucesso"
-  );
+mostrarMensagem(
+`Enviando imagem ${imagensMuralEditando.length + 1} de ${LIMITE_IMAGENS}...`,
+"sucesso"
+);
 
-  const url =
-    await fazerUploadImagem(
-      arquivo,
-      usuarioId
-    );
+const url =
+await fazerUploadImagem(
+arquivo,
+usuarioId
+);
 
-  imagensMuralEditando.push(
-    url
-  );
+imagensMuralEditando.push(
+url
+);
 
-  atualizarEstadoImagens();
+atualizarEstadoImagens();
 
-  renderizarImagensEditor();
+renderizarImagensEditor();
 
 }
 
 mostrarMensagem(
-  "Imagens atualizadas no editor.",
-  "sucesso"
+"Imagens atualizadas no editor.",
+"sucesso"
 );
 
 } catch (erro) {
 
 console.error(
-  "Erro ao enviar imagem:",
-  erro
+"Erro ao enviar imagem:",
+erro
 );
 
 mostrarMensagem(
-  erro.message ||
-  "Não foi possível enviar a imagem.",
-  "erro"
+erro.message ||
+"Não foi possível enviar a imagem.",
+"erro"
 );
 
 } finally {
 
 editorImagemArquivo.disabled =
-  false;
+false;
 
 if (editorBotaoImagem) {
 
-  editorBotaoImagem.style.opacity =
-    "";
+editorBotaoImagem.style.opacity =
+"";
 
 }
 
 editorImagemArquivo.value =
-  "";
+"";
 
 }
 
@@ -815,7 +825,7 @@ await supabaseClient.auth.getSession();
 if (!session) {
 
 throw new Error(
-  "Sessão expirada. Faça login novamente."
+"Sessão expirada. Faça login novamente."
 );
 
 }
@@ -826,44 +836,46 @@ EDGE_FUNCTION_URL,
 {
 method: "POST",
 
-    headers: {
-      "Authorization":
-        `Bearer ${session.access_token}`,
+headers: {
+"Authorization":
+`Bearer ${session.access_token}`,
 
-      "apikey":
-        SUPABASE_ANON_KEY,
+"apikey":
+SUPABASE_ANON_KEY,
 
-      "Content-Type":
-        "application/json"
-    },
+"Content-Type":
+"application/json"
+},
 
-    body:
-      JSON.stringify({
-        acao,
-        ...dados
-      })
-  }
+body:
+JSON.stringify({
+acao,
+...dados
+})
+}
 );
 
-let resultado = null;
+let resultado =
+null;
 
 try {
 
 resultado =
-  await resposta.json();
+await resposta.json();
 
 } catch {
 
-resultado = null;
+resultado =
+null;
 
 }
 
 if (!resposta.ok) {
 
 throw new Error(
-  resultado?.erro ||
-  resultado?.error ||
-  `Erro HTTP ${resposta.status}.`
+resultado?.erro ||
+resultado?.error ||
+`Erro HTTP ${resposta.status}.`
 );
 
 }
@@ -874,7 +886,7 @@ resultado.erro
 ) {
 
 throw new Error(
-  resultado.erro
+resultado.erro
 );
 
 }
@@ -885,7 +897,7 @@ resultado.error
 ) {
 
 throw new Error(
-  resultado.error
+resultado.error
 );
 
 }
@@ -903,28 +915,32 @@ async function verificarLogin() {
 try {
 
 const {
-  data: {
-    session
-  }
+data: {
+session
+}
 } =
-  await supabaseClient.auth.getSession();
+await supabaseClient.auth.getSession();
 
 if (!session) {
 
-  window.location.href =
-    "../index.html";
+window.location.href =
+"../index.html";
 
-  return false;
+return false;
 
 }
 
 const usuario =
-  session.user;
+session.user;
 
 if (
 !usuario ||
 usuario.id !== ADMIN_USER_ID
 ) {
+
+alert(
+"Acesso restrito ao administrador."
+);
 
 await supabaseClient.auth.signOut();
 
@@ -940,16 +956,16 @@ return true;
 } catch (erro) {
 
 console.error(
-  "Erro ao verificar administrador:",
-  erro
+"Erro ao verificar administrador:",
+erro
 );
 
 alert(
-  "Não foi possível verificar seu acesso."
+"Não foi possível verificar seu acesso."
 );
 
 window.location.href =
-  "../index.html";
+"../index.html";
 
 return false;
 
@@ -966,75 +982,75 @@ async function carregarCadastrosMural() {
 if (carregando) {
 
 carregando.hidden =
-  false;
+false;
 
 }
 
 if (listaMural) {
 
 listaMural.innerHTML =
-  "";
+"";
 
 }
 
 if (semMural) {
 
 semMural.hidden =
-  true;
+true;
 
 }
 
 try {
 
 const {
-  data,
-  error
+data,
+error
 } =
-  await supabaseClient
-    .from("mural_cadastros")
-    .select("*")
-    .eq(
-      "status",
-      "pendente"
-    )
-    .order(
-      "criado_em",
-      {
-        ascending: false
-      }
-    );
+await supabaseClient
+.from("mural_cadastros")
+.select("*")
+.eq(
+"status",
+"pendente"
+)
+.order(
+"criado_em",
+{
+ascending: false
+}
+);
 
 if (error) {
 
-  throw error;
+throw error;
 
 }
 
 cadastrosMural =
-  Array.isArray(data)
-    ? data
-    : [];
+Array.isArray(data)
+? data
+: [];
 
 renderizarCadastrosMural();
 
 } catch (erro) {
 
 console.error(
-  "Erro ao carregar cadastros do mural:",
-  erro
+"Erro ao carregar cadastros do mural:",
+erro
 );
 
 mostrarMensagem(
-  `Não foi possível carregar os cadastros do mural: ${erro.message}`,
-  "erro"
+`Não foi possível carregar os cadastros do mural: ${erro.message}`,
+"erro"
 );
 
 } finally {
 
 if (carregando) {
 
-  carregando.hidden =
-    true;
+carregando.hidden =
+true;
 
 }
 
@@ -1059,8 +1075,8 @@ if (!cadastrosMural.length) {
 
 if (semMural) {
 
-  semMural.hidden =
-    false;
+semMural.hidden =
+false;
 
 }
 
@@ -1071,22 +1087,21 @@ return;
 if (semMural) {
 
 semMural.hidden =
-  true;
+true;
 
 }
 
 cadastrosMural.forEach(
 cadastro => {
 
-  listaMural.appendChild(
-    criarCardMural(
-      cadastro,
-      true
-    )
-  );
+listaMural.appendChild(
+criarCardMural(
+cadastro,
+true
+)
+);
 
 }
-
 );
 
 }
@@ -1122,75 +1137,75 @@ imagensDiv.className =
 if (imagens.length) {
 
 imagens.forEach(
-  (url, index) => {
+(url, index) => {
 
-    const div =
-      document.createElement("div");
+const div =
+document.createElement("div");
 
-    div.className =
-      "admin-mural-imagem";
+div.className =
+"admin-mural-imagem";
 
-    if (index === 0) {
+if (index === 0) {
 
-      div.classList.add(
-        "admin-mural-imagem-capa"
-      );
+div.classList.add(
+"admin-mural-imagem-capa"
+);
 
-    }
+}
 
-    const img =
-      document.createElement("img");
+const img =
+document.createElement("img");
 
-    img.src =
-      url;
+img.src =
+url;
 
-    img.alt =
-      cadastro.nome
-        ? `${cadastro.nome} — imagem ${index + 1}`
-        : `Imagem ${index + 1}`;
+img.alt =
+cadastro.nome
+? `${cadastro.nome} — imagem ${index + 1}`
+: `Imagem ${index + 1}`;
 
-    img.loading =
-      "lazy";
+img.loading =
+"lazy";
 
-    div.appendChild(
-      img
-    );
+div.appendChild(
+img
+);
 
-    imagensDiv.appendChild(
-      div
-    );
+imagensDiv.appendChild(
+div
+);
 
-  }
+}
 );
 
 } else {
 
 const div =
-  document.createElement("div");
+document.createElement("div");
 
 div.className =
-  "admin-mural-imagem";
+"admin-mural-imagem";
 
 div.style.gridColumn =
-  "1 / -1";
+"1 / -1";
 
 div.style.display =
-  "flex";
+"flex";
 
 div.style.alignItems =
-  "center";
+"center";
 
 div.style.justifyContent =
-  "center";
+"center";
 
 div.style.color =
-  "#6b6b6b";
+"#6b6b6b";
 
 div.textContent =
-  "Sem imagem";
+"Sem imagem";
 
 imagensDiv.appendChild(
-  div
+div
 );
 
 }
@@ -1227,11 +1242,11 @@ statusAtual ===
 ) {
 
 status.classList.add(
-  "admin-mural-status-aprovado"
+"admin-mural-status-aprovado"
 );
 
 status.textContent =
-  "Aprovado";
+"Aprovado";
 
 } else if (
 statusAtual ===
@@ -1239,20 +1254,20 @@ statusAtual ===
 ) {
 
 status.classList.add(
-  "admin-mural-status-recusado"
+"admin-mural-status-recusado"
 );
 
 status.textContent =
-  "Recusado";
+"Recusado";
 
 } else {
 
 status.classList.add(
-  "admin-mural-status-pendente"
+"admin-mural-status-pendente"
 );
 
 status.textContent =
-  "Pendente";
+"Pendente";
 
 }
 
@@ -1278,16 +1293,16 @@ titulo
 if (cadastro.categoria) {
 
 const categoria =
-  document.createElement("div");
+document.createElement("div");
 
 categoria.className =
-  "admin-mural-categoria";
+"admin-mural-categoria";
 
 categoria.textContent =
-  cadastro.categoria;
+cadastro.categoria;
 
 conteudo.appendChild(
-  categoria
+categoria
 );
 
 }
@@ -1297,16 +1312,16 @@ conteudo.appendChild(
 if (cadastro.descricao) {
 
 const descricao =
-  document.createElement("p");
+document.createElement("p");
 
 descricao.className =
-  "admin-mural-descricao";
+"admin-mural-descricao";
 
 descricao.textContent =
-  cadastro.descricao;
+cadastro.descricao;
 
 conteudo.appendChild(
-  descricao
+descricao
 );
 
 }
@@ -1376,18 +1391,16 @@ cadastro.instagram
 ) {
 
 const instagramMeta =
-  document.createElement("div");
+document.createElement("div");
 
 instagramMeta.className =
-  "admin-mural-metadado";
+"admin-mural-metadado";
 
 instagramMeta.innerHTML =
-  `<strong>Instagram:</strong> ${escaparHTML(
-    cadastro.instagram
-  )}`;
+`<strong>Instagram:</strong> ${escaparHTML(cadastro.instagram)}`;
 
 metadados.appendChild(
-  instagramMeta
+instagramMeta
 );
 
 }
@@ -1396,13 +1409,17 @@ conteudo.appendChild(
 metadados
 );
 
-/* Ações */
+/* =========================================================
+AÇÕES
+========================================================= */
 
 const acoes =
 document.createElement("div");
 
 acoes.className =
 "admin-mural-acoes-card";
+
+/* Editar */
 
 const editar =
 document.createElement("button");
@@ -1420,75 +1437,75 @@ editar.addEventListener(
 "click",
 () => {
 
-  abrirEditorMural(
-    cadastro
-  );
+abrirEditorMural(
+cadastro
+);
 
 }
-
 );
 
 acoes.appendChild(
 editar
 );
 
+/* Aprovar / Rejeitar */
+
 if (pendente) {
 
 const aprovar =
-  document.createElement("button");
+document.createElement("button");
 
 aprovar.type =
-  "button";
+"button";
 
 aprovar.className =
-  "admin-mural-botao-aprovar";
+"admin-mural-botao-aprovar";
 
 aprovar.textContent =
-  "Aprovar";
+"Aprovar";
 
 aprovar.addEventListener(
-  "click",
-  () => {
+"click",
+() => {
 
-    aprovarCadastroMural(
-      cadastro,
-      aprovar
-    );
+aprovarCadastroMural(
+cadastro,
+aprovar
+);
 
-  }
+}
 );
 
 acoes.appendChild(
-  aprovar
+aprovar
 );
-
 
 const rejeitar =
-  document.createElement("button");
+document.createElement("button");
 
 rejeitar.type =
-  "button";
+"button";
 
 rejeitar.className =
-  "admin-mural-botao-rejeitar";
+"admin-mural-botao-rejeitar";
 
 rejeitar.textContent =
-  "Rejeitar";
+"Rejeitar";
 
 rejeitar.addEventListener(
-  "click",
-  () => {
+"click",
+() => {
 
-    rejeitarCadastroMural(
-      cadastro,
-      rejeitar
-    );
+rejeitarCadastroMural(
+cadastro,
+rejeitar
+);
 
-  }
+}
 );
 
 acoes.appendChild(
-  rejeitar
+rejeitar
 );
 
 }
@@ -1599,7 +1616,7 @@ imagensMuralEditando =
 if (editorImagemArquivo) {
 
 editorImagemArquivo.value =
-  "";
+"";
 
 }
 
@@ -1621,27 +1638,27 @@ statusAtual ===
 if (editorAprovar) {
 
 editorAprovar.style.display =
-  pendente
-    ? ""
-    : "none";
+pendente
+? ""
+: "none";
 
 }
 
 if (editorRejeitar) {
 
 editorRejeitar.style.display =
-  pendente
-    ? ""
-    : "none";
+pendente
+? ""
+: "none";
 
 }
 
 if (editorRecusaBloco) {
 
 editorRecusaBloco.style.display =
-  statusAtual === "recusado"
-    ? ""
-    : "";
+statusAtual === "recusado"
+? ""
+: "";
 
 }
 
@@ -1656,32 +1673,32 @@ function obterDadosEditor() {
 return {
 
 id:
-  muralEditandoId,
+muralEditandoId,
 
 nome:
-  editorNome.value.trim(),
+editorNome.value.trim(),
 
 categoria:
-  editorCategoria.value.trim(),
+editorCategoria.value.trim(),
 
 descricao:
-  editorDescricao.value.trim(),
+editorDescricao.value.trim(),
 
 sobre:
-  editorSobre.value.trim(),
+editorSobre.value.trim(),
 
 instagram:
-  editorInstagram.value.trim(),
+editorInstagram.value.trim(),
 
 imagem:
-  imagensMuralEditando[0] ||
-  "",
+imagensMuralEditando[0] ||
+"",
 
 imagens:
-  imagensMuralEditando.slice(
-    0,
-    LIMITE_IMAGENS
-  )
+imagensMuralEditando.slice(
+0,
+LIMITE_IMAGENS
+)
 
 };
 
@@ -1694,7 +1711,7 @@ dados
 if (!dados.id) {
 
 throw new Error(
-  "ID do perfil não encontrado."
+"ID do perfil não encontrado."
 );
 
 }
@@ -1702,7 +1719,7 @@ throw new Error(
 if (!dados.nome) {
 
 throw new Error(
-  "Informe o nome do perfil."
+"Informe o nome do perfil."
 );
 
 }
@@ -1710,7 +1727,7 @@ throw new Error(
 if (!dados.categoria) {
 
 throw new Error(
-  "Informe a categoria do perfil."
+"Informe a categoria do perfil."
 );
 
 }
@@ -1721,7 +1738,7 @@ dados.nome.length >
 ) {
 
 throw new Error(
-  "O nome é muito longo."
+"O nome é muito longo."
 );
 
 }
@@ -1732,7 +1749,7 @@ dados.categoria.length >
 ) {
 
 throw new Error(
-  "A categoria é muito longa."
+"A categoria é muito longa."
 );
 
 }
@@ -1743,7 +1760,7 @@ dados.descricao.length >
 ) {
 
 throw new Error(
-  "A descrição é muito longa."
+"A descrição é muito longa."
 );
 
 }
@@ -1769,8 +1786,8 @@ evento.preventDefault();
 if (!muralEditandoId) {
 
 mostrarMensagem(
-  "Nenhum perfil está sendo editado.",
-  "erro"
+"Nenhum perfil está sendo editado.",
+"erro"
 );
 
 return;
@@ -1783,38 +1800,36 @@ obterDadosEditor();
 try {
 
 validarDadosEditor(
-  dados
+dados
 );
 
 editorSalvar.disabled =
-  true;
+true;
 
 mostrarMensagem(
-  "Salvando alterações...",
-  "sucesso"
+"Salvando alterações...",
+"sucesso"
 );
 
-
 /*
-   A Edge Function é responsável por verificar
-   novamente se o usuário da sessão é administrador.
+A Edge Function verifica novamente
+se o usuário da sessão é administrador.
 */
 
 await chamarEdgeFunction(
-  "editar_mural",
-  {
-    cadastro_id:
-      muralEditandoId,
+"editar_mural",
+{
+cadastro_id:
+muralEditandoId,
 
-    perfil:
-      dados
-  }
+perfil:
+dados
+}
 );
 
-
 mostrarMensagem(
-  "Perfil atualizado com sucesso.",
-  "sucesso"
+"Perfil atualizado com sucesso.",
+"sucesso"
 );
 
 fecharEditorMural();
@@ -1826,20 +1841,20 @@ await carregarMuralPublicados();
 } catch (erro) {
 
 console.error(
-  "Erro ao salvar perfil:",
-  erro
+"Erro ao salvar perfil:",
+erro
 );
 
 mostrarMensagem(
-  erro.message ||
-  "Não foi possível salvar o perfil.",
-  "erro"
+erro.message ||
+"Não foi possível salvar o perfil.",
+"erro"
 );
 
 } finally {
 
 editorSalvar.disabled =
-  false;
+false;
 
 }
 
@@ -1870,42 +1885,39 @@ return;
 if (botao) {
 
 botao.disabled =
-  true;
+true;
 
 }
 
 try {
 
 mostrarMensagem(
-  "Publicando perfil no Mural...",
-  "sucesso"
+"Publicando perfil no Mural...",
+"sucesso"
 );
 
-
 /*
-   IMPORTANTE:
+A Edge Function deverá:
 
-   A Edge Function deverá:
-   1. verificar ADMIN_USER_ID;
-   2. buscar o cadastro;
-   3. manter o mesmo cadastro.id;
-   4. atualizar status para aprovado;
-   5. publicar/atualizar DATA/pessoas.json;
-   6. manter a relação com votos_pessoas.pessoa_id.
+verificar ADMIN_USER_ID;
+buscar o cadastro;
+manter o mesmo cadastro.id;
+atualizar status para aprovado;
+publicar/atualizar DATA/pessoas.json;
+manter a relação com votos_pessoas.pessoa_id.
 */
 
 await chamarEdgeFunction(
-  "aprovar_mural",
-  {
-    cadastro_id:
-      cadastro.id
-  }
+"aprovar_mural",
+{
+cadastro_id:
+cadastro.id
+}
 );
 
-
 mostrarMensagem(
-  "Perfil aprovado e publicado com sucesso.",
-  "sucesso"
+"Perfil aprovado e publicado com sucesso.",
+"sucesso"
 );
 
 await carregarCadastrosMural();
@@ -1915,22 +1927,22 @@ await carregarMuralPublicados();
 } catch (erro) {
 
 console.error(
-  "Erro ao aprovar mural:",
-  erro
+"Erro ao aprovar mural:",
+erro
 );
 
 mostrarMensagem(
-  erro.message ||
-  "Não foi possível aprovar o perfil.",
-  "erro"
+erro.message ||
+"Não foi possível aprovar o perfil.",
+"erro"
 );
 
 } finally {
 
 if (botao) {
 
-  botao.disabled =
-    false;
+botao.disabled =
+false;
 
 }
 
@@ -1970,7 +1982,7 @@ motivo.trim();
 if (!motivoFinal) {
 
 alert(
-  "Informe um motivo para rejeitar o cadastro."
+"Informe um motivo para rejeitar o cadastro."
 );
 
 return;
@@ -1980,32 +1992,31 @@ return;
 if (botao) {
 
 botao.disabled =
-  true;
+true;
 
 }
 
 try {
 
 mostrarMensagem(
-  "Rejeitando cadastro...",
-  "sucesso"
+"Rejeitando cadastro...",
+"sucesso"
 );
 
 await chamarEdgeFunction(
-  "rejeitar_mural",
-  {
-    cadastro_id:
-      cadastro.id,
+"rejeitar_mural",
+{
+cadastro_id:
+cadastro.id,
 
-    motivo:
-      motivoFinal
-  }
+motivo:
+motivoFinal
+}
 );
 
-
 mostrarMensagem(
-  "Cadastro rejeitado.",
-  "sucesso"
+"Cadastro rejeitado.",
+"sucesso"
 );
 
 await carregarCadastrosMural();
@@ -2013,22 +2024,22 @@ await carregarCadastrosMural();
 } catch (erro) {
 
 console.error(
-  "Erro ao rejeitar mural:",
-  erro
+"Erro ao rejeitar mural:",
+erro
 );
 
 mostrarMensagem(
-  erro.message ||
-  "Não foi possível rejeitar o cadastro.",
-  "erro"
+erro.message ||
+"Não foi possível rejeitar o cadastro.",
+"erro"
 );
 
 } finally {
 
 if (botao) {
 
-  botao.disabled =
-    false;
+botao.disabled =
+false;
 
 }
 
@@ -2055,14 +2066,8 @@ String(muralEditandoId)
 
 if (!cadastro) {
 
-/*
-   Pode ser um perfil publicado.
-   Nesse caso buscamos a confirmação
-   apenas pelo ID atual.
-*/
-
 alert(
-  "Não foi possível localizar o cadastro original."
+"Não foi possível localizar o cadastro original."
 );
 
 return;
@@ -2097,7 +2102,7 @@ String(muralEditandoId)
 if (!cadastro) {
 
 alert(
-  "Não foi possível localizar o cadastro original."
+"Não foi possível localizar o cadastro original."
 );
 
 return;
@@ -2121,76 +2126,76 @@ async function carregarMuralPublicados() {
 if (carregandoPublicados) {
 
 carregandoPublicados.hidden =
-  false;
+false;
 
 }
 
 try {
 
 const resposta =
-  await fetch(
-    `../DATA/pessoas.json?t=${Date.now()}`,
-    {
-      cache: "no-store"
-    }
-  );
+await fetch(
+`../DATA/pessoas.json?t=${Date.now()}`,
+{
+cache: "no-store"
+}
+);
 
 if (!resposta.ok) {
 
-  throw new Error(
-    `Não foi possível carregar pessoas.json (${resposta.status}).`
-  );
+throw new Error(
+`Não foi possível carregar pessoas.json (${resposta.status}).`
+);
 
 }
 
 const dados =
-  await resposta.json();
+await resposta.json();
 
 muralPublicados =
-  Array.isArray(dados)
-    ? dados
-    : [];
+Array.isArray(dados)
+? dados
+: [];
 
 renderizarMuralPublicados();
 
 } catch (erro) {
 
 console.error(
-  "Erro ao carregar perfis publicados:",
-  erro
+"Erro ao carregar perfis publicados:",
+erro
 );
 
 muralPublicados =
-  [];
+[];
 
 if (listaPublicados) {
 
-  listaPublicados.innerHTML =
-    "";
+listaPublicados.innerHTML =
+"";
 
 }
 
 if (semPublicados) {
 
-  semPublicados.hidden =
-    false;
+semPublicados.hidden =
+false;
 
-  semPublicados.textContent =
-    "Não foi possível carregar os perfis publicados.";
+semPublicados.textContent =
+"Não foi possível carregar os perfis publicados.";
 
 }
 
 mostrarMensagem(
-  `Não foi possível carregar os perfis publicados: ${erro.message}`,
-  "erro"
+`Não foi possível carregar os perfis publicados: ${erro.message}`,
+"erro"
 );
 
 } finally {
 
 if (carregandoPublicados) {
 
-  carregandoPublicados.hidden =
-    true;
+carregandoPublicados.hidden =
+true;
 
 }
 
@@ -2220,36 +2225,36 @@ const filtrados =
 muralPublicados.filter(
 pessoa => {
 
-    if (!pesquisa) {
-      return true;
-    }
+if (!pesquisa) {
+return true;
+}
 
-    const texto = [
-      pessoa.id,
-      pessoa.nome,
-      pessoa.categoria,
-      pessoa.descricao,
-      pessoa.sobre,
-      pessoa.instagram
-    ]
-      .map(
-        normalizarTexto
-      )
-      .join(" ");
+const texto = [
+pessoa.id,
+pessoa.nome,
+pessoa.categoria,
+pessoa.descricao,
+pessoa.sobre,
+pessoa.instagram
+]
+.map(
+normalizarTexto
+)
+.join(" ");
 
-    return texto.includes(
-      pesquisa
-    );
+return texto.includes(
+pesquisa
+);
 
-  }
+}
 );
 
 if (contadorPublicados) {
 
 contadorPublicados.textContent =
-  String(
-    filtrados.length
-  );
+String(
+filtrados.length
+);
 
 }
 
@@ -2257,8 +2262,8 @@ if (!filtrados.length) {
 
 if (semPublicados) {
 
-  semPublicados.hidden =
-    false;
+semPublicados.hidden =
+false;
 
 }
 
@@ -2269,21 +2274,20 @@ return;
 if (semPublicados) {
 
 semPublicados.hidden =
-  true;
+true;
 
 }
 
 filtrados.forEach(
 pessoa => {
 
-  listaPublicados.appendChild(
-    criarCardPublicado(
-      pessoa
-    )
-  );
+listaPublicados.appendChild(
+criarCardPublicado(
+pessoa
+)
+);
 
 }
-
 );
 
 }
@@ -2305,11 +2309,11 @@ pessoa.imagens
 ) {
 
 imagens =
-  pessoa.imagens.filter(
-    imagem =>
-      typeof imagem === "string" &&
-      imagem.trim() !== ""
-  );
+pessoa.imagens.filter(
+imagem =>
+typeof imagem === "string" &&
+imagem.trim() !== ""
+);
 
 }
 
@@ -2319,14 +2323,14 @@ typeof pessoa.capa === "string"
 ) {
 
 if (
-  !imagens.includes(
-    pessoa.capa
-  )
+!imagens.includes(
+pessoa.capa
+)
 ) {
 
-  imagens.unshift(
-    pessoa.capa
-  );
+imagens.unshift(
+pessoa.capa
+);
 
 }
 
@@ -2338,14 +2342,14 @@ typeof pessoa.imagem === "string"
 ) {
 
 if (
-  !imagens.includes(
-    pessoa.imagem
-  )
+!imagens.includes(
+pessoa.imagem
+)
 ) {
 
-  imagens.unshift(
-    pessoa.imagem
-  );
+imagens.unshift(
+pessoa.imagem
+);
 
 }
 
@@ -2386,75 +2390,75 @@ galeria.className =
 if (imagens.length) {
 
 imagens.forEach(
-  (url, index) => {
+(url, index) => {
 
-    const div =
-      document.createElement("div");
+const div =
+document.createElement("div");
 
-    div.className =
-      "admin-mural-imagem";
+div.className =
+"admin-mural-imagem";
 
-    if (index === 0) {
+if (index === 0) {
 
-      div.classList.add(
-        "admin-mural-imagem-capa"
-      );
+div.classList.add(
+"admin-mural-imagem-capa"
+);
 
-    }
+}
 
-    const img =
-      document.createElement("img");
+const img =
+document.createElement("img");
 
-    img.src =
-      url;
+img.src =
+url;
 
-    img.alt =
-      pessoa.nome
-        ? `${pessoa.nome} — imagem ${index + 1}`
-        : `Imagem ${index + 1}`;
+img.alt =
+pessoa.nome
+? `${pessoa.nome} — imagem ${index + 1}`
+: `Imagem ${index + 1}`;
 
-    img.loading =
-      "lazy";
+img.loading =
+"lazy";
 
-    div.appendChild(
-      img
-    );
+div.appendChild(
+img
+);
 
-    galeria.appendChild(
-      div
-    );
+galeria.appendChild(
+div
+);
 
-  }
+}
 );
 
 } else {
 
 const div =
-  document.createElement("div");
+document.createElement("div");
 
 div.className =
-  "admin-mural-imagem";
+"admin-mural-imagem";
 
 div.style.gridColumn =
-  "1 / -1";
+"1 / -1";
 
 div.style.display =
-  "flex";
+"flex";
 
 div.style.alignItems =
-  "center";
+"center";
 
 div.style.justifyContent =
-  "center";
+"center";
 
 div.style.color =
-  "#6b6b6b";
+"#6b6b6b";
 
 div.textContent =
-  "Sem imagem";
+"Sem imagem";
 
 galeria.appendChild(
-  div
+div
 );
 
 }
@@ -2496,16 +2500,16 @@ titulo
 if (pessoa.categoria) {
 
 const categoria =
-  document.createElement("div");
+document.createElement("div");
 
 categoria.className =
-  "admin-mural-categoria";
+"admin-mural-categoria";
 
 categoria.textContent =
-  pessoa.categoria;
+pessoa.categoria;
 
 conteudo.appendChild(
-  categoria
+categoria
 );
 
 }
@@ -2513,19 +2517,21 @@ conteudo.appendChild(
 if (pessoa.descricao) {
 
 const descricao =
-  document.createElement("p");
+document.createElement("p");
 
 descricao.className =
-  "admin-mural-descricao";
+"admin-mural-descricao";
 
 descricao.textContent =
-  pessoa.descricao;
+pessoa.descricao;
 
 conteudo.appendChild(
-  descricao
+descricao
 );
 
 }
+
+/* Metadados */
 
 const metadados =
 document.createElement("div");
@@ -2549,18 +2555,16 @@ id
 if (pessoa.instagram) {
 
 const instagram =
-  document.createElement("div");
+document.createElement("div");
 
 instagram.className =
-  "admin-mural-metadado";
+"admin-mural-metadado";
 
 instagram.innerHTML =
-  `<strong>Instagram:</strong> ${escaparHTML(
-    pessoa.instagram
-  )}`;
+`<strong>Instagram:</strong> ${escaparHTML(pessoa.instagram)}`;
 
 metadados.appendChild(
-  instagram
+instagram
 );
 
 }
@@ -2582,11 +2586,17 @@ conteudo.appendChild(
 metadados
 );
 
+/* =========================================================
+AÇÕES DO PERFIL PUBLICADO
+========================================================= */
+
 const acoes =
 document.createElement("div");
 
 acoes.className =
 "admin-mural-acoes-card";
+
+/* EDITAR */
 
 const editar =
 document.createElement("button");
@@ -2604,16 +2614,47 @@ editar.addEventListener(
 "click",
 () => {
 
-  abrirEditorPublicado(
-    pessoa
-  );
+abrirEditorPublicado(
+pessoa
+);
 
 }
-
 );
 
 acoes.appendChild(
 editar
+);
+
+/* =========================================================
+EXCLUIR
+========================================================= */
+
+const excluir =
+document.createElement("button");
+
+excluir.type =
+"button";
+
+excluir.className =
+"admin-mural-botao-excluir";
+
+excluir.textContent =
+"Excluir";
+
+excluir.addEventListener(
+"click",
+() => {
+
+excluirMuralPublicado(
+pessoa,
+excluir
+);
+
+}
+);
+
+acoes.appendChild(
+excluir
 );
 
 conteudo.appendChild(
@@ -2625,6 +2666,141 @@ conteudo
 );
 
 return card;
+
+}
+
+/* =========================================================
+EXCLUIR PERFIL PUBLICADO
+========================================================= */
+
+async function excluirMuralPublicado(
+pessoa,
+botao = null
+) {
+
+if (!pessoa || !pessoa.id) {
+
+mostrarMensagem(
+"Não foi possível identificar o perfil que será excluído.",
+"erro"
+);
+
+return;
+
+}
+
+const nome =
+pessoa.nome ||
+"este perfil";
+
+const id =
+String(
+pessoa.id
+);
+
+/*
+Primeira confirmação.
+*/
+
+const confirmar =
+window.confirm(
+`Deseja realmente excluir "${nome}" do Mural?\n\nID: ${id}\n\nEssa ação removerá o perfil da publicação.`
+);
+
+if (!confirmar) {
+return;
+}
+
+/*
+Segunda confirmação para evitar
+exclusões acidentais.
+*/
+
+const confirmarNovamente =
+window.confirm(
+`Confirme a exclusão de "${nome}".\n\nO perfil será removido do Mural publicado.`
+);
+
+if (!confirmarNovamente) {
+return;
+}
+
+if (botao) {
+
+botao.disabled =
+true;
+
+botao.textContent =
+"Excluindo...";
+
+}
+
+try {
+
+mostrarMensagem(
+`Excluindo "${nome}"...`,
+"sucesso"
+);
+
+/*
+A Edge Function deverá:
+
+verificar se o usuário é administrador;
+localizar o perfil pelo ID público;
+remover o perfil de DATA/pessoas.json;
+preservar o ID dos demais perfis;
+tratar os dados relacionados ao perfil conforme
+a regra definida no servidor;
+publicar a alteração no GitHub/Cloudflare.
+*/
+
+await chamarEdgeFunction(
+"excluir_mural",
+{
+pessoa_id:
+id
+}
+);
+
+mostrarMensagem(
+`O perfil "${nome}" foi excluído do Mural.`,
+"sucesso"
+);
+
+/*
+Atualiza imediatamente as duas listas.
+*/
+
+await carregarCadastrosMural();
+
+await carregarMuralPublicados();
+
+} catch (erro) {
+
+console.error(
+"Erro ao excluir perfil publicado:",
+erro
+);
+
+mostrarMensagem(
+erro.message ||
+"Não foi possível excluir o perfil publicado.",
+"erro"
+);
+
+} finally {
+
+if (botao) {
+
+botao.disabled =
+false;
+
+botao.textContent =
+"Excluir";
+
+}
+
+}
 
 }
 
@@ -2693,14 +2869,14 @@ de aprovação/rejeição.
 if (editorAprovar) {
 
 editorAprovar.style.display =
-  "none";
+"none";
 
 }
 
 if (editorRejeitar) {
 
 editorRejeitar.style.display =
-  "none";
+"none";
 
 }
 
@@ -2726,13 +2902,12 @@ pesquisaPublicados.addEventListener(
 "input",
 evento => {
 
-  pesquisaMuralAdmin =
-    evento.target.value;
+pesquisaMuralAdmin =
+evento.target.value;
 
-  renderizarMuralPublicados();
+renderizarMuralPublicados();
 
 }
-
 );
 
 }
@@ -2747,14 +2922,13 @@ botaoAtualizar.addEventListener(
 "click",
 async () => {
 
-  esconderMensagem();
+esconderMensagem();
 
-  await carregarCadastrosMural();
+await carregarCadastrosMural();
 
-  await carregarMuralPublicados();
+await carregarMuralPublicados();
 
 }
-
 );
 
 }
@@ -2765,13 +2939,12 @@ botaoSair.addEventListener(
 "click",
 async () => {
 
-  await supabaseClient.auth.signOut();
+await supabaseClient.auth.signOut();
 
-  window.location.href =
-    "../index.html";
+window.location.href =
+"../index.html";
 
 }
-
 );
 
 }
@@ -2840,12 +3013,11 @@ editorImagemArquivo.addEventListener(
 "change",
 evento => {
 
-  processarArquivosSelecionados(
-    evento.target.files
-  );
+processarArquivosSelecionados(
+evento.target.files
+);
 
 }
-
 );
 
 }
@@ -2861,12 +3033,12 @@ document.addEventListener(
 evento => {
 
 if (
-  evento.key === "Escape" &&
-  editorMural &&
-  !editorMural.hidden
+evento.key === "Escape" &&
+editorMural &&
+!editorMural.hidden
 ) {
 
-  fecharEditorMural();
+fecharEditorMural();
 
 }
 
@@ -2884,29 +3056,29 @@ session
 ) => {
 
 if (
-  evento ===
-  "SIGNED_OUT"
+evento ===
+"SIGNED_OUT"
 ) {
 
-  window.location.href =
-    "../index.html";
+window.location.href =
+"../index.html";
 
-  return;
+return;
 
 }
 
 if (
-  evento ===
-  "SIGNED_IN" &&
-  session &&
-  session.user.id !==
-  ADMIN_USER_ID
+evento ===
+"SIGNED_IN" &&
+session &&
+session.user.id !==
+ADMIN_USER_ID
 ) {
 
-  supabaseClient.auth.signOut();
+supabaseClient.auth.signOut();
 
-  window.location.href =
-    "../index.html";
+window.location.href =
+"../index.html";
 
 }
 
