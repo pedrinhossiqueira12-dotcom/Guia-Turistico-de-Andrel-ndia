@@ -22,7 +22,221 @@ content="#091D1C"
 
 <title>Cadastros — Andrelândia — Guia Turístico</title>
 
-<style> :root { --verde: #194138; --verde-escuro: #091d1c; --branco: #ffffff; --fundo: #f5f3ef; --texto: #222222; --texto-secundario: #666666; --borda: #dddddd; --cinza: #f0f0f0; } * { box-sizing: border-box; margin: 0; padding: 0; } body { font-family: Arial, Helvetica, sans-serif; background: var(--fundo); color: var(--texto); min-height: 100vh; } /* ===================================================== CABEÇALHO ===================================================== */ .cabecalho { background: var(--verde-escuro); color: var(--branco); padding: 18px 20px; } .cabecalho-conteudo { width: 100%; max-width: 900px; margin: 0 auto; display: flex; align-items: center; gap: 14px; } .botao-voltar { width: 40px; height: 40px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.08); color: white; display: flex; align-items: center; justify-content: center; text-decoration: none; font-size: 22px; flex-shrink: 0; } .cabecalho-texto h1 { font-size: 20px; font-weight: 600; margin-bottom: 4px; } .cabecalho-texto p { font-size: 13px; color: rgba(255,255,255,0.72); } /* ===================================================== CONTEÚDO ===================================================== */ .pagina { width: 100%; max-width: 900px; margin: 0 auto; padding: 28px 18px 50px; } .introducao { margin-bottom: 24px; } .introducao h2 { font-size: 25px; line-height: 1.25; margin-bottom: 9px; color: var(--verde-escuro); } .introducao p { font-size: 15px; line-height: 1.6; color: var(--texto-secundario); } /* ===================================================== OPÇÕES ===================================================== */ .opcoes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; } .opcao { background: var(--branco); border: 1px solid var(--borda); border-radius: 14px; padding: 22px; cursor: pointer; transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease; } .opcao:hover { transform: translateY(-2px); border-color: var(--verde); box-shadow: 0 6px 20px rgba(0,0,0,0.06); } .opcao-icone { width: 48px; height: 48px; border-radius: 12px; background: var(--verde); color: white; display: flex; align-items: center; justify-content: center; font-size: 23px; margin-bottom: 16px; } .opcao h3 { font-size: 18px; color: var(--verde-escuro); margin-bottom: 8px; } .opcao p { font-size: 14px; line-height: 1.55; color: var(--texto-secundario); } .opcao-seta { margin-top: 18px; color: var(--verde); font-size: 14px; font-weight: 600; } /* ===================================================== FORMULÁRIO ===================================================== */ .formulario-container { display: none; background: var(--branco); border: 1px solid var(--borda); border-radius: 14px; padding: 24px; margin-top: 20px; } .formulario-container.ativo { display: block; } .formulario-cabecalho { margin-bottom: 24px; } .formulario-cabecalho h2 { color: var(--verde-escuro); font-size: 21px; margin-bottom: 7px; } .formulario-cabecalho p { color: var(--texto-secundario); font-size: 14px; line-height: 1.5; } .campo { margin-bottom: 17px; } .campo label { display: block; font-size: 13px; font-weight: 600; color: var(--verde-escuro); margin-bottom: 7px; } .campo input, .campo select, .campo textarea { width: 100%; border: 1px solid var(--borda); border-radius: 9px; background: white; color: var(--texto); font-family: inherit; font-size: 14px; padding: 11px 12px; outline: none; } .campo input:focus, .campo select:focus, .campo textarea:focus { border-color: var(--verde); } .campo textarea { min-height: 105px; resize: vertical; } .campo-ajuda { display: block; margin-top: 5px; color: #777; font-size: 11px; line-height: 1.4; } .linha { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; } .acoes-formulario { display: flex; gap: 10px; margin-top: 24px; } .botao { border: 0; border-radius: 9px; padding: 12px 18px; font-size: 14px; font-weight: 600; cursor: pointer; } .botao-principal { background: var(--verde); color: white; flex: 1; } .botao-principal:hover { background: var(--verde-escuro); } .botao-secundario { background: var(--cinza); color: var(--texto); } /* ===================================================== AVISOS ===================================================== */ .aviso { display: none; padding: 13px 15px; border-radius: 9px; margin-bottom: 18px; font-size: 13px; line-height: 1.5; } .aviso.ativo { display: block; } .aviso-info { background: #eef4f2; color: var(--verde-escuro); border: 1px solid #d5e3df; } .aviso-erro { background: #fff1f1; color: #8a2020; border: 1px solid #edcccc; } /* ===================================================== RODAPÉ ===================================================== */ .rodape { text-align: center; color: #777; font-size: 12px; margin-top: 30px; line-height: 1.5; } /* ===================================================== RESPONSIVO ===================================================== */ @media (max-width: 650px) { .pagina { padding: 22px 14px 40px; } .opcoes { grid-template-columns: 1fr; } .linha { grid-template-columns: 1fr; gap: 0; } .formulario-container { padding: 18px; } .acoes-formulario { flex-direction: column-reverse; } .botao { width: 100%; } } </style>
+<style> :root { --verde: #194138; --verde-escuro: #091d1c; --branco: #ffffff; --fundo: #f5f3ef; --texto: #222222; --texto-secundario: #666666; --borda: #dddddd; --cinza: #f0f0f0; } * { box-sizing: border-box; margin: 0; padding: 0; } body { font-family: Arial, Helvetica, sans-serif; background: var(--fundo); color: var(--texto); min-height: 100vh; } /* ===================================================== CABEÇALHO ===================================================== */ .cabecalho { background: var(--verde-escuro); color: var(--branco); padding: 18px 20px; } .cabecalho-conteudo { width: 100%; max-width: 900px; margin: 0 auto; display: flex; align-items: center; gap: 14px; } .botao-voltar { width: 40px; height: 40px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.08); color: white; display: flex; align-items: center; justify-content: center; text-decoration: none; font-size: 22px; flex-shrink: 0; } .cabecalho-texto h1 { font-size: 20px; font-weight: 600; margin-bottom: 4px; } .cabecalho-texto p { font-size: 13px; color: rgba(255,255,255,0.72); } /* ===================================================== CONTEÚDO ===================================================== */ .pagina { width: 100%; max-width: 900px; margin: 0 auto; padding: 28px 18px 50px; } .introducao { margin-bottom: 24px; } .introducao h2 { font-size: 25px; line-height: 1.25; margin-bottom: 9px; color: var(--verde-escuro); } .introducao p { font-size: 15px; line-height: 1.6; color: var(--texto-secundario); } /* ===================================================== OPÇÕES ===================================================== */ .opcoes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; } .opcao { background: var(--branco); border: 1px solid var(--borda); border-radius: 14px; padding: 22px; cursor: pointer; transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease; } .opcao:hover { transform: translateY(-2px); border-color: var(--verde); box-shadow: 0 6px 20px rgba(0,0,0,0.06); } .opcao-icone { width: 48px; height: 48px; border-radius: 12px; background: var(--verde); color: white; display: flex; align-items: center; justify-content: center; font-size: 23px; margin-bottom: 16px; } .opcao h3 { font-size: 18px; color: var(--verde-escuro); margin-bottom: 8px; } .opcao p { font-size: 14px; line-height: 1.55; color: var(--texto-secundario); } .opcao-seta { margin-top: 18px; color: var(--verde); font-size: 14px; font-weight: 600; } /* ===================================================== FORMULÁRIO ===================================================== */ .formulario-container { display: none; background: var(--branco); border: 1px solid var(--borda); border-radius: 14px; padding: 24px; margin-top: 20px; } .formulario-container.ativo { display: block; } .formulario-cabecalho { margin-bottom: 24px; } .formulario-cabecalho h2 { color: var(--verde-escuro); font-size: 21px; margin-bottom: 7px; } .formulario-cabecalho p { color: var(--texto-secundario); font-size: 14px; line-height: 1.5; } .campo { margin-bottom: 17px; } .campo label { display: block; font-size: 13px; font-weight: 600; color: var(--verde-escuro); margin-bottom: 7px; } .campo input, .campo select, .campo textarea { width: 100%; border: 1px solid var(--borda); border-radius: 9px; background: white; color: var(--texto); font-family: inherit; font-size: 14px; padding: 11px 12px; outline: none; } .campo input:focus, .campo select:focus, .campo textarea:focus { border-color: var(--verde); } .campo textarea { min-height: 105px; resize: vertical; } .campo-ajuda { display: block; margin-top: 5px; color: #777; font-size: 11px; line-height: 1.4; } .linha { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; } .acoes-formulario { display: flex; gap: 10px; margin-top: 24px; } .botao { border: 0; border-radius: 9px; padding: 12px 18px; font-size: 14px; font-weight: 600; cursor: pointer; } .botao-principal { background: var(--verde); color: white; flex: 1; } .botao-principal:hover { background: var(--verde-escuro); } .botao-secundario { background: var(--cinza); color: var(--texto); } /* ===================================================== AVISOS ===================================================== */ .aviso { display: none; padding: 13px 15px; border-radius: 9px; margin-bottom: 18px; font-size: 13px; line-height: 1.5; } .aviso.ativo { display: block; } .aviso-info { background: #eef4f2; color: var(--verde-escuro); border: 1px solid #d5e3df; } .aviso-erro { background: #fff1f1; color: #8a2020; border: 1px solid #edcccc; } /* ===================================================== RODAPÉ ===================================================== */ .rodape { text-align: center; color: #777; font-size: 12px; margin-top: 30px; line-height: 1.5; } /* ===================================================== RESPONSIVO ===================================================== */ @media (max-width: 650px) { .pagina { padding: 22px 14px 40px; } .opcoes { grid-template-columns: 1fr; } .linha { grid-template-columns: 1fr; gap: 0; } .formulario-container { padding: 18px; } .acoes-formulario { flex-direction: column-reverse; } .botao { width: 100%; } }/* =====================================================
+IMAGENS DO CADASTRO
+===================================================== */
+
+.cadastro-ajuda-imagens {
+margin: 4px 0 14px;
+color: var(--texto-secundario);
+font-size: 12px;
+line-height: 1.5;
+}
+
+/* =====================================================
+ÁREA DE UPLOAD
+===================================================== */
+
+.cadastro-upload-imagens {
+display: flex;
+align-items: center;
+flex-wrap: wrap;
+gap: 10px;
+margin-bottom: 15px;
+}
+
+.cadastro-botao-imagem {
+display: inline-flex;
+align-items: center;
+justify-content: center;
+
+min-height: 40px;
+
+padding: 9px 14px;
+
+border-radius: 8px;
+
+background: var(--verde);
+color: var(--branco);
+
+cursor: pointer;
+
+font-size: 13px;
+font-weight: 600;
+
+transition:
+background 0.2s ease,
+transform 0.1s ease;
+}
+
+.cadastro-botao-imagem {
+background: var(--verde-escuro);
+}
+
+.cadastro-botao-imagem {
+transform: scale(0.98);
+}
+
+.cadastro-limite-imagens {
+color: var(--texto-secundario);
+font-size: 12px;
+}
+
+/* =====================================================
+PRÉ-VISUALIZAÇÃO
+===================================================== */
+
+.cadastro-preview-imagens {
+display: grid;
+
+grid-template-columns:
+repeat(4, 120px);
+
+gap: 10px;
+
+width: 100%;
+
+margin-bottom: 12px;
+}
+
+/* =====================================================
+MINIATURA
+===================================================== */
+
+.cadastro-imagem-item {
+position: relative;
+
+width: 120px;
+height: 100px;
+
+overflow: hidden;
+
+border:
+1px solid var(--borda);
+
+border-radius: 9px;
+
+background: #eeeeee;
+}
+
+.cadastro-imagem-item img {
+display: block;
+
+width: 100%;
+height: 100%;
+
+object-fit: cover;
+}
+
+/* =====================================================
+INDICADOR DE CAPA
+===================================================== */
+
+.cadastro-imagem-capa {
+position: absolute;
+
+left: 6px;
+bottom: 6px;
+
+z-index: 2;
+
+padding: 4px 7px;
+
+border-radius: 5px;
+
+background:
+var(--verde-escuro);
+
+color:
+var(--branco);
+
+font-size: 9px;
+font-weight: 700;
+
+line-height: 1;
+}
+
+/* =====================================================
+BOTÃO REMOVER
+===================================================== */
+
+.cadastro-imagem-remover {
+position: absolute;
+
+top: 5px;
+right: 5px;
+
+z-index: 3;
+
+width: 26px;
+height: 26px;
+
+display: flex;
+align-items: center;
+justify-content: center;
+
+padding: 0;
+
+border: 0;
+border-radius: 50%;
+
+background:
+rgba(0, 0, 0, 0.72);
+
+color:
+var(--branco);
+
+cursor: pointer;
+
+font-size: 17px;
+font-weight: 400;
+line-height: 1;
+
+transition:
+background 0.2s ease,
+transform 0.1s ease;
+}
+
+.cadastro-imagem-remover {
+background:
+#b3261e;
+}
+
+.cadastro-imagem-remover {
+transform: scale(0.92);
+}
+
+/* =====================================================
+RESPONSIVO
+===================================================== */
+
+@media (max-width: 700px) {
+
+.cadastro-preview-imagens {
+grid-template-columns:
+repeat(3, 110px);
+}
+
+.cadastro-imagem-item {
+width: 110px;
+height: 90px;
+}
+
+}
+
+@media (max-width: 480px) {
+
+.cadastro-preview-imagens {
+grid-template-columns:
+repeat(2, minmax(0, 1fr));
+}
+
+.cadastro-imagem-item {
+width: 100%;
+height: 105px;
+}
+
+} </style>
 <!-- =====================================================
      CSS DE AUTENTICAÇÃO
 ====================================================== -->
@@ -417,25 +631,41 @@ content="#091D1C"
          FOTO
     ================================================ -->
 
-    <div class="campo">
+<div class="campo cadastro-campo-imagens">
 
-      <label for="imagem">
-        Foto do comércio
-      </label>
+<label> Fotos do comércio </label>
 
-      <input
-        type="file"
-        id="imagem"
-        name="imagem"
-        accept="image/jpeg,image/png,image/webp"
-      >
+<p class="cadastro-ajuda-imagens"> Adicione até 4 imagens. A primeira será usada como capa. </p>
 
-      <span class="campo-ajuda">
-        A imagem será analisada antes de ser publicada.
-      </span>
+<div class="cadastro-upload-imagens">
 
-    </div>
+<label
+  for="cadastro-imagens"
+  class="cadastro-botao-imagem"
+>
+  + Adicionar imagens
+</label>
 
+<input
+  type="file"
+  id="cadastro-imagens"
+  name="imagens"
+  accept="image/jpeg,image/png,image/webp"
+  multiple
+  hidden
+>
+
+<span class="cadastro-limite-imagens">
+  Máximo de 4 imagens
+</span>
+
+</div>
+
+<div id="cadastro-preview-imagens" class="cadastro-preview-imagens" > </div>
+
+<span class="campo-ajuda"> As imagens serão analisadas antes de serem publicadas. </span>
+
+</div>
 
     <!-- ===============================================
          AÇÕES
