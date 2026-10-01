@@ -1430,3 +1430,43 @@ a {
   }
 
 }
+
+/* =====================================================
+SUGERIR ALTERAÇÃO
+====================================================== */
+
+.sugerir-alteracao {
+display: flex;
+align-items: center;
+justify-content: space-between;
+gap: 12px;
+margin: 18px 0 8px;
+padding: 13px 15px;
+border-top: 1px solid #e5e5e5;
+border-bottom: 1px solid #e5e5e5;
+font-size: 12px;
+}
+
+.sugerir-alteracao span {
+color: #777;
+line-height: 1.4;
+}
+
+.sugerir-alteracao a {
+color: var(--verde);
+text-decoration: none;
+font-weight: 600;
+white-space: nowrap;
+}
+
+.sugerir-alteracao a:hover {
+text-decoration: underline;
+}
+
+@media (max-width: 500px) {
+.sugerir-alteracao {
+align-items: flex-start;
+flex-direction: column;
+gap: 6px;
+}
+}
