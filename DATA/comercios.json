@@ -32,7 +32,7 @@
     "descricao": "",
     "historia": "",
     "curiosidades": "",
-    "endereco": "Praça Gabriel Ribeiro Salgado, 3, Centro, Andrelândia - MG",
+    "endereco": "Praça Gabriel Ribeiro Salgado, 01, Centro, Andrelândia - MG",
     "horario": "Terça a quinta: 18:00 às 00:00; Sexta: 18:00 às 01:00; Sábado: 16:00 às 01:00",
     "entrada": "",
     "telefone": "(35) 99171-5593",
@@ -44,7 +44,12 @@
     "y": null,
     "capa": "./img/artesanal-bar-e-lanchonete/capa.png",
     "galeria": [],
-    "pagina": "local.html"
+    "pagina": "local.html",
+    "whatsapp": "",
+    "imagem": "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/admin/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790862243472-38oi5y5-1000453048.png",
+    "imagens": [
+      "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/admin/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790862243472-38oi5y5-1000453048.png"
+    ]
   },
   {
     "id": "restaurante-andrelandia",
