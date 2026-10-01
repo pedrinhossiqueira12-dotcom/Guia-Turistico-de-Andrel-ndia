@@ -187,34 +187,185 @@ CARREGA CADASTROS PENDENTES
 ========================================================= */
 
 async function carregarCadastros() {
-  if (carregando) {
-    carregando.hidden = false;
-  }
 
-  try {
-    const { data, error } = await supabaseClient
-      .from("cadastros_comercios")
-      .select("*")
-      .eq("status", "pendente")
-      .order("criado_em", { ascending: true });
+console.log("========================================");
+console.log("ADMIN — INICIANDO CARREGAMENTO");
+console.log("========================================");
 
-    if (error) {
-      throw error;
-    }
+try {
 
-    cadastros = data || [];
-    renderizarCadastros();
-  } catch (erro) {
-    console.error("Erro ao carregar cadastros:", erro);
-    mostrarMensagem(
-      erro.message || "Não foi possível carregar os cadastros.",
-      "erro",
-    );
-  } finally {
-    if (carregando) {
-      carregando.hidden = true;
-    }
-  }
+/* =========================================================
+   VERIFICAR USUÁRIO LOGADO
+========================================================= */
+
+const {
+  data: { user },
+  error: erroUsuario
+} = await supabaseClient.auth.getUser();
+
+console.log("Usuário atual:", user);
+console.log("Erro ao obter usuário:", erroUsuario);
+
+if (erroUsuario) {
+  console.error("ERRO AO OBTER USUÁRIO:", erroUsuario);
+  return;
+}
+
+if (!user) {
+  console.error("NENHUM USUÁRIO LOGADO.");
+  return;
+}
+
+console.log("ID DO USUÁRIO:", user.id);
+
+/* =========================================================
+   VERIFICAR SE É O ADMIN
+========================================================= */
+
+const ADMIN_USER_ID =
+  "4b9a0233-6b72-4573-aebd-d596c5b15e1b";
+
+console.log(
+  "É ADMIN?",
+  user.id === ADMIN_USER_ID
+);
+
+if (user.id !== ADMIN_USER_ID) {
+
+  console.error(
+    "USUÁRIO LOGADO NÃO É O ADMIN."
+  );
+
+  console.error(
+    "ID esperado:",
+    ADMIN_USER_ID
+  );
+
+  console.error(
+    "ID encontrado:",
+    user.id
+  );
+
+  return;
+}
+
+/* =========================================================
+   BUSCAR CADASTROS PENDENTES
+========================================================= */
+
+console.log(
+  "Buscando cadastros com status = pendente..."
+);
+
+const {
+  data,
+  error
+} = await supabaseClient
+  .from("cadastros_comercios")
+  .select("*")
+  .eq("status", "pendente")
+  .order("criado_em", {
+    ascending: false
+  });
+
+console.log("Resultado da consulta:", data);
+console.log("Erro da consulta:", error);
+
+if (error) {
+
+  console.error(
+    "ERRO AO BUSCAR CADASTROS PENDENTES:",
+    error
+  );
+
+  alert(
+    "Erro ao carregar os cadastros pendentes.\n\n" +
+    error.message
+  );
+
+  return;
+}
+
+console.log(
+  "Quantidade de cadastros encontrados:",
+  data?.length || 0
+);
+
+/* =========================================================
+   SALVAR NA VARIÁVEL GLOBAL
+========================================================= */
+
+cadastrosPendentes = data || [];
+
+/* =========================================================
+   RENDERIZAR
+========================================================= */
+
+const lista =
+  document.getElementById("listaCadastros");
+
+if (!lista) {
+
+  console.error(
+    "Elemento #listaCadastros não encontrado no HTML."
+  );
+
+  return;
+}
+
+lista.innerHTML = "";
+
+if (!cadastrosPendentes.length) {
+
+  lista.innerHTML = `
+    <div class="admin-vazio">
+      <p>Nenhum cadastro pendente.</p>
+    </div>
+  `;
+
+  console.log(
+    "Nenhum cadastro pendente encontrado."
+  );
+
+  return;
+}
+
+console.log(
+  "Renderizando",
+  cadastrosPendentes.length,
+  "cadastro(s)."
+);
+
+cadastrosPendentes.forEach((cadastro) => {
+
+  console.log(
+    "Renderizando cadastro:",
+    cadastro
+  );
+
+  lista.appendChild(
+    criarCardCadastro(cadastro)
+  );
+
+});
+
+console.log(
+  "CADASTROS RENDERIZADOS COM SUCESSO."
+);
+
+} catch (erro) {
+
+console.error(
+  "ERRO GERAL EM carregarCadastros():",
+  erro
+);
+
+alert(
+  "Erro inesperado ao carregar os cadastros.\n\n" +
+  erro.message
+);
+
+}
 }
 
 /* =========================================================
