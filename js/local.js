@@ -888,35 +888,107 @@ let fotos = [];
 /*
 
 =========================================================
+IMAGEM PRINCIPAL DO COMÉRCIO
+=========================================================
+
+
+Comercios.json utiliza:
+
+
+"imagem": "https://..."
+*/
+
+if (item.imagem) {
+
+const imagem =
+  corrigirCaminhoImagem(
+    item.imagem
+  );
+
+if (
+  imagem &&
+  !fotos.includes(imagem)
+) {
+  fotos.push(
+    imagem
+  );
+}
+
+}
+
+/*
+
+=========================================================
+ARRAY DE IMAGENS DO COMÉRCIO
+=========================================================
+
+
+Comercios.json também utiliza:
+
+
+"imagens": [
+"https://..."
+]
+*/
+
+if (
+Array.isArray(
+item.imagens
+)
+) {
+
+item.imagens.forEach(
+  foto => {
+
+    const caminho =
+      corrigirCaminhoImagem(
+        foto
+      );
+
+    if (
+      caminho &&
+      !fotos.includes(
+        caminho
+      )
+    ) {
+      fotos.push(
+        caminho
+      );
+    }
+
+  }
+);
+
+}
+
+/*
+
+=========================================================
 IMAGEM DO SUPABASE STORAGE
 =========================================================
 
 
-Cadastros feitos pelo formulário utilizam:
+Compatibilidade com cadastros que ainda possuam:
 
 
-imagem_url
-
-
-Exemplo:
-https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/...
+"imagem_url": "https://..."
 */
 
 if (item.imagem_url) {
 
-const imagemSupabase =
+const imagemUrl =
   corrigirCaminhoImagem(
     item.imagem_url
   );
 
 if (
-  imagemSupabase &&
+  imagemUrl &&
   !fotos.includes(
-    imagemSupabase
+    imagemUrl
   )
 ) {
   fotos.push(
-    imagemSupabase
+    imagemUrl
   );
 }
 
@@ -927,6 +999,9 @@ if (
 =========================================================
 CAPA
 =========================================================
+
+
+Utilizado pelos locais tradicionais.
 */
 
 if (item.capa) {
@@ -938,7 +1013,9 @@ const capa =
 
 if (
   capa &&
-  !fotos.includes(capa)
+  !fotos.includes(
+    capa
+  )
 ) {
   fotos.push(
     capa
@@ -978,6 +1055,7 @@ item.galeria.forEach(
         caminho
       );
     }
+
   }
 );
 
@@ -1014,6 +1092,7 @@ item.fotos.forEach(
         caminho
       );
     }
+
   }
 );
 
@@ -1091,6 +1170,9 @@ index
       "button"
     );
 
+  button.type =
+    "button";
+
   button.className =
     "thumbnail";
 
@@ -1162,7 +1244,6 @@ index
 
 );
 }
-
 /* =========================================================
    MAPA
 ========================================================= */
