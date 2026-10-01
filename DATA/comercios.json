@@ -232,7 +232,7 @@
   },
   {
     "id": "pub-house-choperia",
-    "nome": "Pub House Choperia",
+    "nome": "Pube House Choperia",
     "categoria": "Bar",
     "descricao": "",
     "historia": "",
@@ -249,7 +249,12 @@
     "y": null,
     "capa": "./img/pub-house-choperia/capa.png",
     "galeria": [],
-    "pagina": "local.html"
+    "pagina": "local.html",
+    "whatsapp": "",
+    "imagem": "./img/pub-house-choperia/capa.png",
+    "imagens": [
+      "./img/pub-house-choperia/capa.png"
+    ]
   },
   {
     "id": "bar-do-prudente",
