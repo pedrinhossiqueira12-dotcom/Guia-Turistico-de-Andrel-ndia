@@ -125,8 +125,8 @@ async function chamarEdgeFunction(acao, dados = {}) {
   const resposta = await fetch(EDGE_FUNCTION_URL, {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${token}`,
-      "apikey": SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${token}`,
+      apikey: SUPABASE_ANON_KEY,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ acao, ...dados }),
@@ -187,185 +187,58 @@ CARREGA CADASTROS PENDENTES
 ========================================================= */
 
 async function carregarCadastros() {
+  if (carregando) {
+    carregando.hidden = false;
+  }
 
-console.log("========================================");
-console.log("ADMIN — INICIANDO CARREGAMENTO");
-console.log("========================================");
+  try {
+    const { data: usuarioData, error: usuarioError } =
+      await supabaseClient.auth.getUser();
 
-try {
+    if (usuarioError) {
+      throw usuarioError;
+    }
 
-/* =========================================================
-   VERIFICAR USUÁRIO LOGADO
-========================================================= */
+    const usuario = usuarioData?.user;
 
-const {
-  data: { user },
-  error: erroUsuario
-} = await supabaseClient.auth.getUser();
+    if (!usuario) {
+      throw new Error("Nenhum usuário autenticado.");
+    }
 
-console.log("Usuário atual:", user);
-console.log("Erro ao obter usuário:", erroUsuario);
+    if (usuario.id !== ADMIN_USER_ID) {
+      throw new Error("O usuário atual não possui permissão administrativa.");
+    }
 
-if (erroUsuario) {
-  console.error("ERRO AO OBTER USUÁRIO:", erroUsuario);
-  return;
-}
+    const { data, error } = await supabaseClient
+      .from("cadastros_comercios")
+      .select("*")
+      .eq("status", "pendente")
+      .order("criado_em", { ascending: false });
 
-if (!user) {
-  console.error("NENHUM USUÁRIO LOGADO.");
-  return;
-}
+    if (error) {
+      console.error("ERRO AO BUSCAR CADASTROS:", error);
+      throw new Error(
+        error.message || "Não foi possível carregar os cadastros.",
+      );
+    }
 
-console.log("ID DO USUÁRIO:", user.id);
+    cadastros = Array.isArray(data) ? data : [];
+    renderizarCadastros();
+  } catch (erro) {
+    console.error("ERRO GERAL EM carregarCadastros():", erro);
 
-/* =========================================================
-   VERIFICAR SE É O ADMIN
-========================================================= */
+    cadastros = [];
+    renderizarCadastros();
 
-const ADMIN_USER_ID =
-  "4b9a0233-6b72-4573-aebd-d596c5b15e1b";
-
-console.log(
-  "É ADMIN?",
-  user.id === ADMIN_USER_ID
-);
-
-if (user.id !== ADMIN_USER_ID) {
-
-  console.error(
-    "USUÁRIO LOGADO NÃO É O ADMIN."
-  );
-
-  console.error(
-    "ID esperado:",
-    ADMIN_USER_ID
-  );
-
-  console.error(
-    "ID encontrado:",
-    user.id
-  );
-
-  return;
-}
-
-/* =========================================================
-   BUSCAR CADASTROS PENDENTES
-========================================================= */
-
-console.log(
-  "Buscando cadastros com status = pendente..."
-);
-
-const {
-  data,
-  error
-} = await supabaseClient
-  .from("cadastros_comercios")
-  .select("*")
-  .eq("status", "pendente")
-  .order("criado_em", {
-    ascending: false
-  });
-
-console.log("Resultado da consulta:", data);
-console.log("Erro da consulta:", error);
-
-if (error) {
-
-  console.error(
-    "ERRO AO BUSCAR CADASTROS PENDENTES:",
-    error
-  );
-
-  alert(
-    "Erro ao carregar os cadastros pendentes.\n\n" +
-    error.message
-  );
-
-  return;
-}
-
-console.log(
-  "Quantidade de cadastros encontrados:",
-  data?.length || 0
-);
-
-/* =========================================================
-   SALVAR NA VARIÁVEL GLOBAL
-========================================================= */
-
-cadastrosPendentes = data || [];
-
-/* =========================================================
-   RENDERIZAR
-========================================================= */
-
-const lista =
-  document.getElementById("listaCadastros");
-
-if (!lista) {
-
-  console.error(
-    "Elemento #listaCadastros não encontrado no HTML."
-  );
-
-  return;
-}
-
-lista.innerHTML = "";
-
-if (!cadastrosPendentes.length) {
-
-  lista.innerHTML = `
-    <div class="admin-vazio">
-      <p>Nenhum cadastro pendente.</p>
-    </div>
-  `;
-
-  console.log(
-    "Nenhum cadastro pendente encontrado."
-  );
-
-  return;
-}
-
-console.log(
-  "Renderizando",
-  cadastrosPendentes.length,
-  "cadastro(s)."
-);
-
-cadastrosPendentes.forEach((cadastro) => {
-
-  console.log(
-    "Renderizando cadastro:",
-    cadastro
-  );
-
-  lista.appendChild(
-    criarCardCadastro(cadastro)
-  );
-
-});
-
-console.log(
-  "CADASTROS RENDERIZADOS COM SUCESSO."
-);
-
-} catch (erro) {
-
-console.error(
-  "ERRO GERAL EM carregarCadastros():",
-  erro
-);
-
-alert(
-  "Erro inesperado ao carregar os cadastros.\n\n" +
-  erro.message
-);
-
-}
+    mostrarMensagem(
+      erro.message || "Erro ao carregar cadastros pendentes.",
+      "erro",
+    );
+  } finally {
+    if (carregando) {
+      carregando.hidden = true;
+    }
+  }
 }
 
 /* =========================================================
@@ -374,6 +247,7 @@ RENDERIZA CADASTROS
 
 function renderizarCadastros() {
   if (!listaCadastros) {
+    console.error("Elemento #lista-cadastros não foi encontrado.");
     return;
   }
 
@@ -393,6 +267,34 @@ function renderizarCadastros() {
 }
 
 /* =========================================================
+OBTÉM IMAGENS DO CADASTRO
+========================================================= */
+
+function obterImagensCadastro(cadastro) {
+  const imagens = [];
+
+  /* NOVO FORMATO: imagens: [...] */
+  if (Array.isArray(cadastro?.imagens)) {
+    cadastro.imagens.forEach((imagem) => {
+      const valor = normalizarTexto(imagem);
+
+      if (valor && !imagens.includes(valor)) {
+        imagens.push(valor);
+      }
+    });
+  }
+
+  /* FORMATO ANTIGO: imagem_url */
+  const imagemPrincipal = normalizarTexto(cadastro?.imagem_url);
+
+  if (imagemPrincipal && !imagens.includes(imagemPrincipal)) {
+    imagens.unshift(imagemPrincipal);
+  }
+
+  return imagens.slice(0, LIMITE_IMAGENS);
+}
+
+/* =========================================================
 CRIA CARD DE CADASTRO
 ========================================================= */
 
@@ -400,26 +302,12 @@ function criarCardCadastro(cadastro) {
   const card = document.createElement("article");
   card.className = "admin-cadastro-card";
 
-  const imagens = Array.isArray(cadastro?.imagens)
-    ? cadastro.imagens
-        .map((imagem) => normalizarTexto(imagem))
-        .filter(Boolean)
-        .slice(0, LIMITE_IMAGENS)
-    : [];
+  const imagens = obterImagensCadastro(cadastro);
 
-  /* Compatibilidade com cadastros antigos (imagem_url) */
-  const imagemPrincipal = normalizarTexto(cadastro?.imagem_url);
-
-  if (imagemPrincipal && !imagens.includes(imagemPrincipal)) {
-    imagens.unshift(imagemPrincipal);
-  }
-
-  const imagensFinais = imagens.slice(0, LIMITE_IMAGENS);
-
-  const imagensHTML = imagensFinais.length
+  const imagensHTML = imagens.length
     ? `
       <div class="admin-cadastro-imagens">
-        ${imagensFinais
+        ${imagens
           .map(
             (imagem, indice) => `
               <div class="admin-cadastro-imagem ${indice === 0 ? "principal" : ""}">
@@ -447,13 +335,9 @@ function criarCardCadastro(cadastro) {
 
     <div class="admin-cadastro-conteudo">
 
-      <span class="admin-cadastro-status">
-        Pendente
-      </span>
+      <span class="admin-cadastro-status">Pendente</span>
 
-      <h3>
-        ${escaparHTML(cadastro.nome || "Sem nome")}
-      </h3>
+      <h3>${escaparHTML(cadastro.nome || "Sem nome")}</h3>
 
       <p>
         <strong>Categoria:</strong>
@@ -484,27 +368,19 @@ function criarCardCadastro(cadastro) {
       <p>
         <strong>Fotos:</strong>
         ${
-          imagensFinais.length
-            ? `${imagensFinais.length}/${LIMITE_IMAGENS}`
+          imagens.length
+            ? `${imagens.length}/${LIMITE_IMAGENS}`
             : "Nenhuma imagem"
         }
       </p>
 
       <div class="admin-cadastro-acoes">
 
-        <button
-          type="button"
-          class="admin-botao-aprovar"
-          data-acao="aprovar"
-        >
+        <button type="button" class="admin-botao-aprovar" data-acao="aprovar">
           Aprovar
         </button>
 
-        <button
-          type="button"
-          class="admin-botao-rejeitar"
-          data-acao="rejeitar"
-        >
+        <button type="button" class="admin-botao-rejeitar" data-acao="rejeitar">
           Rejeitar
         </button>
 
@@ -597,7 +473,7 @@ async function rejeitarCadastro(cadastro, botao) {
 }
 
 /* =========================================================
-IMAGENS DO COMÉRCIO
+IMAGENS DO COMÉRCIO PUBLICADO
 ========================================================= */
 
 function obterImagensComercio(comercio) {
@@ -678,7 +554,7 @@ function criarSecaoComerciosAdmin() {
   const secao = document.getElementById("secaoComercios");
 
   /* ---------------------------------------------------
-  SEÇÃO JÁ EXISTE NO HTML
+  SEÇÃO JÁ EXISTE
   --------------------------------------------------- */
   if (secao) {
     let lista =
@@ -710,17 +586,17 @@ function criarSecaoComerciosAdmin() {
       }
     }
 
-    pesquisa.addEventListener("input", () => {
+    pesquisa.oninput = () => {
       pesquisaComerciosAdmin = pesquisa.value;
       renderizarComerciosAdmin();
-    });
+    };
 
     renderizarComerciosAdmin();
     return;
   }
 
   /* ---------------------------------------------------
-  CRIA SEÇÃO NOVA
+  CRIAR SEÇÃO
   --------------------------------------------------- */
   const novaSecao = document.createElement("section");
 
@@ -848,15 +724,13 @@ function criarCardComercioAdmin(comercio) {
           ? `
             <img
               src="${escaparHTML(imagem)}"
-              alt="${escaparHTML(comercio.nome)}"
+              alt="${escaparHTML(comercio.nome || "Comércio")}"
               loading="lazy"
               onerror="this.parentElement.classList.add('sem-imagem'); this.style.display='none';"
             >
           `
           : `
-            <div class="admin-comercio-sem-imagem">
-              Sem imagem
-            </div>
+            <div class="admin-comercio-sem-imagem">Sem imagem</div>
           `
       }
     </div>
@@ -867,17 +741,11 @@ function criarCardComercioAdmin(comercio) {
         ${escaparHTML(comercio.categoria || "Sem categoria")}
       </span>
 
-      <h3>
-        ${escaparHTML(comercio.nome || "Sem nome")}
-      </h3>
+      <h3>${escaparHTML(comercio.nome || "Sem nome")}</h3>
 
-      <p>
-        ${escaparHTML(comercio.endereco || "Endereço não informado")}
-      </p>
+      <p>${escaparHTML(comercio.endereco || "Endereço não informado")}</p>
 
-      <small>
-        ID: ${escaparHTML(comercio.id)}
-      </small>
+      <small>ID: ${escaparHTML(comercio.id)}</small>
 
       <small>
         ${imagens.length} ${imagens.length === 1 ? "imagem" : "imagens"}
@@ -885,19 +753,11 @@ function criarCardComercioAdmin(comercio) {
 
       <div class="admin-comercio-acoes">
 
-        <button
-          type="button"
-          class="admin-botao-editar"
-          data-acao="editar"
-        >
+        <button type="button" class="admin-botao-editar" data-acao="editar">
           Editar
         </button>
 
-        <button
-          type="button"
-          class="admin-botao-excluir"
-          data-acao="excluir"
-        >
+        <button type="button" class="admin-botao-excluir" data-acao="excluir">
           Excluir
         </button>
 
@@ -1067,6 +927,7 @@ function abrirEditorComercio(comercio) {
     listaImagens.innerHTML = "";
 
     contador.textContent = `${imagensEditor.length}/${LIMITE_IMAGENS}`;
+
     botaoImagem.style.display =
       imagensEditor.length >= LIMITE_IMAGENS ? "none" : "";
 
@@ -1078,6 +939,7 @@ function abrirEditorComercio(comercio) {
 
       bloco.innerHTML = `
         <div class="editor-imagem-preview">
+
           <img src="${escaparHTML(origem)}" alt="Imagem ${indice + 1}">
 
           ${
@@ -1094,11 +956,10 @@ function abrirEditorComercio(comercio) {
           >
             ×
           </button>
+
         </div>
 
-        <span class="editor-imagem-numero">
-          Imagem ${indice + 1}
-        </span>
+        <span class="editor-imagem-numero">Imagem ${indice + 1}</span>
       `;
 
       bloco
@@ -1195,7 +1056,7 @@ function abrirEditorComercio(comercio) {
   renderizarImagensEditor();
 
   /* -------------------------------------------------------
-  ROLA ATÉ O EDITOR
+  ROLAR ATÉ EDITOR
   ------------------------------------------------------- */
   editor.scrollIntoView({ behavior: "smooth", block: "start" });
 }
@@ -1329,9 +1190,9 @@ async function salvarComercioPublicado(comercio, imagensEditor, botao) {
       }
     }
 
+    /* SALVAR COMÉRCIO */
     botao.textContent = "Salvando comércio...";
 
-    /* DADOS */
     const dados = {
       nome,
       categoria: valorCampo("categoria"),
@@ -1350,7 +1211,7 @@ async function salvarComercioPublicado(comercio, imagensEditor, botao) {
       imagens: imagensFinais.slice(0, LIMITE_IMAGENS),
     };
 
-    /* ENVIA PARA EDGE FUNCTION */
+    /* EDGE FUNCTION */
     const resultado = await chamarEdgeFunction("editar_comercio", {
       comercio_id: comercio.id,
       comercio: dados,
