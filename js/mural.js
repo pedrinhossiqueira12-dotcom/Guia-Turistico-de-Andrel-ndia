@@ -9,7 +9,8 @@ Verificação de login
 Upload de até 4 imagens
 Integração com Supabase
 Envio para análise
-Controle do cadastro do próprio usuário
+Controle dos cadastros do próprio usuário
+Limite de até 3 perfis ativos por conta
 
 NÃO CONTÉM:
 
@@ -43,6 +44,9 @@ MURAL_SUPABASE_KEY
 CONFIGURAÇÕES
 ========================================================= */
 
+const LIMITE_PERFIS_MURAL =
+3;
+
 const LIMITE_IMAGENS_MURAL =
 4;
 
@@ -53,6 +57,11 @@ const TIPOS_IMAGEM_MURAL = [
 "image/jpeg",
 "image/png",
 "image/webp"
+];
+
+const STATUS_ATIVOS_MURAL = [
+"pendente",
+"aprovado"
 ];
 
 /* =========================================================
@@ -116,6 +125,8 @@ ESTADO
 let imagensMural = [];
 
 let usuarioMural = null;
+
+let cadastrosMuralUsuario = [];
 
 /* =========================================================
 AVISO
@@ -232,7 +243,9 @@ return (
   null
 );
 
-} catch (erro) {
+}
+
+catch (erro) {
 
 console.error(
   "Erro ao consultar usuário:",
@@ -269,7 +282,9 @@ try {
   usuario =
     await verificarUsuario();
 
-} catch (erro) {
+}
+
+catch (erro) {
 
   console.error(
     "Erro em verificarUsuario():",
@@ -308,13 +323,16 @@ if (
     "login"
   );
 
-} else {
+}
+
+else {
 
   console.error(
     "abrirModalAuth() não está disponível."
   );
 
 }
+
 
 mostrarAvisoMural(
   "Entre na sua conta para cadastrar seu perfil no mural.",
@@ -440,8 +458,14 @@ slug;
 
 /*
 
-Verifica se o ID já existe
-em cadastros do mural.
+Verifica se o ID já existe.
+
+
+Mesmo que o cadastro esteja deletado,
+não reutilizamos o ID.
+
+
+Isso preserva o histórico dos votos.
 */
 
 const {
@@ -477,22 +501,20 @@ return id;
 
 /*
 
-Se já existir, acrescenta um sufixo.
-
-
-Exemplo:
+Se já existir:
 
 
 pedro
 pedro-2
 pedro-3
+pedro-4
 */
 
 let contador =
 2;
 
 while (
-contador <= 99
+contador <= 999
 ) {
 
 const novoId =
@@ -544,12 +566,20 @@ throw new Error(
 }
 
 /* =========================================================
-VERIFICAR CADASTRO EXISTENTE
+BUSCAR TODOS OS CADASTROS DO USUÁRIO
 ========================================================= */
 
-async function verificarCadastroExistenteMural(
+async function buscarCadastrosMuralUsuario(
 usuario
 ) {
+
+if (
+!usuario?.id
+) {
+
+return [];
+
+}
 
 const {
 data,
@@ -560,28 +590,207 @@ await muralSupabase
 "mural_cadastros"
 )
 .select(
-"id, nome, status, motivo_recusa"
+"id, nome, status, motivo_recusa, criado_em, atualizado_em"
 )
 .eq(
 "usuario_id",
 usuario.id
 )
-.maybeSingle();
+.order(
+"criado_em",
+{
+ascending: false
+}
+);
 
 if (error) {
 
 console.error(
-  "Erro ao consultar cadastro:",
+  "Erro ao consultar cadastros:",
   error
 );
 
 throw new Error(
-  "Não foi possível verificar seu cadastro no mural."
+  "Não foi possível verificar seus cadastros no mural."
 );
 
 }
 
-return data || null;
+return data || [];
+
+}
+
+/* =========================================================
+VERIFICAR CADASTROS EXISTENTES
+========================================================= */
+
+async function verificarCadastrosExistentesMural(
+usuario
+) {
+
+const cadastros =
+await buscarCadastrosMuralUsuario(
+usuario
+);
+
+cadastrosMuralUsuario =
+cadastros;
+
+return cadastros;
+
+}
+
+/* =========================================================
+CADASTROS ATIVOS
+========================================================= */
+
+function obterCadastrosAtivosMural(
+cadastros
+) {
+
+if (
+!Array.isArray(cadastros)
+) {
+
+return [];
+
+}
+
+return cadastros.filter(
+cadastro =>
+STATUS_ATIVOS_MURAL.includes(
+cadastro.status
+)
+);
+
+}
+
+/* =========================================================
+VAGAS DISPONÍVEIS
+========================================================= */
+
+function obterVagasDisponiveisMural(
+cadastros
+) {
+
+const ativos =
+obterCadastrosAtivosMural(
+cadastros
+);
+
+return Math.max(
+0,
+LIMITE_PERFIS_MURAL -
+ativos.length
+);
+
+}
+
+/* =========================================================
+VERIFICAR LIMITE DE PERFIS
+========================================================= */
+
+async function verificarLimitePerfisMural(
+usuario
+) {
+
+const cadastros =
+await verificarCadastrosExistentesMural(
+usuario
+);
+
+const ativos =
+obterCadastrosAtivosMural(
+cadastros
+);
+
+const vagas =
+Math.max(
+0,
+LIMITE_PERFIS_MURAL -
+ativos.length
+);
+
+return {
+permitido:
+ativos.length <
+LIMITE_PERFIS_MURAL,
+
+totalAtivos:
+  ativos.length,
+
+vagas,
+
+cadastros,
+
+ativos
+
+};
+
+}
+
+/* =========================================================
+MOSTRAR STATUS DOS PERFIS
+========================================================= */
+
+function mostrarStatusPerfisMural(
+resultado
+) {
+
+if (!resultado) {
+return;
+}
+
+const {
+totalAtivos,
+vagas
+} =
+resultado;
+
+if (
+totalAtivos >=
+LIMITE_PERFIS_MURAL
+) {
+
+mostrarAvisoMural(
+  "Você já possui 3 perfis ativos no mural. Exclua um deles para liberar uma nova vaga."
+);
+
+if (
+  botaoEnviarMural
+) {
+
+  botaoEnviarMural.disabled =
+    true;
+
+  botaoEnviarMural.textContent =
+    "Limite de 3 perfis atingido";
+
+}
+
+return;
+
+}
+
+if (
+vagas === 1
+) {
+
+mostrarAvisoMural(
+  "Você possui 1 vaga disponível para um novo perfil."
+);
+
+}
+
+else if (
+vagas > 1
+) {
+
+mostrarAvisoMural(
+  `Você possui ${vagas} vagas disponíveis para novos perfis.`
+);
+
+}
 
 }
 
@@ -618,7 +827,8 @@ function limparImagensMural() {
 
 liberarPreviewsMural();
 
-imagensMural = [];
+imagensMural =
+[];
 
 if (
 inputImagensMural
@@ -661,6 +871,7 @@ index
       "div"
     );
 
+
   elemento.className =
     "cadastro-imagem-item";
 
@@ -670,8 +881,10 @@ index
       "img"
     );
 
+
   imagem.src =
     item.preview;
+
 
   imagem.alt =
     index === 0
@@ -693,11 +906,14 @@ index
         "span"
       );
 
+
     capa.className =
       "cadastro-imagem-capa";
 
+
     capa.textContent =
       "CAPA";
+
 
     elemento.appendChild(
       capa
@@ -711,14 +927,18 @@ index
       "button"
     );
 
+
   remover.type =
     "button";
+
 
   remover.className =
     "cadastro-imagem-remover";
 
+
   remover.textContent =
     "×";
+
 
   remover.setAttribute(
     "aria-label",
@@ -760,6 +980,7 @@ index
   elemento.appendChild(
     remover
   );
+
 
   previewImagensMural.appendChild(
     elemento
@@ -852,8 +1073,10 @@ function () {
       "Você já adicionou o limite de 4 imagens."
     );
 
+
     inputImagensMural.value =
       "";
+
 
     return;
 
@@ -890,7 +1113,9 @@ function () {
 
       });
 
-    } catch (erro) {
+    }
+
+    catch (erro) {
 
       alert(
         erro.message
@@ -1048,6 +1273,7 @@ console.error(
   error
 );
 
+
 throw new Error(
   "Não foi possível enviar uma imagem: " +
   error.message
@@ -1099,7 +1325,8 @@ return [];
 
 }
 
-const urls = [];
+const urls =
+[];
 
 for (
 let i = 0;
@@ -1163,59 +1390,29 @@ usuario;
 
 /*
 
-Impedir cadastro duplicado.
+Verificar limite de 3 perfis.
+
+
+Somente pendente e aprovado
+ocupam vaga.
 */
 
-const cadastroExistente =
-await verificarCadastroExistenteMural(
+const limite =
+await verificarLimitePerfisMural(
 usuario
 );
 
 if (
-cadastroExistente
+!limite.permitido
 ) {
 
-if (
-  cadastroExistente.status ===
-  "pendente"
-) {
-
-  mostrarAvisoMural(
-    "Você já possui um cadastro do mural aguardando análise."
-  );
-
-  return;
-
-}
+mostrarAvisoMural(
+  "Você já possui 3 perfis ativos no mural. Exclua um perfil para liberar uma nova vaga.",
+  "erro"
+);
 
 
-if (
-  cadastroExistente.status ===
-  "aprovado"
-) {
-
-  mostrarAvisoMural(
-    "Você já possui um perfil aprovado no mural."
-  );
-
-  return;
-
-}
-
-
-if (
-  cadastroExistente.status ===
-  "recusado"
-) {
-
-  mostrarAvisoMural(
-    "Seu cadastro anterior foi recusado. A edição e o reenvio serão disponibilizados na próxima etapa.",
-    "erro"
-  );
-
-  return;
-
-}
+return;
 
 }
 
@@ -1265,6 +1462,7 @@ mostrarAvisoMural(
   "erro"
 );
 
+
 return;
 
 }
@@ -1299,7 +1497,9 @@ mostrarAvisoMural(
   "erro"
 );
 
+
 campoNome.focus();
+
 
 return;
 
@@ -1312,7 +1512,9 @@ mostrarAvisoMural(
   "erro"
 );
 
+
 campoCategoria.focus();
+
 
 return;
 
@@ -1327,6 +1529,7 @@ mostrarAvisoMural(
   "O limite máximo é de 4 imagens.",
   "erro"
 );
+
 
 return;
 
@@ -1347,6 +1550,7 @@ botaoEnviarMural
 
 botaoEnviarMural.disabled =
   true;
+
 
 botaoEnviarMural.textContent =
   "Preparando...";
@@ -1369,7 +1573,8 @@ const id =
  * Upload.
  */
 
-let imagensUrls = [];
+let imagensUrls =
+  [];
 
 
 if (
@@ -1465,6 +1670,7 @@ if (error) {
     error
   );
 
+
   throw new Error(
     error.message ||
     "Não foi possível enviar o cadastro."
@@ -1480,10 +1686,20 @@ console.log(
 
 
 /*
+ * Atualiza o estado local.
+ */
+
+cadastrosMuralUsuario.push(
+  data
+);
+
+
+/*
  * Limpeza.
  */
 
 limparImagensMural();
+
 
 formularioMural.reset();
 
@@ -1523,12 +1739,15 @@ if (
   botaoEnviarMural.disabled =
     true;
 
+
   botaoEnviarMural.textContent =
     "Cadastro enviado";
 
 }
 
-} catch (erro) {
+}
+
+catch (erro) {
 
 console.error(
   "Erro no cadastro do mural:",
@@ -1542,7 +1761,9 @@ mostrarAvisoMural(
   "erro"
 );
 
-} finally {
+}
+
+finally {
 
 /*
  * Se não foi concluído,
@@ -1557,6 +1778,7 @@ if (
 
   botaoEnviarMural.disabled =
     false;
+
 
   botaoEnviarMural.textContent =
     textoOriginal;
@@ -1657,89 +1879,86 @@ mostrarDadosUsuarioMural(
 
 
 /*
- * Verifica se o usuário já possui
- * um cadastro.
+ * Busca todos os cadastros da conta.
  */
 
 try {
 
-  const cadastroExistente =
-    await verificarCadastroExistenteMural(
+  const resultado =
+    await verificarLimitePerfisMural(
       usuario
     );
 
 
+  /*
+   * Se já atingiu o limite,
+   * bloqueia o formulário.
+   */
+
   if (
-    cadastroExistente
+    !resultado.permitido
   ) {
 
-    if (
-      cadastroExistente.status ===
-      "pendente"
-    ) {
+    mostrarStatusPerfisMural(
+      resultado
+    );
 
-      mostrarAvisoMural(
-        "Você já possui um cadastro do mural aguardando análise."
-      );
-
-
-      if (
-        botaoEnviarMural
-      ) {
-
-        botaoEnviarMural.disabled =
-          true;
-
-        botaoEnviarMural.textContent =
-          "Cadastro em análise";
-
-      }
-
-    } else if (
-      cadastroExistente.status ===
-      "aprovado"
-    ) {
-
-      mostrarAvisoMural(
-        "Seu perfil já foi aprovado no mural."
-      );
-
-
-      if (
-        botaoEnviarMural
-      ) {
-
-        botaoEnviarMural.disabled =
-          true;
-
-        botaoEnviarMural.textContent =
-          "Perfil já cadastrado";
-
-      }
-
-    } else if (
-      cadastroExistente.status ===
-      "recusado"
-    ) {
-
-      mostrarAvisoMural(
-        "Seu cadastro anterior foi recusado. O reenvio será disponibilizado posteriormente.",
-        "erro"
-      );
-
-    }
+    return;
 
   }
 
-} catch (erro) {
+
+  /*
+   * Caso ainda tenha vagas,
+   * informa ao usuário.
+   */
+
+  if (
+    resultado.totalAtivos > 0
+  ) {
+
+    mostrarStatusPerfisMural(
+      resultado
+    );
+
+  }
+
+
+  /*
+   * Mostra no console os perfis
+   * encontrados, inclusive deletados.
+   */
+
+  console.log(
+    "Cadastros do usuário:",
+    resultado.cadastros
+  );
+
+
+  console.log(
+    "Perfis ativos:",
+    resultado.ativos
+  );
+
+
+  console.log(
+    "Vagas disponíveis:",
+    resultado.vagas
+  );
+
+}
+
+catch (erro) {
 
   console.error(
-    "Erro ao verificar cadastro:",
+    "Erro ao verificar cadastros:",
     erro
   );
 
+
   mostrarAvisoMural(
-    erro.message,
+    erro.message ||
+    "Não foi possível verificar seus cadastros.",
     "erro"
   );
 
