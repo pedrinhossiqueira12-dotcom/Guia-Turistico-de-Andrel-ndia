@@ -1,584 +1,3113 @@
-/* ========================================================= ANDRELÂNDIA — GUIA TURÍSTICO ADMIN-CADASTROS.JS RESPONSABILIDADES: - Verificação do administrador - Listagem de cadastros pendentes - Aprovação - Rejeição - Listagem de comércios publicados - Pesquisa - Edição - Exclusão - Upload de até 4 imagens ========================================================= */ /* ========================================================= CONFIGURAÇÕES ========================================================= */
-const SUPABASE_URL = "https://xdmbkflufsfqziixzpxc.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_dvwNkLDf3oZrCqvZ5uAaRA_VsfiuZFy";
-const EDGE_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/whatsapp-bot`;
-const ADMIN_USER_ID = "4b9a0233-6b72-4573-aebd-d596c5b15e1b";
-const STORAGE_BUCKET = "cadastros";
-const LIMITE_IMAGENS = 4; /* ========================================================= CLIENTE SUPABASE ========================================================= */
-const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); /* ========================================================= ESTADO ========================================================= */
-let cadastros = [];
+/* =========================================================
+ANDRELÂNDIA — GUIA TURÍSTICO
+ADMIN-CADASTROS.JS
+
+PAINEL ADMINISTRATIVO
+
+RESPONSABILIDADES:
+
+Verificar usuário logado
+Listar cadastros pendentes
+Editar dados
+Salvar alterações
+Aprovar e publicar via Edge Function
+Rejeitar cadastro
+Listar comércios publicados
+Pesquisar comércios
+Editar comércio publicado
+Excluir comércio publicado
+========================================================= */
+
+/* =========================================================
+CONFIGURAÇÕES
+========================================================= */
+
+const LOGIN_SUPABASE_URL =
+  "https://xdmbkflufsfqziixzpxc.supabase.co";
+
+const LOGIN_SUPABASE_KEY =
+  "sb_publishable_dvwNkLDf3oZrCqvZ5uAaRA_VsfiuZFy";
+
+const EDGE_FUNCTION_URL =
+  `${LOGIN_SUPABASE_URL}/functions/v1/whatsapp-bot`;
+
+const ADMIN_USER_ID =
+"4b9a0233-6b72-4573-aebd-d596c5b15e1b";
+
+/* =========================================================
+SUPABASE
+========================================================= */
+
+const supabaseClient =
+window.supabase.createClient(
+LOGIN_SUPABASE_URL,
+LOGIN_SUPABASE_KEY
+);
+
+/* =========================================================
+ELEMENTOS
+========================================================= */
+
+const carregando =
+document.getElementById("carregando");
+
+const listaCadastros =
+document.getElementById("lista-cadastros");
+
+const semCadastros =
+document.getElementById("sem-cadastros");
+
+const mensagem =
+document.getElementById("mensagem");
+
+const botaoAtualizar =
+document.getElementById("botao-atualizar");
+
+const botaoSair =
+document.getElementById("botao-sair");
+
+/* =========================================================
+VARIÁVEIS — COMÉRCIOS PUBLICADOS
+========================================================= */
+
 let comerciosPublicados = [];
+
 let pesquisaComerciosAdmin = "";
-let comercioEditandoId = null; /* ========================================================= ELEMENTOS PRINCIPAIS ========================================================= */
-const carregando = document.getElementById("carregando");
-const listaCadastros = document.getElementById("lista-cadastros");
-const semCadastros = document.getElementById("sem-cadastros");
-const mensagem = document.getElementById("mensagem");
-const botaoAtualizar = document.getElementById("botao-atualizar");
-const botaoSair = document.getElementById("botao-sair"); /* ========================================================= MENSAGEM ========================================================= */
-function mostrarMensagem(texto, tipo = "sucesso") {
-  if (!mensagem) {
-    return;
-  }
-  mensagem.textContent = texto;
-  mensagem.className = `mensagem ${tipo}`;
-  mensagem.hidden = false;
+
+let comercioEditandoId = null;
+
+/* =========================================================
+UTILITÁRIOS
+========================================================= */
+
+function mostrarMensagem(
+texto,
+tipo = "sucesso"
+) {
+
+if (!mensagem) return;
+
+mensagem.textContent = texto;
+
+  mensagem.className =
+    `mensagem ${tipo}`;
+
+mensagem.style.display =
+"block";
 }
 
 function esconderMensagem() {
-  if (!mensagem) {
-    return;
-  }
-  mensagem.hidden = true;
-} /* ========================================================= NORMALIZA TEXTO ========================================================= */
-function normalizarTexto(valor) {
-  return String(valor ?? "").trim();
-} /* ========================================================= ESCAPA HTML ========================================================= */
+
+if (!mensagem) return;
+
+mensagem.style.display =
+"none";
+}
+
 function escaparHTML(valor) {
-  return String(valor ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
-} /* ========================================================= NORMALIZA PESQUISA ========================================================= */
-function normalizarPesquisa(valor) {
-  return normalizarTexto(valor).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-} /* ========================================================= CHAMA EDGE FUNCTION ========================================================= */
-async function chamarEdgeFunction(acao, dados = {}) {
-  const {
-    data: sessionData,
-    error: erroSessao
-  } = await supabaseClient.auth.getSession();
-  if (erroSessao || !sessionData?.session) {
-    throw new Error("Sessão administrativa não encontrada.");
-  }
-  const token = sessionData.session.access_token;
-  const resposta = await fetch(EDGE_FUNCTION_URL, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${token}`,
-      "apikey": SUPABASE_ANON_KEY,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      acao,
-      ...dados
-    })
-  });
-  let resultado;
-  try {
-    resultado = await resposta.json();
-  } catch {
-    throw new Error("A Edge Function retornou uma resposta inválida.");
-  }
-  if (!resposta.ok || resultado?.sucesso === false) {
-    throw new Error(resultado?.erro || resultado?.mensagem || "Erro ao executar operação.");
-  }
-  return resultado;
-} /* ========================================================= VERIFICA LOGIN / ADMIN ========================================================= */
+
+if (
+valor === null ||
+valor === undefined
+) {
+return "";
+}
+
+  return String(valor)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+
+function valorOuVazio(valor) {
+
+if (
+valor === null ||
+valor === undefined
+) {
+return "";
+}
+
+return String(valor);
+}
+
+/* =========================================================
+FORMATAÇÃO
+========================================================= */
+
+function formatarData(data) {
+
+if (!data) {
+return "-";
+}
+
+const dataObj =
+new Date(data);
+
+if (
+Number.isNaN(
+dataObj.getTime()
+)
+) {
+return "-";
+}
+
+return dataObj.toLocaleDateString(
+"pt-BR",
+{
+day: "2-digit",
+month: "2-digit",
+year: "numeric",
+hour: "2-digit",
+minute: "2-digit"
+}
+);
+}
+
+function formatarTelefone(
+telefone
+) {
+
+if (!telefone) {
+return "-";
+}
+
+return telefone;
+}
+
+/* =========================================================
+IMAGEM
+========================================================= */
+
+function obterImagemComercio(
+comercio
+) {
+
+if (!comercio) {
+return "";
+}
+
+if (
+comercio.imagem &&
+typeof comercio.imagem === "string" &&
+comercio.imagem.trim()
+) {
+return comercio.imagem.trim();
+}
+
+if (
+comercio.imagem_url &&
+typeof comercio.imagem_url === "string" &&
+comercio.imagem_url.trim()
+) {
+return comercio.imagem_url.trim();
+}
+
+if (
+Array.isArray(comercio.imagens)
+) {
+
+const imagem =
+  comercio.imagens.find(
+    item =>
+      typeof item === "string" &&
+      item.trim()
+  );
+
+if (imagem) {
+  return imagem.trim();
+}
+
+}
+
+if (
+comercio.capa &&
+typeof comercio.capa === "string" &&
+comercio.capa.trim()
+) {
+return comercio.capa.trim();
+}
+
+if (
+Array.isArray(comercio.galeria)
+) {
+
+const imagem =
+  comercio.galeria.find(
+    item =>
+      typeof item === "string" &&
+      item.trim()
+  );
+
+if (imagem) {
+  return imagem.trim();
+}
+
+}
+
+if (
+Array.isArray(comercio.fotos)
+) {
+
+const imagem =
+  comercio.fotos.find(
+    item =>
+      typeof item === "string" &&
+      item.trim()
+  );
+
+if (imagem) {
+  return imagem.trim();
+}
+
+}
+
+return "";
+}
+
+/* =========================================================
+VERIFICAR LOGIN
+========================================================= */
+
 async function verificarLogin() {
-  try {
-    const {
-      data,
-      error
-    } = await supabaseClient.auth.getSession();
-    if (error || !data?.session?.user) {
-      window.location.href = "../index.html";
-      return;
-    }
-    const usuario = data.session.user;
-    if (usuario.id !== ADMIN_USER_ID) {
-      alert("Você não possui permissão para acessar esta página.");
-      window.location.href = "../index.html";
-      return;
-    }
-    await carregarCadastros();
-    await carregarComerciosPublicados();
-    criarSecaoComerciosAdmin();
-  } catch (erro) {
-    console.error("Erro na verificação:", erro);
-    mostrarMensagem(erro.message || "Erro ao carregar painel administrativo.", "erro");
-  }
-} /* ========================================================= CARREGA CADASTROS PENDENTES ========================================================= */
+
+const {
+data,
+error
+} =
+await supabaseClient
+.auth
+.getSession();
+
+if (error) {
+
+console.error(
+  "Erro ao verificar sessão:",
+  error
+);
+
+window.location.href =
+  "../index.html";
+
+return;
+
+}
+
+const session =
+data?.session;
+
+const usuario =
+session?.user;
+
+if (!usuario) {
+
+console.warn(
+  "Acesso administrativo negado: usuário não autenticado."
+);
+
+window.location.href =
+  "../index.html";
+
+return;
+
+}
+
+if (
+usuario.id !==
+ADMIN_USER_ID
+) {
+
+console.warn(
+  "Acesso administrativo negado:",
+  usuario.id
+);
+
+alert(
+  "Você não possui permissão para acessar esta área."
+);
+
+window.location.href =
+  "../index.html";
+
+return;
+
+}
+
+console.log(
+"Acesso administrativo autorizado:",
+usuario.id
+);
+
+await carregarCadastros();
+
+await carregarComerciosPublicados();
+
+criarSecaoComerciosAdmin();
+}
+
+/* =========================================================
+CARREGAR CADASTROS PENDENTES
+========================================================= */
+
 async function carregarCadastros() {
-  if (carregando) {
-    carregando.hidden = false;
-  }
-  try {
-    const {
-      data,
-      error
-    } = await supabaseClient.from("cadastros_comercios").select("*").eq("status", "pendente").order("criado_em", {
-      ascending: true
-    });
-    if (error) {
-      throw error;
-    }
-    cadastros = data || [];
-    renderizarCadastros();
-  } catch (erro) {
-    console.error("Erro ao carregar cadastros:", erro);
-    mostrarMensagem(erro.message || "Não foi possível carregar os cadastros.", "erro");
-  } finally {
-    if (carregando) {
-      carregando.hidden = true;
-    }
-  }
-} /* ========================================================= RENDERIZA CADASTROS ========================================================= */
-function renderizarCadastros() {
-  if (!listaCadastros) {
-    return;
-  }
-  listaCadastros.innerHTML = "";
+
+if (carregando) {
+
+carregando.style.display =
+  "block";
+
+}
+
+if (listaCadastros) {
+
+listaCadastros.innerHTML =
+  "";
+
+}
+
+if (semCadastros) {
+
+semCadastros.style.display =
+  "none";
+
+}
+
+try {
+
+const {
+  data,
+  error
+} =
+  await supabaseClient
+    .from("cadastros_comercios")
+    .select("*")
+    .eq(
+      "status",
+      "pendente"
+    )
+    .order(
+      "criado_em",
+      {
+        ascending: true
+      }
+    );
+
+if (error) {
+  throw error;
+}
+
+if (carregando) {
+
+  carregando.style.display =
+    "none";
+}
+
+if (
+  !data ||
+  data.length === 0
+) {
+
   if (semCadastros) {
-    semCadastros.hidden = cadastros.length !== 0;
+
+    semCadastros.style.display =
+      "block";
   }
-  if (!cadastros.length) {
-    return;
+
+  return;
+}
+
+data.forEach(
+  cadastro => {
+
+    criarCadastro(
+      cadastro
+    );
+
   }
-  cadastros.forEach(cadastro => {
-    listaCadastros.appendChild(criarCardCadastro(cadastro));
-  });
-} /* ========================================================= CRIA CARD DE CADASTRO ========================================================= */
-function criarCardCadastro(cadastro) {
-  const card = document.createElement("article");
-  card.className = "admin-cadastro-card";
-  const imagem = normalizarTexto(cadastro.imagem_url);
-  const imagensHTML = imagem ? ` <div class="admin-cadastro-imagem"> <img src="${escaparHTML(imagem)}" alt="${escaparHTML(cadastro.nome)}" loading="lazy" onerror="this.style.display='none';" > </div> ` : "";
-  card.innerHTML = ` ${imagensHTML} <div class="admin-cadastro-conteudo"> <span class="admin-cadastro-status"> Pendente </span> <h3> ${escaparHTML( cadastro.nome || "Sem nome" )} </h3> <p> <strong>Categoria:</strong> ${escaparHTML( cadastro.categoria || "Não informada" )} </p> <p> <strong>WhatsApp:</strong> ${escaparHTML( cadastro.whatsapp || "Não informado" )} </p> <p> <strong>Endereço:</strong> ${escaparHTML( cadastro.endereco || "Não informado" )} </p> ${ cadastro.descricao ? ` <p> <strong>Descrição:</strong> ${escaparHTML( cadastro.descricao )} </p> ` : "" } <div class="admin-cadastro-acoes"> <button type="button" class="admin-botao-aprovar" data-acao="aprovar" > Aprovar </button> <button type="button" class="admin-botao-rejeitar" data-acao="rejeitar" > Rejeitar </button> </div> </div> `;
-  const botaoAprovar = card.querySelector('[data-acao="aprovar"]');
-  const botaoRejeitar = card.querySelector('[data-acao="rejeitar"]');
-  botaoAprovar?.addEventListener("click", () => aprovarCadastro(cadastro, botaoAprovar));
-  botaoRejeitar?.addEventListener("click", () => rejeitarCadastro(cadastro, botaoRejeitar));
-  return card;
-} /* ========================================================= APROVAR CADASTRO ========================================================= */
-async function aprovarCadastro(cadastro, botao) {
-  if (!confirm(`Aprovar "${cadastro.nome}" e publicar no site?`)) {
-    return;
-  }
-  const textoOriginal = botao.textContent;
-  botao.disabled = true;
-  botao.textContent = "Publicando...";
-  esconderMensagem();
-  try {
-    const resultado = await chamarEdgeFunction("aprovar_cadastro", {
-      cadastro_id: cadastro.id
-    });
-    if (resultado?.sucesso) {
-      mostrarMensagem("Comércio aprovado e publicado com sucesso.", "sucesso");
-      await carregarCadastros();
-      await carregarComerciosPublicados();
+);
+
+} catch (erro) {
+
+console.error(
+  "Erro ao carregar cadastros:",
+  erro
+);
+
+if (carregando) {
+
+  carregando.style.display =
+    "none";
+}
+
+mostrarMensagem(
+  "Erro ao carregar os cadastros.",
+  "erro"
+);
+
+}
+}
+
+/* =========================================================
+CRIAR CARD — CADASTRO PENDENTE
+========================================================= */
+
+function criarCadastro(
+cadastro
+) {
+
+if (!listaCadastros) {
+return;
+}
+
+const card =
+document.createElement(
+"article"
+);
+
+card.className =
+"cadastro-card";
+
+card.dataset.id =
+cadastro.id;
+
+const imagem =
+cadastro.imagem_url
+? `<div class="cadastro-imagem"> <img src="${escaparHTML( cadastro.imagem_url )}" alt="${escaparHTML( cadastro.nome || "Imagem do comércio" )}" loading="lazy" onerror=" this.parentElement.style.display='none' " > </div>`
+: `
+<div class="cadastro-imagem cadastro-imagem-vazia">
+<div class="cadastro-imagem-icone">
+🏪
+</div>
+
+      <span>
+        Sem imagem
+      </span>
+    </div>
+  `;
+
+card.innerHTML = `
+
+${imagem}
+
+
+<div class="cadastro-conteudo">
+
+
+  <div class="cadastro-topo">
+
+    <div>
+
+      <span class="cadastro-label-topo">
+        CADASTRO PENDENTE
+      </span>
+
+      <h2 class="cadastro-nome">
+        ${escaparHTML(
+          cadastro.nome ||
+          "Sem nome"
+        )}
+      </h2>
+
+      <p class="cadastro-categoria">
+        ${escaparHTML(
+          cadastro.categoria ||
+          "Categoria não informada"
+        )}
+      </p>
+
+    </div>
+
+
+    <span class="cadastro-status">
+      Pendente
+    </span>
+
+  </div>
+
+
+  <div class="cadastro-secao">
+
+    <div class="cadastro-secao-titulo">
+
+      <span class="cadastro-secao-icone">
+        📋
+      </span>
+
+      <div>
+        <strong>
+          Informações do comércio
+        </strong>
+
+        <small>
+          Dados principais
+        </small>
+      </div>
+
+    </div>
+
+
+    <div class="cadastro-campos">
+
+
+      <label>
+
+        <span>
+          Nome
+        </span>
+
+        <input
+          type="text"
+          id="nome-${cadastro.id}"
+          value="${escaparHTML(
+            valorOuVazio(
+              cadastro.nome
+            )
+          )}"
+        >
+
+      </label>
+
+
+      <label>
+
+        <span>
+          Categoria
+        </span>
+
+        <input
+          type="text"
+          id="categoria-${cadastro.id}"
+          value="${escaparHTML(
+            valorOuVazio(
+              cadastro.categoria
+            )
+          )}"
+        >
+
+      </label>
+
+
+      <label>
+
+        <span>
+          WhatsApp
+        </span>
+
+        <input
+          type="text"
+          id="whatsapp-${cadastro.id}"
+          value="${escaparHTML(
+            valorOuVazio(
+              cadastro.whatsapp
+            )
+          )}"
+        >
+
+      </label>
+
+
+      <label>
+
+        <span>
+          Instagram
+        </span>
+
+        <input
+          type="text"
+          id="instagram-${cadastro.id}"
+          value="${escaparHTML(
+            valorOuVazio(
+              cadastro.instagram
+            )
+          )}"
+        >
+
+      </label>
+
+
+    </div>
+
+  </div>
+
+
+  <div class="cadastro-secao">
+
+    <div class="cadastro-secao-titulo">
+
+      <span class="cadastro-secao-icone">
+        📍
+      </span>
+
+      <div>
+
+        <strong>
+          Localização
+        </strong>
+
+        <small>
+          Endereço e coordenadas
+        </small>
+
+      </div>
+
+    </div>
+
+
+    <div class="cadastro-campos">
+
+
+      <label class="campo-largo">
+
+        <span>
+          Endereço
+        </span>
+
+        <textarea
+          id="endereco-${cadastro.id}"
+          rows="2"
+        >${escaparHTML(
+          valorOuVazio(
+            cadastro.endereco
+          )
+        )}</textarea>
+
+      </label>
+
+
+      <label>
+
+        <span>
+          Latitude
+        </span>
+
+        <input
+          type="number"
+          step="any"
+          id="latitude-${cadastro.id}"
+          value="${escaparHTML(
+            valorOuVazio(
+              cadastro.latitude
+            )
+          )}"
+        >
+
+      </label>
+
+
+      <label>
+
+        <span>
+          Longitude
+        </span>
+
+        <input
+          type="number"
+          step="any"
+          id="longitude-${cadastro.id}"
+          value="${escaparHTML(
+            valorOuVazio(
+              cadastro.longitude
+            )
+          )}"
+        >
+
+      </label>
+
+
+    </div>
+
+  </div>
+
+
+  <div class="cadastro-secao">
+
+    <div class="cadastro-secao-titulo">
+
+      <span class="cadastro-secao-icone">
+        ✏️
+      </span>
+
+      <div>
+
+        <strong>
+          Detalhes
+        </strong>
+
+        <small>
+          Informações exibidas no guia
+        </small>
+
+      </div>
+
+    </div>
+
+
+    <div class="cadastro-campos">
+
+
+      <label>
+
+        <span>
+          Horário
+        </span>
+
+        <textarea
+          id="horario-${cadastro.id}"
+          rows="2"
+        >${escaparHTML(
+          valorOuVazio(
+            cadastro.horario
+          )
+        )}</textarea>
+
+      </label>
+
+
+      <label>
+
+        <span>
+          URL da imagem
+        </span>
+
+        <input
+          type="url"
+          id="imagem-${cadastro.id}"
+          value="${escaparHTML(
+            valorOuVazio(
+              cadastro.imagem_url
+            )
+          )}"
+          placeholder="https://..."
+        >
+
+      </label>
+
+
+      <label class="campo-largo">
+
+        <span>
+          Descrição
+        </span>
+
+        <textarea
+          id="descricao-${cadastro.id}"
+          rows="4"
+        >${escaparHTML(
+          valorOuVazio(
+            cadastro.descricao
+          )
+        )}</textarea>
+
+      </label>
+
+
+    </div>
+
+  </div>
+
+
+  <div class="cadastro-meta">
+
+    <div>
+
+      <span>
+        ID do cadastro
+      </span>
+
+      <strong>
+        ${escaparHTML(
+          cadastro.id
+        )}
+      </strong>
+
+    </div>
+
+
+    <div>
+
+      <span>
+        Enviado em
+      </span>
+
+      <strong>
+        ${formatarData(
+          cadastro.criado_em
+        )}
+      </strong>
+
+    </div>
+
+
+    <div>
+
+      <span>
+        Telefone do cadastro
+      </span>
+
+      <strong>
+        ${escaparHTML(
+          formatarTelefone(
+            cadastro.telefone_usuario
+          )
+        )}
+      </strong>
+
+    </div>
+
+  </div>
+
+
+  <div class="cadastro-acoes">
+
+
+    <button
+      type="button"
+      class="botao-salvar"
+      onclick="salvarCadastro('${cadastro.id}')"
+    >
+      <span>💾</span>
+      <span>Salvar alterações</span>
+    </button>
+
+
+    <button
+      type="button"
+      class="botao-aprovar"
+      onclick="aprovarCadastro('${cadastro.id}')"
+    >
+      <span>✓</span>
+      <span>Aprovar e publicar</span>
+    </button>
+
+
+    <button
+      type="button"
+      class="botao-rejeitar"
+      onclick="rejeitarCadastro('${cadastro.id}')"
+    >
+      <span>×</span>
+      <span>Rejeitar</span>
+    </button>
+
+
+  </div>
+
+
+</div>
+
+`;
+
+listaCadastros.appendChild(
+card
+);
+}
+
+/* =========================================================
+OBTER DADOS DO CARD
+========================================================= */
+
+function obterDadosCard(
+id
+) {
+
+const nome =
+document.getElementById(
+`nome-${id}`
+)?.value.trim() || "";
+
+const categoria =
+document.getElementById(
+`categoria-${id}`
+)?.value.trim() || "";
+
+const whatsapp =
+document.getElementById(
+`whatsapp-${id}`
+)?.value.trim() || "";
+
+const instagram =
+document.getElementById(
+`instagram-${id}`
+)?.value.trim() || "";
+
+const endereco =
+document.getElementById(
+`endereco-${id}`
+)?.value.trim() || "";
+
+const horario =
+document.getElementById(
+`horario-${id}`
+)?.value.trim() || "";
+
+const descricao =
+document.getElementById(
+`descricao-${id}`
+)?.value.trim() || "";
+
+const imagem_url =
+document.getElementById(
+`imagem-${id}`
+)?.value.trim() || "";
+
+const latitudeTexto =
+document.getElementById(
+`latitude-${id}`
+)?.value.trim() || "";
+
+const longitudeTexto =
+document.getElementById(
+`longitude-${id}`
+)?.value.trim() || "";
+
+const latitude =
+latitudeTexto === ""
+? null
+: Number(
+latitudeTexto
+);
+
+const longitude =
+longitudeTexto === ""
+? null
+: Number(
+longitudeTexto
+);
+
+return {
+
+id,
+
+nome,
+
+categoria,
+
+whatsapp,
+
+instagram,
+
+endereco,
+
+horario,
+
+descricao,
+
+imagem_url,
+
+latitude,
+
+longitude
+
+};
+}
+
+/* =========================================================
+VALIDAR
+========================================================= */
+
+function validarDadosCadastro(
+dados
+) {
+
+if (!dados.nome) {
+
+mostrarMensagem(
+  "Informe o nome do comércio.",
+  "erro"
+);
+
+return false;
+
+}
+
+if (!dados.categoria) {
+
+mostrarMensagem(
+  "Informe a categoria do comércio.",
+  "erro"
+);
+
+return false;
+
+}
+
+if (
+dados.latitude === null ||
+dados.longitude === null
+) {
+
+mostrarMensagem(
+  "Informe latitude e longitude.",
+  "erro"
+);
+
+return false;
+
+}
+
+if (
+!Number.isFinite(
+dados.latitude
+) ||
+!Number.isFinite(
+dados.longitude
+)
+) {
+
+mostrarMensagem(
+  "Latitude e longitude precisam ser números válidos.",
+  "erro"
+);
+
+return false;
+
+}
+
+if (
+dados.latitude < -90 ||
+dados.latitude > 90
+) {
+
+mostrarMensagem(
+  "Latitude inválida.",
+  "erro"
+);
+
+return false;
+
+}
+
+if (
+dados.longitude < -180 ||
+dados.longitude > 180
+) {
+
+mostrarMensagem(
+  "Longitude inválida.",
+  "erro"
+);
+
+return false;
+
+}
+
+return true;
+}
+
+/* =========================================================
+SALVAR ALTERAÇÕES — CADASTRO PENDENTE
+========================================================= */
+
+async function salvarCadastro(
+id
+) {
+
+try {
+
+esconderMensagem();
+
+const dados =
+  obterDadosCard(id);
+
+if (
+  !validarDadosCadastro(
+    dados
+  )
+) {
+  return;
+}
+
+
+const {
+  error
+} =
+  await supabaseClient
+    .from(
+      "cadastros_comercios"
+    )
+    .update({
+
+      nome:
+        dados.nome,
+
+      categoria:
+        dados.categoria,
+
+      whatsapp:
+        dados.whatsapp,
+
+      instagram:
+        dados.instagram,
+
+      endereco:
+        dados.endereco,
+
+      horario:
+        dados.horario,
+
+      descricao:
+        dados.descricao,
+
+      imagem_url:
+        dados.imagem_url,
+
+      latitude:
+        dados.latitude,
+
+      longitude:
+        dados.longitude,
+
+      atualizado_em:
+        new Date().toISOString()
+
+    })
+    .eq(
+      "id",
+      id
+    )
+    .eq(
+      "status",
+      "pendente"
+    );
+
+
+if (error) {
+  throw error;
+}
+
+
+mostrarMensagem(
+  "Alterações salvas com sucesso.",
+  "sucesso"
+);
+
+
+await carregarCadastros();
+
+} catch (erro) {
+
+console.error(
+  "Erro ao salvar cadastro:",
+  erro
+);
+
+
+mostrarMensagem(
+  "Não foi possível salvar as alterações.",
+  "erro"
+);
+
+}
+}
+
+/* =========================================================
+APROVAR E PUBLICAR
+========================================================= */
+
+async function aprovarCadastro(
+id
+) {
+
+const confirmar =
+confirm(
+
+  "Aprovar e publicar este comércio?\n\n" +
+
+  "O cadastro será enviado para o GitHub e poderá aparecer no Guia Turístico após a atualização do site.\n\n" +
+
+  "Essa ação não deve ser feita se os dados ainda estiverem incorretos."
+
+);
+
+if (!confirmar) {
+return;
+}
+
+try {
+
+esconderMensagem();
+
+const card =
+  document.querySelector(
+    `.cadastro-card[data-id="${id}"]`
+  );
+
+
+const botao =
+  card?.querySelector(
+    ".botao-aprovar"
+  );
+
+
+if (botao) {
+
+  botao.disabled =
+    true;
+
+  botao.innerHTML =
+    `
+      <span>⏳</span>
+      <span>Publicando...</span>
+    `;
+}
+
+
+const {
+  data,
+  error
+} =
+  await supabaseClient
+    .auth
+    .getSession();
+
+
+if (error) {
+  throw error;
+}
+
+
+const session =
+  data.session;
+
+
+if (!session) {
+
+  window.location.href =
+    "../index.html";
+
+  return;
+}
+
+
+const resposta =
+  await fetch(
+    EDGE_FUNCTION_URL,
+    {
+
+      method: "POST",
+
+      headers: {
+
+        "Authorization":
+          `Bearer ${session.access_token}`,
+
+        "Content-Type":
+          "application/json"
+
+      },
+
+      body:
+        JSON.stringify({
+
+          acao:
+            "aprovar_cadastro",
+
+          cadastro_id:
+            id
+
+        })
+
     }
-  } catch (erro) {
-    console.error("Erro ao aprovar:", erro);
-    mostrarMensagem(erro.message || "Erro ao aprovar cadastro.", "erro");
-  } finally {
-    botao.disabled = false;
-    botao.textContent = textoOriginal;
-  }
-} /* ========================================================= REJEITAR CADASTRO ========================================================= */
-async function rejeitarCadastro(cadastro, botao) {
-  const motivo = prompt(`Motivo da rejeição de "${cadastro.nome}"?\n\nVocê pode deixar em branco.`);
-  if (motivo === null) {
-    return;
-  }
-  const textoOriginal = botao.textContent;
-  botao.disabled = true;
-  botao.textContent = "Rejeitando...";
-  try {
-    await chamarEdgeFunction("rejeitar_cadastro", {
-      cadastro_id: cadastro.id,
-      motivo: motivo.trim()
-    });
-    mostrarMensagem("Cadastro rejeitado.", "sucesso");
-    await carregarCadastros();
-  } catch (erro) {
-    console.error("Erro ao rejeitar:", erro);
-    mostrarMensagem(erro.message || "Erro ao rejeitar cadastro.", "erro");
-  } finally {
-    botao.disabled = false;
-    botao.textContent = textoOriginal;
-  }
-} /* ========================================================= IMAGEM DO COMÉRCIO ========================================================= */
-function obterImagensComercio(comercio) {
-  const imagens = [];
-  if (Array.isArray(comercio?.imagens)) {
-    comercio.imagens.forEach(imagem => {
-      const valor = normalizarTexto(imagem);
-      if (valor && !imagens.includes(valor)) {
-        imagens.push(valor);
-      }
-    });
-  }
-  const imagemPrincipal = normalizarTexto(comercio?.imagem);
-  if (imagemPrincipal && !imagens.includes(imagemPrincipal)) {
-    imagens.unshift(imagemPrincipal);
-  }
-  return imagens.slice(0, LIMITE_IMAGENS);
-} /* ========================================================= PRIMEIRA IMAGEM DO COMÉRCIO ========================================================= */
-function obterImagemComercio(comercio) {
-  const imagens = obterImagensComercio(comercio);
-  return (imagens[0] || normalizarTexto(comercio?.imagem_url) || normalizarTexto(comercio?.capa) || normalizarTexto(comercio?.galeria?.[0]) || normalizarTexto(comercio?.fotos?.[0]) || "");
-} /* ========================================================= CARREGA COMÉRCIOS PUBLICADOS ========================================================= */
+  );
+
+
+let resultado;
+
+try {
+
+  resultado =
+    await resposta.json();
+
+} catch {
+
+  resultado = {
+
+    ok: false,
+
+    error:
+      "A Edge Function não retornou JSON válido."
+
+  };
+}
+
+
+console.log(
+  "Resposta da aprovação:",
+  resultado
+);
+
+
+if (
+  !resposta.ok ||
+  !resultado.ok
+) {
+
+  throw new Error(
+
+    resultado.error ||
+    resultado.mensagem ||
+    `Erro HTTP ${resposta.status}`
+
+  );
+}
+
+
+const comercio =
+  resultado.comercio;
+
+
+alert(
+
+  "Cadastro aprovado com sucesso!\n\n" +
+
+  `Comércio: ${
+    comercio?.nome ||
+    "Comércio"
+  }\n\n` +
+
+  "O cadastro foi publicado no GitHub."
+
+);
+
+
+mostrarMensagem(
+  "Cadastro aprovado e publicado com sucesso.",
+  "sucesso"
+);
+
+
+await carregarCadastros();
+
+await carregarComerciosPublicados();
+
+} catch (erro) {
+
+console.error(
+  "Erro ao aprovar cadastro:",
+  erro
+);
+
+
+mostrarMensagem(
+  `Não foi possível aprovar: ${erro.message}`,
+  "erro"
+);
+
+
+const card =
+  document.querySelector(
+    `.cadastro-card[data-id="${id}"]`
+  );
+
+
+const botao =
+  card?.querySelector(
+    ".botao-aprovar"
+  );
+
+
+if (botao) {
+
+  botao.disabled =
+    false;
+
+  botao.innerHTML =
+    `
+      <span>✓</span>
+      <span>Aprovar e publicar</span>
+    `;
+}
+
+}
+}
+
+/* =========================================================
+REJEITAR
+========================================================= */
+
+async function rejeitarCadastro(
+id
+) {
+
+const motivo =
+prompt(
+"Informe o motivo da rejeição:"
+);
+
+if (
+motivo === null
+) {
+return;
+}
+
+const motivoFinal =
+motivo.trim();
+
+if (!motivoFinal) {
+
+mostrarMensagem(
+  "Informe um motivo para rejeitar o cadastro.",
+  "erro"
+);
+
+return;
+
+}
+
+const confirmar =
+confirm(
+
+  "Deseja realmente rejeitar este cadastro?\n\n" +
+
+  `Motivo: ${motivoFinal}`
+
+);
+
+if (!confirmar) {
+return;
+}
+
+try {
+
+esconderMensagem();
+
+
+const {
+  data: usuarioData,
+  error: usuarioError
+} =
+  await supabaseClient
+    .auth
+    .getUser();
+
+
+if (usuarioError) {
+  throw usuarioError;
+}
+
+
+const usuario =
+  usuarioData.user;
+
+
+if (!usuario) {
+
+  window.location.href =
+    "../index.html";
+
+  return;
+}
+
+
+const {
+  error
+} =
+  await supabaseClient
+    .from(
+      "cadastros_comercios"
+    )
+    .update({
+
+      status:
+        "rejeitado",
+
+      revisado_por:
+        usuario.id,
+
+      revisado_em:
+        new Date().toISOString(),
+
+      motivo_rejeicao:
+        motivoFinal,
+
+      atualizado_em:
+        new Date().toISOString()
+
+    })
+    .eq(
+      "id",
+      id
+    )
+    .eq(
+      "status",
+      "pendente"
+    );
+
+
+if (error) {
+  throw error;
+}
+
+
+mostrarMensagem(
+  "Cadastro rejeitado com sucesso.",
+  "sucesso"
+);
+
+
+await carregarCadastros();
+
+} catch (erro) {
+
+console.error(
+  "Erro ao rejeitar cadastro:",
+  erro
+);
+
+
+mostrarMensagem(
+  "Não foi possível rejeitar o cadastro.",
+  "erro"
+);
+
+}
+}
+
+/* =========================================================
+COMÉRCIOS PUBLICADOS
+========================================================= */
+
 async function carregarComerciosPublicados() {
-  try {
-    const resposta = await fetch(`../DATA/comercios.json?t=${Date.now()}`, {
+
+try {
+
+const resposta =
+  await fetch(
+    "../DATA/comercios.json",
+    {
       cache: "no-store"
-    });
-    if (!resposta.ok) {
-      throw new Error("Não foi possível carregar DATA/comercios.json.");
     }
-    const dados = await resposta.json();
-    if (!Array.isArray(dados)) {
-      throw new Error("DATA/comercios.json não contém uma lista válida.");
-    }
-    comerciosPublicados = dados;
-    renderizarComerciosAdmin();
-  } catch (erro) {
-    console.error("Erro ao carregar comércios:", erro);
-    mostrarMensagem(erro.message || "Erro ao carregar comércios publicados.", "erro");
-  }
-} /* ========================================================= CRIA SEÇÃO DE COMÉRCIOS ========================================================= */
+  );
+
+
+if (!resposta.ok) {
+
+  throw new Error(
+    `HTTP ${resposta.status}`
+  );
+}
+
+
+const dados =
+  await resposta.json();
+
+
+if (
+  !Array.isArray(dados)
+) {
+
+  throw new Error(
+    "comercios.json não contém um array."
+  );
+}
+
+
+comerciosPublicados =
+  dados;
+
+
+console.log(
+  "Comércios publicados carregados:",
+  comerciosPublicados.length
+);
+
+
+renderizarComerciosAdmin();
+
+} catch (erro) {
+
+console.error(
+  "Erro ao carregar comércios publicados:",
+  erro
+);
+
+
+comerciosPublicados =
+  [];
+
+
+renderizarComerciosAdmin();
+
+}
+}
+
+/* =========================================================
+CRIAR SEÇÃO ADMINISTRATIVA
+========================================================= */
+
 function criarSecaoComerciosAdmin() {
-  let secao = document.getElementById("secaoComercios"); /* ======================================================= SEÇÃO JÁ EXISTE NO HTML ======================================================= */
-  if (secao) {
-    let lista = document.getElementById("lista-comercios-admin");
-    if (!lista) {
-      lista = document.getElementById("listaComercios");
-    }
-    if (!lista) {
-      lista = document.createElement("div");
-      lista.id = "lista-comercios-admin";
-      lista.className = "lista-comercios";
-      secao.appendChild(lista);
-    }
-    let pesquisa = document.getElementById("pesquisa-comercios-admin");
-    if (!pesquisa) {
-      pesquisa = document.createElement("input");
-      pesquisa.type = "search";
-      pesquisa.id = "pesquisa-comercios-admin";
-      pesquisa.className = "admin-comercios-pesquisa";
-      pesquisa.placeholder = "Pesquisar comércio...";
-      const cabecalho = secao.querySelector(".section-header");
-      if (cabecalho) {
-        cabecalho.appendChild(pesquisa);
-      } else {
-        secao.insertBefore(pesquisa, lista);
-      }
-    }
-    pesquisa.addEventListener("input", () => {
-      pesquisaComerciosAdmin = pesquisa.value;
-      renderizarComerciosAdmin();
-    });
+
+if (
+document.getElementById(
+"secao-comercios-admin"
+)
+) {
+return;
+}
+
+const secao =
+document.createElement(
+"section"
+);
+
+secao.id =
+"secao-comercios-admin";
+
+secao.className =
+"secao-comercios-admin";
+
+secao.innerHTML = `
+
+<div class="admin-comercios-cabecalho">
+
+  <div>
+
+    <span class="admin-comercios-tag">
+      GUIA TURÍSTICO
+    </span>
+
+    <h2>
+      Comércios publicados
+    </h2>
+
+    <p>
+      Gerencie os comércios que já aparecem no Guia.
+    </p>
+
+  </div>
+
+  <span
+    class="admin-comercios-contador"
+    id="contador-comercios-admin"
+  >
+    0
+  </span>
+
+</div>
+
+
+<div class="admin-comercios-pesquisa">
+
+  <input
+    type="search"
+    id="pesquisa-comercios-admin"
+    placeholder="Pesquisar comércio..."
+    autocomplete="off"
+  >
+
+</div>
+
+
+<div
+  id="editor-comercio-admin"
+  class="editor-comercio-admin"
+  hidden
+></div>
+
+
+<div
+  id="lista-comercios-admin"
+  class="lista-comercios-admin"
+></div>
+
+
+<div
+  id="sem-comercios-admin"
+  class="sem-comercios-admin"
+  hidden
+>
+  Nenhum comércio encontrado.
+</div>
+
+`;
+
+const referencia =
+document.getElementById(
+"lista-cadastros"
+)?.parentElement;
+
+if (referencia) {
+
+referencia.appendChild(
+  secao
+);
+
+} else {
+
+document.body.appendChild(
+  secao
+);
+
+}
+
+const pesquisa =
+document.getElementById(
+"pesquisa-comercios-admin"
+);
+
+if (pesquisa) {
+
+pesquisa.addEventListener(
+  "input",
+  event => {
+
+    pesquisaComerciosAdmin =
+      event.target.value
+        .trim()
+        .toLowerCase();
+
+
     renderizarComerciosAdmin();
-    return;
-  } /* ======================================================= CRIA SEÇÃO NOVA ======================================================= */
-  const novaSecao = document.createElement("section");
-  novaSecao.className = "secao-comercios-admin";
-  novaSecao.id = "secaoComercios";
-  novaSecao.innerHTML = ` <div class="admin-comercios-cabecalho"> <div> <span class="admin-comercios-tag"> PUBLICADOS </span> <h2> Comércios publicados </h2> </div> <span class="admin-comercios-contador" id="contadorComerciosAdmin" > 0 </span> </div> <div class="admin-comercios-pesquisa-wrap"> <input type="search" id="pesquisa-comercios-admin" class="admin-comercios-pesquisa" placeholder="Pesquisar comércio..." autocomplete="off" > </div> <div id="editor-comercio-admin" hidden ></div> <div id="lista-comercios-admin" class="lista-comercios" ></div> <div id="sem-comercios-admin" class="admin-empty" hidden > Nenhum comércio encontrado. </div> `;
-  const principal = document.querySelector("main");
-  if (principal) {
-    principal.appendChild(novaSecao);
-  } else {
-    document.body.appendChild(novaSecao);
+
   }
-  const pesquisa = document.getElementById("pesquisa-comercios-admin");
-  pesquisa?.addEventListener("input", () => {
-    pesquisaComerciosAdmin = pesquisa.value;
-    renderizarComerciosAdmin();
-  });
-  renderizarComerciosAdmin();
-} /* ========================================================= RENDERIZA COMÉRCIOS ========================================================= */
+);
+
+}
+
+renderizarComerciosAdmin();
+}
+
+/* =========================================================
+FILTRAR COMÉRCIOS
+========================================================= */
+
+function obterComerciosFiltradosAdmin() {
+
+const termo =
+pesquisaComerciosAdmin
+.normalize("NFD")
+.replace(
+/[\u0300-\u036f]/g,
+""
+);
+
+if (!termo) {
+
+return [
+  ...comerciosPublicados
+];
+
+}
+
+return comerciosPublicados.filter(
+comercio => {
+
+  const texto = [
+
+    comercio.nome,
+
+    comercio.categoria,
+
+    comercio.endereco,
+
+    comercio.endereço,
+
+    comercio.descricao,
+
+    comercio.telefone,
+
+    comercio.whatsapp,
+
+    comercio.instagram
+
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .normalize("NFD")
+    .replace(
+      /[\u0300-\u036f]/g,
+      ""
+    )
+    .toLowerCase();
+
+
+  return texto.includes(
+    termo
+  );
+}
+
+);
+}
+
+/* =========================================================
+RENDERIZAR COMÉRCIOS ADMIN
+========================================================= */
+
 function renderizarComerciosAdmin() {
-  const lista = document.getElementById("lista-comercios-admin") || document.getElementById("listaComercios");
-  if (!lista) {
-    return;
-  }
-  const termo = normalizarPesquisa(pesquisaComerciosAdmin);
-  const filtrados = comerciosPublicados.filter(comercio => {
-    if (!termo) {
-      return true;
-    }
-    const campos = [comercio?.nome, comercio?.categoria, comercio?.endereco, comercio?.descricao, comercio?.telefone, comercio?.whatsapp, comercio?.instagram];
-    return campos.some(campo => normalizarPesquisa(campo).includes(termo));
-  });
-  lista.innerHTML = "";
-  const contador = document.getElementById("contadorComerciosAdmin") || document.getElementById("contadorComercios");
-  if (contador) {
-    contador.textContent = filtrados.length;
-  }
-  const vazio = document.getElementById("sem-comercios-admin") || document.getElementById("semComercios");
-  if (vazio) {
-    vazio.hidden = filtrados.length !== 0;
-  }
-  filtrados.forEach(comercio => {
-    lista.appendChild(criarCardComercioAdmin(comercio));
-  });
-} /* ========================================================= CARD COMÉRCIO PUBLICADO ========================================================= */
-function criarCardComercioAdmin(comercio) {
-  const card = document.createElement("article");
-  card.className = "admin-comercio-card";
-  const imagem = obterImagemComercio(comercio);
-  const imagens = obterImagensComercio(comercio);
-  card.innerHTML = ` <div class="admin-comercio-imagem"> ${ imagem ? ` <img src="${escaparHTML(imagem)}" alt="${escaparHTML( comercio.nome )}" loading="lazy" onerror="this.parentElement.classList.add('sem-imagem'); this.style.display='none';" > ` : ` <div class="admin-comercio-sem-imagem"> Sem imagem </div> ` } </div> <div class="admin-comercio-conteudo"> <span class="admin-comercio-categoria"> ${escaparHTML( comercio.categoria || "Sem categoria" )} </span> <h3> ${escaparHTML( comercio.nome || "Sem nome" )} </h3> <p> ${escaparHTML( comercio.endereco || "Endereço não informado" )} </p> <small> ID: ${escaparHTML( comercio.id )} </small> <small> ${imagens.length} ${ imagens.length === 1 ? "imagem" : "imagens" } </small> <div class="admin-comercio-acoes"> <button type="button" class="admin-botao-editar" data-acao="editar" > Editar </button> <button type="button" class="admin-botao-excluir" data-acao="excluir" > Excluir </button> </div> </div> `;
-  card.querySelector('[data-acao="editar"]')?.addEventListener("click", () => abrirEditorComercio(comercio));
-  card.querySelector('[data-acao="excluir"]')?.addEventListener("click", () => excluirComercio(comercio.id));
-  return card;
-} /* ========================================================= EDITOR DE COMÉRCIO ========================================================= */
-function abrirEditorComercio(comercio) {
-  comercioEditandoId = comercio.id;
-  const editor = document.getElementById("editor-comercio-admin");
-  if (!editor) {
-    console.error("Editor não encontrado.");
-    return;
-  }
-  const imagensExistentes = obterImagensComercio(comercio);
-  editor.hidden = false;
-  editor.innerHTML = ` <div class="editor-comercio-topo"> <div> <span> EDITANDO COMÉRCIO </span> <h2> ${escaparHTML( comercio.nome )} </h2> </div> <button type="button" class="editor-botao-fechar" id="editor-fechar" > Fechar </button> </div> <div class="editor-comercio-campos"> <div class="editor-campo"> <label for="editor-nome"> Nome </label> <input type="text" id="editor-nome" value="${escaparHTML( comercio.nome )}" > </div> <div class="editor-campo"> <label for="editor-categoria"> Categoria </label> <input type="text" id="editor-categoria" value="${escaparHTML( comercio.categoria )}" > </div> <div class="editor-campo"> <label for="editor-whatsapp"> WhatsApp </label> <input type="text" id="editor-whatsapp" value="${escaparHTML( comercio.whatsapp )}" > </div> <div class="editor-campo"> <label for="editor-telefone"> Telefone </label> <input type="text" id="editor-telefone" value="${escaparHTML( comercio.telefone )}" > </div> <div class="editor-campo"> <label for="editor-instagram"> Instagram </label> <input type="text" id="editor-instagram" value="${escaparHTML( comercio.instagram )}" > </div> <div class="editor-campo"> <label for="editor-site"> Site </label> <input type="text" id="editor-site" value="${escaparHTML( comercio.site )}" > </div> <div class="editor-campo editor-campo-largo"> <label for="editor-endereco"> Endereço </label> <input type="text" id="editor-endereco" value="${escaparHTML( comercio.endereco )}" > </div> <div class="editor-campo"> <label for="editor-horario"> Horário </label> <input type="text" id="editor-horario" value="${escaparHTML( comercio.horario )}" > </div> <div class="editor-campo"> <label for="editor-latitude"> Latitude </label> <input type="text" id="editor-latitude" value="${escaparHTML( comercio.latitude ?? "" )}" > </div> <div class="editor-campo"> <label for="editor-longitude"> Longitude </label> <input type="text" id="editor-longitude" value="${escaparHTML( comercio.longitude ?? "" )}" > </div> <div class="editor-campo editor-campo-largo"> <label for="editor-descricao"> Descrição </label> <textarea id="editor-descricao" rows="4" >${escaparHTML( comercio.descricao )}</textarea> </div> <div class="editor-campo editor-campo-largo"> <label for="editor-historia"> História </label> <textarea id="editor-historia" rows="5" >${escaparHTML( comercio.historia )}</textarea> </div> <div class="editor-campo editor-campo-largo"> <label for="editor-curiosidades"> Curiosidades </label> <textarea id="editor-curiosidades" rows="5" >${escaparHTML( comercio.curiosidades )}</textarea> </div> <!-- ================================================= IMAGENS ================================================= --> <div class="editor-imagens"> <div class="editor-imagens-cabecalho"> <div> <label> Imagens </label> <small> Até ${LIMITE_IMAGENS} imagens. A primeira será a imagem principal. </small> </div> <span id="editor-contador-imagens" class="editor-contador-imagens" > ${imagensExistentes.length}/${LIMITE_IMAGENS} </span> </div> <div id="editor-imagens-lista" class="editor-imagens-lista" ></div> <label for="editor-imagem-arquivo" id="editor-botao-imagem" class="editor-botao-imagem" > + Adicionar imagens </label> <input type="file" id="editor-imagem-arquivo" accept="image/jpeg,image/png,image/webp" multiple hidden > <small class="editor-imagens-ajuda"> JPG, PNG ou WEBP · máximo 5 MB por imagem </small> <input type="hidden" id="editor-imagens-json" value="" > </div> </div> <div class="editor-comercio-acoes"> <button type="button" class="editor-botao-cancelar" id="editor-cancelar" > Cancelar </button> <button type="button" class="editor-botao-salvar" id="editor-salvar" > Salvar alterações </button> </div> `; /* ======================================================= ESTADO DAS IMAGENS ======================================================= */
-  let imagensEditor = imagensExistentes.map(url => ({
-    url,
-    arquivo: null,
-    nova: false
-  })); /* ======================================================= ELEMENTOS ======================================================= */
-  const inputArquivos = document.getElementById("editor-imagem-arquivo");
-  const botaoImagem = document.getElementById("editor-botao-imagem");
-  const listaImagens = document.getElementById("editor-imagens-lista");
-  const contador = document.getElementById("editor-contador-imagens");
-  const botaoSalvar = document.getElementById("editor-salvar"); /* ======================================================= RENDERIZA IMAGENS ======================================================= */
-  function renderizarImagensEditor() {
-    listaImagens.innerHTML = "";
-    contador.textContent = `${imagensEditor.length}/${LIMITE_IMAGENS}`;
-    botaoImagem.style.display = imagensEditor.length >= LIMITE_IMAGENS ? "none" : "";
-    imagensEditor.forEach((item, indice) => {
-      const bloco = document.createElement("div");
-      bloco.className = "editor-imagem-item";
-      const origem = item.arquivo ? URL.createObjectURL(item.arquivo) : item.url;
-      bloco.innerHTML = ` <div class="editor-imagem-preview"> <img src="${escaparHTML(origem)}" alt="Imagem ${indice + 1}" > ${ indice === 0 ? ` <span class="editor-imagem-principal"> Principal </span> ` : "" } <button type="button" class="editor-imagem-remover" data-indice="${indice}" title="Remover imagem" > × </button> </div> <span class="editor-imagem-numero"> Imagem ${indice + 1} </span> `;
-      bloco.querySelector(".editor-imagem-remover")?.addEventListener("click", () => {
-        removerImagemEditor(indice);
-      });
-      listaImagens.appendChild(bloco);
-    });
-    document.getElementById("editor-imagens-json").value = JSON.stringify(imagensEditor.map(item => item.url));
-  } /* ======================================================= REMOVE IMAGEM ======================================================= */
-  function removerImagemEditor(indice) {
-    const item = imagensEditor[indice];
-    if (item?.arquivo) {
-      try {
-        URL.revokeObjectURL(URL.createObjectURL(item.arquivo));
-      } catch {
-        /* nada */ }
-    }
-    imagensEditor.splice(indice, 1);
-    renderizarImagensEditor();
-  } /* ======================================================= SELECIONA NOVAS IMAGENS ======================================================= */
-  inputArquivos.addEventListener("change", () => {
-    const arquivos = Array.from(inputArquivos.files || []);
-    if (!arquivos.length) {
-      return;
-    }
-    const vagas = LIMITE_IMAGENS - imagensEditor.length;
-    if (vagas <= 0) {
-      alert(`O limite é de ${LIMITE_IMAGENS} imagens.`);
-      inputArquivos.value = "";
-      return;
-    }
-    if (arquivos.length > vagas) {
-      alert(`Você pode adicionar somente mais ${vagas} imagem(ns).`);
-    }
-    const arquivosSelecionados = arquivos.slice(0, vagas);
-    for (const arquivo of arquivosSelecionados) {
-      if (!validarImagem(arquivo)) {
-        continue;
-      }
-      imagensEditor.push({
-        url: "",
-        arquivo,
-        nova: true
-      });
-    }
-    inputArquivos.value = "";
-    renderizarImagensEditor();
-  }); /* ======================================================= FECHAR EDITOR ======================================================= */
-  document.getElementById("editor-fechar")?.addEventListener("click", fecharEditorComercio);
-  document.getElementById("editor-cancelar")?.addEventListener("click", fecharEditorComercio); /* ======================================================= SALVAR ======================================================= */
-  botaoSalvar?.addEventListener("click", async () => {
-    await salvarComercioPublicado(comercio, imagensEditor, botaoSalvar);
-  }); /* ======================================================= PRIMEIRA RENDERIZAÇÃO ======================================================= */
-  renderizarImagensEditor(); /* ======================================================= ROLLA ATÉ O EDITOR ======================================================= */
-  editor.scrollIntoView({
-    behavior: "smooth",
-    block: "start"
-  });
-} /* ========================================================= VALIDA IMAGEM ========================================================= */
-function validarImagem(arquivo) {
-  if (!arquivo) {
-    return false;
-  }
-  const tiposPermitidos = ["image/jpeg", "image/png", "image/webp"];
-  if (!tiposPermitidos.includes(arquivo.type)) {
-    alert(`"${arquivo.name}" não é uma imagem válida.\n\nUse JPG, PNG ou WEBP.`);
-    return false;
-  }
-  const limite = 5 * 1024 * 1024;
-  if (arquivo.size > limite) {
-    alert(`"${arquivo.name}" ultrapassa o limite de 5 MB.`);
-    return false;
-  }
-  return true;
-} /* ========================================================= GERA NOME SEGURO PARA IMAGEM ========================================================= */
-function gerarNomeImagem(usuarioId, arquivo) {
-  const nomeOriginal = arquivo.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9._-]/g, "-");
-  const extensao = nomeOriginal.split(".").pop().toLowerCase();
-  const nomeBase = nomeOriginal.replace(/\.[^/.]+$/, "");
-  const aleatorio = Math.random().toString(36).substring(2, 9);
-  return (`admin/${usuarioId}/` + `${Date.now()}-${aleatorio}-` + `${nomeBase}.` + `${extensao}`);
-} /* ========================================================= ENVIA IMAGEM PARA SUPABASE STORAGE ========================================================= */
-async function enviarImagemEditor(arquivo, usuarioId) {
-  if (!validarImagem(arquivo)) {
-    throw new Error("Imagem inválida.");
-  }
-  const caminho = gerarNomeImagem(usuarioId, arquivo);
-  const {
-    error
-  } = await supabaseClient.storage.from(STORAGE_BUCKET).upload(caminho, arquivo, {
-    cacheControl: "3600",
-    upsert: false,
-    contentType: arquivo.type
-  });
-  if (error) {
-    console.error("Erro ao enviar imagem:", error);
-    throw new Error(error.message || "Não foi possível enviar a imagem.");
-  }
-  const {
-    data
-  } = supabaseClient.storage.from(STORAGE_BUCKET).getPublicUrl(caminho);
-  if (!data?.publicUrl) {
-    throw new Error("A imagem foi enviada, mas não foi possível obter sua URL pública.");
-  }
-  return data.publicUrl;
-} /* ========================================================= SALVA COMÉRCIO PUBLICADO ========================================================= */
-async function salvarComercioPublicado(comercio, imagensEditor, botao) {
-  const nome = normalizarTexto(document.getElementById("editor-nome")?.value);
-  if (!nome) {
-    alert("Informe o nome do comércio.");
-    return;
-  }
-  if (imagensEditor.length > LIMITE_IMAGENS) {
-    alert(`O limite é de ${LIMITE_IMAGENS} imagens.`);
-    return;
-  }
-  const textoOriginal = botao.textContent;
-  botao.disabled = true;
-  botao.textContent = "Preparando imagens...";
-  try {
-    /* ===================================================== USUÁRIO LOGADO ===================================================== */
-    const {
-      data,
-      error
-    } = await supabaseClient.auth.getUser();
-    if (error || !data?.user) {
-      throw new Error("Usuário administrador não encontrado.");
-    }
-    const usuarioId = data.user.id; /* ===================================================== ENVIA NOVAS IMAGENS ===================================================== */
-    const imagensFinais = [];
-    for (let i = 0; i < imagensEditor.length; i++) {
-      const item = imagensEditor[i];
-      if (item.arquivo) {
-        botao.textContent = `Enviando imagem ${i + 1} de ${imagensEditor.length}...`;
-        const url = await enviarImagemEditor(item.arquivo, usuarioId);
-        imagensFinais.push(url);
-      } else if (item.url) {
-        imagensFinais.push(item.url);
-      }
-    }
-    botao.textContent = "Salvando comércio..."; /* ===================================================== DADOS ===================================================== */
-    const dados = {
-      nome,
-      categoria: normalizarTexto(document.getElementById("editor-categoria")?.value),
-      whatsapp: normalizarTexto(document.getElementById("editor-whatsapp")?.value),
-      telefone: normalizarTexto(document.getElementById("editor-telefone")?.value),
-      instagram: normalizarTexto(document.getElementById("editor-instagram")?.value),
-      site: normalizarTexto(document.getElementById("editor-site")?.value),
-      endereco: normalizarTexto(document.getElementById("editor-endereco")?.value),
-      horario: normalizarTexto(document.getElementById("editor-horario")?.value),
-      latitude: normalizarTexto(document.getElementById("editor-latitude")?.value),
-      longitude: normalizarTexto(document.getElementById("editor-longitude")?.value),
-      descricao: normalizarTexto(document.getElementById("editor-descricao")?.value),
-      historia: normalizarTexto(document.getElementById("editor-historia")?.value),
-      curiosidades: normalizarTexto(document.getElementById("editor-curiosidades")?.value),
-      imagem: imagensFinais[0] || "",
-      imagens: imagensFinais.slice(0, LIMITE_IMAGENS)
-    }; /* ===================================================== ENVIA PARA EDGE FUNCTION ===================================================== */
-    const resultado = await chamarEdgeFunction("editar_comercio", {
-      comercio_id: comercio.id,
-      comercio: dados
-    });
-    if (!resultado?.sucesso) {
-      throw new Error(resultado?.erro || "Não foi possível salvar as alterações.");
-    }
-    mostrarMensagem("Comércio atualizado com sucesso.", "sucesso");
-    fecharEditorComercio();
-    await carregarComerciosPublicados();
-  } catch (erro) {
-    console.error("Erro ao salvar comércio:", erro);
-    mostrarMensagem(erro.message || "Erro ao salvar comércio.", "erro");
-  } finally {
-    botao.disabled = false;
-    botao.textContent = textoOriginal;
-  }
-} /* ========================================================= FECHA EDITOR ========================================================= */
+
+const lista =
+document.getElementById(
+"lista-comercios-admin"
+);
+
+const vazio =
+document.getElementById(
+"sem-comercios-admin"
+);
+
+const contador =
+document.getElementById(
+"contador-comercios-admin"
+);
+
+if (!lista) {
+return;
+}
+
+lista.innerHTML =
+"";
+
+const resultados =
+obterComerciosFiltradosAdmin();
+
+if (contador) {
+
+contador.textContent =
+  resultados.length;
+
+}
+
+if (!resultados.length) {
+
+if (vazio) {
+  vazio.hidden =
+    false;
+}
+
+return;
+
+}
+
+if (vazio) {
+vazio.hidden =
+true;
+}
+
+resultados.forEach(
+comercio => {
+
+  lista.appendChild(
+    criarCardComercioAdmin(
+      comercio
+    )
+  );
+
+}
+
+);
+}
+
+/* =========================================================
+CARD — COMÉRCIO PUBLICADO
+========================================================= */
+
+function criarCardComercioAdmin(
+comercio
+) {
+
+const card =
+document.createElement(
+"article"
+);
+
+card.className =
+"admin-comercio-card";
+
+card.dataset.id =
+comercio.id;
+
+const imagem =
+obterImagemComercio(
+comercio
+);
+
+const imagemHTML =
+imagem
+? `<div class="admin-comercio-imagem"> <img src="${escaparHTML(imagem)}" alt="${escaparHTML( comercio.nome || "Comércio" )}" loading="lazy" onerror=" this.parentElement.classList.add('sem-imagem') this.style.display='none' " > </div>`
+: `<div class="admin-comercio-imagem sem-imagem"> <span>🏪</span> </div>` ;
+
+card.innerHTML = `
+
+${imagemHTML}
+
+
+<div class="admin-comercio-conteudo">
+
+  <div class="admin-comercio-info">
+
+    <span class="admin-comercio-categoria">
+      ${escaparHTML(
+        comercio.categoria ||
+        "Comércio"
+      )}
+    </span>
+
+    <h3>
+      ${escaparHTML(
+        comercio.nome ||
+        "Sem nome"
+      )}
+    </h3>
+
+    <p>
+      ${escaparHTML(
+        comercio.endereco ||
+        comercio.endereço ||
+        "Endereço não informado"
+      )}
+    </p>
+
+    <small>
+      ID: ${escaparHTML(
+        comercio.id
+      )}
+    </small>
+
+  </div>
+
+
+  <div class="admin-comercio-acoes">
+
+    <button
+      type="button"
+      class="admin-botao-editar"
+    >
+      ✏️ Editar
+    </button>
+
+    <button
+      type="button"
+      class="admin-botao-excluir"
+    >
+      🗑️ Excluir
+    </button>
+
+  </div>
+
+</div>
+
+`;
+
+const botaoEditar =
+card.querySelector(
+".admin-botao-editar"
+);
+
+if (botaoEditar) {
+
+botaoEditar.onclick =
+  () => {
+
+    abrirEditorComercio(
+      comercio
+    );
+
+  };
+
+}
+
+const botaoExcluir =
+card.querySelector(
+".admin-botao-excluir"
+);
+
+if (botaoExcluir) {
+
+botaoExcluir.onclick =
+  () => {
+
+    excluirComercio(
+      comercio.id
+    );
+
+  };
+
+}
+
+return card;
+}
+
+/* =========================================================
+ABRIR EDITOR
+========================================================= */
+
+function abrirEditorComercio(
+comercio
+) {
+
+const editor =
+document.getElementById(
+"editor-comercio-admin"
+);
+
+if (!editor) {
+return;
+}
+
+comercioEditandoId =
+comercio.id;
+
+editor.hidden =
+false;
+
+editor.innerHTML = `
+
+<div class="editor-comercio-topo">
+
+  <div>
+
+    <span>
+      EDITANDO COMÉRCIO
+    </span>
+
+    <h3>
+      ${escaparHTML(
+        comercio.nome ||
+        "Comércio"
+      )}
+    </h3>
+
+  </div>
+
+  <button
+    type="button"
+    id="fechar-editor-comercio"
+  >
+    ×
+  </button>
+
+</div>
+
+
+<div class="editor-comercio-campos">
+
+  <label>
+
+    <span>
+      Nome
+    </span>
+
+    <input
+      type="text"
+      id="editor-nome"
+      value="${escaparHTML(
+        valorOuVazio(
+          comercio.nome
+        )
+      )}"
+    >
+
+  </label>
+
+
+  <label>
+
+    <span>
+      Categoria
+    </span>
+
+    <input
+      type="text"
+      id="editor-categoria"
+      value="${escaparHTML(
+        valorOuVazio(
+          comercio.categoria
+        )
+      )}"
+    >
+
+  </label>
+
+
+  <label>
+
+    <span>
+      WhatsApp
+    </span>
+
+    <input
+      type="text"
+      id="editor-whatsapp"
+      value="${escaparHTML(
+        valorOuVazio(
+          comercio.whatsapp
+        )
+      )}"
+    >
+
+  </label>
+
+
+  <label>
+
+    <span>
+      Telefone
+    </span>
+
+    <input
+      type="text"
+      id="editor-telefone"
+      value="${escaparHTML(
+        valorOuVazio(
+          comercio.telefone
+        )
+      )}"
+    >
+
+  </label>
+
+
+  <label>
+
+    <span>
+      Instagram
+    </span>
+
+    <input
+      type="text"
+      id="editor-instagram"
+      value="${escaparHTML(
+        valorOuVazio(
+          comercio.instagram
+        )
+      )}"
+    >
+
+  </label>
+
+
+  <label>
+
+    <span>
+      Site
+    </span>
+
+    <input
+      type="url"
+      id="editor-site"
+      value="${escaparHTML(
+        valorOuVazio(
+          comercio.site
+        )
+      )}"
+      placeholder="https://..."
+    >
+
+  </label>
+
+
+  <label class="campo-largo">
+
+    <span>
+      Endereço
+    </span>
+
+    <textarea
+      id="editor-endereco"
+      rows="2"
+    >${escaparHTML(
+      valorOuVazio(
+        comercio.endereco ||
+        comercio.endereço
+      )
+    )}</textarea>
+
+  </label>
+
+
+  <label class="campo-largo">
+
+    <span>
+      Horário
+    </span>
+
+    <textarea
+      id="editor-horario"
+      rows="3"
+    >${escaparHTML(
+      valorOuVazio(
+        comercio.horario
+      )
+    )}</textarea>
+
+  </label>
+
+
+  <label>
+
+    <span>
+      Latitude
+    </span>
+
+    <input
+      type="number"
+      step="any"
+      id="editor-latitude"
+      value="${escaparHTML(
+        valorOuVazio(
+          comercio.latitude
+        )
+      )}"
+    >
+
+  </label>
+
+
+  <label>
+
+    <span>
+      Longitude
+    </span>
+
+    <input
+      type="number"
+      step="any"
+      id="editor-longitude"
+      value="${escaparHTML(
+        valorOuVazio(
+          comercio.longitude
+        )
+      )}"
+    >
+
+  </label>
+
+
+  <label class="campo-largo">
+
+    <span>
+      URL da imagem
+    </span>
+
+    <input
+      type="url"
+      id="editor-imagem"
+      value="${escaparHTML(
+        obterImagemComercio(
+          comercio
+        )
+      )}"
+      placeholder="https://..."
+    >
+
+  </label>
+
+
+  <label class="campo-largo">
+
+    <span>
+      Descrição
+    </span>
+
+    <textarea
+      id="editor-descricao"
+      rows="5"
+    >${escaparHTML(
+      valorOuVazio(
+        comercio.descricao
+      )
+    )}</textarea>
+
+  </label>
+
+
+  <label class="campo-largo">
+
+    <span>
+      História
+    </span>
+
+    <textarea
+      id="editor-historia"
+      rows="5"
+    >${escaparHTML(
+      valorOuVazio(
+        comercio.historia
+      )
+    )}</textarea>
+
+  </label>
+
+
+  <label class="campo-largo">
+
+    <span>
+      Curiosidades
+    </span>
+
+    <textarea
+      id="editor-curiosidades"
+      rows="5"
+    >${escaparHTML(
+      valorOuVazio(
+        comercio.curiosidades
+      )
+    )}</textarea>
+
+  </label>
+
+</div>
+
+
+<div class="editor-comercio-acoes">
+
+  <button
+    type="button"
+    class="editor-botao-cancelar"
+    id="cancelar-editor-comercio"
+  >
+    Cancelar
+  </button>
+
+  <button
+    type="button"
+    class="editor-botao-salvar"
+    id="salvar-editor-comercio"
+  >
+    💾 Salvar alterações
+  </button>
+
+</div>
+
+`;
+
+const fechar =
+document.getElementById(
+"fechar-editor-comercio"
+);
+
+const cancelar =
+document.getElementById(
+"cancelar-editor-comercio"
+);
+
+if (fechar) {
+
+fechar.onclick =
+  fecharEditorComercio;
+
+}
+
+if (cancelar) {
+
+cancelar.onclick =
+  fecharEditorComercio;
+
+}
+
+const salvar =
+document.getElementById(
+"salvar-editor-comercio"
+);
+
+if (salvar) {
+
+salvar.onclick =
+  salvarComercioPublicado;
+
+}
+
+editor.scrollIntoView({
+behavior: "smooth",
+block: "start"
+});
+}
+
+/* =========================================================
+FECHAR EDITOR
+========================================================= */
+
 function fecharEditorComercio() {
-  const editor = document.getElementById("editor-comercio-admin");
-  if (editor) {
-    editor.hidden = true;
-    editor.innerHTML = "";
-  }
-  comercioEditandoId = null;
-} /* ========================================================= EXCLUI COMÉRCIO ========================================================= */
-async function excluirComercio(id) {
-  const comercio = comerciosPublicados.find(item => item.id === id);
-  if (!comercio) {
-    return;
-  }
-  const confirmado = confirm(`Excluir "${comercio.nome}" do site?\n\n` + "Esta ação removerá o comércio do DATA/comercios.json " + "e será publicada no GitHub.");
-  if (!confirmado) {
-    return;
-  }
-  try {
-    mostrarMensagem("Excluindo comércio...", "sucesso");
-    await chamarEdgeFunction("excluir_comercio", {
-      comercio_id: id
-    });
-    if (comercioEditandoId === id) {
-      fecharEditorComercio();
+
+const editor =
+document.getElementById(
+"editor-comercio-admin"
+);
+
+if (!editor) {
+return;
+}
+
+editor.hidden =
+true;
+
+editor.innerHTML =
+"";
+
+comercioEditandoId =
+null;
+}
+
+/* =========================================================
+OBTER DADOS DO EDITOR
+========================================================= */
+
+function obterDadosEditorComercio() {
+
+const obter =
+id =>
+document.getElementById(
+id
+)?.value.trim() || "";
+
+const latitudeTexto =
+obter(
+"editor-latitude"
+);
+
+const longitudeTexto =
+obter(
+"editor-longitude"
+);
+
+const latitude =
+latitudeTexto === ""
+? null
+: Number(
+latitudeTexto
+);
+
+const longitude =
+longitudeTexto === ""
+? null
+: Number(
+longitudeTexto
+);
+
+return {
+
+id:
+  comercioEditandoId,
+
+nome:
+  obter(
+    "editor-nome"
+  ),
+
+categoria:
+  obter(
+    "editor-categoria"
+  ),
+
+whatsapp:
+  obter(
+    "editor-whatsapp"
+  ),
+
+telefone:
+  obter(
+    "editor-telefone"
+  ),
+
+instagram:
+  obter(
+    "editor-instagram"
+  ),
+
+site:
+  obter(
+    "editor-site"
+  ),
+
+endereco:
+  obter(
+    "editor-endereco"
+  ),
+
+horario:
+  obter(
+    "editor-horario"
+  ),
+
+latitude,
+
+longitude,
+
+imagem:
+  obter(
+    "editor-imagem"
+  ),
+
+descricao:
+  obter(
+    "editor-descricao"
+  ),
+
+historia:
+  obter(
+    "editor-historia"
+  ),
+
+curiosidades:
+  obter(
+    "editor-curiosidades"
+  )
+
+};
+}
+
+/* =========================================================
+VALIDAR COMÉRCIO PUBLICADO
+========================================================= */
+
+function validarComercioPublicado(
+dados
+) {
+
+if (!dados.nome) {
+
+mostrarMensagem(
+  "Informe o nome do comércio.",
+  "erro"
+);
+
+return false;
+
+}
+
+if (!dados.categoria) {
+
+mostrarMensagem(
+  "Informe a categoria.",
+  "erro"
+);
+
+return false;
+
+}
+
+if (
+dados.latitude !== null &&
+(
+!Number.isFinite(
+dados.latitude
+) ||
+dados.latitude < -90 ||
+dados.latitude > 90
+)
+) {
+
+mostrarMensagem(
+  "Latitude inválida.",
+  "erro"
+);
+
+return false;
+
+}
+
+if (
+dados.longitude !== null &&
+(
+!Number.isFinite(
+dados.longitude
+) ||
+dados.longitude < -180 ||
+dados.longitude > 180
+)
+) {
+
+mostrarMensagem(
+  "Longitude inválida.",
+  "erro"
+);
+
+return false;
+
+}
+
+return true;
+}
+
+/* =========================================================
+SALVAR COMÉRCIO PUBLICADO
+========================================================= */
+
+async function salvarComercioPublicado() {
+
+if (!comercioEditandoId) {
+return;
+}
+
+const dados =
+obterDadosEditorComercio();
+
+if (
+!validarComercioPublicado(
+dados
+)
+) {
+return;
+}
+
+const confirmar =
+confirm(
+"Salvar as alterações deste comércio?\n\n" +
+"As alterações serão publicadas no DATA/comercios.json."
+);
+
+if (!confirmar) {
+return;
+}
+
+const botao =
+document.getElementById(
+"salvar-editor-comercio"
+);
+
+try {
+
+esconderMensagem();
+
+
+if (botao) {
+
+  botao.disabled =
+    true;
+
+  botao.textContent =
+    "⏳ Salvando...";
+}
+
+
+const {
+  data,
+  error
+} =
+  await supabaseClient
+    .auth
+    .getSession();
+
+
+if (error) {
+  throw error;
+}
+
+
+const session =
+  data?.session;
+
+
+if (!session) {
+
+  window.location.href =
+    "../index.html";
+
+  return;
+}
+
+
+const resposta =
+  await fetch(
+    EDGE_FUNCTION_URL,
+    {
+
+      method: "POST",
+
+      headers: {
+
+        "Authorization":
+          `Bearer ${session.access_token}`,
+
+        "Content-Type":
+          "application/json"
+
+      },
+
+      body:
+        JSON.stringify({
+
+          acao:
+            "editar_comercio",
+
+          comercio_id:
+            comercioEditandoId,
+
+          comercio:
+            dados
+
+        })
+
     }
-    mostrarMensagem("Comércio excluído com sucesso.", "sucesso");
-    await carregarComerciosPublicados();
-  } catch (erro) {
-    console.error("Erro ao excluir comércio:", erro);
-    mostrarMensagem(erro.message || "Erro ao excluir comércio.", "erro");
-  }
-} /* ========================================================= BOTÃO ATUALIZAR ========================================================= */
-botaoAtualizar?.addEventListener("click", async () => {
-  botaoAtualizar.disabled = true;
-  const textoOriginal = botaoAtualizar.textContent;
-  botaoAtualizar.textContent = "Atualizando...";
-  try {
-    await carregarCadastros();
-    await carregarComerciosPublicados();
-    mostrarMensagem("Painel atualizado.", "sucesso");
-  } catch (erro) {
-    console.error(erro);
-  } finally {
-    botaoAtualizar.disabled = false;
-    botaoAtualizar.textContent = textoOriginal;
-  }
-}); /* ========================================================= BOTÃO SAIR ========================================================= */
-botaoSair?.addEventListener("click", async () => {
-  await supabaseClient.auth.signOut();
-  window.location.href = "../index.html";
-}); /* ========================================================= ALTERAÇÃO DE AUTENTICAÇÃO ========================================================= */
-supabaseClient.auth.onAuthStateChange((evento) => {
-  if (evento === "SIGNED_OUT") {
-    window.location.href = "../index.html";
-  }
-}); /* ========================================================= INICIALIZA ========================================================= */
+  );
+
+
+const resultado =
+  await resposta.json();
+
+
+console.log(
+  "Resposta da edição:",
+  resultado
+);
+
+
+if (
+  !resposta.ok ||
+  !resultado.ok
+) {
+
+  throw new Error(
+    resultado.error ||
+    resultado.mensagem ||
+    `Erro HTTP ${resposta.status}`
+  );
+}
+
+
+mostrarMensagem(
+  "Comércio atualizado com sucesso.",
+  "sucesso"
+);
+
+
+fecharEditorComercio();
+
+
+await carregarComerciosPublicados();
+
+} catch (erro) {
+
+console.error(
+  "Erro ao editar comércio:",
+  erro
+);
+
+
+mostrarMensagem(
+  `Não foi possível editar o comércio: ${erro.message}`,
+  "erro"
+);
+
+
+if (botao) {
+
+  botao.disabled =
+    false;
+
+  botao.textContent =
+    "💾 Salvar alterações";
+}
+
+}
+}
+
+/* =========================================================
+EXCLUIR COMÉRCIO
+========================================================= */
+
+async function excluirComercio(
+id
+) {
+
+const comercio =
+comerciosPublicados.find(
+item =>
+String(
+item.id
+) ===
+String(id)
+);
+
+if (!comercio) {
+
+mostrarMensagem(
+  "Comércio não encontrado.",
+  "erro"
+);
+
+return;
+
+}
+
+const confirmar =
+confirm(
+
+  "Excluir este comércio?\n\n" +
+
+  `Comércio: ${
+    comercio.nome ||
+    "Sem nome"
+  }\n\n` +
+
+  "Essa ação removerá o comércio do DATA/comercios.json."
+
+);
+
+if (!confirmar) {
+return;
+}
+
+try {
+
+esconderMensagem();
+
+
+const {
+  data,
+  error
+} =
+  await supabaseClient
+    .auth
+    .getSession();
+
+
+if (error) {
+  throw error;
+}
+
+
+const session =
+  data?.session;
+
+
+if (!session) {
+
+  window.location.href =
+    "../index.html";
+
+  return;
+}
+
+
+const card =
+  document.querySelector(
+    `.admin-comercio-card[data-id="${id}"]`
+  );
+
+
+const botao =
+  card?.querySelector(
+    ".admin-botao-excluir"
+  );
+
+
+if (botao) {
+
+  botao.disabled =
+    true;
+
+  botao.textContent =
+    "⏳ Excluindo...";
+}
+
+
+const resposta =
+  await fetch(
+    EDGE_FUNCTION_URL,
+    {
+
+      method: "POST",
+
+      headers: {
+
+        "Authorization":
+          `Bearer ${session.access_token}`,
+
+        "Content-Type":
+          "application/json"
+
+      },
+
+      body:
+        JSON.stringify({
+
+          acao:
+            "excluir_comercio",
+
+          comercio_id:
+            id
+
+        })
+
+    }
+  );
+
+
+const resultado =
+  await resposta.json();
+
+
+console.log(
+  "Resposta da exclusão:",
+  resultado
+);
+
+
+if (
+  !resposta.ok ||
+  !resultado.ok
+) {
+
+  throw new Error(
+    resultado.error ||
+    resultado.mensagem ||
+    `Erro HTTP ${resposta.status}`
+  );
+}
+
+
+mostrarMensagem(
+  "Comércio excluído com sucesso.",
+  "sucesso"
+);
+
+
+if (
+  comercioEditandoId ===
+  id
+) {
+
+  fecharEditorComercio();
+}
+
+
+await carregarComerciosPublicados();
+
+} catch (erro) {
+
+console.error(
+  "Erro ao excluir comércio:",
+  erro
+);
+
+
+mostrarMensagem(
+  `Não foi possível excluir o comércio: ${erro.message}`,
+  "erro"
+);
+
+
+const card =
+  document.querySelector(
+    `.admin-comercio-card[data-id="${id}"]`
+  );
+
+
+const botao =
+  card?.querySelector(
+    ".admin-botao-excluir"
+  );
+
+
+if (botao) {
+
+  botao.disabled =
+    false;
+
+  botao.textContent =
+    "🗑️ Excluir";
+}
+
+}
+}
+
+/* =========================================================
+SAIR
+========================================================= */
+
+async function sair() {
+
+try {
+
+const {
+  error
+} =
+  await supabaseClient
+    .auth
+    .signOut();
+
+
+if (error) {
+  throw error;
+}
+
+
+window.location.href =
+  "../index.html";
+
+} catch (erro) {
+
+console.error(
+  "Erro ao sair:",
+  erro
+);
+
+
+mostrarMensagem(
+  "Não foi possível sair.",
+  "erro"
+);
+
+}
+}
+
+/* =========================================================
+EVENTOS
+========================================================= */
+
+if (botaoAtualizar) {
+
+botaoAtualizar.addEventListener(
+"click",
+async () => {
+
+  esconderMensagem();
+
+  await carregarCadastros();
+
+  await carregarComerciosPublicados();
+
+}
+
+);
+
+}
+
+if (botaoSair) {
+
+botaoSair.addEventListener(
+"click",
+sair
+);
+
+}
+
+/* =========================================================
+AUTENTICAÇÃO
+========================================================= */
+
+supabaseClient.auth.onAuthStateChange(
+(
+evento,
+session
+) => {
+
+if (
+  evento ===
+  "SIGNED_OUT"
+) {
+
+  window.location.href =
+    "../index.html";
+
+}
+
+}
+);
+
+/* =========================================================
+INICIALIZAÇÃO
+========================================================= */
+
+document.addEventListener(
+"DOMContentLoaded",
+() => {
+
 verificarLogin();
+
+}
+);
