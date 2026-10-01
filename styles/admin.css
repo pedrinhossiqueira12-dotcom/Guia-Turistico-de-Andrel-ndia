@@ -1691,3 +1691,53 @@ height: 105px;
 }
 
 }
+.admin-cadastro-imagens {
+display: grid;
+grid-template-columns: repeat(4, 1fr);
+gap: 8px;
+margin-bottom: 16px;
+}
+
+.admin-cadastro-imagem {
+position: relative;
+aspect-ratio: 1 / 1;
+overflow: hidden;
+border-radius: 10px;
+background: #f0f0f0;
+}
+
+.admin-cadastro-imagem img {
+width: 100%;
+height: 100%;
+display: block;
+object-fit: cover;
+}
+
+.admin-cadastro-imagem-capa {
+position: absolute;
+left: 6px;
+bottom: 6px;
+padding: 3px 6px;
+border-radius: 5px;
+background: #091d1c;
+color: #ffffff;
+font-size: 9px;
+font-weight: 700;
+letter-spacing: 0.5px;
+}
+
+@media (max-width: 700px) {
+
+.admin-cadastro-imagens {
+grid-template-columns: repeat(3, 1fr);
+}
+
+}
+
+@media (max-width: 480px) {
+
+.admin-cadastro-imagens {
+grid-template-columns: repeat(2, 1fr);
+}
+
+}
