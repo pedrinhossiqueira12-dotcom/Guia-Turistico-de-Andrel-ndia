@@ -864,275 +864,304 @@ function configurarWhatsApp(
    GALERIA
 ========================================================= */
 
-function configurarGaleria(
-  item
+function configurarGaleria(item) {
+
+const principal =
+document.getElementById(
+"fotoPrincipal"
+);
+
+const miniaturas =
+document.getElementById(
+"miniaturas"
+);
+
+if (
+!principal ||
+!miniaturas
+) {
+return;
+}
+
+let fotos = [];
+
+/*
+
+=========================================================
+IMAGEM DO SUPABASE STORAGE
+=========================================================
+
+
+Cadastros feitos pelo formulário utilizam:
+
+
+imagem_url
+
+
+Exemplo:
+https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/...
+*/
+
+if (item.imagem_url) {
+
+const imagemSupabase =
+  corrigirCaminhoImagem(
+    item.imagem_url
+  );
+
+if (
+  imagemSupabase &&
+  !fotos.includes(
+    imagemSupabase
+  )
+) {
+  fotos.push(
+    imagemSupabase
+  );
+}
+
+}
+
+/*
+
+=========================================================
+CAPA
+=========================================================
+*/
+
+if (item.capa) {
+
+const capa =
+  corrigirCaminhoImagem(
+    item.capa
+  );
+
+if (
+  capa &&
+  !fotos.includes(capa)
+) {
+  fotos.push(
+    capa
+  );
+}
+
+}
+
+/*
+
+=========================================================
+GALERIA
+=========================================================
+*/
+
+if (
+Array.isArray(
+item.galeria
+)
 ) {
 
-  const principal =
-    document.getElementById(
-      "fotoPrincipal"
-    );
+item.galeria.forEach(
+  foto => {
 
-
-  const miniaturas =
-    document.getElementById(
-      "miniaturas"
-    );
-
-
-  if (
-    !principal ||
-    !miniaturas
-  ) {
-
-    return;
-
-  }
-
-
-  let fotos = [];
-
-
-  /*
-   * CAPA
-   */
-
-  if (item.capa) {
-
-    const capa =
+    const caminho =
       corrigirCaminhoImagem(
-        item.capa
+        foto
       );
 
-
-    if (capa) {
-
+    if (
+      caminho &&
+      !fotos.includes(
+        caminho
+      )
+    ) {
       fotos.push(
-        capa
+        caminho
+      );
+    }
+  }
+);
+
+}
+
+/*
+
+=========================================================
+FOTOS
+=========================================================
+*/
+
+if (
+Array.isArray(
+item.fotos
+)
+) {
+
+item.fotos.forEach(
+  foto => {
+
+    const caminho =
+      corrigirCaminhoImagem(
+        foto
       );
 
+    if (
+      caminho &&
+      !fotos.includes(
+        caminho
+      )
+    ) {
+      fotos.push(
+        caminho
+      );
     }
-
   }
+);
 
+}
 
-  /*
-   * GALERIA
-   */
+/*
+
+=========================================================
+SEM FOTOS
+=========================================================
+*/
+
+if (
+fotos.length === 0
+) {
+
+principal.style.display =
+  "none";
+
+miniaturas.innerHTML = `
+  <div class="empty-comments">
+    Nenhuma foto disponível.
+  </div>
+`;
+
+return;
+
+}
+
+/*
+
+=========================================================
+FOTO PRINCIPAL
+=========================================================
+*/
+
+principal.style.display =
+"";
+
+principal.src =
+fotos[0];
+
+principal.alt =
+item.nome ||
+"Foto do local";
+
+principal.onerror =
+() => {
+
+  console.error(
+    "Erro ao carregar imagem:",
+    principal.src
+  );
+
+};
+
+/*
+
+=========================================================
+MINIATURAS
+=========================================================
+*/
+
+miniaturas.innerHTML =
+"";
+
+fotos.forEach(
+(
+foto,
+index
+) => {
+
+  const button =
+    document.createElement(
+      "button"
+    );
+
+  button.className =
+    "thumbnail";
 
   if (
-    Array.isArray(
-      item.galeria
-    )
+    index === 0
   ) {
 
-    item.galeria.forEach(
-      foto => {
-
-        const caminho =
-          corrigirCaminhoImagem(
-            foto
-          );
-
-
-        if (
-          caminho &&
-          !fotos.includes(
-            caminho
-          )
-        ) {
-
-          fotos.push(
-            caminho
-          );
-
-        }
-
-      }
+    button.classList.add(
+      "active"
     );
 
   }
 
-
-  /*
-   * FOTOS
-   */
-
-  if (
-    Array.isArray(
-      item.fotos
-    )
-  ) {
-
-    item.fotos.forEach(
-      foto => {
-
-        const caminho =
-          corrigirCaminhoImagem(
-            foto
-          );
-
-
-        if (
-          caminho &&
-          !fotos.includes(
-            caminho
-          )
-        ) {
-
-          fotos.push(
-            caminho
-          );
-
-        }
-
-      }
+  const imagem =
+    document.createElement(
+      "img"
     );
 
-  }
+  imagem.src =
+    foto;
 
+  imagem.alt =
+    `Foto ${index + 1}`;
 
-  /*
-   * SEM FOTOS
-   */
-
-  if (
-    fotos.length === 0
-  ) {
-
-    principal.style.display =
-      "none";
-
-
-    miniaturas.innerHTML = `
-
-      <div class="empty-comments">
-        Nenhuma foto disponível.
-      </div>
-
-    `;
-
-    return;
-
-  }
-
-
-  /*
-   * FOTO PRINCIPAL
-   */
-
-  principal.style.display =
-    "";
-
-  principal.src =
-    fotos[0];
-
-  principal.alt =
-    item.nome ||
-    "Foto do local";
-
-
-  principal.onerror =
+  imagem.onerror =
     () => {
 
       console.error(
-        "Erro ao carregar imagem:",
-        principal.src
+        "Erro ao carregar miniatura:",
+        foto
       );
 
     };
 
+  button.appendChild(
+    imagem
+  );
 
-  /*
-   * MINIATURAS
-   */
+  button.addEventListener(
+    "click",
+    () => {
 
-  miniaturas.innerHTML =
-    "";
-
-
-  fotos.forEach(
-    (
-      foto,
-      index
-    ) => {
-
-      const button =
-        document.createElement(
-          "button"
-        );
-
-
-      button.className =
-        "thumbnail";
-
-
-      if (
-        index === 0
-      ) {
-
-        button.classList.add(
-          "active"
-        );
-
-      }
-
-
-      const imagem =
-        document.createElement(
-          "img"
-        );
-
-
-      imagem.src =
+      principal.src =
         foto;
 
-      imagem.alt =
-        `Foto ${index + 1}`;
-
-
-      button.appendChild(
-        imagem
-      );
-
-
-      button.addEventListener(
-        "click",
-        () => {
-
-          principal.src =
-            foto;
-
-
-          document
-            .querySelectorAll(
-              ".thumbnail"
+      document
+        .querySelectorAll(
+          ".thumbnail"
+        )
+        .forEach(
+          item =>
+            item.classList.remove(
+              "active"
             )
-            .forEach(
-              item =>
-                item.classList.remove(
-                  "active"
-                )
-            );
+        );
 
-
-          button.classList.add(
-            "active"
-          );
-
-        }
-      );
-
-
-      miniaturas.appendChild(
-        button
+      button.classList.add(
+        "active"
       );
 
     }
   );
 
+  miniaturas.appendChild(
+    button
+  );
+
 }
 
+);
+}
 
 /* =========================================================
    MAPA
