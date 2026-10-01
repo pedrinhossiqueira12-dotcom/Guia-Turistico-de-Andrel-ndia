@@ -6,7 +6,7 @@ RESPONSABILIDADE:
 
 Cadastro público de comércio
 Envio para análise
-Upload de imagem
+Upload de até 4 imagens
 Integração com Supabase
 Integração com login.js
 
@@ -88,6 +88,53 @@ document.getElementById(
 );
 
 /* =========================================================
+ELEMENTOS DAS IMAGENS
+========================================================= */
+
+const inputImagensCadastro =
+document.getElementById(
+"cadastro-imagens"
+);
+
+const previewImagensCadastro =
+document.getElementById(
+"cadastro-preview-imagens"
+);
+
+/* =========================================================
+CONFIGURAÇÃO DAS IMAGENS
+========================================================= */
+
+const LIMITE_IMAGENS_CADASTRO =
+4;
+
+const TAMANHO_MAXIMO_IMAGEM =
+5 * 1024 * 1024;
+
+const TIPOS_IMAGEM_PERMITIDOS = [
+"image/jpeg",
+"image/png",
+"image/webp"
+];
+
+/* =========================================================
+ESTADO DAS IMAGENS
+========================================================= */
+
+let imagensCadastro = [];
+
+/*
+
+Cada item possui:
+
+
+{
+arquivo: File,
+preview: string
+}
+*/
+
+/* =========================================================
 ESTADO
 ========================================================= */
 
@@ -151,6 +198,345 @@ aviso.className =
 }
 
 /* =========================================================
+LIBERAR PREVIEWS
+========================================================= */
+
+function liberarPreviewsImagens() {
+
+imagensCadastro.forEach(
+item => {
+
+  if (
+    item?.preview
+  ) {
+
+    URL.revokeObjectURL(
+      item.preview
+    );
+
+  }
+
+}
+
+);
+
+}
+
+/* =========================================================
+LIMPAR IMAGENS
+========================================================= */
+
+function limparImagensCadastro() {
+
+liberarPreviewsImagens();
+
+imagensCadastro = [];
+
+if (
+inputImagensCadastro
+) {
+
+inputImagensCadastro.value =
+  "";
+
+}
+
+renderizarPreviewImagensCadastro();
+
+}
+
+/* =========================================================
+RENDERIZAR PREVIEW DAS IMAGENS
+========================================================= */
+
+function renderizarPreviewImagensCadastro() {
+
+if (
+!previewImagensCadastro
+) {
+
+return;
+
+}
+
+previewImagensCadastro.innerHTML =
+"";
+
+imagensCadastro.forEach(
+(
+item,
+index
+) => {
+
+  const elemento =
+    document.createElement(
+      "div"
+    );
+
+  elemento.className =
+    "cadastro-imagem-item";
+
+
+  /* ---------------------------------------------------
+     IMAGEM
+  --------------------------------------------------- */
+
+  const imagem =
+    document.createElement(
+      "img"
+    );
+
+  imagem.src =
+    item.preview;
+
+  imagem.alt =
+    index === 0
+      ? "Imagem de capa"
+      : `Imagem ${index + 1}`;
+
+
+  /* ---------------------------------------------------
+     MARCAÇÃO DE CAPA
+  --------------------------------------------------- */
+
+  if (
+    index === 0
+  ) {
+
+    const capa =
+      document.createElement(
+        "span"
+      );
+
+    capa.className =
+      "cadastro-imagem-capa";
+
+    capa.textContent =
+      "CAPA";
+
+    elemento.appendChild(
+      capa
+    );
+
+  }
+
+
+  /* ---------------------------------------------------
+     BOTÃO REMOVER
+  --------------------------------------------------- */
+
+  const remover =
+    document.createElement(
+      "button"
+    );
+
+  remover.type =
+    "button";
+
+  remover.className =
+    "cadastro-imagem-remover";
+
+  remover.textContent =
+    "×";
+
+  remover.setAttribute(
+    "aria-label",
+    `Remover imagem ${index + 1}`
+  );
+
+
+  remover.addEventListener(
+    "click",
+    function () {
+
+      const imagemRemovida =
+        imagensCadastro[index];
+
+      if (
+        imagemRemovida?.preview
+      ) {
+
+        URL.revokeObjectURL(
+          imagemRemovida.preview
+        );
+
+      }
+
+      imagensCadastro.splice(
+        index,
+        1
+      );
+
+      renderizarPreviewImagensCadastro();
+
+    }
+  );
+
+
+  elemento.appendChild(
+    imagem
+  );
+
+  elemento.appendChild(
+    remover
+  );
+
+  previewImagensCadastro.appendChild(
+    elemento
+  );
+
+}
+
+);
+
+}
+
+/* =========================================================
+SELEÇÃO DE IMAGENS
+========================================================= */
+
+if (
+inputImagensCadastro
+) {
+
+inputImagensCadastro.addEventListener(
+"change",
+function () {
+
+  const arquivos =
+    Array.from(
+      inputImagensCadastro.files || []
+    );
+
+
+  if (
+    !arquivos.length
+  ) {
+
+    return;
+
+  }
+
+
+  const espacoDisponivel =
+    LIMITE_IMAGENS_CADASTRO -
+    imagensCadastro.length;
+
+
+  if (
+    espacoDisponivel <= 0
+  ) {
+
+    alert(
+      "Você já adicionou o limite de 4 imagens."
+    );
+
+    inputImagensCadastro.value =
+      "";
+
+    return;
+
+  }
+
+
+  const arquivosSelecionados =
+    arquivos.slice(
+      0,
+      espacoDisponivel
+    );
+
+
+  for (
+    const arquivo
+    of arquivosSelecionados
+  ) {
+
+    /* -------------------------------------------------
+       FORMATO
+    ------------------------------------------------- */
+
+    if (
+      !TIPOS_IMAGEM_PERMITIDOS.includes(
+        arquivo.type
+      )
+    ) {
+
+      alert(
+        `A imagem "${arquivo.name}" deve estar em JPG, PNG ou WEBP.`
+      );
+
+      continue;
+
+    }
+
+
+    /* -------------------------------------------------
+       TAMANHO
+    ------------------------------------------------- */
+
+    if (
+      arquivo.size >
+      TAMANHO_MAXIMO_IMAGEM
+    ) {
+
+      alert(
+        `A imagem "${arquivo.name}" ultrapassa o limite de 5 MB.`
+      );
+
+      continue;
+
+    }
+
+
+    /* -------------------------------------------------
+       ADICIONAR
+    ------------------------------------------------- */
+
+    imagensCadastro.push({
+
+      arquivo:
+        arquivo,
+
+      preview:
+        URL.createObjectURL(
+          arquivo
+        )
+
+    });
+
+  }
+
+
+  if (
+    arquivos.length >
+    espacoDisponivel
+  ) {
+
+    alert(
+      "O limite máximo é de 4 imagens."
+    );
+
+  }
+
+
+  renderizarPreviewImagensCadastro();
+
+
+  /*
+   * Permite selecionar novamente
+   * o mesmo arquivo depois de removê-lo.
+   */
+
+  inputImagensCadastro.value =
+    "";
+
+}
+
+);
+
+}
+
+/* =========================================================
 ABRIR FORMULÁRIO
 ========================================================= */
 
@@ -158,18 +544,26 @@ function abrirFormulario(
 tipo
 ) {
 
-if (!formulario) {
+if (
+!formulario
+) {
+
 return;
+
 }
 
 formulario.reset();
+
+limparImagensCadastro();
 
 limparAviso();
 
 tipoCadastro =
 tipo;
 
-if (formularioContainer) {
+if (
+formularioContainer
+) {
 
 formularioContainer.classList.add(
   "ativo"
@@ -177,7 +571,9 @@ formularioContainer.classList.add(
 
 }
 
-if (opcoes) {
+if (
+opcoes
+) {
 
 opcoes.style.display =
   "none";
@@ -193,7 +589,9 @@ tipo ===
 "novo_comercio"
 ) {
 
-if (tituloFormulario) {
+if (
+  tituloFormulario
+) {
 
   tituloFormulario.textContent =
     "Cadastrar comércio";
@@ -201,14 +599,15 @@ if (tituloFormulario) {
 }
 
 
-if (descricaoFormulario) {
+if (
+  descricaoFormulario
+) {
 
   descricaoFormulario.textContent =
     "Preencha as informações abaixo. " +
     "O cadastro será analisado antes de ser publicado no guia.";
 
 }
-
 
 return;
 
@@ -218,14 +617,18 @@ return;
 ALTERAÇÃO
 ------------------------------------------------------- */
 
-if (tituloFormulario) {
+if (
+tituloFormulario
+) {
 
 tituloFormulario.textContent =
   "Sugerir alteração";
 
 }
 
-if (descricaoFormulario) {
+if (
+descricaoFormulario
+) {
 
 descricaoFormulario.textContent =
   "A seleção do comércio existente será adicionada " +
@@ -246,7 +649,11 @@ FECHAR FORMULÁRIO
 
 function fecharFormulario() {
 
-if (formularioContainer) {
+limparImagensCadastro();
+
+if (
+formularioContainer
+) {
 
 formularioContainer.classList.remove(
   "ativo"
@@ -254,14 +661,18 @@ formularioContainer.classList.remove(
 
 }
 
-if (opcoes) {
+if (
+opcoes
+) {
 
 opcoes.style.display =
   "";
 
 }
 
-if (formulario) {
+if (
+formulario
+) {
 
 formulario.reset();
 
@@ -282,8 +693,12 @@ function converterCoordenada(
 valor
 ) {
 
-if (!valor) {
+if (
+!valor
+) {
+
 return null;
+
 }
 
 const numero =
@@ -318,12 +733,17 @@ function normalizarWhatsapp(
 valor
 ) {
 
-if (!valor) {
+if (
+!valor
+) {
+
 return "";
+
 }
 
-return String(valor)
-.replace(
+return String(
+valor
+).replace(
 /\D/g,
 ""
 );
@@ -338,8 +758,8 @@ async function obterUsuarioCadastro() {
 
 /*
 
-Primeiro tenta utilizar o usuário
-que já foi carregado pelo login.js.
+Primeiro tenta utilizar o estado
+mantido pelo login.js.
 */
 
 if (
@@ -351,7 +771,9 @@ const usuario =
   obterUsuarioLogin();
 
 
-if (usuario) {
+if (
+  usuario
+) {
 
   return usuario;
 
@@ -361,17 +783,9 @@ if (usuario) {
 
 /*
 
-Se o login.js ainda não tiver
-disponibilizado o usuário, usamos
-getSession().
-
-
-IMPORTANTE:
-
-
-Não usamos getUser() aqui porque
-getUser() gera AuthSessionMissingError
-quando não existe sessão.
+Caso a sessão ainda não tenha sido
+disponibilizada pelo login.js,
+consultamos diretamente o Supabase.
 */
 
 try {
@@ -382,13 +796,15 @@ const {
 } =
   await cadastrosSupabase
     .auth
-    .getSession();
+    .getUser();
 
 
-if (error) {
+if (
+  error
+) {
 
   console.error(
-    "Erro ao verificar sessão:",
+    "Erro ao obter usuário:",
     error
   );
 
@@ -398,14 +814,16 @@ if (error) {
 
 
 return (
-  data?.session?.user ||
+  data?.user ||
   null
 );
 
-} catch (erro) {
+} catch (
+erro
+) {
 
 console.error(
-  "Erro inesperado ao verificar sessão:",
+  "Erro ao consultar sessão:",
   erro
 );
 
@@ -416,50 +834,7 @@ return null;
 }
 
 /* =========================================================
-ABRIR LOGIN
-========================================================= */
-
-function abrirLoginCadastro() {
-
-/*
-
-O login.js é responsável pelo modal.
-
-
-Portanto, não criamos outro sistema
-de login aqui.
-*/
-
-if (
-typeof abrirModalAuth ===
-"function"
-) {
-
-console.log(
-  "Abrindo modal de login..."
-);
-
-
-abrirModalAuth(
-  "login"
-);
-
-
-return true;
-
-}
-
-console.error(
-"abrirModalAuth() não está disponível. " +
-"Verifique se login.js foi carregado antes de cadastros.js."
-);
-
-return false;
-
-}
-
-/* =========================================================
-EXIGIR LOGIN
+VERIFICAR LOGIN
 ========================================================= */
 
 async function verificarLoginCadastro() {
@@ -467,23 +842,31 @@ async function verificarLoginCadastro() {
 const usuario =
 await obterUsuarioCadastro();
 
-/*
-
-Usuário está logado.
-*/
-
-if (usuario) {
+if (
+usuario
+) {
 
 return usuario;
 
 }
 
-/*
+if (
+typeof abrirModalAuth ===
+"function"
+) {
 
-Usuário não está logado.
-*/
+abrirModalAuth(
+  "login"
+);
 
-abrirLoginCadastro();
+} else {
+
+console.error(
+  "A função abrirModalAuth() não está disponível. " +
+  "Verifique se login.js foi carregado antes de cadastros.js."
+);
+
+}
 
 mostrarAviso(
 "Para enviar um cadastro, entre na sua conta ou crie uma conta.",
@@ -495,102 +878,13 @@ return null;
 }
 
 /* =========================================================
-OBTENER ARQUIVO DA FOTO
-========================================================= */
-
-function obterArquivoImagem() {
-
-const campoImagem =
-document.getElementById(
-"imagem"
-) ||
-document.getElementById(
-"foto"
-);
-
-if (!campoImagem) {
-
-console.warn(
-  "Campo de imagem não encontrado."
-);
-
-
-return null;
-
-}
-
-return (
-campoImagem.files?.[0] ||
-null
-);
-
-}
-
-/* =========================================================
-VALIDAR IMAGEM
-========================================================= */
-
-function validarImagem(
-arquivo
-) {
-
-if (!arquivo) {
-return;
-}
-
-/* -------------------------------------------------------
-TAMANHO MÁXIMO
-------------------------------------------------------- */
-
-const tamanhoMaximo =
-5 * 1024 * 1024;
-
-if (
-arquivo.size >
-tamanhoMaximo
-) {
-
-throw new Error(
-  "A imagem deve ter no máximo 5 MB."
-);
-
-}
-
-/* -------------------------------------------------------
-FORMATOS PERMITIDOS
-------------------------------------------------------- */
-
-const tiposPermitidos = [
-
-"image/jpeg",
-
-"image/png",
-
-"image/webp"
-
-];
-
-if (
-!tiposPermitidos.includes(
-arquivo.type
-)
-) {
-
-throw new Error(
-  "A imagem deve estar em JPG, PNG ou WEBP."
-);
-
-}
-
-}
-
-/* =========================================================
 GERAR NOME DA IMAGEM
 ========================================================= */
 
 function gerarNomeImagem(
 usuarioId,
-arquivo
+arquivo,
+indice
 ) {
 
 const extensao =
@@ -632,6 +926,8 @@ arquivo.name
 const identificador =
 Date.now() +
 "-" +
+indice +
+"-" +
 Math.random()
 .toString(36)
 .substring(
@@ -652,15 +948,18 @@ extensao
 }
 
 /* =========================================================
-UPLOAD DA IMAGEM
+UPLOAD DE UMA IMAGEM
 ========================================================= */
 
 async function enviarImagem(
 arquivo,
-usuario
+usuario,
+indice
 ) {
 
-if (!arquivo) {
+if (
+!arquivo
+) {
 
 return null;
 
@@ -673,7 +972,8 @@ arquivo
 const caminho =
 gerarNomeImagem(
 usuario.id,
-arquivo
+arquivo,
+indice
 );
 
 console.log(
@@ -706,7 +1006,9 @@ arquivo,
     }
   );
 
-if (error) {
+if (
+error
+) {
 
 console.error(
   "Erro ao enviar imagem:",
@@ -720,10 +1022,6 @@ throw new Error(
 );
 
 }
-
-/* -------------------------------------------------------
-URL PÚBLICA
-------------------------------------------------------- */
 
 const {
 data
@@ -741,7 +1039,9 @@ const imagemUrl =
 data?.publicUrl ||
 null;
 
-if (!imagemUrl) {
+if (
+!imagemUrl
+) {
 
 throw new Error(
   "A imagem foi enviada, mas não foi possível obter sua URL."
@@ -755,6 +1055,113 @@ imagemUrl
 );
 
 return imagemUrl;
+
+}
+
+/* =========================================================
+VALIDAR IMAGEM
+========================================================= */
+
+function validarImagem(
+arquivo
+) {
+
+if (
+!arquivo
+) {
+
+return;
+
+}
+
+if (
+arquivo.size >
+TAMANHO_MAXIMO_IMAGEM
+) {
+
+throw new Error(
+  "Cada imagem deve ter no máximo 5 MB."
+);
+
+}
+
+if (
+!TIPOS_IMAGEM_PERMITIDOS.includes(
+arquivo.type
+)
+) {
+
+throw new Error(
+  "As imagens devem estar em JPG, PNG ou WEBP."
+);
+
+}
+
+}
+
+/* =========================================================
+ENVIAR TODAS AS IMAGENS
+========================================================= */
+
+async function enviarImagensCadastro(
+usuario
+) {
+
+if (
+!imagensCadastro.length
+) {
+
+return [];
+
+}
+
+const urls = [];
+
+for (
+let i = 0;
+i < imagensCadastro.length;
+i++
+) {
+
+const item =
+  imagensCadastro[i];
+
+
+if (
+  !item?.arquivo
+) {
+
+  continue;
+
+}
+
+
+mostrarAviso(
+  `Enviando imagem ${i + 1} de ${imagensCadastro.length}...`
+);
+
+
+const url =
+  await enviarImagem(
+    item.arquivo,
+    usuario,
+    i
+  );
+
+
+if (
+  url
+) {
+
+  urls.push(
+    url
+  );
+
+}
+
+}
+
+return urls;
 
 }
 
@@ -775,7 +1182,9 @@ VERIFICAR LOGIN
 const usuario =
 await verificarLoginCadastro();
 
-if (!usuario) {
+if (
+!usuario
+) {
 
 return;
 
@@ -795,7 +1204,6 @@ mostrarAviso(
   "erro"
 );
 
-
 return;
 
 }
@@ -809,12 +1217,13 @@ formulario?.querySelector(
 'button[type="submit"]'
 );
 
-if (!botaoEnviar) {
+if (
+!botaoEnviar
+) {
 
 console.error(
   "Botão de envio do formulário não encontrado."
 );
-
 
 return;
 
@@ -882,7 +1291,7 @@ const campoLongitude =
 
 
 /* -----------------------------------------------------
-   CAMPOS OBRIGATÓRIOS
+   VALIDAR CAMPOS EXISTENTES
 ----------------------------------------------------- */
 
 if (
@@ -899,7 +1308,7 @@ if (
 
 
 /* -----------------------------------------------------
-   VALORES
+   LER CAMPOS
 ----------------------------------------------------- */
 
 const nome =
@@ -960,7 +1369,9 @@ const longitude =
    VALIDAÇÃO
 ----------------------------------------------------- */
 
-if (!nome) {
+if (
+  !nome
+) {
 
   throw new Error(
     "Informe o nome do comércio."
@@ -969,7 +1380,9 @@ if (!nome) {
 }
 
 
-if (!categoria) {
+if (
+  !categoria
+) {
 
   throw new Error(
     "Selecione uma categoria."
@@ -978,7 +1391,9 @@ if (!categoria) {
 }
 
 
-if (!endereco) {
+if (
+  !endereco
+) {
 
   throw new Error(
     "Informe o endereço."
@@ -988,17 +1403,28 @@ if (!endereco) {
 
 
 /* -----------------------------------------------------
-   FOTO
+   VALIDAR TODAS AS IMAGENS
 ----------------------------------------------------- */
 
-const arquivoImagem =
-  obterArquivoImagem();
+if (
+  imagensCadastro.length >
+  LIMITE_IMAGENS_CADASTRO
+) {
+
+  throw new Error(
+    "O limite máximo é de 4 imagens."
+  );
+
+}
 
 
-if (arquivoImagem) {
+for (
+  const item
+  of imagensCadastro
+) {
 
   validarImagem(
-    arquivoImagem
+    item.arquivo
   );
 
 }
@@ -1008,24 +1434,19 @@ if (arquivoImagem) {
    UPLOAD
 ----------------------------------------------------- */
 
-let imagemUrl =
-  null;
+let imagensUrls = [];
 
 
-if (arquivoImagem) {
+if (
+  imagensCadastro.length
+) {
 
   botaoEnviar.textContent =
-    "Enviando foto...";
+    "Enviando fotos...";
 
 
-  mostrarAviso(
-    "Enviando a foto..."
-  );
-
-
-  imagemUrl =
-    await enviarImagem(
-      arquivoImagem,
+  imagensUrls =
+    await enviarImagensCadastro(
       usuario
     );
 
@@ -1033,7 +1454,17 @@ if (arquivoImagem) {
 
 
 /* -----------------------------------------------------
-   OBJETO DO CADASTRO
+   CAPA
+----------------------------------------------------- */
+
+const imagemUrl =
+  imagensUrls.length > 0
+    ? imagensUrls[0]
+    : null;
+
+
+/* -----------------------------------------------------
+   DADOS DO CADASTRO
 ----------------------------------------------------- */
 
 const cadastro = {
@@ -1079,8 +1510,23 @@ const cadastro = {
     descricao ||
     null,
 
+  /*
+   * Mantido para compatibilidade
+   * com o sistema atual.
+   *
+   * A primeira imagem é sempre
+   * a capa.
+   */
+
   imagem_url:
     imagemUrl,
+
+  /*
+   * Todas as imagens.
+   */
+
+  imagens:
+    imagensUrls,
 
   latitude,
 
@@ -1096,7 +1542,7 @@ console.log(
 
 
 /* -----------------------------------------------------
-   ENVIO SUPABASE
+   SUPABASE
 ----------------------------------------------------- */
 
 botaoEnviar.textContent =
@@ -1118,7 +1564,9 @@ const {
     .single();
 
 
-if (error) {
+if (
+  error
+) {
 
   console.error(
     "Erro Supabase:",
@@ -1144,6 +1592,8 @@ console.log(
    SUCESSO
 ----------------------------------------------------- */
 
+limparImagensCadastro();
+
 formulario.reset();
 
 
@@ -1154,7 +1604,9 @@ mostrarAviso(
 );
 
 
-if (formularioContainer) {
+if (
+  formularioContainer
+) {
 
   formularioContainer.scrollIntoView({
 
@@ -1168,7 +1620,9 @@ if (formularioContainer) {
 
 }
 
-} catch (erro) {
+} catch (
+erro
+) {
 
 console.error(
   "Erro ao enviar cadastro:",
@@ -1199,7 +1653,9 @@ botaoEnviar.textContent =
 EVENTOS
 ========================================================= */
 
-if (opcaoNovo) {
+if (
+opcaoNovo
+) {
 
 opcaoNovo.addEventListener(
 "click",
@@ -1215,7 +1671,9 @@ function () {
 
 }
 
-if (opcaoAlteracao) {
+if (
+opcaoAlteracao
+) {
 
 opcaoAlteracao.addEventListener(
 "click",
@@ -1231,7 +1689,9 @@ function () {
 
 }
 
-if (botaoCancelar) {
+if (
+botaoCancelar
+) {
 
 botaoCancelar.addEventListener(
 "click",
@@ -1240,7 +1700,9 @@ fecharFormulario
 
 }
 
-if (formulario) {
+if (
+formulario
+) {
 
 formulario.addEventListener(
 "submit",
@@ -1257,15 +1719,12 @@ document.addEventListener(
 "DOMContentLoaded",
 async () => {
 
-console.log(
-  "Cadastros — verificando sessão..."
-);
-
-
 /*
  * Aguarda o login.js verificar a sessão.
  *
- * O login.js já possui verificarUsuario().
+ * Isso evita abrir o modal de login por engano
+ * enquanto o Supabase ainda está carregando
+ * uma sessão existente.
  */
 
 let usuario =
@@ -1288,38 +1747,31 @@ if (
 }
 
 
-console.log(
-  "Cadastros — usuário encontrado:",
-  usuario
-);
-
-
 /*
- * Se não houver usuário,
+ * Se não estiver logado,
  * abre automaticamente o modal.
  */
 
-if (!usuario) {
+if (
+  !usuario
+) {
 
-  console.log(
-    "Cadastros — usuário não está logado."
-  );
+  if (
+    typeof abrirModalAuth ===
+    "function"
+  ) {
 
+    abrirModalAuth(
+      "login"
+    );
 
-  /*
-   * Pequeno atraso para garantir que
-   * o DOM do modal já esteja disponível.
-   */
+  } else {
 
-  setTimeout(
-    () => {
+    console.error(
+      "A função abrirModalAuth() não está disponível."
+    );
 
-      abrirLoginCadastro();
-
-    },
-    100
-  );
-
+  }
 
   return;
 
