@@ -3992,24 +3992,5 @@
     "capa": "./img/churras-grelhados/capa.png",
     "galeria": [],
     "pagina": "local.html"
-  },
-  {
-    "id": "pedroxteste",
-    "nome": "pedroxteste",
-    "categoria": "Lanchonete",
-    "descricao": "Descubra um mundo de sabores em cada opção do nosso cardápio!",
-    "historia": "",
-    "curiosidades": "",
-    "endereco": "R. São João Del Rei, 248, Andrelândia - MG",
-    "horario": "18:00 às 00:00",
-    "entrada": "",
-    "telefone": "3591354677",
-    "whatsapp": "3591354677",
-    "instagram": "https://www.instagram.com/vagaolanches_?stkn=YTBlbDMyemV1Ynk2",
-    "site": "",
-    "latitude": -21.735703,
-    "longitude": -44.306538,
-    "imagem": "",
-    "imagens": []
   }
 ]
