@@ -7,10 +7,10 @@ LOCAL.JS
 SUPABASE
 ========================================================= */
 
-const supabaseClient = window.supabaseLoginClient;
+const supabaseClient = window.supabaseLoginClient || null;
 
 /* =========================================================
-IDENTIFICAÇÃO DO LOCAL
+ID DO LOCAL
 ========================================================= */
 
 const parametrosURL = new URLSearchParams(window.location.search);
@@ -27,11 +27,13 @@ VOLTAR
 ========================================================= */
 
 function voltarPagina() {
+
 if (document.referrer) {
 history.back();
-} else {
-window.location.href = "../index.html";
+return;
 }
+
+window.location.href = "../index.html";
 }
 
 /* =========================================================
@@ -53,7 +55,7 @@ return String(valor)
 }
 
 /* =========================================================
-CORRIGIR CAMINHO DAS IMAGENS
+CAMINHO DA IMAGEM
 ========================================================= */
 
 function corrigirCaminhoImagem(caminho) {
@@ -80,7 +82,11 @@ if (valor.startsWith("/")) {
 return valor;
 }
 
-if (valor.startsWith("./img/")) {
+if (valor.startsWith("../")) {
+return valor;
+}
+
+if (valor.startsWith("./")) {
 return ../${valor.substring(2)};
 }
 
@@ -88,15 +94,11 @@ if (valor.startsWith("img/")) {
 return ../${valor};
 }
 
-if (valor.startsWith("../")) {
-return valor;
-}
-
 return valor;
 }
 
 /* =========================================================
-CARREGAR LOCAL
+CARREGAR DADOS
 ========================================================= */
 
 async function carregarLocal() {
@@ -108,53 +110,86 @@ if (!idLocal) {
   return;
 }
 
-const respostas = await Promise.all([
-  fetch("../DATA/locais.json"),
-  fetch("../DATA/comercios.json"),
-  fetch("../DATA/hospedagem.json")
-]);
+const respostaLocais =
+  await fetch("../DATA/locais.json");
 
-for (const resposta of respostas) {
+const respostaComercios =
+  await fetch("../DATA/comercios.json");
 
-  if (!resposta.ok) {
-    throw new Error(
-      `Erro ao carregar dados (${resposta.status}).`
-    );
-  }
+const respostaHospedagem =
+  await fetch("../DATA/hospedagem.json");
+
+
+if (!respostaLocais.ok) {
+  throw new Error(
+    `Erro em locais.json: ${respostaLocais.status}`
+  );
 }
 
-const locais = await respostas[0].json();
-const comercios = await respostas[1].json();
-const hospedagem = await respostas[2].json();
+if (!respostaComercios.ok) {
+  throw new Error(
+    `Erro em comercios.json: ${respostaComercios.status}`
+  );
+}
 
-const listaLocais = Array.isArray(locais)
-  ? locais
-  : [];
+if (!respostaHospedagem.ok) {
+  throw new Error(
+    `Erro em hospedagem.json: ${respostaHospedagem.status}`
+  );
+}
 
-const listaComercios = Array.isArray(comercios)
-  ? comercios
-  : [];
 
-const listaHospedagem = Array.isArray(hospedagem)
-  ? hospedagem
-  : [];
+const locais =
+  await respostaLocais.json();
 
-const todos = [
+const comercios =
+  await respostaComercios.json();
+
+const hospedagem =
+  await respostaHospedagem.json();
+
+
+const listaLocais =
+  Array.isArray(locais)
+    ? locais
+    : [];
+
+const listaComercios =
+  Array.isArray(comercios)
+    ? comercios
+    : [];
+
+const listaHospedagem =
+  Array.isArray(hospedagem)
+    ? hospedagem
+    : [];
+
+
+const todosOsLocais = [
   ...listaLocais,
   ...listaComercios,
   ...listaHospedagem
 ];
 
-localAtual = todos.find(
-  item => String(item.id) === String(idLocal)
-);
+
+localAtual =
+  todosOsLocais.find(
+    item => String(item.id) === String(idLocal)
+  );
+
 
 if (!localAtual) {
-  mostrarErro("Local não encontrado.");
+  mostrarErro(
+    "Local não encontrado."
+  );
   return;
 }
 
+
 preencherPagina(localAtual);
+
+esconderCarregando();
+
 
 await carregarAvaliacoes();
 
@@ -175,6 +210,20 @@ mostrarErro(
 }
 
 /* =========================================================
+ESCONDER CARREGAMENTO
+========================================================= */
+
+function esconderCarregando() {
+
+const carregando =
+document.getElementById("carregando");
+
+if (carregando) {
+carregando.style.display = "none";
+}
+}
+
+/* =========================================================
 PREENCHER PÁGINA
 ========================================================= */
 
@@ -183,201 +232,118 @@ function preencherPagina(item) {
 document.title =
 ${item.nome || "Local"} — Guia Turístico de Andrelândia;
 
-const titulo = document.getElementById("tituloLocal");
-const categoria = document.getElementById("categoriaLocal");
-const descricao = document.getElementById("descricaoLocal");
-const historia = document.getElementById("historiaLocal");
-const curiosidades = document.getElementById("curiosidadesLocal");
+const titulo =
+document.getElementById("tituloLocal");
 
 if (titulo) {
-titulo.textContent = item.nome || "";
+titulo.textContent =
+item.nome || "";
 }
 
+const categoria =
+document.getElementById("categoriaLocal");
+
 if (categoria) {
-categoria.textContent = item.categoria || "";
+categoria.textContent =
+item.categoria || "";
 }
+
+const descricao =
+document.getElementById("descricaoLocal");
 
 if (descricao) {
 descricao.textContent =
-item.descricao || "Nenhuma descrição disponível.";
+item.descricao ||
+"Nenhuma descrição disponível.";
 }
+
+const historia =
+document.getElementById("historiaLocal");
 
 if (historia) {
 
-const blocoHistoria =
+historia.textContent =
+  item.historia || "";
+
+const bloco =
   historia.closest(".secao-local");
 
-if (item.historia) {
+if (bloco) {
 
-  historia.textContent = item.historia;
-
-  if (blocoHistoria) {
-    blocoHistoria.style.display = "";
-  }
-
-} else {
-
-  if (blocoHistoria) {
-    blocoHistoria.style.display = "none";
-  }
+  bloco.style.display =
+    item.historia ? "" : "none";
 }
 
 }
+
+const curiosidades =
+document.getElementById("curiosidadesLocal");
 
 if (curiosidades) {
 
-const blocoCuriosidades =
+curiosidades.textContent =
+  item.curiosidades || "";
+
+const bloco =
   curiosidades.closest(".secao-local");
 
-if (item.curiosidades) {
+if (bloco) {
 
-  curiosidades.textContent =
-    item.curiosidades;
-
-  if (blocoCuriosidades) {
-    blocoCuriosidades.style.display = "";
-  }
-
-} else {
-
-  if (blocoCuriosidades) {
-    blocoCuriosidades.style.display = "none";
-  }
+  bloco.style.display =
+    item.curiosidades ? "" : "none";
 }
 
 }
-
-/* =======================================================
-INFORMAÇÕES
-======================================================= */
 
 const horario =
 document.getElementById("horarioLocal");
 
+if (horario) {
+
+horario.textContent =
+  formatarHorario(item.horario);
+
+}
+
 const endereco =
 document.getElementById("enderecoLocal");
+
+if (endereco) {
+
+endereco.textContent =
+  item.endereco || "Não informado";
+
+}
 
 const entrada =
 document.getElementById("entradaLocal");
 
+if (entrada) {
+
+entrada.textContent =
+  item.entrada || "Não informado";
+
+}
+
 const telefone =
 document.getElementById("telefoneLocal");
 
-const site =
-document.getElementById("siteLocal");
-
-if (horario) {
-horario.textContent =
-formatarHorario(item.horario);
-}
-
-if (endereco) {
-endereco.textContent =
-item.endereco || "Não informado";
-}
-
-if (entrada) {
-
-const blocoEntrada =
-  entrada.closest(".informacao-item");
-
-if (item.entrada) {
-
-  entrada.textContent =
-    item.entrada;
-
-  if (blocoEntrada) {
-    blocoEntrada.style.display = "";
-  }
-
-} else {
-
-  if (blocoEntrada) {
-    blocoEntrada.style.display = "none";
-  }
-}
-
-}
-
 if (telefone) {
 
-const blocoTelefone =
-  telefone.closest(".informacao-item");
-
-if (item.telefone) {
-
-  telefone.textContent =
-    item.telefone;
-
-  if (blocoTelefone) {
-    blocoTelefone.style.display = "";
-  }
-
-} else {
-
-  if (blocoTelefone) {
-    blocoTelefone.style.display = "none";
-  }
-}
+telefone.textContent =
+  item.telefone || "";
 
 }
-
-if (site) {
-
-const blocoSite =
-  site.closest(".informacao-item");
-
-if (item.site) {
-
-  site.href = item.site;
-  site.textContent = item.site;
-
-  if (blocoSite) {
-    blocoSite.style.display = "";
-  }
-
-} else {
-
-  if (blocoSite) {
-    blocoSite.style.display = "none";
-  }
-}
-
-}
-
-/* =======================================================
-INSTAGRAM
-======================================================= */
 
 configurarInstagram(item);
 
-/* =======================================================
-WHATSAPP
-======================================================= */
-
 configurarWhatsApp(item);
-
-/* =======================================================
-GALERIA
-======================================================= */
 
 configurarGaleria(item);
 
-/* =======================================================
-MAPA
-======================================================= */
-
 configurarMapa(item);
 
-/* =======================================================
-GOOGLE MAPS
-======================================================= */
-
 configurarGoogleMaps(item);
-
-/* =======================================================
-SUGESTÃO DE ALTERAÇÃO
-======================================================= */
 
 configurarSugestaoAlteracao();
 }
@@ -400,9 +366,7 @@ if (typeof horario === "object") {
 
 return Object.entries(horario)
   .map(([dia, valor]) => {
-
     return `${dia}: ${valor}`;
-
   })
   .join(" • ");
 
@@ -424,38 +388,33 @@ if (!link) {
 return;
 }
 
-const bloco =
-link.closest(".informacao-item");
+if (!item.instagram) {
 
-let url =
-item.instagram || "";
-
-if (!url) {
-
-if (bloco) {
-  bloco.style.display = "none";
-}
-
+link.style.display = "none";
 return;
 
 }
 
-url = String(url).trim();
+let url =
+String(item.instagram).trim();
 
 if (!/^https?:///i.test(url)) {
 
 url =
-  `https://www.instagram.com/${url.replace(/^@/, "")}/`;
+  "https://www.instagram.com/" +
+  url.replace(/^@/, "") +
+  "/";
 
 }
 
 link.href = url;
-link.target = "_blank";
-link.rel = "noopener noreferrer";
 
-if (bloco) {
-bloco.style.display = "";
-}
+link.target = "_blank";
+
+link.rel =
+"noopener noreferrer";
+
+link.style.display = "";
 }
 
 /* =========================================================
@@ -471,31 +430,20 @@ if (!link) {
 return;
 }
 
-const bloco =
-link.closest(".informacao-item");
+if (!item.whatsapp) {
 
-const telefone =
-item.whatsapp || "";
-
-if (!telefone) {
-
-if (bloco) {
-  bloco.style.display = "none";
-}
-
+link.style.display = "none";
 return;
 
 }
 
 const numero =
-String(telefone).replace(/\D/g, "");
+String(item.whatsapp)
+.replace(/\D/g, "");
 
 if (!numero) {
 
-if (bloco) {
-  bloco.style.display = "none";
-}
-
+link.style.display = "none";
 return;
 
 }
@@ -504,11 +452,11 @@ link.href =
 https://wa.me/${numero};
 
 link.target = "_blank";
-link.rel = "noopener noreferrer";
 
-if (bloco) {
-bloco.style.display = "";
-}
+link.rel =
+"noopener noreferrer";
+
+link.style.display = "";
 }
 
 /* =========================================================
@@ -523,7 +471,7 @@ document.getElementById("imagemPrincipal");
 const miniaturas =
 document.getElementById("miniaturas");
 
-if (!imagemPrincipal || !miniaturas) {
+if (!imagemPrincipal) {
 return;
 }
 
@@ -541,72 +489,112 @@ if (Array.isArray(item.fotos)) {
 imagens.push(...item.fotos);
 }
 
-imagens = imagens
+imagens =
+imagens
 .filter(Boolean)
 .map(corrigirCaminhoImagem)
 .filter(Boolean);
 
-imagens = [...new Set(imagens)];
-
-miniaturas.innerHTML = "";
+imagens =
+[...new Set(imagens)];
 
 if (!imagens.length) {
 
-imagemPrincipal.style.display = "none";
+imagemPrincipal.style.display =
+  "none";
+
+if (miniaturas) {
+  miniaturas.innerHTML = "";
+}
 
 return;
 
 }
 
-imagemPrincipal.src = imagens[0];
+imagemPrincipal.src =
+imagens[0];
+
 imagemPrincipal.alt =
 item.nome || "Imagem do local";
 
-imagemPrincipal.style.display = "block";
+imagemPrincipal.style.display =
+"block";
 
-imagens.forEach((imagem, indice) => {
-
-const botao =
-  document.createElement("button");
-
-botao.type = "button";
-botao.className = "miniatura";
-
-if (indice === 0) {
-  botao.classList.add("ativa");
+if (!miniaturas) {
+return;
 }
 
-const img =
-  document.createElement("img");
+miniaturas.innerHTML = "";
 
-img.src = imagem;
+imagens.forEach(
+(imagem, indice) => {
 
-img.alt =
-  `${item.nome || "Local"} — imagem ${indice + 1}`;
+  const botao =
+    document.createElement("button");
 
-img.loading = "lazy";
+  botao.type =
+    "button";
 
-botao.appendChild(img);
+  botao.className =
+    "miniatura";
 
-botao.addEventListener(
-  "click",
-  () => {
 
-    imagemPrincipal.src = imagem;
+  if (indice === 0) {
 
-    document
-      .querySelectorAll(".miniatura")
-      .forEach(elemento => {
-        elemento.classList.remove("ativa");
-      });
-
-    botao.classList.add("ativa");
+    botao.classList.add(
+      "ativa"
+    );
   }
+
+
+  const img =
+    document.createElement("img");
+
+  img.src =
+    imagem;
+
+  img.alt =
+    `${item.nome || "Local"} - imagem ${indice + 1}`;
+
+  img.loading =
+    "lazy";
+
+
+  botao.appendChild(img);
+
+
+  botao.addEventListener(
+    "click",
+    function() {
+
+      imagemPrincipal.src =
+        imagem;
+
+
+      document
+        .querySelectorAll(".miniatura")
+        .forEach(
+          elemento => {
+            elemento.classList.remove(
+              "ativa"
+            );
+          }
+        );
+
+
+      botao.classList.add(
+        "ativa"
+      );
+    }
+  );
+
+
+  miniaturas.appendChild(
+    botao
+  );
+}
+
 );
-
-miniaturas.appendChild(botao);
-
-});
 }
 
 /* =========================================================
@@ -633,7 +621,8 @@ if (
 !Number.isFinite(longitude)
 ) {
 
-elementoMapa.style.display = "none";
+elementoMapa.style.display =
+  "none";
 
 return;
 
@@ -648,11 +637,17 @@ mapaLocal = null;
 }
 
 mapaLocal =
-L.map(elementoMapa, {
+L.map(
+elementoMapa,
+{
 zoomControl: true,
 scrollWheelZoom: false
-}).setView(
-[latitude, longitude],
+}
+).setView(
+[
+latitude,
+longitude
+],
 18
 );
 
@@ -665,20 +660,22 @@ subdomains: [
 ],
 maxNativeZoom: 19,
 maxZoom: 22,
-attribution:
-"Tiles © Esri"
+attribution: "Tiles © Esri"
 }
 ).addTo(mapaLocal);
 
-L.marker([
+L.marker(
+[
 latitude,
 longitude
-])
+]
+)
 .addTo(mapaLocal)
 .bindPopup(
-escaparHTML(item.nome || "Local")
+escaparHTML(
+item.nome || "Local"
 )
-.openPopup();
+);
 }
 
 /* =========================================================
@@ -688,7 +685,9 @@ GOOGLE MAPS
 function configurarGoogleMaps(item) {
 
 const botao =
-document.getElementById("botaoGoogleMaps");
+document.getElementById(
+"botaoGoogleMaps"
+);
 
 if (!botao) {
 return;
@@ -705,7 +704,8 @@ if (
 !Number.isFinite(longitude)
 ) {
 
-botao.style.display = "none";
+botao.style.display =
+  "none";
 
 return;
 
@@ -715,12 +715,17 @@ const destino =
 ${latitude},${longitude};
 
 botao.href =
-https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destino)};
+"https://www.google.com/maps/dir/?api=1&destination=" +
+encodeURIComponent(destino);
 
-botao.target = "_blank";
-botao.rel = "noopener noreferrer";
+botao.target =
+"_blank";
 
-botao.style.display = "";
+botao.rel =
+"noopener noreferrer";
+
+botao.style.display =
+"";
 }
 
 /* =========================================================
@@ -730,30 +735,30 @@ SUGERIR ALTERAÇÃO
 function configurarSugestaoAlteracao() {
 
 const botao =
-document.getElementById("botaoSugerirAlteracao");
+document.getElementById(
+"botaoSugerirAlteracao"
+);
 
-if (!botao || !idLocal) {
+if (!botao) {
+return;
+}
+
+if (!idLocal) {
 return;
 }
 
 botao.href =
-../pages/cadastros.html?tipo=alteracao&local=${encodeURIComponent(idLocal)};
+"../pages/cadastros.html?tipo=alteracao&local=" +
+encodeURIComponent(idLocal);
 }
 
 /* =========================================================
-FOTO EM TELA CHEIA
+TELA CHEIA DA IMAGEM
 ========================================================= */
 
 function abrirImagemFullscreen(imagem) {
 
-if (!imagem) {
-return;
-}
-
-const src =
-imagem.src || imagem;
-
-if (!src) {
+if (!imagem || !imagem.src) {
 return;
 }
 
@@ -766,55 +771,63 @@ fundo.className =
 const imagemGrande =
 document.createElement("img");
 
-imagemGrande.src = src;
+imagemGrande.src =
+imagem.src;
 
 imagemGrande.alt =
 imagem.alt || "Imagem ampliada";
 
-fundo.appendChild(imagemGrande);
+fundo.appendChild(
+imagemGrande
+);
 
 fundo.addEventListener(
 "click",
-() => fundo.remove()
+function() {
+fundo.remove();
+}
 );
 
-document.body.appendChild(fundo);
-}
-
-function fecharImagemFullscreen() {
-
-const elemento =
-document.querySelector(
-".imagem-fullscreen"
+document.body.appendChild(
+fundo
 );
-
-if (elemento) {
-elemento.remove();
-}
 }
 
 /* =========================================================
-TECLADO — ESC
+ESC — FECHAR IMAGEM
 ========================================================= */
 
 document.addEventListener(
 "keydown",
-evento => {
+function(evento) {
 
-if (evento.key === "Escape") {
-  fecharImagemFullscreen();
+if (
+  evento.key === "Escape"
+) {
+
+  const tela =
+    document.querySelector(
+      ".imagem-fullscreen"
+    );
+
+  if (tela) {
+    tela.remove();
+  }
 }
 
 }
 );
 
 /* =========================================================
-AVALIAÇÕES — USUÁRIO
+USUÁRIO
 ========================================================= */
 
 function obterUsuarioAtual() {
 
-return window.usuarioAtualSupabase || null;
+return (
+window.usuarioAtualSupabase ||
+null
+);
 }
 
 /* =========================================================
@@ -823,7 +836,10 @@ VERIFICAR AVALIAÇÃO DO USUÁRIO
 
 async function verificarAvaliacaoUsuario() {
 
-if (!supabaseClient || !idLocal) {
+if (
+!supabaseClient ||
+!idLocal
+) {
 return;
 }
 
@@ -833,6 +849,7 @@ obterUsuarioAtual();
 if (!usuario) {
 
 avaliacaoAtual = null;
+notaSelecionada = 0;
 
 return;
 
@@ -840,49 +857,61 @@ return;
 
 try {
 
-const {
-  data,
-  error
-} = await supabaseClient
-  .from("avaliacoes")
-  .select("*")
-  .eq("local_id", idLocal)
-  .eq("usuario_id", usuario.id)
-  .maybeSingle();
+const resposta =
+  await supabaseClient
+    .from("avaliacoes")
+    .select("*")
+    .eq("local_id", idLocal)
+    .eq("usuario_id", usuario.id)
+    .maybeSingle();
 
-if (error) {
-  throw error;
+
+if (resposta.error) {
+  throw resposta.error;
 }
 
+
 avaliacaoAtual =
-  data || null;
+  resposta.data || null;
 
-if (avaliacaoAtual) {
 
-  notaSelecionada =
-    Number(avaliacaoAtual.nota) || 0;
+if (!avaliacaoAtual) {
+  return;
+}
 
-  const comentario =
-    document.getElementById(
-      "comentarioAvaliacao"
-    );
 
-  if (comentario) {
-    comentario.value =
-      avaliacaoAtual.comentario || "";
-  }
+notaSelecionada =
+  Number(
+    avaliacaoAtual.nota
+  ) || 0;
 
-  atualizarEstrelas();
 
-  const botao =
-    document.getElementById(
-      "botaoPublicarAvaliacao"
-    );
+const comentario =
+  document.getElementById(
+    "comentarioAvaliacao"
+  );
 
-  if (botao) {
-    botao.textContent =
-      "Atualizar avaliação";
-  }
+
+if (comentario) {
+
+  comentario.value =
+    avaliacaoAtual.comentario || "";
+}
+
+
+atualizarEstrelas();
+
+
+const botao =
+  document.getElementById(
+    "botaoPublicarAvaliacao"
+  );
+
+
+if (botao) {
+
+  botao.textContent =
+    "Atualizar avaliação";
 }
 
 } catch (erro) {
@@ -901,66 +930,81 @@ CARREGAR AVALIAÇÕES
 
 async function carregarAvaliacoes() {
 
-if (!supabaseClient || !idLocal) {
+if (
+!supabaseClient ||
+!idLocal
+) {
 return;
 }
 
 try {
 
-const {
-  data,
-  error
-} = await supabaseClient
-  .from("avaliacoes")
-  .select("*")
-  .eq("local_id", idLocal)
-  .order("criado_em", {
-    ascending: false
-  });
+const resposta =
+  await supabaseClient
+    .from("avaliacoes")
+    .select("*")
+    .eq("local_id", idLocal)
+    .order(
+      "criado_em",
+      {
+        ascending: false
+      }
+    );
 
-if (error) {
-  throw error;
+
+if (resposta.error) {
+  throw resposta.error;
 }
 
+
 const avaliacoes =
-  data || [];
+  resposta.data || [];
+
 
 atualizarResumoAvaliacoes(
   avaliacoes
 );
+
 
 const lista =
   document.getElementById(
     "listaAvaliacoes"
   );
 
+
 if (!lista) {
   return;
 }
 
+
 lista.innerHTML = "";
+
 
 if (!avaliacoes.length) {
 
   lista.innerHTML =
-    `<p class="sem-avaliacoes">
-      Ainda não há avaliações.
-    </p>`;
+    '<p class="sem-avaliacoes">Ainda não há avaliações.</p>';
 
   return;
 }
 
+
 const usuario =
   obterUsuarioAtual();
 
+
 avaliacoes.forEach(
-  avaliacao => {
+  function(avaliacao) {
 
     const item =
-      document.createElement("div");
+      document.createElement(
+        "div"
+      );
+
 
     item.className =
       "avaliacao-item";
+
 
     const nome =
       escaparHTML(
@@ -968,62 +1012,81 @@ avaliacoes.forEach(
         "Usuário"
       );
 
+
     const comentario =
       escaparHTML(
-        avaliacao.comentario || ""
+        avaliacao.comentario ||
+        ""
       );
+
 
     const data =
       formatarData(
         avaliacao.criado_em
       );
 
-    let botoes = "";
+
+    let botoes =
+      "";
+
 
     if (
       usuario &&
-      usuario.id === avaliacao.usuario_id
+      usuario.id ===
+        avaliacao.usuario_id
     ) {
 
-      botoes = `
-        <div class="acoes-avaliacao">
-          <button
-            type="button"
-            onclick="editarAvaliacao('${avaliacao.id}')"
-          >
-            Editar
-          </button>
+      botoes =
+        `
+          <div class="acoes-avaliacao">
 
-          <button
-            type="button"
-            onclick="excluirAvaliacao('${avaliacao.id}')"
-          >
-            Excluir
-          </button>
-        </div>
-      `;
+            <button
+              type="button"
+              onclick="editarAvaliacao('${avaliacao.id}')"
+            >
+              Editar
+            </button>
+
+            <button
+              type="button"
+              onclick="excluirAvaliacao('${avaliacao.id}')"
+            >
+              Excluir
+            </button>
+
+          </div>
+        `;
     }
 
-    item.innerHTML = `
-      <div class="avaliacao-cabecalho">
-        <strong>${nome}</strong>
-        <span>${data}</span>
-      </div>
 
-      <div class="avaliacao-estrelas">
-        ${criarHTMLestrelas(
-          Number(avaliacao.nota) || 0
-        )}
-      </div>
+    item.innerHTML =
+      `
+        <div class="avaliacao-cabecalho">
 
-      <p class="avaliacao-comentario">
-        ${comentario}
-      </p>
+          <strong>${nome}</strong>
 
-      ${botoes}
-    `;
+          <span>${data}</span>
 
-    lista.appendChild(item);
+        </div>
+
+        <div class="avaliacao-estrelas">
+          ${criarHTMLestrelas(
+            Number(avaliacao.nota) || 0
+          )}
+        </div>
+
+        <p class="avaliacao-comentario">
+          ${comentario}
+        </p>
+
+        ${botoes}
+
+      `;
+
+
+    lista.appendChild(
+      item
+    );
   }
 );
 
@@ -1038,7 +1101,7 @@ console.error(
 }
 
 /* =========================================================
-RESUMO DAS AVALIAÇÕES
+RESUMO
 ========================================================= */
 
 function atualizarResumoAvaliacoes(
@@ -1073,10 +1136,14 @@ return;
 
 const soma =
 avaliacoes.reduce(
-(total, avaliacao) =>
-total +
-(Number(avaliacao.nota) || 0),
-0
+function(total, avaliacao) {
+
+    return (
+      total +
+      (Number(avaliacao.nota) || 0)
+    );
+  },
+  0
 );
 
 const media =
@@ -1085,7 +1152,9 @@ soma / avaliacoes.length;
 if (mediaElemento) {
 
 mediaElemento.textContent =
-  media.toFixed(1).replace(".", ",");
+  media
+    .toFixed(1)
+    .replace(".", ",");
 
 }
 
@@ -1109,7 +1178,11 @@ function criarHTMLestrelas(nota) {
 
 let html = "";
 
-for (let i = 1; i <= 5; i++) {
+for (
+let i = 1;
+i <= 5;
+i++
+) {
 
 html +=
   i <= nota
@@ -1129,10 +1202,11 @@ document.querySelectorAll(
 );
 
 estrelas.forEach(
-(estrela, indice) => {
+function(estrela, indice) {
 
   const numero =
     indice + 1;
+
 
   estrela.classList.toggle(
     "selecionada",
@@ -1156,7 +1230,11 @@ return "";
 const valor =
 new Date(data);
 
-if (Number.isNaN(valor.getTime())) {
+if (
+Number.isNaN(
+valor.getTime()
+)
+) {
 return "";
 }
 
@@ -1171,7 +1249,27 @@ year: "numeric"
 }
 
 /* =========================================================
-PUBLICAR / ATUALIZAR COMENTÁRIO
+NOME DO USUÁRIO
+========================================================= */
+
+function obterNomeUsuarioLocal(
+usuario
+) {
+
+if (!usuario) {
+return "Usuário";
+}
+
+return (
+usuario.user_metadata?.nome ||
+usuario.user_metadata?.name ||
+usuario.email?.split("@")[0] ||
+"Usuário"
+);
+}
+
+/* =========================================================
+PUBLICAR AVALIAÇÃO
 ========================================================= */
 
 async function publicarComentario() {
@@ -1245,20 +1343,29 @@ document.getElementById(
 );
 
 if (botao) {
-botao.disabled = true;
-botao.textContent = "Salvando...";
+
+botao.disabled =
+  true;
+
+botao.textContent =
+  "Salvando...";
+
 }
 
 try {
 
 const dados = {
 
-  local_id: idLocal,
+  local_id:
+    idLocal,
 
-  usuario_id: usuario.id,
+  usuario_id:
+    usuario.id,
 
   nome_usuario:
-    obterNomeUsuarioLocal(usuario),
+    obterNomeUsuarioLocal(
+      usuario
+    ),
 
   nota:
     notaSelecionada,
@@ -1267,38 +1374,43 @@ const dados = {
     comentario
 };
 
-let erro;
+
+let resposta;
+
 
 if (avaliacaoAtual) {
 
-  const resposta =
+  resposta =
     await supabaseClient
       .from("avaliacoes")
       .update(dados)
-      .eq("id", avaliacaoAtual.id)
-      .eq("usuario_id", usuario.id);
-
-  erro =
-    resposta.error;
+      .eq(
+        "id",
+        avaliacaoAtual.id
+      )
+      .eq(
+        "usuario_id",
+        usuario.id
+      );
 
 } else {
 
-  const resposta =
+  resposta =
     await supabaseClient
       .from("avaliacoes")
       .insert(dados);
-
-  erro =
-    resposta.error;
 }
 
-if (erro) {
-  throw erro;
+
+if (resposta.error) {
+  throw resposta.error;
 }
+
 
 alert(
   "Avaliação salva com sucesso."
 );
+
 
 await carregarAvaliacoes();
 
@@ -1311,6 +1423,7 @@ console.error(
   erro
 );
 
+
 alert(
   "Não foi possível salvar sua avaliação."
 );
@@ -1319,7 +1432,8 @@ alert(
 
 if (botao) {
 
-  botao.disabled = false;
+  botao.disabled =
+    false;
 
   botao.textContent =
     avaliacaoAtual
@@ -1331,28 +1445,12 @@ if (botao) {
 }
 
 /* =========================================================
-NOME DO USUÁRIO
-========================================================= */
-
-function obterNomeUsuarioLocal(usuario) {
-
-if (!usuario) {
-return "Usuário";
-}
-
-return (
-usuario.user_metadata?.nome ||
-usuario.user_metadata?.name ||
-usuario.email?.split("@")[0] ||
-"Usuário"
-);
-}
-
-/* =========================================================
 EDITAR AVALIAÇÃO
 ========================================================= */
 
-async function editarAvaliacao(id) {
+async function editarAvaliacao(
+id
+) {
 
 if (!supabaseClient) {
 return;
@@ -1360,61 +1458,71 @@ return;
 
 try {
 
-const {
-  data,
-  error
-} = await supabaseClient
-  .from("avaliacoes")
-  .select("*")
-  .eq("id", id)
-  .maybeSingle();
+const resposta =
+  await supabaseClient
+    .from("avaliacoes")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
 
-if (error) {
-  throw error;
+
+if (resposta.error) {
+  throw resposta.error;
 }
 
-if (!data) {
+
+if (!resposta.data) {
   return;
 }
 
+
 avaliacaoAtual =
-  data;
+  resposta.data;
+
 
 notaSelecionada =
-  Number(data.nota) || 0;
+  Number(
+    resposta.data.nota
+  ) || 0;
+
 
 const comentario =
   document.getElementById(
     "comentarioAvaliacao"
   );
 
+
 if (comentario) {
+
   comentario.value =
-    data.comentario || "";
+    resposta.data.comentario || "";
 }
 
+
 atualizarEstrelas();
+
 
 const botao =
   document.getElementById(
     "botaoPublicarAvaliacao"
   );
 
+
 if (botao) {
+
   botao.textContent =
     "Atualizar avaliação";
 }
 
-const campo =
-  document.getElementById(
-    "comentarioAvaliacao"
-  );
 
-if (campo) {
-  campo.scrollIntoView({
-    behavior: "smooth",
-    block: "center"
-  });
+if (comentario) {
+
+  comentario.scrollIntoView(
+    {
+      behavior: "smooth",
+      block: "center"
+    }
+  );
 }
 
 } catch (erro) {
@@ -1431,7 +1539,9 @@ console.error(
 EXCLUIR AVALIAÇÃO
 ========================================================= */
 
-async function excluirAvaliacao(id) {
+async function excluirAvaliacao(
+id
+) {
 
 const usuario =
 obterUsuarioAtual();
@@ -1451,41 +1561,55 @@ return;
 
 try {
 
-const {
-  error
-} = await supabaseClient
-  .from("avaliacoes")
-  .delete()
-  .eq("id", id)
-  .eq("usuario_id", usuario.id);
+const resposta =
+  await supabaseClient
+    .from("avaliacoes")
+    .delete()
+    .eq("id", id)
+    .eq(
+      "usuario_id",
+      usuario.id
+    );
 
-if (error) {
-  throw error;
+
+if (resposta.error) {
+  throw resposta.error;
 }
 
-avaliacaoAtual = null;
-notaSelecionada = 0;
+
+avaliacaoAtual =
+  null;
+
+notaSelecionada =
+  0;
+
 
 const comentario =
   document.getElementById(
     "comentarioAvaliacao"
   );
 
+
 if (comentario) {
   comentario.value = "";
 }
 
+
 atualizarEstrelas();
+
 
 const botao =
   document.getElementById(
     "botaoPublicarAvaliacao"
   );
 
+
 if (botao) {
+
   botao.textContent =
     "Publicar avaliação";
 }
+
 
 await carregarAvaliacoes();
 
@@ -1496,6 +1620,7 @@ console.error(
   erro
 );
 
+
 alert(
   "Não foi possível excluir a avaliação."
 );
@@ -1504,58 +1629,58 @@ alert(
 }
 
 /* =========================================================
-MOSTRAR ERRO
+ERRO
 ========================================================= */
 
-function mostrarErro(mensagem) {
+function mostrarErro(
+mensagem
+) {
 
-const carregando =
-document.getElementById(
-"carregando"
-);
+esconderCarregando();
 
-if (carregando) {
-carregando.style.display = "none";
-}
-
-const erro =
+const elementoErro =
 document.getElementById(
 "erroLocal"
 );
 
-if (erro) {
+if (elementoErro) {
 
-erro.textContent =
+elementoErro.textContent =
   mensagem;
 
-erro.style.display =
+elementoErro.style.display =
   "block";
 
 return;
 
 }
 
-const conteudo =
+const main =
 document.querySelector(
 "main"
 );
 
-if (conteudo) {
+if (main) {
 
-const mensagemErro =
-  document.createElement("p");
+const mensagemElemento =
+  document.createElement(
+    "p"
+  );
 
-mensagemErro.textContent =
+
+mensagemElemento.textContent =
   mensagem;
 
-mensagemErro.style.padding =
+
+mensagemElemento.style.padding =
   "30px";
 
-mensagemErro.style.textAlign =
+mensagemElemento.style.textAlign =
   "center";
 
-conteudo.prepend(
-  mensagemErro
+
+main.prepend(
+  mensagemElemento
 );
 
 }
@@ -1576,7 +1701,7 @@ if (botaoVoltar) {
 
 botaoVoltar.addEventListener(
   "click",
-  evento => {
+  function(evento) {
 
     evento.preventDefault();
 
@@ -1586,21 +1711,17 @@ botaoVoltar.addEventListener(
 
 }
 
-/* =======================================================
-ESTRELAS
-======================================================= */
-
 const estrelas =
 document.querySelectorAll(
 ".estrela-avaliacao"
 );
 
 estrelas.forEach(
-(estrela, indice) => {
+function(estrela, indice) {
 
   estrela.addEventListener(
     "click",
-    () => {
+    function() {
 
       notaSelecionada =
         indice + 1;
@@ -1611,10 +1732,6 @@ estrelas.forEach(
 }
 
 );
-
-/* =======================================================
-BOTÃO AVALIAR
-======================================================= */
 
 const botaoAvaliacao =
 document.getElementById(
@@ -1630,10 +1747,6 @@ botaoAvaliacao.addEventListener(
 
 }
 
-/* =======================================================
-FOTO PRINCIPAL
-======================================================= */
-
 const imagemPrincipal =
 document.getElementById(
 "imagemPrincipal"
@@ -1643,7 +1756,8 @@ if (imagemPrincipal) {
 
 imagemPrincipal.addEventListener(
   "click",
-  () => {
+  function() {
+
     abrirImagemFullscreen(
       imagemPrincipal
     );
@@ -1654,7 +1768,7 @@ imagemPrincipal.addEventListener(
 }
 
 /* =========================================================
-MONITORAMENTO DE LOGIN
+AUTENTICAÇÃO
 ========================================================= */
 
 if (
@@ -1663,10 +1777,14 @@ supabaseClient.auth
 ) {
 
 supabaseClient.auth.onAuthStateChange(
-async (_evento, usuario) => {
+async function(
+_evento,
+usuario
+) {
 
   window.usuarioAtualSupabase =
     usuario || null;
+
 
   await verificarAvaliacaoUsuario();
 
@@ -1682,7 +1800,7 @@ INICIALIZAÇÃO
 
 document.addEventListener(
 "DOMContentLoaded",
-() => {
+function() {
 
 configurarEventos();
 
