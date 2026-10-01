@@ -99,13 +99,8 @@
     "latitude": null,
     "longitude": null,
     "whatsapp": "",
-    "imagem": "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/admin/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790879447910-daugvio-ChatGPT-Image-23-de-set.-de-2026--14_06_43.png",
-    "imagens": [
-      "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/admin/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790879447910-daugvio-ChatGPT-Image-23-de-set.-de-2026--14_06_43.png",
-      "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/admin/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790879448518-kpa3w5r-download--1-.png",
-      "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/admin/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790879448719-71ngkw6-file_0000000003c0820eb66965a0775adcd0.png",
-      "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/admin/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790879449080-5kqdhka-images.jpeg"
-    ]
+    "imagem": "",
+    "imagens": []
   },
   {
     "id": "paradex-dos-amigos",
