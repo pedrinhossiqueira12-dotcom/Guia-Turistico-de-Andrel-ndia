@@ -6,6 +6,7 @@ RESPONSABILIDADE:
 
 Cadastro público de comércio
 Envio para análise
+Upload de imagem
 Integração com Supabase
 Integração com login.js
 
@@ -30,19 +31,6 @@ const CADASTROS_SUPABASE_KEY =
 /* =========================================================
 CLIENTE SUPABASE
 ========================================================= */
-
-/*
-
-O login.js possui seu próprio cliente.
-
-
-Aqui usamos um cliente específico para os cadastros.
-
-
-Os dois clientes utilizam o mesmo projeto Supabase,
-portanto a sessão de autenticação é compartilhada
-pelo navegador.
-*/
 
 const cadastrosSupabase =
 window.supabase.createClient(
@@ -197,11 +185,9 @@ tipo ===
 tituloFormulario.textContent =
   "Cadastrar comércio";
 
-
 descricaoFormulario.textContent =
   "Preencha as informações abaixo. " +
   "O cadastro será analisado antes de ser publicado no guia.";
-
 
 return;
 
@@ -319,7 +305,6 @@ OBTER USUÁRIO
 async function obterUsuarioCadastro() {
 
 /*
-
 Primeiro utilizamos a função já existente
 no login.js.
 */
@@ -332,8 +317,15 @@ typeof obterUsuarioLogin ===
 const usuario =
   obterUsuarioLogin();
 
-  console.log("USUÁRIO LOGADO:", usuario);
-console.log("UUID DO USUÁRIO:", usuario?.id);
+console.log(
+  "USUÁRIO LOGADO:",
+  usuario
+);
+
+console.log(
+  "UUID DO USUÁRIO:",
+  usuario?.id
+);
 
 if (usuario) {
 
@@ -344,7 +336,6 @@ if (usuario) {
 }
 
 /*
-
 Caso a sessão ainda não tenha sido carregada
 pelo login.js, consultamos diretamente o Supabase.
 */
@@ -361,7 +352,6 @@ console.error(
   "Erro ao obter usuário:",
   error
 );
-
 
 return null;
 
@@ -387,9 +377,7 @@ return usuario;
 }
 
 /*
-
 O usuário não está conectado.
-
 
 Usamos o modal existente do login.js.
 */
@@ -411,6 +399,258 @@ mostrarAviso(
 );
 
 return null;
+
+}
+
+/* =========================================================
+OBTER ARQUIVO DA FOTO
+========================================================= */
+
+function obterArquivoImagem() {
+
+/*
+O formulário normalmente utiliza id="imagem".
+
+Também aceitamos id="foto" para evitar
+problemas caso o campo tenha esse nome.
+*/
+
+const campoImagem =
+document.getElementById(
+"imagem"
+) ||
+document.getElementById(
+"foto"
+);
+
+if (!campoImagem) {
+
+console.warn(
+  "Campo de imagem não encontrado."
+);
+
+return null;
+
+}
+
+return campoImagem.files?.[0] || null;
+
+}
+
+/* =========================================================
+VALIDAR IMAGEM
+========================================================= */
+
+function validarImagem(
+arquivo
+) {
+
+if (!arquivo) {
+return;
+}
+
+/* -------------------------------------------------------
+TAMANHO MÁXIMO
+------------------------------------------------------- */
+
+const tamanhoMaximo =
+5 * 1024 * 1024;
+
+if (
+arquivo.size >
+tamanhoMaximo
+) {
+
+throw new Error(
+  "A imagem deve ter no máximo 5 MB."
+);
+
+}
+
+/* -------------------------------------------------------
+FORMATOS PERMITIDOS
+------------------------------------------------------- */
+
+const tiposPermitidos = [
+"image/jpeg",
+"image/png",
+"image/webp"
+];
+
+if (
+!tiposPermitidos.includes(
+arquivo.type
+)
+) {
+
+throw new Error(
+  "A imagem deve estar em JPG, PNG ou WEBP."
+);
+
+}
+
+}
+
+/* =========================================================
+GERAR NOME DA IMAGEM
+========================================================= */
+
+function gerarNomeImagem(
+usuarioId,
+arquivo
+) {
+
+const extensao =
+arquivo.name
+.split(".")
+.pop()
+.toLowerCase()
+.replace(
+/[^a-z0-9]/g,
+""
+) || "jpg";
+
+const nomeSeguro =
+String(
+arquivo.name
+)
+.replace(
+/.[^/.]+$/,
+""
+)
+.normalize("NFD")
+.replace(
+/[\u0300-\u036f]/g,
+""
+)
+.replace(
+/[^a-zA-Z0-9_-]/g,
+"-"
+)
+.toLowerCase()
+.substring(
+0,
+60
+);
+
+const identificador =
+Date.now() +
+"-" +
+Math.random()
+.toString(36)
+.substring(
+2,
+9
+);
+
+return (
+usuarioId +
+"/" +
+identificador +
+"-" +
+nomeSeguro +
+"." +
+extensao
+);
+
+}
+
+/* =========================================================
+UPLOAD DA IMAGEM
+========================================================= */
+
+async function enviarImagem(
+arquivo,
+usuario
+) {
+
+if (!arquivo) {
+
+return null;
+
+}
+
+validarImagem(
+arquivo
+);
+
+const caminho =
+gerarNomeImagem(
+usuario.id,
+arquivo
+);
+
+console.log(
+"Enviando imagem para:",
+caminho
+);
+
+const {
+error
+} =
+await cadastrosSupabase
+.storage
+.from("cadastros")
+.upload(
+caminho,
+arquivo,
+{
+cacheControl:
+"3600",
+
+      upsert:
+        false,
+
+      contentType:
+        arquivo.type
+    }
+  );
+
+if (error) {
+
+console.error(
+  "Erro ao enviar imagem:",
+  error
+);
+
+throw new Error(
+  "Não foi possível enviar a imagem: " +
+  error.message
+);
+
+}
+
+/* -------------------------------------------------------
+GERAR URL PÚBLICA
+------------------------------------------------------- */
+
+const {
+data
+} =
+cadastrosSupabase
+.storage
+.from("cadastros")
+.getPublicUrl(
+caminho
+);
+
+const imagemUrl =
+data?.publicUrl || null;
+
+if (!imagemUrl) {
+
+throw new Error(
+  "A imagem foi enviada, mas não foi possível obter sua URL."
+);
+
+}
+
+console.log(
+"Imagem enviada:",
+imagemUrl
+);
+
+return imagemUrl;
 
 }
 
@@ -577,6 +817,49 @@ if (!endereco) {
 
 
 /* -----------------------------------------------------
+   FOTO
+----------------------------------------------------- */
+
+const arquivoImagem =
+  obterArquivoImagem();
+
+
+if (arquivoImagem) {
+
+  validarImagem(
+    arquivoImagem
+  );
+
+}
+
+
+/* -----------------------------------------------------
+   UPLOAD
+----------------------------------------------------- */
+
+let imagemUrl =
+  null;
+
+
+if (arquivoImagem) {
+
+  botaoEnviar.textContent =
+    "Enviando foto...";
+
+  mostrarAviso(
+    "Enviando a foto..."
+  );
+
+  imagemUrl =
+    await enviarImagem(
+      arquivoImagem,
+      usuario
+    );
+
+}
+
+
+/* -----------------------------------------------------
    DADOS
 ----------------------------------------------------- */
 
@@ -619,7 +902,7 @@ const cadastro = {
     descricao || null,
 
   imagem_url:
-    null,
+    imagemUrl,
 
   latitude,
 
@@ -637,6 +920,10 @@ console.log(
 /* -----------------------------------------------------
    SUPABASE
 ----------------------------------------------------- */
+
+botaoEnviar.textContent =
+  "Enviando cadastro...";
+
 
 const {
   data,
@@ -716,7 +1003,6 @@ mostrarAviso(
 
 botaoEnviar.disabled =
   false;
-
 
 botaoEnviar.textContent =
   textoOriginal;
