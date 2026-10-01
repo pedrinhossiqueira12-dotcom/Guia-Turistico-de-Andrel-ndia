@@ -173,47 +173,101 @@ function formatarTelefone(
 
 async function verificarLogin() {
 
-  try {
+/* =======================================================
+ID DO ADMINISTRADOR
+======================================================= */
 
-    esconderMensagem();
+const ADMIN_USER_ID =
+"4b9a0233-6b72-4573-aebd-d596c5b15e1b";
 
-    const {
-      data,
-      error
-    } =
-      await supabaseClient.auth.getSession();
+/* =======================================================
+VERIFICAR SESSÃO
+======================================================= */
 
-    if (error) {
-      throw error;
-    }
+const {
+data,
+error
+} =
+await supabaseClient.auth.getSession();
 
-    const session =
-      data.session;
+/* -------------------------------------------------------
+ERRO AO CONSULTAR SESSÃO
+------------------------------------------------------- */
 
-    if (!session) {
+if (error) {
 
-      window.location.href =
-        "login.html";
+console.error(
+  "Erro ao verificar sessão:",
+  error
+);
 
-      return;
-    }
+window.location.href =
+  "../index.html";
 
-    await carregarCadastros();
+return;
 
-  } catch (erro) {
-
-    console.error(
-      "Erro ao verificar login:",
-      erro
-    );
-
-    mostrarMensagem(
-      "Não foi possível verificar o acesso.",
-      "erro"
-    );
-  }
 }
 
+const session =
+data?.session;
+
+const usuario =
+session?.user;
+
+/* =======================================================
+NÃO ESTÁ LOGADO
+======================================================= */
+
+if (!usuario) {
+
+console.warn(
+  "Acesso administrativo negado: usuário não autenticado."
+);
+
+window.location.href =
+  "../index.html";
+
+return;
+
+}
+
+/* =======================================================
+VERIFICAR ADMINISTRADOR
+======================================================= */
+
+if (
+usuario.id !==
+ADMIN_USER_ID
+) {
+
+console.warn(
+  "Acesso administrativo negado:",
+  usuario.id
+);
+
+alert(
+  "Você não possui permissão para acessar esta área."
+);
+
+window.location.href =
+  "../index.html";
+
+return;
+
+}
+
+/* =======================================================
+ACESSO AUTORIZADO
+======================================================= */
+
+console.log(
+"Acesso administrativo autorizado:",
+usuario.id
+);
+
+await carregarCadastros();
+
+}
 
 /* =========================================================
    CARREGAR CADASTROS
