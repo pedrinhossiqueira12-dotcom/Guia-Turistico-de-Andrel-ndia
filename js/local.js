@@ -586,18 +586,27 @@ function preencherPagina(item) {
   }
 
 
-  configurarInstagram(item);
-
-  configurarWhatsApp(item);
-
-  configurarGaleria(item);
-
-  configurarMapa(item);
-
-  configurarGoogleMaps(item);
-
+configurarInstagram(item);
+configurarWhatsApp(item);
+configurarGaleria(item);
+configurarMapa(item);
+configurarGoogleMaps(item);
+configurarSugestaoAlteracao();
 }
 
+function configurarSugestaoAlteracao() {
+const botao =
+document.getElementById(
+"botaoSugerirAlteracao"
+);
+
+if (!botao || !idLocal) {
+return;
+}
+
+botao.href =
+`../pages/cadastros.html?tipo=alteracao&local=${encodeURIComponent(idLocal)}`;
+}
 
 /* =========================================================
    HORÁRIO
