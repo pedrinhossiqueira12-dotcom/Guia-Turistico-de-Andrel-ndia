@@ -1093,4 +1093,20 @@ height: 220px;
 .admin-mural-imagem:nth-child(n + 3) {
   display: none;
 }
+}/* =========================================================
+BOTÃO EXCLUIR PERFIL PUBLICADO
+========================================================= */
+
+.admin-mural-botao-excluir {
+background: #fff5f3;
+
+border: 1px solid #e4bbb5;
+
+color: var(--erro, #b3261e);
+}
+
+.admin-mural-botao-excluir {
+background: #fce8e5;
+
+border-color: var(--erro, #b3261e);
 }
