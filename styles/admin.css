@@ -9,18 +9,34 @@ VARIÁVEIS
 ========================================================= */
 
 :root{
+
 --verde: #194138;
 --verde-escuro: #091d1c;
+
 --branco: #ffffff;
+
 --fundo: #f5f3ef;
+--fundo-claro: #faf9f7;
+--fundo-verde-claro: #f1f5f3;
+
 --texto: #222222;
 --texto-suave: #6b6b6b;
+
 --borda: #dddddd;
 --borda-clara: #eeeeee;
+
 --sucesso: #2e7d32;
 --erro: #b3261e;
 --pendente: #8a6500;
---fundo-verde-claro: #f1f5f3;
+
+--sombra-pequena:
+0 2px 8px rgba(0, 0, 0, 0.05);
+
+--sombra:
+0 5px 18px rgba(0, 0, 0, 0.07);
+
+--raio: 10px;
+--raio-grande: 14px;
 }
 
 /* =========================================================
@@ -30,20 +46,27 @@ RESET
 * {
 box-sizing: border-box;
 }
-html,
-body {
+
+html {
 margin: 0;
 padding: 0;
 min-height: 100%;
 }
 
 body {
+margin: 0;
+padding: 0;
+min-height: 100vh;
+
 background: var(--fundo);
 color: var(--texto);
+
 font-family:
 Arial,
 Helvetica,
 sans-serif;
+
+line-height: 1.5;
 }
 
 button,
@@ -56,6 +79,10 @@ button {
 -webkit-tap-highlight-color: transparent;
 }
 
+img {
+max-width: 100%;
+}
+
 /* =========================================================
 CABEÇALHO
 ========================================================= */
@@ -63,7 +90,10 @@ CABEÇALHO
 .admin-header {
 position: sticky;
 top: 0;
+
 z-index: 1000;
+
+width: 100%;
 
 padding: 18px 20px;
 
@@ -91,6 +121,7 @@ gap: 20px;
 margin: 0;
 
 font-size: 20px;
+line-height: 1.25;
 font-weight: 700;
 }
 
@@ -108,6 +139,8 @@ BOTÃO SAIR
 ========================================================= */
 
 .botao-sair {
+flex-shrink: 0;
+
 border:
 1px solid rgba(255, 255, 255, 0.25);
 
@@ -164,54 +197,23 @@ margin-bottom: 25px;
 .admin-intro h1 {
 margin: 0 0 7px;
 
+color: var(--verde-escuro);
+
 font-size: 25px;
+line-height: 1.25;
+
 font-weight: 700;
 }
 
 .admin-intro p {
+max-width: 760px;
+
 margin: 0;
 
 color: var(--texto-suave);
 
 font-size: 14px;
-line-height: 1.5;
-}
-
-/* =========================================================
-MENSAGENS
-========================================================= */
-
-.mensagem {
-display: none;
-
-margin-bottom: 20px;
-
-padding: 14px 16px;
-
-border-radius: 9px;
-
-font-size: 14px;
-line-height: 1.45;
-}
-
-.mensagem.sucesso {
-display: block;
-
-background: #e8f5e9;
-color: var(--sucesso);
-
-border:
-1px solid #c8e6c9;
-}
-
-.mensagem.erro {
-display: block;
-
-background: #ffebee;
-color: var(--erro);
-
-border:
-1px solid #ffcdd2;
+line-height: 1.6;
 }
 
 /* =========================================================
@@ -229,11 +231,15 @@ margin-bottom: 20px;
 }
 
 .admin-controles-titulo {
+color: var(--verde-escuro);
+
 font-size: 15px;
 font-weight: 700;
 }
 
 .botao-atualizar {
+flex-shrink: 0;
+
 border:
 1px solid var(--borda);
 
@@ -251,348 +257,205 @@ font-weight: 600;
 
 transition:
 background 0.2s ease,
-transform 0.1s ease;
+border-color 0.2s ease,
+transform 0.1s ease,
+opacity 0.2s ease;
 }
 
 .botao-atualizar {
-background: #fafafa;
+background: var(--fundo-claro);
+border-color: #c7c7c7;
 }
 
 .botao-atualizar {
 transform: scale(0.98);
 }
 
+.botao-atualizar {
+cursor: wait;
+opacity: 0.6;
+}
+
 /* =========================================================
-CADASTROS PENDENTES
+CARREGAMENTO
+========================================================= */
+
+#carregando {
+padding: 35px 20px;
+
+color: var(--texto-suave);
+
+text-align: center;
+
+font-size: 14px;
+}
+
+/* =========================================================
+LISTA DE CADASTROS
 ========================================================= */
 
 #lista-cadastros {
 display: flex;
 flex-direction: column;
 
-gap: 22px;
+gap: 18px;
 }
 
-.cadastro-card {
+/* =========================================================
+CARD DE CADASTRO PENDENTE
+========================================================= */
+
+.admin-cadastro-card {
+overflow: hidden;
+
 background: var(--branco);
 
 border:
 1px solid var(--borda);
 
-border-radius: 14px;
+border-radius: var(--raio-grande);
 
-overflow: hidden;
-
-box-shadow:
-0 3px 12px rgba(0, 0, 0, 0.05);
+box-shadow: var(--sombra);
 }
 
 /* =========================================================
-IMAGEM DO CADASTRO
+IMAGENS DO CADASTRO
 ========================================================= */
 
-.cadastro-imagem {
-width: 100%;
+.admin-cadastro-imagens {
+display: grid;
 
-max-height: 330px;
+grid-template-columns:
+repeat(4, minmax(0, 1fr));
+
+gap: 8px;
+
+padding: 10px;
 
 background: #eeeeee;
-
-overflow: hidden;
 }
 
-.cadastro-imagem img {
+.admin-cadastro-imagem {
+position: relative;
+
+overflow: hidden;
+
+aspect-ratio: 1 / 1;
+
+border-radius: 8px;
+
+background: #dddddd;
+}
+
+.admin-cadastro-imagem img {
 display: block;
 
 width: 100%;
-max-height: 330px;
+height: 100%;
 
 object-fit: cover;
+
+transition:
+transform 0.25s ease;
 }
 
-.cadastro-imagem-vazia {
-height: 150px;
-
-display: flex;
-flex-direction: column;
-
-align-items: center;
-justify-content: center;
-
-gap: 7px;
-
-color: var(--texto-suave);
-
-font-size: 13px;
+.admin-cadastro-imagem img {
+transform: scale(1.03);
 }
 
-.cadastro-imagem-icone {
-font-size: 35px;
+.admin-cadastro-imagem-capa {
+position: absolute;
+
+left: 7px;
+bottom: 7px;
+
+padding: 4px 7px;
+
+border-radius: 5px;
+
+background: var(--verde-escuro);
+color: var(--branco);
+
+font-size: 9px;
+line-height: 1;
+
+font-weight: 700;
+
+letter-spacing: 0.05em;
 }
 
 /* =========================================================
 CONTEÚDO DO CADASTRO
 ========================================================= */
 
-.cadastro-conteudo {
+.admin-cadastro-conteudo {
 padding: 22px;
 }
 
-/* =========================================================
-TOPO DO CADASTRO
-========================================================= */
+.admin-cadastro-status {
+display: inline-flex;
+align-items: center;
 
-.cadastro-topo {
-display: flex;
-align-items: flex-start;
-justify-content: space-between;
+margin-bottom: 8px;
 
-gap: 15px;
-
-padding-bottom: 20px;
-
-border-bottom:
-1px solid var(--borda-clara);
-}
-
-.cadastro-label-topo {
-display: block;
-
-margin-bottom: 5px;
-
-color: var(--pendente);
-
-font-size: 11px;
-font-weight: 700;
-
-letter-spacing: 0.08em;
-}
-
-.cadastro-nome {
-margin: 0;
-
-font-size: 22px;
-line-height: 1.25;
-}
-
-.cadastro-categoria {
-margin: 5px 0 0;
-
-color: var(--texto-suave);
-
-font-size: 14px;
-}
-
-.cadastro-status {
-flex-shrink: 0;
-
-padding: 6px 10px;
+padding: 5px 9px;
 
 border-radius: 20px;
 
 background: #fff8e1;
 color: var(--pendente);
 
-font-size: 12px;
-font-weight: 700;
-}
-
-/* =========================================================
-SEÇÕES DO CADASTRO
-========================================================= */
-
-.cadastro-secao {
-margin-top: 22px;
-
-padding-top: 20px;
-
-border-top:
-1px solid var(--borda-clara);
-}
-
-.cadastro-secao-titulo {
-display: flex;
-align-items: center;
-
-gap: 10px;
-
-margin-bottom: 15px;
-}
-
-.cadastro-secao-icone {
-width: 35px;
-height: 35px;
-
-display: flex;
-align-items: center;
-justify-content: center;
-
-border-radius: 8px;
-
-background:
-var(--fundo-verde-claro);
-
-font-size: 17px;
-}
-
-.cadastro-secao-titulo strong {
-display: block;
-
-font-size: 14px;
-}
-
-.cadastro-secao-titulo small {
-display: block;
-
-margin-top: 2px;
-
-color: var(--texto-suave);
-
-font-size: 12px;
-}
-
-/* =========================================================
-CAMPOS
-========================================================= */
-
-.cadastro-campos {
-display: grid;
-
-grid-template-columns:
-repeat(2, minmax(0, 1fr));
-
-gap: 15px;
-}
-
-.cadastro-campos label {
-display: flex;
-flex-direction: column;
-
-gap: 6px;
-}
-
-.cadastro-campos label > span {
-color: #555555;
-
-font-size: 12px;
-font-weight: 700;
-}
-
-.cadastro-campos input,
-.cadastro-campos textarea {
-width: 100%;
-
-border:
-1px solid #d5d5d5;
-
-border-radius: 8px;
-
-background: var(--branco);
-color: var(--texto);
-
-padding: 11px 12px;
-
-font-size: 14px;
-
-outline: none;
-
-transition:
-border-color 0.2s ease,
-box-shadow 0.2s ease;
-}
-
-.cadastro-campos textarea {
-resize: vertical;
-
-min-height: 80px;
-}
-
-.cadastro-campos input,
-.cadastro-campos textarea {
-border-color: var(--verde);
-
-box-shadow:
-0 0 0 3px
-rgba(25, 65, 56, 0.10);
-}
-
-.campo-largo {
-grid-column: 1 / -1;
-}
-
-/* =========================================================
-METADADOS
-========================================================= */
-
-.cadastro-meta {
-display: grid;
-
-grid-template-columns:
-repeat(3, minmax(0, 1fr));
-
-gap: 12px;
-
-margin-top: 22px;
-
-padding-top: 18px;
-
-border-top:
-1px solid var(--borda-clara);
-}
-
-.cadastro-meta > div {
-min-width: 0;
-
-padding: 12px;
-
-background: #f8f8f8;
-
-border-radius: 8px;
-}
-
-.cadastro-meta span {
-display: block;
-
-margin-bottom: 5px;
-
-color: var(--texto-suave);
-
 font-size: 11px;
+font-weight: 700;
 }
 
-.cadastro-meta strong {
-display: block;
+.admin-cadastro-conteudo h3 {
+margin: 0 0 12px;
 
-word-break: break-word;
+color: var(--verde-escuro);
 
-font-size: 12px;
+font-size: 22px;
+line-height: 1.3;
+}
+
+.admin-cadastro-conteudo p {
+margin: 7px 0;
+
+color: var(--texto-suave);
+
+font-size: 13px;
+line-height: 1.55;
+}
+
+.admin-cadastro-conteudo p strong {
+color: #444444;
 }
 
 /* =========================================================
 AÇÕES DO CADASTRO
 ========================================================= */
 
-.cadastro-acoes {
+.admin-cadastro-acoes {
 display: flex;
 flex-wrap: wrap;
 
 gap: 10px;
 
-margin-top: 22px;
-padding-top: 20px;
+margin-top: 20px;
+padding-top: 18px;
 
 border-top:
 1px solid var(--borda-clara);
 }
 
-.cadastro-acoes button {
+.admin-cadastro-acoes button {
 min-height: 42px;
 
 border: 0;
 
-border-radius: 8px;
+padding: 10px 17px;
 
-padding: 10px 15px;
+border-radius: 8px;
 
 cursor: pointer;
 
@@ -600,58 +463,46 @@ font-size: 13px;
 font-weight: 700;
 
 transition:
+background 0.2s ease,
 opacity 0.2s ease,
 transform 0.1s ease;
 }
 
-.cadastro-acoes button {
-opacity: 0.9;
-}
-
-.cadastro-acoes button {
-transform: scale(0.98);
-}
-
-.cadastro-acoes button {
-cursor: not-allowed;
-
-opacity: 0.55;
-}
-
-.botao-salvar {
-background: #eeeeee;
-color: #333333;
-}
-
-.botao-aprovar {
+.admin-botao-aprovar {
 background: var(--verde);
 color: var(--branco);
 }
 
-.botao-rejeitar {
+.admin-botao-aprovar {
+background: var(--verde-escuro);
+}
+
+.admin-botao-rejeitar {
 background: #fbe9e7;
 color: var(--erro);
 }
 
-/* =========================================================
-CARREGANDO / VAZIO
-========================================================= */
-
-#carregando {
-display: block;
-
-padding: 40px 20px;
-
-text-align: center;
-
-color: var(--texto-suave);
-
-font-size: 14px;
+.admin-botao-rejeitar {
+background: #f7d9d6;
 }
 
-#sem-cadastros {
-display: none;
+.admin-cadastro-acoes button {
+transform: scale(0.98);
+}
 
+.admin-cadastro-acoes button {
+cursor: wait;
+
+opacity: 0.55;
+
+transform: none;
+}
+
+/* =========================================================
+SEM CADASTROS
+========================================================= */
+
+#sem-cadastros {
 padding: 45px 20px;
 
 background: var(--branco);
@@ -659,7 +510,7 @@ background: var(--branco);
 border:
 1px solid var(--borda);
 
-border-radius: 12px;
+border-radius: var(--raio-grande);
 
 text-align: center;
 }
@@ -668,6 +519,8 @@ text-align: center;
 display: block;
 
 margin-bottom: 7px;
+
+color: var(--verde-escuro);
 
 font-size: 17px;
 }
@@ -679,21 +532,56 @@ font-size: 13px;
 }
 
 /* =========================================================
+MENSAGENS
+========================================================= */
+
+.mensagem {
+margin-top: 20px;
+margin-bottom: 20px;
+
+padding: 14px 16px;
+
+border-radius: 9px;
+
+font-size: 14px;
+line-height: 1.45;
+}
+
+.mensagem[hidden] {
+display: none;
+}
+
+.mensagem.sucesso {
+background: #e8f5e9;
+color: var(--sucesso);
+
+border:
+1px solid #c8e6c9;
+}
+
+.mensagem.erro {
+background: #ffebee;
+color: var(--erro);
+
+border:
+1px solid #ffcdd2;
+}
+
+/* =========================================================
 SEÇÃO — COMÉRCIOS PUBLICADOS
 ========================================================= */
 
-.secao-comercios-admin {
-margin-top: 35px;
-
+.admin-section {
+margin-top: 45px;
 padding-top: 30px;
 
 border-top:
-1px solid #dddddd;
+1px solid var(--borda);
 }
 
-.admin-comercios-cabecalho {
+.section-header {
 display: flex;
-align-items: flex-end;
+align-items: center;
 justify-content: space-between;
 
 gap: 20px;
@@ -701,28 +589,16 @@ gap: 20px;
 margin-bottom: 18px;
 }
 
-.admin-comercios-tag {
-display: block;
-
-margin-bottom: 5px;
-
-color: var(--verde);
-
-font-size: 10px;
-font-weight: 700;
-
-letter-spacing: 0.12em;
-}
-
-.admin-comercios-cabecalho h2 {
+.section-header h2 {
 margin: 0;
 
 color: var(--verde-escuro);
 
 font-size: 21px;
+line-height: 1.3;
 }
 
-.admin-comercios-cabecalho p {
+.section-header p {
 margin: 5px 0 0;
 
 color: var(--texto-suave);
@@ -730,7 +606,7 @@ color: var(--texto-suave);
 font-size: 13px;
 }
 
-.admin-comercios-contador {
+.contador-comercios {
 min-width: 38px;
 height: 38px;
 
@@ -740,10 +616,9 @@ justify-content: center;
 
 padding: 0 10px;
 
-border-radius: 19px;
+border-radius: 20px;
 
 background: var(--verde);
-
 color: var(--branco);
 
 font-size: 13px;
@@ -751,16 +626,15 @@ font-weight: 700;
 }
 
 /* =========================================================
-PESQUISA
+PESQUISA DE COMÉRCIOS
 ========================================================= */
 
-.admin-comercios-pesquisa {
+.admin-pesquisa {
 margin-bottom: 18px;
 }
 
-.admin-comercios-pesquisa input {
+.admin-pesquisa input {
 width: 100%;
-
 height: 46px;
 
 padding:
@@ -772,7 +646,6 @@ border:
 border-radius: 9px;
 
 background: var(--branco);
-
 color: var(--texto);
 
 font-size: 14px;
@@ -784,11 +657,51 @@ border-color 0.2s ease,
 box-shadow 0.2s ease;
 }
 
-.admin-comercios-pesquisa input::placeholder {
+.admin-pesquisa input::placeholder {
 color: #999999;
 }
 
-.admin-comercios-pesquisa input {
+.admin-pesquisa input {
+border-color: var(--verde);
+
+box-shadow:
+0 0 0 3px
+rgba(25, 65, 56, 0.10);
+}
+
+/* =========================================================
+COMPATIBILIDADE COM PESQUISA GERADA PELO JS
+========================================================= */
+
+.admin-comercios-pesquisa-wrap {
+margin-bottom: 18px;
+}
+
+.admin-comercios-pesquisa {
+width: 100%;
+height: 46px;
+
+padding:
+0 15px;
+
+border:
+1px solid var(--borda);
+
+border-radius: 9px;
+
+background: var(--branco);
+color: var(--texto);
+
+font-size: 14px;
+
+outline: none;
+
+transition:
+border-color 0.2s ease,
+box-shadow 0.2s ease;
+}
+
+.admin-comercios-pesquisa {
 border-color: var(--verde);
 
 box-shadow:
@@ -800,21 +713,19 @@ rgba(25, 65, 56, 0.10);
 LISTA DE COMÉRCIOS
 ========================================================= */
 
-.lista-comercios-admin {
+.lista-comercios {
 display: grid;
 
 gap: 12px;
 }
 
-.sem-comercios-admin {
-padding: 35px 20px;
+/* =========================================================
+CARREGAMENTO / VAZIO
+========================================================= */
 
-background: var(--branco);
-
-border:
-1px solid var(--borda);
-
-border-radius: 12px;
+.admin-loading,
+.admin-empty {
+padding: 30px 20px;
 
 color: var(--texto-suave);
 
@@ -823,15 +734,19 @@ text-align: center;
 font-size: 13px;
 }
 
+.admin-empty[hidden] {
+display: none;
+}
+
 /* =========================================================
-CARD — COMÉRCIO PUBLICADO
+CARD DE COMÉRCIO PUBLICADO
 ========================================================= */
 
 .admin-comercio-card {
 display: flex;
 align-items: stretch;
 
-gap: 0;
+overflow: hidden;
 
 background: var(--branco);
 
@@ -840,7 +755,7 @@ border:
 
 border-radius: 12px;
 
-overflow: hidden;
+box-shadow: var(--sombra);
 
 transition:
 box-shadow 0.2s ease,
@@ -849,8 +764,9 @@ transform 0.15s ease;
 
 .admin-comercio-card {
 box-shadow:
-0 5px 18px
-rgba(0, 0, 0, 0.07);
+0 7px 22px rgba(0, 0, 0, 0.09);
+
+transform: translateY(-1px);
 }
 
 /* =========================================================
@@ -858,13 +774,14 @@ IMAGEM DO COMÉRCIO
 ========================================================= */
 
 .admin-comercio-imagem {
-flex: 0 0 150px;
+flex:
+0 0 155px;
 
 min-height: 145px;
 
-background: #eeeeee;
-
 overflow: hidden;
+
+background: #eeeeee;
 }
 
 .admin-comercio-imagem img {
@@ -880,13 +797,27 @@ object-fit: cover;
 
 .admin-comercio-imagem.sem-imagem {
 display: flex;
-
 align-items: center;
 justify-content: center;
 
 color: #999999;
 
-font-size: 30px;
+font-size: 13px;
+}
+
+.admin-comercio-sem-imagem {
+width: 100%;
+height: 100%;
+
+min-height: 145px;
+
+display: flex;
+align-items: center;
+justify-content: center;
+
+color: #999999;
+
+font-size: 13px;
 }
 
 /* =========================================================
@@ -895,25 +826,22 @@ CONTEÚDO DO COMÉRCIO
 
 .admin-comercio-conteudo {
 flex: 1;
+
 min-width: 0;
-
-display: flex;
-align-items: center;
-justify-content: space-between;
-
-gap: 20px;
 
 padding: 17px;
-}
 
-.admin-comercio-info {
-min-width: 0;
+display: grid;
+
+align-content: center;
+
+gap: 0;
 }
 
 .admin-comercio-categoria {
 display: inline-block;
 
-margin-bottom: 5px;
+margin-bottom: 4px;
 
 color: var(--verde);
 
@@ -921,16 +849,16 @@ font-size: 11px;
 font-weight: 700;
 }
 
-.admin-comercio-info h3 {
+.admin-comercio-conteudo h3 {
 margin: 0;
 
 color: var(--verde-escuro);
 
-font-size: 16px;
+font-size: 17px;
 line-height: 1.3;
 }
 
-.admin-comercio-info p {
+.admin-comercio-conteudo p {
 margin: 6px 0 0;
 
 color: var(--texto-suave);
@@ -939,12 +867,12 @@ font-size: 12px;
 line-height: 1.45;
 }
 
-.admin-comercio-info small {
+.admin-comercio-conteudo small {
 display: block;
 
-margin-top: 7px;
+margin-top: 6px;
 
-color: #aaaaaa;
+color: #999999;
 
 font-size: 10px;
 
@@ -956,12 +884,12 @@ AÇÕES DO COMÉRCIO
 ========================================================= */
 
 .admin-comercio-acoes {
-flex-shrink: 0;
-
 display: flex;
 align-items: center;
 
 gap: 8px;
+
+margin-top: 14px;
 }
 
 .admin-botao-editar,
@@ -981,25 +909,27 @@ font-size: 12px;
 font-weight: 700;
 
 transition:
+background 0.2s ease,
 opacity 0.2s ease,
 transform 0.1s ease;
 }
 
 .admin-botao-editar {
 background: var(--verde);
-
 color: var(--branco);
+}
+
+.admin-botao-editar {
+background: var(--verde-escuro);
 }
 
 .admin-botao-excluir {
 background: #f1f1f1;
-
 color: #555555;
 }
 
-.admin-botao-editar,
 .admin-botao-excluir {
-opacity: 0.88;
+background: #e5e5e5;
 }
 
 .admin-botao-editar,
@@ -1007,55 +937,82 @@ opacity: 0.88;
 transform: scale(0.97);
 }
 
-.admin-botao-editar,
-.admin-botao-excluir {
-cursor: not-allowed;
-
-opacity: 0.55;
-}
-
 /* =========================================================
 EDITOR DE COMÉRCIO
 ========================================================= */
 
 .editor-comercio-admin {
-margin-bottom: 20px;
+position: fixed;
 
-background: var(--branco);
+inset: 0;
 
-border:
-1px solid var(--borda);
+z-index: 5000;
 
-border-radius: 14px;
+overflow-y: auto;
+
+padding: 30px 20px;
+
+background:
+rgba(9, 29, 28, 0.78);
+}
+
+.editor-comercio-admin[hidden] {
+display: none;
+}
+
+/* =========================================================
+MODAL
+========================================================= */
+
+.editor-comercio-modal {
+width: 100%;
+max-width: 900px;
+
+margin: 0 auto;
 
 overflow: hidden;
 
+background: var(--branco);
+
+border-radius: 15px;
+
 box-shadow:
-0 4px 16px
-rgba(0, 0, 0, 0.06);
+0 20px 60px rgba(0, 0, 0, 0.25);
 }
 
+/* =========================================================
+CABEÇALHO DO EDITOR
+========================================================= */
+
+.editor-comercio-header,
 .editor-comercio-topo {
 display: flex;
 align-items: center;
 justify-content: space-between;
 
-gap: 15px;
+gap: 20px;
 
-padding: 18px 20px;
+padding:
+20px 22px;
 
 background: var(--verde-escuro);
 
 color: var(--branco);
 }
 
+.editor-comercio-header > div,
+.editor-comercio-topo > div {
+min-width: 0;
+}
+
+.editor-comercio-label,
 .editor-comercio-topo span {
 display: block;
 
 margin-bottom: 4px;
 
 color:
-rgba(255, 255, 255, 0.65);
+rgba(255, 255, 255, 0.62);
 
 font-size: 10px;
 font-weight: 700;
@@ -1063,17 +1020,33 @@ font-weight: 700;
 letter-spacing: 0.1em;
 }
 
-.editor-comercio-topo h3 {
+.editor-comercio-header h2,
+.editor-comercio-topo h2 {
 margin: 0;
 
-font-size: 18px;
+font-size: 19px;
+line-height: 1.3;
 }
 
-#fechar-editor-comercio {
-width: 34px;
-height: 34px;
+.editor-comercio-header p {
+margin: 5px 0 0;
 
+color:
+rgba(255, 255, 255, 0.68);
+
+font-size: 12px;
+}
+
+/* =========================================================
+BOTÃO FECHAR
+========================================================= */
+
+.editor-fechar,
+.editor-botao-fechar {
 flex-shrink: 0;
+
+min-width: 36px;
+height: 36px;
 
 border:
 1px solid
@@ -1088,19 +1061,58 @@ color: var(--branco);
 
 cursor: pointer;
 
-font-size: 22px;
-line-height: 1;
+font-size: 13px;
+font-weight: 600;
+
+transition:
+background 0.2s ease,
+transform 0.1s ease;
 }
 
-#fechar-editor-comercio {
+.editor-fechar,
+.editor-botao-fechar {
 background:
-rgba(255, 255, 255, 0.16);
+rgba(255, 255, 255, 0.17);
+}
+
+.editor-fechar,
+.editor-botao-fechar {
+transform: scale(0.95);
 }
 
 /* =========================================================
-CAMPOS DO EDITOR
+FORMULÁRIO
 ========================================================= */
 
+.form-editor-comercio {
+width: 100%;
+}
+
+/* =========================================================
+BLOCOS DO EDITOR
+========================================================= */
+
+.editor-bloco {
+padding: 22px;
+
+border-bottom:
+1px solid var(--borda-clara);
+}
+
+.editor-bloco-titulo {
+margin-bottom: 17px;
+
+color: var(--verde-escuro);
+
+font-size: 15px;
+font-weight: 700;
+}
+
+/* =========================================================
+GRID DO EDITOR
+========================================================= */
+
+.editor-grid,
 .editor-comercio-campos {
 display: grid;
 
@@ -1108,24 +1120,35 @@ grid-template-columns:
 repeat(2, minmax(0, 1fr));
 
 gap: 15px;
-
-padding: 20px;
 }
 
-.editor-comercio-campos label {
+/* =========================================================
+CAMPOS
+========================================================= */
+
+.editor-campo {
+min-width: 0;
+
 display: flex;
 flex-direction: column;
 
 gap: 6px;
 }
 
-.editor-comercio-campos label > span {
+.editor-campo-full,
+.editor-campo-largo {
+grid-column: 1 / -1;
+}
+
+.editor-campo label {
 color: #555555;
 
 font-size: 12px;
 font-weight: 700;
 }
 
+.editor-campo input,
+.editor-campo textarea,
 .editor-comercio-campos input,
 .editor-comercio-campos textarea {
 width: 100%;
@@ -1136,10 +1159,10 @@ border:
 border-radius: 8px;
 
 background: var(--branco);
-
 color: var(--texto);
 
-padding: 11px 12px;
+padding:
+11px 12px;
 
 font-size: 14px;
 
@@ -1150,12 +1173,21 @@ border-color 0.2s ease,
 box-shadow 0.2s ease;
 }
 
-.editor-comercio-campos textarea {
-resize: vertical;
-
-min-height: 80px;
+.editor-campo input,
+.editor-campo textarea {
+appearance: none;
 }
 
+.editor-campo textarea {
+resize: vertical;
+
+min-height: 90px;
+
+line-height: 1.5;
+}
+
+.editor-campo input,
+.editor-campo textarea,
 .editor-comercio-campos input,
 .editor-comercio-campos textarea {
 border-color: var(--verde);
@@ -1165,22 +1197,290 @@ box-shadow:
 rgba(25, 65, 56, 0.10);
 }
 
-.editor-comercio-campos .campo-largo {
+/* =========================================================
+SEÇÃO DE IMAGENS DO EDITOR
+========================================================= */
+
+.editor-imagens {
 grid-column: 1 / -1;
+
+padding-top: 5px;
+}
+
+.editor-imagens-cabecalho {
+display: flex;
+align-items: center;
+justify-content: space-between;
+
+gap: 15px;
+
+margin-bottom: 13px;
+}
+
+.editor-imagens-cabecalho label {
+display: block;
+
+margin-bottom: 3px;
+
+color: #555555;
+
+font-size: 12px;
+font-weight: 700;
+}
+
+.editor-imagens-cabecalho small {
+display: block;
+
+color: var(--texto-suave);
+
+font-size: 11px;
+}
+
+.editor-contador-imagens {
+flex-shrink: 0;
+
+padding: 5px 9px;
+
+border-radius: 20px;
+
+background: var(--fundo-verde-claro);
+
+color: var(--verde);
+
+font-size: 11px;
+font-weight: 700;
+}
+
+/* =========================================================
+LISTA DE IMAGENS
+========================================================= */
+
+.editor-imagens-lista {
+display: grid;
+
+grid-template-columns:
+repeat(4, minmax(0, 1fr));
+
+gap: 10px;
+
+margin-bottom: 14px;
+}
+
+/* =========================================================
+ITEM DE IMAGEM
+========================================================= */
+
+.editor-imagem-item {
+min-width: 0;
+}
+
+.editor-imagem-preview {
+position: relative;
+
+overflow: hidden;
+
+aspect-ratio: 1 / 1;
+
+border:
+1px solid var(--borda);
+
+border-radius: 9px;
+
+background: #eeeeee;
+}
+
+.editor-imagem-preview img {
+display: block;
+
+width: 100%;
+height: 100%;
+
+object-fit: cover;
+}
+
+.editor-imagem-principal {
+position: absolute;
+
+left: 6px;
+bottom: 6px;
+
+padding: 4px 7px;
+
+border-radius: 5px;
+
+background: var(--verde-escuro);
+color: var(--branco);
+
+font-size: 9px;
+font-weight: 700;
+
+line-height: 1;
+}
+
+.editor-imagem-numero {
+display: block;
+
+margin-top: 5px;
+
+color: var(--texto-suave);
+
+font-size: 10px;
+
+text-align: center;
+}
+
+/* =========================================================
+REMOVER IMAGEM
+========================================================= */
+
+.editor-imagem-remover {
+position: absolute;
+
+top: 6px;
+right: 6px;
+
+z-index: 2;
+
+width: 27px;
+height: 27px;
+
+display: flex;
+align-items: center;
+justify-content: center;
+
+padding: 0;
+
+border: 0;
+
+border-radius: 50%;
+
+background:
+rgba(0, 0, 0, 0.72);
+
+color: var(--branco);
+
+cursor: pointer;
+
+font-size: 18px;
+line-height: 1;
+
+transition:
+background 0.2s ease,
+transform 0.1s ease;
+}
+
+.editor-imagem-remover {
+background: var(--erro);
+}
+
+.editor-imagem-remover {
+transform: scale(0.92);
+}
+
+/* =========================================================
+BOTÃO ADICIONAR IMAGENS
+========================================================= */
+
+.editor-botao-imagem {
+display: inline-flex;
+align-items: center;
+justify-content: center;
+
+min-height: 40px;
+
+padding:
+9px 14px;
+
+border-radius: 8px;
+
+background: var(--verde);
+color: var(--branco);
+
+cursor: pointer;
+
+font-size: 13px;
+font-weight: 700;
+
+transition:
+background 0.2s ease,
+transform 0.1s ease;
+}
+
+.editor-botao-imagem {
+background: var(--verde-escuro);
+}
+
+.editor-botao-imagem {
+transform: scale(0.98);
+}
+
+.editor-imagens-ajuda {
+display: block;
+
+margin-top: 7px;
+
+color: var(--texto-suave);
+
+font-size: 11px;
+}
+
+/* =========================================================
+EDITOR ANTIGO — COMPATIBILIDADE
+========================================================= */
+
+.editor-ajuda {
+margin: -5px 0 15px;
+
+color: var(--texto-suave);
+
+font-size: 12px;
+line-height: 1.5;
+}
+
+.editor-upload {
+display: flex;
+align-items: center;
+flex-wrap: wrap;
+
+gap: 10px;
+
+margin-bottom: 15px;
+}
+
+.editor-limite-imagens {
+color: var(--texto-suave);
+
+font-size: 12px;
+}
+
+.editor-preview-imagens {
+display: grid;
+
+grid-template-columns:
+repeat(4, 120px);
+
+gap: 10px;
+
+width: 100%;
+}
+
+.editor-preview-imagens {
+display: none;
 }
 
 /* =========================================================
 AÇÕES DO EDITOR
 ========================================================= */
 
-.editor-comercio-acoes {
+.editor-comercio-acoes,
+.editor-acoes {
 display: flex;
 justify-content: flex-end;
 
 gap: 10px;
 
 padding:
-17px 20px;
+17px 22px;
 
 border-top:
 1px solid var(--borda-clara);
@@ -1189,7 +1489,8 @@ background: #fafafa;
 }
 
 .editor-botao-cancelar,
-.editor-botao-salvar {
+.editor-botao-salvar,
+.editor-botao {
 min-height: 42px;
 
 border: 0;
@@ -1197,126 +1498,63 @@ border: 0;
 border-radius: 8px;
 
 padding:
-10px 16px;
+10px 17px;
 
 cursor: pointer;
 
 font-size: 13px;
 font-weight: 700;
-}
 
-.editor-botao-cancelar {
-background: #eeeeee;
-
-color: #444444;
-}
-
-.editor-botao-salvar {
-background: var(--verde);
-
-color: var(--branco);
+transition:
+background 0.2s ease,
+opacity 0.2s ease,
+transform 0.1s ease;
 }
 
 .editor-botao-cancelar,
-.editor-botao-salvar {
-opacity: 0.9;
+.editor-botao.cancelar {
+background: #eeeeee;
+color: #444444;
 }
 
-.editor-botao-salvar {
-cursor: not-allowed;
+.editor-botao-cancelar,
+.editor-botao.cancelar {
+background: #e2e2e2;
+}
 
+.editor-botao-salvar,
+.editor-botao.salvar {
+background: var(--verde);
+color: var(--branco);
+}
+
+.editor-botao-salvar,
+.editor-botao.salvar {
+background: var(--verde-escuro);
+}
+
+.editor-botao-cancelar,
+.editor-botao-salvar,
+.editor-botao {
+transform: scale(0.98);
+}
+
+.editor-botao-salvar,
+.editor-botao.salvar {
+cursor: wait;
 opacity: 0.55;
 }
 
 /* =========================================================
-COMPATIBILIDADE COM A ESTRUTURA ANTIGA
+CLASSE HIDDEN
 ========================================================= */
 
-.admin-section {
-margin-top: 30px;
-}
-
-.section-header {
-display: flex;
-align-items: center;
-justify-content: space-between;
-
-gap: 16px;
-
-margin-bottom: 18px;
-}
-
-.section-header h2 {
-margin: 0;
-
-color: var(--verde-escuro);
-
-font-size: 20px;
-}
-
-.section-header p {
-margin: 5px 0 0;
-
-color: #777777;
-
-font-size: 13px;
-}
-
-.contador-comercios {
-min-width: 34px;
-height: 34px;
-
-display: flex;
-align-items: center;
-justify-content: center;
-
-padding: 0 10px;
-
-border-radius: 17px;
-
-background: var(--verde);
-
-color: var(--branco);
-
-font-size: 13px;
-font-weight: 700;
-}
-
-.admin-loading,
-.admin-empty {
-padding: 20px;
-
-text-align: center;
-
-color: #777777;
-
-font-size: 13px;
-}
-
-.lista-comercios {
-display: grid;
-
-gap: 12px;
-}
-
-.comercio-admin-item {
-display: flex;
-align-items: center;
-
-gap: 15px;
-
-padding: 15px;
-
-background: var(--branco);
-
-border:
-1px solid #e4e4e4;
-
-border-radius: 12px;
+[hidden] {
+display: none !important;
 }
 
 /* =========================================================
-RESPONSIVO
+RESPONSIVO — 800px
 ========================================================= */
 
 @media (max-width: 800px) {
@@ -1326,11 +1564,11 @@ flex-direction: column;
 }
 
 .admin-comercio-imagem {
+width: 100%;
+
 flex-basis: auto;
 
-width: 100%;
 height: 190px;
-
 min-height: 190px;
 
 }
@@ -1339,13 +1577,8 @@ min-height: 190px;
 min-height: 190px;
 }
 
-.admin-comercio-conteudo {
-align-items: flex-start;
-
-flex-direction: column;
-
-gap: 15px;
-
+.admin-comercio-sem-imagem {
+min-height: 190px;
 }
 
 .admin-comercio-acoes {
@@ -1357,7 +1590,15 @@ width: 100%;
 flex: 1;
 }
 
+.editor-imagens-lista {
+grid-template-columns:
+repeat(4, minmax(0, 1fr));
 }
+}
+
+/* =========================================================
+RESPONSIVO — 700px
+========================================================= */
 
 @media (max-width: 700px) {
 
@@ -1382,53 +1623,80 @@ padding:
 font-size: 22px;
 }
 
-.cadastro-conteudo {
-padding: 17px;
-}
-
-.cadastro-topo {
+.admin-controles {
+align-items: stretch;
 flex-direction: column;
 }
 
-.cadastro-status {
-align-self: flex-start;
-}
-
-.cadastro-campos {
-grid-template-columns: 1fr;
-}
-
-.campo-largo {
-grid-column: auto;
-}
-
-.cadastro-meta {
-grid-template-columns: 1fr;
-}
-
-.cadastro-acoes {
-flex-direction: column;
-}
-
-.cadastro-acoes button {
+.botao-atualizar {
 width: 100%;
 }
 
+.admin-cadastro-conteudo {
+padding: 17px;
+}
+
+.admin-cadastro-imagens {
+grid-template-columns:
+repeat(3, minmax(0, 1fr));
+}
+
+.admin-cadastro-acoes {
+flex-direction: column;
+}
+
+.admin-cadastro-acoes button {
+width: 100%;
+}
+
+.section-header {
+align-items: flex-start;
+}
+
+.editor-comercio-admin {
+padding:
+15px;
+}
+
+.editor-comercio-modal {
+border-radius: 12px;
+}
+
+.editor-grid,
 .editor-comercio-campos {
 grid-template-columns: 1fr;
 }
 
-.editor-comercio-campos .campo-largo {
+.editor-campo-full,
+.editor-campo-largo,
+.editor-imagens {
 grid-column: auto;
 }
 
+.editor-imagens-lista {
+grid-template-columns:
+repeat(3, minmax(0, 1fr));
 }
+
+.editor-bloco {
+padding: 18px;
+}
+
+.editor-comercio-acoes,
+.editor-acoes {
+padding:
+15px 18px;
+}
+}
+
+/* =========================================================
+RESPONSIVO — 500px
+========================================================= */
 
 @media (max-width: 500px) {
 
 .admin-header {
-padding:
-15px;
+padding: 15px;
 }
 
 .admin-header-inner {
@@ -1451,17 +1719,8 @@ font-size: 12px;
 
 }
 
-.admin-comercios-cabecalho {
-align-items: flex-start;
-
-flex-direction: column;
-
-gap: 10px;
-
-}
-
-.admin-comercios-contador {
-align-self: flex-start;
+.admin-comercio-conteudo {
+padding: 15px;
 }
 
 .admin-comercio-acoes {
@@ -1473,271 +1732,67 @@ flex-direction: column;
 width: 100%;
 }
 
+.section-header {
+flex-direction: column;
+}
+
+.contador-comercios {
+align-self: flex-start;
+}
+
+.editor-comercio-header,
 .editor-comercio-topo {
 padding:
 15px;
 }
 
-.editor-comercio-campos {
-padding:
-15px;
-}
-
-.editor-comercio-acoes {
-flex-direction: column;
-
-padding:
-  15px;
-
-}
-
-.editor-botao-cancelar,
-.editor-botao-salvar {
-width: 100%;
-}
-
-}
-/* =========================================================
-EDITOR — IMAGENS
-========================================================= */
-
-.editor-ajuda {
-margin: -5px 0 15px;
-color: var(--texto-suave);
-font-size: 12px;
-line-height: 1.5;
-}
-
-/* =========================================================
-ÁREA DE UPLOAD
-========================================================= */
-
-.editor-upload {
-display: flex;
-align-items: center;
-flex-wrap: wrap;
-gap: 10px;
-margin-bottom: 15px;
-}
-
-.editor-botao-imagem {
-display: inline-flex;
-align-items: center;
-justify-content: center;
-min-height: 40px;
-padding: 9px 14px;
-border-radius: 8px;
-background: var(--verde);
-color: var(--branco);
-cursor: pointer;
-font-size: 13px;
-font-weight: 700;
-transition:
-background 0.2s ease,
-transform 0.1s ease;
-}
-
-.editor-botao-imagem {
-background: var(--verde-escuro);
-}
-
-.editor-botao-imagem {
-transform: scale(0.98);
-}
-
-.editor-limite-imagens {
-color: var(--texto-suave);
-font-size: 12px;
-}
-
-/* =========================================================
-GRADE DE IMAGENS
-========================================================= */
-
-.editor-preview-imagens {
-display: grid;
-grid-template-columns: repeat(4, 120px);
-gap: 10px;
-width: 100%;
-}
-
-/* =========================================================
-MINIATURA
-========================================================= */
-
-.editor-imagem-item {
-position: relative;
-width: 120px;
-height: 100px;
-overflow: hidden;
-border: 1px solid var(--borda);
-border-radius: 9px;
-background: #eeeeee;
-}
-
-/* =========================================================
-IMAGEM
-========================================================= */
-
-.editor-imagem-item img {
-display: block;
-width: 100%;
-height: 100%;
-object-fit: cover;
-}
-
-/* =========================================================
-INDICAÇÃO DE CAPA
-========================================================= */
-
-.editor-imagem-capa {
-position: absolute;
-left: 6px;
-bottom: 6px;
-z-index: 2;
-
-padding: 4px 7px;
-
-border-radius: 5px;
-
-background: var(--verde-escuro);
-color: var(--branco);
-
-font-size: 9px;
-font-weight: 700;
-line-height: 1;
-}
-
-/* =========================================================
-BOTÃO REMOVER IMAGEM
-========================================================= */
-
-.editor-imagem-remover {
-position: absolute;
-top: 5px;
-right: 5px;
-z-index: 3;
-
-width: 26px;
-height: 26px;
-
-display: flex;
-align-items: center;
-justify-content: center;
-
-padding: 0;
-
-border: 0;
-border-radius: 50%;
-
-background: rgba(0, 0, 0, 0.72);
-color: var(--branco);
-
-cursor: pointer;
-
+.editor-comercio-header h2,
+.editor-comercio-topo h2 {
 font-size: 17px;
-font-weight: 400;
-line-height: 1;
-
-transition:
-background 0.2s ease,
-transform 0.1s ease;
 }
 
-.editor-imagem-remover {
-background: var(--erro);
-}
-
-.editor-imagem-remover {
-transform: scale(0.92);
-}
-
-/* =========================================================
-QUANDO NÃO HÁ IMAGENS
-========================================================= */
-
-.editor-preview-imagens {
-display: none;
-}
-
-/* =========================================================
-RESPONSIVO
-========================================================= */
-
-@media (max-width: 700px) {
-
-.editor-preview-imagens {
-grid-template-columns:
-repeat(3, 110px);
-}
-
-.editor-imagem-item {
-width: 110px;
-height: 90px;
-}
-
-}
-
-@media (max-width: 480px) {
-
-.editor-preview-imagens {
+.editor-imagens-lista {
 grid-template-columns:
 repeat(2, minmax(0, 1fr));
 }
 
-.editor-imagem-item {
-width: 100%;
-height: 105px;
+.editor-imagens-cabecalho {
+align-items: flex-start;
 }
 
+.editor-comercio-acoes,
+.editor-acoes {
+flex-direction: column;
 }
+
+.editor-botao-cancelar,
+.editor-botao-salvar,
+.editor-botao {
+width: 100%;
+}
+}
+
+/* =========================================================
+RESPONSIVO — 380px
+========================================================= */
+
+@media (max-width: 380px) {
+
 .admin-cadastro-imagens {
-display: grid;
-grid-template-columns: repeat(4, 1fr);
+grid-template-columns:
+repeat(2, minmax(0, 1fr));
+}
+
+.admin-cadastro-conteudo h3 {
+font-size: 19px;
+}
+
+.editor-comercio-admin {
+padding:
+8px;
+}
+
+.editor-imagens-lista {
 gap: 8px;
-margin-bottom: 16px;
 }
-
-.admin-cadastro-imagem {
-position: relative;
-aspect-ratio: 1 / 1;
-overflow: hidden;
-border-radius: 10px;
-background: #f0f0f0;
-}
-
-.admin-cadastro-imagem img {
-width: 100%;
-height: 100%;
-display: block;
-object-fit: cover;
-}
-
-.admin-cadastro-imagem-capa {
-position: absolute;
-left: 6px;
-bottom: 6px;
-padding: 3px 6px;
-border-radius: 5px;
-background: #091d1c;
-color: #ffffff;
-font-size: 9px;
-font-weight: 700;
-letter-spacing: 0.5px;
-}
-
-@media (max-width: 700px) {
-
-.admin-cadastro-imagens {
-grid-template-columns: repeat(3, 1fr);
-}
-
-}
-
-@media (max-width: 480px) {
-
-.admin-cadastro-imagens {
-grid-template-columns: repeat(2, 1fr);
-}
-
 }
