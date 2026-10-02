@@ -32,18 +32,14 @@ const EDGE_FUNCTION_URL =
 const FALLBACK_IMAGE =
 "../img/icones/imgnaodisponivel.png";
 
-const ESTRELA_ATIVA =
-"../img/icones/estrela.png";
-
-const ESTRELA_INATIVA =
-"../img/icones/estrela2.png";
-
 /* =========================================================
 ESTADO
 ========================================================= */
 
 const parametrosURL =
-new URLSearchParams(window.location.search);
+new URLSearchParams(
+window.location.search
+);
 
 const idLocal =
 parametrosURL.get("id");
@@ -55,8 +51,6 @@ let mapaLocal = null;
 let imagensAtuais = [];
 
 let notaSelecionada = 0;
-
-let notaHover = 0;
 
 let avaliacaoAtual = null;
 
@@ -79,7 +73,7 @@ return supabaseClient;
 if (window.supabaseLoginClient) {
 
 supabaseClient =
-  window.supabaseLoginClient;
+window.supabaseLoginClient;
 
 return supabaseClient;
 
@@ -91,10 +85,10 @@ typeof window.supabase.createClient === "function"
 ) {
 
 supabaseClient =
-  window.supabase.createClient(
-    SUPABASE_URL,
-    SUPABASE_ANON_KEY
-  );
+window.supabase.createClient(
+SUPABASE_URL,
+SUPABASE_ANON_KEY
+);
 
 return supabaseClient;
 
@@ -105,6 +99,7 @@ console.error(
 );
 
 return null;
+
 }
 
 /* =========================================================
@@ -117,15 +112,54 @@ if (
 valor === null ||
 valor === undefined
 ) {
+
 return "";
+
 }
 
 return String(valor)
-.replace(/&/g, "&")
-.replace(/</g, "<")
-.replace(/>/g, ">")
-.replace(/"/g, '"')
-.replace(/'/g, "'");
+.replace(/&/g, "&amp;")
+.replace(/</g, "&lt;")
+.replace(/>/g, "&gt;")
+.replace(/"/g, "&quot;")
+.replace(/'/g, "&#039;");
+
+}
+
+/* =========================================================
+RESOLVER CAMINHO DE IMAGEM
+========================================================= */
+
+function resolverCaminhoImagem(valor) {
+
+if (
+typeof valor !== "string" ||
+!valor.trim()
+) {
+return null;
+}
+
+const caminho = valor.trim();
+
+if (
+caminho.startsWith("http://") ||
+caminho.startsWith("https://") ||
+caminho.startsWith("data:") ||
+caminho.startsWith("blob:")
+) {
+return caminho;
+}
+
+if (caminho.startsWith("./img/")) {
+return `../${caminho.slice(2)}`;
+}
+
+if (caminho.startsWith("img/")) {
+return `../${caminho}`;
+}
+
+return caminho;
+
 }
 
 /* =========================================================
@@ -139,6 +173,7 @@ return String(valor || "")
 .toLowerCase()
 .normalize("NFD")
 .replace(/[\u0300-\u036f]/g, "");
+
 }
 
 /* =========================================================
@@ -187,8 +222,11 @@ const categoriasComercio = [
 
 return (
 tipo.includes("comerc") ||
-categoriasComercio.includes(categoria)
+categoriasComercio.includes(
+categoria
+)
 );
+
 }
 
 /* =========================================================
@@ -204,7 +242,7 @@ console.log(
 if (!idLocal) {
 
 console.error(
-  "Nenhum ID foi informado na URL."
+"Nenhum ID foi informado na URL."
 );
 
 return;
@@ -214,126 +252,134 @@ return;
 try {
 
 const [
-  respostaLocais,
-  respostaComercios,
-  respostaHospedagem
+respostaLocais,
+respostaComercios,
+respostaHospedagem
 ] = await Promise.all([
 
-  fetch("../DATA/locais.json"),
+fetch(
+"../DATA/locais.json"
+),
 
-  fetch("../DATA/comercios.json"),
+fetch(
+"../DATA/comercios.json"
+),
 
-  fetch("../DATA/hospedagem.json")
+fetch(
+"../DATA/hospedagem.json"
+)
 
 ]);
 
 const locais =
-  respostaLocais.ok
-    ? await respostaLocais.json()
-    : [];
+respostaLocais.ok
+? await respostaLocais.json()
+: [];
 
 const comercios =
-  respostaComercios.ok
-    ? await respostaComercios.json()
-    : [];
+respostaComercios.ok
+? await respostaComercios.json()
+: [];
 
 const hospedagem =
-  respostaHospedagem.ok
-    ? await respostaHospedagem.json()
-    : [];
+respostaHospedagem.ok
+? await respostaHospedagem.json()
+: [];
 
 let encontrado = null;
 
-
 /* =====================================================
-   LOCAIS
-====================================================== */
+LOCAIS
+===================================================== */
 
 encontrado =
-  locais.find(
-    item =>
-      String(item.id) ===
-      String(idLocal)
-  );
+locais.find(
+item =>
+String(item.id) ===
+String(idLocal)
+);
 
 if (encontrado) {
 
-  encontrado._tipo =
-    "local";
+encontrado._tipo =
+"local";
 
-  encontrado.fonte =
-    "locais";
+encontrado.fonte =
+"locais";
+
 }
 
-
 /* =====================================================
-   COMÉRCIOS
-====================================================== */
+COMÉRCIOS
+===================================================== */
 
 if (!encontrado) {
 
-  encontrado =
-    comercios.find(
-      item =>
-        String(item.id) ===
-        String(idLocal)
-    );
+encontrado =
+comercios.find(
+item =>
+String(item.id) ===
+String(idLocal)
+);
 
-  if (encontrado) {
+if (encontrado) {
 
-    encontrado._tipo =
-      "comercio";
+encontrado._tipo =
+"comercio";
 
-    encontrado.fonte =
-      "comercios";
-  }
+encontrado.fonte =
+"comercios";
+
 }
 
+}
 
 /* =====================================================
-   HOSPEDAGEM
-====================================================== */
+HOSPEDAGEM
+===================================================== */
 
 if (!encontrado) {
 
-  encontrado =
-    hospedagem.find(
-      item =>
-        String(item.id) ===
-        String(idLocal)
-    );
+encontrado =
+hospedagem.find(
+item =>
+String(item.id) ===
+String(idLocal)
+);
 
-  if (encontrado) {
+if (encontrado) {
 
-    encontrado._tipo =
-      "hospedagem";
+encontrado._tipo =
+"hospedagem";
 
-    encontrado.fonte =
-      "hospedagem";
-  }
+encontrado.fonte =
+"hospedagem";
+
 }
 
+}
 
 /* =====================================================
-   VERIFICAR RESULTADO
-====================================================== */
+VERIFICAR RESULTADO
+===================================================== */
 
 if (!encontrado) {
 
-  console.error(
-    "Local não encontrado:",
-    idLocal
-  );
+console.error(
+"Local não encontrado:",
+idLocal
+);
 
-  return;
+return;
+
 }
 
 localAtual =
-  encontrado;
+encontrado;
 
 console.log(
-  "Local carregado:",
-  localAtual
+"Local carregado:",
+localAtual
 );
 
 preencherPagina();
@@ -347,11 +393,12 @@ await verificarProprietarioComercio();
 } catch (erro) {
 
 console.error(
-  "Erro ao carregar local:",
-  erro
+"Erro ao carregar local:",
+erro
 );
 
 }
+
 }
 
 /* =========================================================
@@ -367,6 +414,10 @@ return;
 document.title =
 `${localAtual.nome || "Local"} — Guia Turístico de Andrelândia`;
 
+/* =====================================================
+CATEGORIA
+===================================================== */
+
 const categoria =
 document.getElementById(
 "categoriaLocal"
@@ -375,10 +426,14 @@ document.getElementById(
 if (categoria) {
 
 categoria.textContent =
-  localAtual.categoria ||
-  "";
+localAtual.categoria ||
+"";
 
 }
+
+/* =====================================================
+NOME
+===================================================== */
 
 const nome =
 document.getElementById(
@@ -388,10 +443,14 @@ document.getElementById(
 if (nome) {
 
 nome.textContent =
-  localAtual.nome ||
-  "";
+localAtual.nome ||
+"";
 
 }
+
+/* =====================================================
+DESCRIÇÃO
+===================================================== */
 
 const descricao =
 document.getElementById(
@@ -401,11 +460,15 @@ document.getElementById(
 if (descricao) {
 
 descricao.textContent =
-  localAtual.descricao ||
-  localAtual.sobre ||
-  "Informações sobre este local ainda não disponíveis.";
+localAtual.descricao ||
+localAtual.sobre ||
+"Informações sobre este local ainda não disponíveis.";
 
 }
+
+/* =====================================================
+HISTÓRIA
+===================================================== */
 
 const historia =
 document.getElementById(
@@ -415,10 +478,14 @@ document.getElementById(
 if (historia) {
 
 historia.textContent =
-  localAtual.historia ||
-  "Ainda não há informações históricas cadastradas.";
+localAtual.historia ||
+"Ainda não há informações históricas cadastradas.";
 
 }
+
+/* =====================================================
+CURIOSIDADES
+===================================================== */
 
 const curiosidades =
 document.getElementById(
@@ -428,10 +495,14 @@ document.getElementById(
 if (curiosidades) {
 
 curiosidades.textContent =
-  localAtual.curiosidades ||
-  "Ainda não há curiosidades cadastradas.";
+localAtual.curiosidades ||
+"Ainda não há curiosidades cadastradas.";
 
 }
+
+/* =====================================================
+HORÁRIO
+===================================================== */
 
 const horario =
 document.getElementById(
@@ -441,10 +512,14 @@ document.getElementById(
 if (horario) {
 
 horario.textContent =
-  localAtual.horario ||
-  "Não informado";
+localAtual.horario ||
+"Não informado";
 
 }
+
+/* =====================================================
+ENDEREÇO
+===================================================== */
 
 const endereco =
 document.getElementById(
@@ -454,8 +529,8 @@ document.getElementById(
 if (endereco) {
 
 endereco.textContent =
-  localAtual.endereco ||
-  "Não informado";
+localAtual.endereco ||
+"Não informado";
 
 }
 
@@ -467,6 +542,10 @@ preencherGaleria();
 
 inicializarMapa();
 
+/* =====================================================
+SUGESTÃO
+===================================================== */
+
 const botaoSugerir =
 document.getElementById(
 "botaoSugerirAlteracao"
@@ -475,9 +554,10 @@ document.getElementById(
 if (botaoSugerir) {
 
 botaoSugerir.onclick =
-  sugerirAlteracao;
+sugerirAlteracao;
 
 }
+
 }
 
 /* =========================================================
@@ -508,11 +588,13 @@ localAtual.telefone ||
 if (!numero) {
 
 elemento.style.display =
-  "none";
+"none";
 
 if (nome) {
-  nome.style.display =
-    "none";
+
+nome.style.display =
+"none";
+
 }
 
 return;
@@ -540,14 +622,12 @@ elemento.style.display =
 
 if (nome) {
 
-nome.style.display =
-  "";
-
 nome.textContent =
-  localAtual.nome ||
-  "WhatsApp";
+localAtual.nome ||
+"WhatsApp";
 
 }
+
 }
 
 /* =========================================================
@@ -580,11 +660,13 @@ String(instagram).trim();
 if (!instagram) {
 
 elemento.style.display =
-  "none";
+"none";
 
 if (nome) {
-  nome.style.display =
-    "none";
+
+nome.style.display =
+"none";
+
 }
 
 return;
@@ -597,13 +679,13 @@ if (
 ) {
 
 instagram =
-  instagram.replace(
-    /^@/,
-    ""
-  );
+instagram.replace(
+/^@/,
+""
+);
 
 instagram =
-  `https://instagram.com/${instagram}`;
+`https://instagram.com/${instagram}`;
 
 }
 
@@ -621,14 +703,12 @@ elemento.style.display =
 
 if (nome) {
 
-nome.style.display =
-  "";
-
 nome.textContent =
-  localAtual.nome ||
-  "Instagram";
+localAtual.nome ||
+"Instagram";
 
 }
+
 }
 
 /* =========================================================
@@ -643,6 +723,10 @@ return [];
 
 let imagens = [];
 
+/* =====================================================
+ARRAY DE IMAGENS
+===================================================== */
+
 if (
 Array.isArray(
 localAtual.imagens
@@ -650,18 +734,44 @@ localAtual.imagens
 ) {
 
 imagens =
-  localAtual.imagens
-    .filter(
-      imagem =>
-        typeof imagem === "string" &&
-        imagem.trim() !== ""
-    )
-    .map(
-      imagem =>
-        imagem.trim()
-    );
+localAtual.imagens
+.filter(
+imagem =>
+typeof imagem === "string" &&
+imagem.trim() !== ""
+)
+.map(
+imagem =>
+resolverCaminhoImagem(imagem)
+);
 
 }
+
+if (
+!imagens.length &&
+Array.isArray(
+localAtual.galeria
+)
+) {
+
+imagens =
+localAtual.galeria
+.filter(
+imagem =>
+typeof imagem === "string" &&
+imagem.trim() !== ""
+)
+.map(
+imagem =>
+resolverCaminhoImagem(imagem)
+)
+.filter(Boolean);
+
+}
+
+/* =====================================================
+IMAGEM ÚNICA
+===================================================== */
 
 if (
 !imagens.length &&
@@ -670,23 +780,50 @@ localAtual.imagem.trim() !== ""
 ) {
 
 imagens = [
-  localAtual.imagem.trim()
+resolverCaminhoImagem(localAtual.imagem)
 ];
 
+imagens = imagens.filter(Boolean);
+
 }
+
+if (
+!imagens.length &&
+typeof localAtual.capa === "string" &&
+localAtual.capa.trim() !== ""
+) {
+
+imagens = [
+resolverCaminhoImagem(localAtual.capa)
+].filter(Boolean);
+
+}
+
+/* =====================================================
+FALLBACK
+===================================================== */
 
 if (!imagens.length) {
 
 imagens = [
-  FALLBACK_IMAGE
+FALLBACK_IMAGE
 ];
 
 }
+
+/* =====================================================
+LIMITE
+
+1 FOTO PRINCIPAL
++
+ATÉ 4 MINIATURAS
+===================================================== */
 
 return imagens.slice(
 0,
 5
 );
+
 }
 
 /* =========================================================
@@ -715,6 +852,10 @@ obterImagensLocal();
 imagensAtuais =
 imagens;
 
+/* =====================================================
+FOTO PRINCIPAL
+===================================================== */
+
 principal.src =
 imagens[0];
 
@@ -724,22 +865,34 @@ principal.alt =
 principal.onerror =
 function () {
 
-  if (this.dataset.fallbackAplicado) {
-    return;
-  }
+if (this.dataset.fallbackAplicado) {
+return;
+}
 
-  this.dataset.fallbackAplicado =
-    "1";
+this.dataset.fallbackAplicado =
+"1";
 
-  this.src =
-    FALLBACK_IMAGE;
+this.src =
+FALLBACK_IMAGE;
+
 };
+
+/* =====================================================
+CLIQUE NA FOTO PRINCIPAL
+===================================================== */
 
 principal.onclick =
 function () {
 
-  abrirVisualizador(0);
+abrirVisualizador(
+0
+);
+
 };
+
+/* =====================================================
+MINIATURAS
+===================================================== */
 
 if (!miniaturas) {
 return;
@@ -748,129 +901,168 @@ return;
 miniaturas.innerHTML =
 "";
 
+/* =====================================================
+UMA ÚNICA IMAGEM
+===================================================== */
+
 if (imagens.length <= 1) {
 
 miniaturas.style.display =
-  "none";
+"none";
 
 return;
 
 }
 
+/* =====================================================
+MOSTRAR MINIATURAS
+===================================================== */
+
 miniaturas.style.display =
 "grid";
 
+/* =====================================================
+CRIAR MINIATURAS
+===================================================== */
+
 imagens
-.slice(0, 4)
+.slice(
+0,
+4
+)
 .forEach(
 (
 imagem,
 indice
 ) => {
 
-    const miniatura =
-      document.createElement(
-        "button"
-      );
+const miniatura =
+document.createElement(
+"button"
+);
 
-    miniatura.type =
-      "button";
+miniatura.type =
+"button";
 
-    miniatura.className =
-      "thumbnail";
+miniatura.className =
+"thumbnail";
 
+/* ===================================================
+IMAGEM DA MINIATURA
+=================================================== */
 
-    const img =
-      document.createElement(
-        "img"
-      );
+const img =
+document.createElement(
+"img"
+);
 
-    img.src =
-      imagem;
+img.src =
+imagem;
 
-    img.alt =
-      `${localAtual?.nome || "Local"} — Foto ${indice + 1}`;
+img.alt =
+`${localAtual?.nome || "Local"} — Foto ${indice + 1}`;
 
-    img.loading =
-      "lazy";
+img.loading =
+"lazy";
 
-    img.decoding =
-      "async";
+img.decoding =
+"async";
 
-    img.onerror =
-      function () {
+img.onerror =
+function () {
 
-        if (this.dataset.fallbackAplicado) {
-          return;
-        }
+if (this.dataset.fallbackAplicado) {
+return;
+}
 
-        this.dataset.fallbackAplicado =
-          "1";
+this.dataset.fallbackAplicado =
+"1";
 
-        this.src =
-          FALLBACK_IMAGE;
-      };
+this.src =
+FALLBACK_IMAGE;
 
+};
 
-    miniatura.appendChild(
-      img
-    );
+/* ===================================================
+COLOCAR IMAGEM DENTRO DO BOTÃO
+=================================================== */
 
+miniatura.appendChild(
+img
+);
 
-    if (indice === 0) {
+/* ===================================================
+PRIMEIRA MINIATURA ATIVA
+=================================================== */
 
-      miniatura.classList.add(
-        "active"
-      );
-    }
+if (indice === 0) {
 
-
-    miniatura.addEventListener(
-      "click",
-      () => {
-
-        principal.src =
-          imagem;
-
-        principal.alt =
-          `${localAtual?.nome || "Local"} — Foto ${indice + 1}`;
-
-
-        miniaturas
-          .querySelectorAll(
-            ".thumbnail"
-          )
-          .forEach(
-            item => {
-
-              item.classList.remove(
-                "active"
-              );
-            }
-          );
-
-
-        miniatura.classList.add(
-          "active"
-        );
-
-        abrirVisualizador(
-          indice
-        );
-      }
-    );
-
-
-    miniaturas.appendChild(
-      miniatura
-    );
-  }
+miniatura.classList.add(
+"active"
 );
 
 }
 
+/* ===================================================
+CLIQUE NA MINIATURA
+=================================================== */
+
+miniatura.addEventListener(
+"click",
+() => {
+
+/* -----------------------------------------------
+TROCAR FOTO PRINCIPAL
+----------------------------------------------- */
+
+principal.src =
+imagem;
+
+principal.alt =
+`${localAtual?.nome || "Local"} — Foto ${indice + 1}`;
+
+/* -----------------------------------------------
+ATUALIZAR MINIATURA ATIVA
+----------------------------------------------- */
+
+miniaturas
+.querySelectorAll(
+".thumbnail"
+)
+.forEach(
+item => {
+
+item.classList.remove(
+"active"
+);
+
+}
+);
+
+miniatura.classList.add(
+"active"
+);
+
+/* -----------------------------------------------
+ABRIR VISUALIZADOR
+----------------------------------------------- */
+
+abrirVisualizador(
+indice
+);
+
+});
+
+miniaturas.appendChild(
+miniatura
+);
+
+});
+
+}
+
 /* =========================================================
-VISUALIZADOR
+VISUALIZADOR DE FOTOS
 ========================================================= */
 
 function abrirVisualizador(
@@ -892,7 +1084,9 @@ if (
 !imagem ||
 !imagensAtuais[indice]
 ) {
+
 return;
+
 }
 
 imagem.src =
@@ -904,15 +1098,16 @@ imagem.alt =
 imagem.onerror =
 function () {
 
-  if (this.dataset.fallbackAplicado) {
-    return;
-  }
+if (this.dataset.fallbackAplicado) {
+return;
+}
 
-  this.dataset.fallbackAplicado =
-    "1";
+this.dataset.fallbackAplicado =
+"1";
 
-  this.src =
-    FALLBACK_IMAGE;
+this.src =
+FALLBACK_IMAGE;
+
 };
 
 viewer.style.display =
@@ -920,7 +1115,12 @@ viewer.style.display =
 
 document.body.style.overflow =
 "hidden";
+
 }
+
+/* =========================================================
+FECHAR VISUALIZADOR
+========================================================= */
 
 function fecharVisualizador() {
 
@@ -932,13 +1132,18 @@ document.getElementById(
 if (viewer) {
 
 viewer.style.display =
-  "none";
+"none";
 
 }
 
 document.body.style.overflow =
 "";
+
 }
+
+/* =========================================================
+COMPATIBILIDADE COM HTML ANTIGO
+========================================================= */
 
 function abrirFotoTelaCheia(
 indice = 0
@@ -947,11 +1152,13 @@ indice = 0
 abrirVisualizador(
 indice
 );
+
 }
 
 function fecharFotoTelaCheia() {
 
 fecharVisualizador();
+
 }
 
 /* =========================================================
@@ -972,6 +1179,7 @@ return;
 
 window.location.href =
 "../index.html";
+
 }
 
 /* =========================================================
@@ -989,17 +1197,25 @@ if (!elemento) {
 return;
 }
 
+/* =====================================================
+VERIFICAR LEAFLET
+===================================================== */
+
 if (
 typeof L === "undefined"
 ) {
 
 console.error(
-  "Leaflet não foi carregado."
+"Leaflet não foi carregado."
 );
 
 return;
 
 }
+
+/* =====================================================
+COORDENADAS
+===================================================== */
 
 const latitude =
 Number(
@@ -1017,31 +1233,50 @@ if (
 ) {
 
 elemento.style.display =
-  "none";
+"none";
 
 return;
 
 }
+
+/* =====================================================
+REMOVER MAPA ANTERIOR
+===================================================== */
 
 if (mapaLocal) {
 
 mapaLocal.remove();
 
 mapaLocal =
-  null;
+null;
 
 }
 
+/* =====================================================
+DIMENSÃO
+
+O CSS controla a altura.
+===================================================== */
+
 elemento.style.width =
 "100%";
+
+/* =====================================================
+CRIAR MAPA
+===================================================== */
 
 mapaLocal =
 L.map(
 elemento,
 {
-zoomControl: true,
-scrollWheelZoom: true,
-attributionControl: true
+zoomControl:
+true,
+
+scrollWheelZoom:
+true,
+
+attributionControl:
+true
 }
 )
 .setView(
@@ -1052,20 +1287,35 @@ longitude
 17
 );
 
+/* =====================================================
+ESRI WORLD IMAGERY
+===================================================== */
+
 const camadaEsri =
 L.tileLayer(
 "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
 {
-maxNativeZoom: 19,
-maxZoom: 22,
-tileSize: 256,
-attribution: "Tiles © Esri"
+maxNativeZoom:
+19,
+
+maxZoom:
+22,
+
+tileSize:
+256,
+
+attribution:
+"Tiles © Esri"
 }
 );
 
 camadaEsri.addTo(
 mapaLocal
 );
+
+/* =====================================================
+MARCADOR
+===================================================== */
 
 const marcador =
 L.marker(
@@ -1082,6 +1332,10 @@ marcador.bindPopup(
 `<strong>${escaparHTML(localAtual.nome || "")}</strong>`
 );
 
+/* =====================================================
+COMO CHEGAR
+===================================================== */
+
 const comoChegar =
 document.getElementById(
 "comoChegar"
@@ -1090,47 +1344,64 @@ document.getElementById(
 if (comoChegar) {
 
 comoChegar.href =
-  `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`;
+`https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`;
 
 comoChegar.target =
-  "_blank";
+"_blank";
 
 comoChegar.rel =
-  "noopener noreferrer";
+"noopener noreferrer";
 
 }
+
+/* =====================================================
+CORRIGIR TAMANHO DO LEAFLET
+===================================================== */
 
 requestAnimationFrame(
 () => {
 
-  if (mapaLocal) {
-    mapaLocal.invalidateSize(true);
-  }
+if (!mapaLocal) {
+return;
 }
 
+mapaLocal.invalidateSize(
+true
+);
+
+}
 );
 
 setTimeout(
 () => {
 
-  if (mapaLocal) {
-    mapaLocal.invalidateSize(true);
-  }
+if (!mapaLocal) {
+return;
+}
+
+mapaLocal.invalidateSize(
+true
+);
+
 },
 300
-
 );
 
 setTimeout(
 () => {
 
-  if (mapaLocal) {
-    mapaLocal.invalidateSize(true);
-  }
+if (!mapaLocal) {
+return;
+}
+
+mapaLocal.invalidateSize(
+true
+);
+
 },
 800
-
 );
+
 }
 
 /* =========================================================
@@ -1142,29 +1413,31 @@ async function obterUsuarioAutenticadoLocal() {
 try {
 
 if (
-  window.usuarioAtualSupabase
+window.usuarioAtualSupabase
 ) {
 
-  return window.usuarioAtualSupabase;
+return window.usuarioAtualSupabase;
+
 }
 
 const supabase =
-  obterSupabaseClient();
+obterSupabaseClient();
 
 if (!supabase) {
-  return null;
+return null;
 }
 
 const resultado =
-  await supabase.auth.getUser();
+await supabase.auth.getUser();
 
 if (
-  resultado.error ||
-  !resultado.data ||
-  !resultado.data.user
+resultado.error ||
+!resultado.data ||
+!resultado.data.user
 ) {
 
-  return null;
+return null;
+
 }
 
 return resultado.data.user;
@@ -1172,17 +1445,18 @@ return resultado.data.user;
 } catch (erro) {
 
 console.error(
-  "Erro ao obter usuário:",
-  erro
+"Erro ao obter usuário:",
+erro
 );
 
 return null;
 
 }
+
 }
 
 /* =========================================================
-ÁREA DOS BOTÕES DO PROPRIETÁRIO
+ÁREA DOS BOTÕES
 ========================================================= */
 
 function obterAreaBotoesComercio() {
@@ -1207,6 +1481,9 @@ area.id =
 area.style.display =
 "none";
 
+area.style.margin =
+"20px 0";
+
 const mapa =
 document.querySelector(
 ".local-map-section"
@@ -1215,33 +1492,35 @@ document.querySelector(
 if (mapa) {
 
 mapa.parentNode.insertBefore(
-  area,
-  mapa
+area,
+mapa
 );
 
 } else {
 
 const pagina =
-  document.querySelector(
-    ".local-page"
-  );
+document.querySelector(
+".local-page"
+);
 
 if (pagina) {
 
-  pagina.appendChild(
-    area
-  );
+pagina.appendChild(
+area
+);
 
 } else {
 
-  document.body.appendChild(
-    area
-  );
+document.body.appendChild(
+area
+);
+
 }
 
 }
 
 return area;
+
 }
 
 /* =========================================================
@@ -1260,6 +1539,10 @@ return;
 area.innerHTML =
 "";
 
+/* =====================================================
+TÍTULO
+===================================================== */
+
 const titulo =
 document.createElement(
 "div"
@@ -1271,6 +1554,10 @@ titulo.className =
 titulo.textContent =
 "Gerenciar meu comércio";
 
+/* =====================================================
+CONTAINER
+===================================================== */
+
 const botoes =
 document.createElement(
 "div"
@@ -1278,6 +1565,10 @@ document.createElement(
 
 botoes.className =
 "gerenciar-comercio-botoes";
+
+/* =====================================================
+EDITAR
+===================================================== */
 
 const editar =
 document.createElement(
@@ -1300,6 +1591,10 @@ editar.addEventListener(
 "click",
 editarMeuComercio
 );
+
+/* =====================================================
+EXCLUIR
+===================================================== */
 
 const excluir =
 document.createElement(
@@ -1341,6 +1636,7 @@ botoes
 
 area.style.display =
 "block";
+
 }
 
 /* =========================================================
@@ -1357,12 +1653,13 @@ document.getElementById(
 if (area) {
 
 area.innerHTML =
-  "";
+"";
 
 area.style.display =
-  "none";
+"none";
 
 }
+
 }
 
 /* =========================================================
@@ -1390,7 +1687,9 @@ return;
 if (
 verificacaoProprietarioEmAndamento
 ) {
+
 return;
+
 }
 
 verificacaoProprietarioEmAndamento =
@@ -1399,152 +1698,155 @@ true;
 try {
 
 const usuario =
-  await obterUsuarioAutenticadoLocal();
+await obterUsuarioAutenticadoLocal();
 
 console.log(
-  "Usuário logado:",
-  usuario
-    ? usuario.id
-    : null
+"Usuário logado:",
+usuario
+? usuario.id
+: null
 );
 
 if (!usuario) {
 
-  esconderBotoesProprietario();
+esconderBotoesProprietario();
 
-  usuarioProprietarioVerificado =
-    null;
+usuarioProprietarioVerificado =
+null;
 
-  return;
+return;
+
 }
 
 const supabase =
-  obterSupabaseClient();
+obterSupabaseClient();
 
 if (!supabase) {
 
-  esconderBotoesProprietario();
+esconderBotoesProprietario();
 
-  return;
+return;
+
 }
 
+/* ===================================================
+BUSCAR CADASTROS
+=================================================== */
 
 const resposta =
-  await supabase
-    .from(
-      "cadastros_comercios"
-    )
-    .select("*")
-    .eq(
-      "usuario_id",
-      usuario.id
-    );
-
+await supabase
+.from(
+"cadastros_comercios"
+)
+.select("*")
+.eq(
+"usuario_id",
+usuario.id
+);
 
 if (resposta.error) {
 
-  console.error(
-    "Erro ao buscar cadastros do usuário:",
-    resposta.error
-  );
-
-  esconderBotoesProprietario();
-
-  return;
-}
-
-
-const cadastros =
-  resposta.data ||
-  [];
-
-
-console.log(
-  "Cadastros do usuário encontrados:",
-  cadastros
+console.error(
+"Erro ao buscar cadastros do usuário:",
+resposta.error
 );
 
+esconderBotoesProprietario();
+
+return;
+
+}
+
+const cadastros =
+resposta.data || [];
+
+console.log(
+"Cadastros do usuário encontrados:",
+cadastros
+);
+
+/* ===================================================
+COMPARAR COMÉRCIO
+=================================================== */
 
 const idAtual =
-  String(
-    localAtual.id ||
-    ""
-  );
+String(
+localAtual.id || ""
+);
 
 const nomeAtual =
-  normalizarTexto(
-    localAtual.nome
-  );
-
+normalizarTexto(
+localAtual.nome
+);
 
 const cadastroEncontrado =
-  cadastros.find(
-    cadastro => {
+cadastros.find(
+cadastro => {
 
-      const localId =
-        String(
-          cadastro.local_id ||
-          ""
-        );
+const localId =
+String(
+cadastro.local_id ||
+""
+);
 
-      const cadastroId =
-        String(
-          cadastro.id ||
-          ""
-        );
+const cadastroId =
+String(
+cadastro.id ||
+""
+);
 
-      const nomeCadastro =
-        normalizarTexto(
-          cadastro.nome
-        );
+const nomeCadastro =
+normalizarTexto(
+cadastro.nome
+);
 
-      return (
-        localId === idAtual ||
-        cadastroId === idAtual ||
-        (
-          nomeAtual &&
-          nomeCadastro &&
-          nomeAtual ===
-          nomeCadastro
-        )
-      );
-    }
-  );
+return (
+localId === idAtual ||
+cadastroId === idAtual ||
+(
+nomeAtual &&
+nomeCadastro &&
+nomeAtual ===
+nomeCadastro
+)
+);
 
+}
+);
 
 if (cadastroEncontrado) {
 
-  localAtual._cadastroSupabase =
-    cadastroEncontrado;
-
-  console.log(
-    "Cadastro do proprietário encontrado:",
-    cadastroEncontrado
-  );
-
-  criarBotoesProprietario();
-
-  usuarioProprietarioVerificado =
-    usuario.id;
-
-  return;
-}
-
+localAtual._cadastroSupabase =
+cadastroEncontrado;
 
 console.log(
-  "Nenhum cadastro do usuário encontrado para este comércio."
+"Cadastro do proprietário encontrado:",
+cadastroEncontrado
+);
+
+criarBotoesProprietario();
+
+usuarioProprietarioVerificado =
+usuario.id;
+
+return;
+
+}
+
+console.log(
+"Nenhum cadastro do usuário encontrado para este comércio."
 );
 
 esconderBotoesProprietario();
 
 usuarioProprietarioVerificado =
-  null;
+null;
 
 } catch (erro) {
 
 console.error(
-  "Erro ao verificar proprietário:",
-  erro
+"Erro ao verificar proprietário:",
+erro
 );
 
 esconderBotoesProprietario();
@@ -1552,13 +1854,14 @@ esconderBotoesProprietario();
 } finally {
 
 verificacaoProprietarioEmAndamento =
-  false;
+false;
 
 }
+
 }
 
 /* =========================================================
-TOKEN SUPABASE
+OBTER TOKEN
 ========================================================= */
 
 async function obterTokenSupabase() {
@@ -1566,118 +1869,40 @@ async function obterTokenSupabase() {
 try {
 
 const supabase =
-  obterSupabaseClient();
+obterSupabaseClient();
 
 if (!supabase) {
-  return null;
+return null;
 }
 
 const resposta =
-  await supabase.auth.getSession();
+await supabase.auth.getSession();
 
 if (
-  resposta.error ||
-  !resposta.data ||
-  !resposta.data.session
+resposta.error ||
+!resposta.data ||
+!resposta.data.session
 ) {
 
-  return null;
+return null;
+
 }
 
-return resposta.data.session.access_token;
+return (
+resposta.data.session.access_token
+);
 
 } catch (erro) {
 
 console.error(
-  "Erro ao obter token:",
-  erro
+"Erro ao obter token:",
+erro
 );
 
 return null;
 
 }
-}
 
-/* =========================================================
-PREENCHER IMAGENS ATUAIS NO EDITOR
-========================================================= */
-
-function preencherImagensEditor() {
-
-const container =
-document.getElementById(
-"editarImagensAtuais"
-);
-
-if (!container) {
-return;
-}
-
-container.innerHTML =
-"";
-
-const imagens =
-obterImagensLocal();
-
-if (!imagens.length) {
-return;
-}
-
-const titulo =
-document.createElement(
-"span"
-);
-
-titulo.className =
-"editar-imagens-titulo";
-
-titulo.textContent =
-"Fotos atuais";
-
-container.appendChild(
-titulo
-);
-
-const grade =
-document.createElement(
-"div"
-);
-
-grade.className =
-"editar-imagens-grade";
-
-imagens
-.slice(0, 4)
-.forEach(
-imagem => {
-
-    const img =
-      document.createElement(
-        "img"
-      );
-
-    img.src =
-      imagem;
-
-    img.alt =
-      "Foto atual do comércio";
-
-    img.onerror =
-      function () {
-
-        this.src =
-          FALLBACK_IMAGE;
-      };
-
-    grade.appendChild(
-      img
-    );
-  }
-);
-
-container.appendChild(
-grade
-);
 }
 
 /* =========================================================
@@ -1707,7 +1932,7 @@ localAtual._cadastroSupabase;
 if (!cadastro) {
 
 console.error(
-  "Não foi possível identificar o cadastro deste comércio."
+"Não foi possível identificar o cadastro deste comércio."
 );
 
 return;
@@ -1722,41 +1947,45 @@ document.getElementById(
 if (!modal) {
 
 console.error(
-  "Modal de edição não encontrado no local.html."
+"Modal de edição não encontrado no local.html."
 );
 
 return;
 
 }
 
+/* =====================================================
+CAMPOS
+===================================================== */
+
 const campos = {
 
 nome:
-  "editarNome",
+"editarNome",
 
 categoria:
-  "editarCategoria",
+"editarCategoria",
 
 whatsapp:
-  "editarWhatsapp",
+"editarWhatsapp",
 
 instagram:
-  "editarInstagram",
+"editarInstagram",
 
 endereco:
-  "editarEndereco",
+"editarEndereco",
 
 horario:
-  "editarHorario",
+"editarHorario",
 
 descricao:
-  "editarDescricao",
+"editarDescricao",
 
 latitude:
-  "editarLatitude",
+"editarLatitude",
 
 longitude:
-  "editarLongitude"
+"editarLongitude"
 
 };
 
@@ -1770,44 +1999,26 @@ id
 ]
 ) => {
 
-  const campo =
-    document.getElementById(
-      id
-    );
-
-  if (!campo) {
-    return;
-  }
-
-  campo.value =
-    localAtual[chave] ??
-    cadastro[chave] ??
-    "";
-}
-
-);
-
-const inputImagens =
+const campo =
 document.getElementById(
-"editarImagens"
+id
 );
 
-if (inputImagens) {
-inputImagens.value =
-"";
+if (!campo) {
+return;
 }
 
-preencherImagensEditor();
+campo.value =
+localAtual[chave] ??
+cadastro[chave] ??
+"";
 
-const mensagem =
-document.getElementById(
-"mensagemEditarComercio"
+}
 );
 
-if (mensagem) {
-mensagem.textContent =
-"";
-}
+/* =====================================================
+ABRIR MODAL
+===================================================== */
 
 modal.style.display =
 "flex";
@@ -1829,15 +2040,16 @@ document.getElementById(
 if (primeiroCampo) {
 
 setTimeout(
-  () => {
+() => {
 
-    primeiroCampo.focus();
+primeiroCampo.focus();
 
-  },
-  50
+},
+50
 );
 
 }
+
 }
 
 /* =========================================================
@@ -1866,6 +2078,7 @@ modal.setAttribute(
 document.body.classList.remove(
 "modal-edicao-aberto"
 );
+
 }
 
 /* =========================================================
@@ -1880,7 +2093,7 @@ typeof window.abrirModalAuth ===
 ) {
 
 window.abrirModalAuth(
-  "login"
+"login"
 );
 
 return;
@@ -1895,42 +2108,10 @@ document.getElementById(
 if (modal) {
 
 modal.style.display =
-  "flex";
+"flex";
 
 }
-}
 
-/* =========================================================
-MENSAGEM DO EDITOR
-========================================================= */
-
-function mostrarMensagemEdicao(
-mensagem,
-tipo = ""
-) {
-
-const elemento =
-document.getElementById(
-"mensagemEditarComercio"
-);
-
-if (!elemento) {
-return;
-}
-
-elemento.textContent =
-mensagem || "";
-
-elemento.className =
-"mensagem-editar-comercio";
-
-if (tipo) {
-
-elemento.classList.add(
-  tipo
-);
-
-}
 }
 
 /* =========================================================
@@ -1954,233 +2135,151 @@ const token =
 await obterTokenSupabase();
 
 if (!token) {
-
-mostrarMensagemEdicao(
-  "Sua sessão expirou. Entre novamente.",
-  "erro"
-);
-
 return;
-
 }
 
 const obterValor =
 id => {
 
-  const campo =
-    document.getElementById(
-      id
-    );
+const campo =
+document.getElementById(
+id
+);
 
-  return campo
-    ? campo.value.trim()
-    : "";
+return campo
+? campo.value.trim()
+: "";
+
 };
 
 const dadosComercio = {
 
 nome:
-  obterValor(
-    "editarNome"
-  ),
+obterValor(
+"editarNome"
+),
 
 categoria:
-  obterValor(
-    "editarCategoria"
-  ),
+obterValor(
+"editarCategoria"
+),
 
 whatsapp:
-  obterValor(
-    "editarWhatsapp"
-  ),
+obterValor(
+"editarWhatsapp"
+),
 
 instagram:
-  obterValor(
-    "editarInstagram"
-  ),
+obterValor(
+"editarInstagram"
+),
 
 endereco:
-  obterValor(
-    "editarEndereco"
-  ),
+obterValor(
+"editarEndereco"
+),
 
 horario:
-  obterValor(
-    "editarHorario"
-  ),
+obterValor(
+"editarHorario"
+),
 
 descricao:
-  obterValor(
-    "editarDescricao"
-  ),
+obterValor(
+"editarDescricao"
+),
 
 latitude:
-  obterValor(
-    "editarLatitude"
-  ) || null,
+obterValor(
+"editarLatitude"
+) || null,
 
 longitude:
-  obterValor(
-    "editarLongitude"
-  ) || null,
+obterValor(
+"editarLongitude"
+) || null,
 
 imagem:
-  localAtual.imagem ||
-  null,
+localAtual.imagem ||
+null,
 
 imagens:
-  Array.isArray(
-    localAtual.imagens
-  )
-    ? localAtual.imagens
-    : []
+Array.isArray(
+localAtual.imagens
+)
+? localAtual.imagens
+: []
 
 };
-
-if (!dadosComercio.nome) {
-
-mostrarMensagemEdicao(
-  "Informe o nome do comércio.",
-  "erro"
-);
-
-return;
-
-}
-
-if (!dadosComercio.categoria) {
-
-mostrarMensagemEdicao(
-  "Informe a categoria do comércio.",
-  "erro"
-);
-
-return;
-
-}
-
-const botao =
-document.getElementById(
-"salvarEdicaoComercio"
-);
-
-if (botao) {
-
-botao.disabled =
-  true;
-
-botao.textContent =
-  "Salvando...";
-
-}
-
-mostrarMensagemEdicao(
-"Salvando alterações..."
-);
 
 try {
 
 const resposta =
-  await fetch(
-    EDGE_FUNCTION_URL,
-    {
-      method:
-        "POST",
+await fetch(
+EDGE_FUNCTION_URL,
+{
+method:
+"POST",
 
-      headers: {
+headers: {
 
-        "Content-Type":
-          "application/json",
+"Content-Type":
+"application/json",
 
-        "Authorization":
-          `Bearer ${token}`
-      },
+"Authorization":
+`Bearer ${token}`
 
-      body:
-        JSON.stringify({
+},
 
-          acao:
-            "editar_meu_comercio",
+body:
+JSON.stringify({
 
-          comercio_id:
-            cadastro.id,
+acao:
+"editar_meu_comercio",
 
-          comercio:
-            dadosComercio
-        })
-    }
-  );
+comercio_id:
+cadastro.id,
 
+comercio:
+dadosComercio
+
+})
+
+}
+);
 
 const resultado =
-  await resposta.json();
-
+await resposta.json();
 
 if (!resposta.ok) {
 
-  console.error(
-    "Erro ao editar comércio:",
-    resultado
-  );
+console.error(
+"Erro ao editar comércio:",
+resultado
+);
 
-  mostrarMensagemEdicao(
-    resultado?.erro ||
-    resultado?.mensagem ||
-    "Não foi possível salvar as alterações.",
-    "erro"
-  );
+return;
 
-  return;
 }
 
-
 console.log(
-  "Comércio atualizado:",
-  resultado
+"Comércio atualizado:",
+resultado
 );
 
+fecharEditorComercio();
 
-mostrarMensagemEdicao(
-  "Alterações salvas com sucesso.",
-  "sucesso"
-);
-
-
-setTimeout(
-  () => {
-
-    fecharEditorComercio();
-
-    window.location.reload();
-
-  },
-  700
-);
+window.location.reload();
 
 } catch (erro) {
 
 console.error(
-  "Erro ao editar comércio:",
-  erro
+"Erro ao editar comércio:",
+erro
 );
 
-mostrarMensagemEdicao(
-  "Erro de conexão. Tente novamente.",
-  "erro"
-);
-
-} finally {
-
-if (botao) {
-
-  botao.disabled =
-    false;
-
-  botao.textContent =
-    "Salvar alterações";
 }
 
-}
 }
 
 /* =========================================================
@@ -2210,7 +2309,7 @@ localAtual._cadastroSupabase;
 if (!cadastro) {
 
 console.error(
-  "Não foi possível identificar o cadastro deste comércio."
+"Não foi possível identificar o cadastro deste comércio."
 );
 
 return;
@@ -2229,68 +2328,69 @@ return;
 try {
 
 const token =
-  await obterTokenSupabase();
+await obterTokenSupabase();
 
 if (!token) {
-  return;
+return;
 }
 
-
 const resposta =
-  await fetch(
-    EDGE_FUNCTION_URL,
-    {
-      method:
-        "POST",
+await fetch(
+EDGE_FUNCTION_URL,
+{
+method:
+"POST",
 
-      headers: {
+headers: {
 
-        "Content-Type":
-          "application/json",
+"Content-Type":
+"application/json",
 
-        "Authorization":
-          `Bearer ${token}`
-      },
+"Authorization":
+`Bearer ${token}`
 
-      body:
-        JSON.stringify({
+},
 
-          acao:
-            "excluir_meu_comercio",
+body:
+JSON.stringify({
 
-          comercio_id:
-            cadastro.id
-        })
-    }
-  );
+acao:
+"excluir_meu_comercio",
 
+comercio_id:
+cadastro.id
+
+})
+
+}
+);
 
 const resultado =
-  await resposta.json();
-
+await resposta.json();
 
 if (!resposta.ok) {
 
-  console.error(
-    "Erro ao excluir comércio:",
-    resultado
-  );
+console.error(
+"Erro ao excluir comércio:",
+resultado
+);
 
-  return;
+return;
+
 }
 
-
 window.location.href =
-  "../index.html";
+"../index.html";
 
 } catch (erro) {
 
 console.error(
-  "Erro ao excluir comércio:",
-  erro
+"Erro ao excluir comércio:",
+erro
 );
 
 }
+
 }
 
 /* =========================================================
@@ -2315,82 +2415,7 @@ encodeURIComponent(
 
 window.location.href =
 `mailto:pedrinhossiqueira12@gmail.com?subject=${assunto}&body=${corpo}`;
-}
 
-/* =========================================================
-FORMATAR DATA DA AVALIAÇÃO
-========================================================= */
-
-function formatarDataAvaliacao(
-data
-) {
-
-if (!data) {
-return "";
-}
-
-const objeto =
-new Date(data);
-
-if (
-Number.isNaN(
-objeto.getTime()
-)
-) {
-return "";
-}
-
-return objeto.toLocaleDateString(
-"pt-BR",
-{
-day: "2-digit",
-month: "2-digit",
-year: "numeric"
-}
-);
-}
-
-/* =========================================================
-GERAR ESTRELAS COM IMAGENS
-========================================================= */
-
-function gerarEstrelasHTML(
-nota,
-tamanho = "normal"
-) {
-
-const valor =
-Number(nota) || 0;
-
-const arredondada =
-Math.round(valor);
-
-let resultado =
-`<div class="estrelas-imagens estrelas-${tamanho}" aria-label="${arredondada} de 5 estrelas">`;
-
-for (
-let i = 1;
-i <= 5;
-i++
-) {
-
-const ativa =
-  i <= arredondada;
-
-resultado += `
-  <img
-    src="${ativa ? ESTRELA_ATIVA : ESTRELA_INATIVA}"
-    alt=""
-    aria-hidden="true"
-  >
-`;
-
-}
-
-resultado +=
-"</div>";
-
-return resultado;
 }
 
 /* =========================================================
@@ -2414,56 +2439,54 @@ return;
 try {
 
 const resposta =
-  await supabase
-    .from(
-      "avaliacoes"
-    )
-    .select("*")
-    .eq(
-      "local_id",
-      localAtual.id
-    )
-    .order(
-      "criado_em",
-      {
-        ascending:
-          false
-      }
-    );
-
+await supabase
+.from(
+"avaliacoes"
+)
+.select("*")
+.eq(
+"local_id",
+localAtual.id
+)
+.order(
+"criado_em",
+{
+ascending:
+false
+}
+);
 
 if (resposta.error) {
 
-  console.error(
-    "Erro ao carregar avaliações:",
-    resposta.error
-  );
+console.error(
+"Erro ao carregar avaliações:",
+resposta.error
+);
 
-  return;
+return;
+
 }
 
-
 const avaliacoes =
-  resposta.data ||
-  [];
-
+resposta.data || [];
 
 atualizarResumoAvaliacoes(
-  avaliacoes
+avaliacoes
 );
 
 renderizarComentarios(
-  avaliacoes
+avaliacoes
 );
 
 } catch (erro) {
 
 console.error(
-  "Erro ao carregar avaliações:",
-  erro
+"Erro ao carregar avaliações:",
+erro
 );
 
 }
+
 }
 
 /* =========================================================
@@ -2511,34 +2534,63 @@ document.getElementById(
 if (mediaElemento) {
 
 mediaElemento.textContent =
-  quantidade
-    ? media.toFixed(1).replace(".", ",")
-    : "0,0";
+media.toFixed(1);
 
 }
 
 if (estrelas) {
 
-estrelas.innerHTML =
-  gerarEstrelasHTML(
-    media,
-    "media"
-  );
+estrelas.textContent =
+gerarEstrelas(
+media
+);
 
 }
 
 if (quantidadeElemento) {
 
 quantidadeElemento.textContent =
-  quantidade === 0
-    ? "Nenhuma avaliação"
-    : `${quantidade} ${quantidade === 1 ? "avaliação" : "avaliações"}`;
+`${quantidade} ${ quantidade === 1 ? "avaliação" : "avaliações" }`;
 
 }
+
 }
 
 /* =========================================================
-RENDERIZAR COMENTÁRIOS
+ESTRELAS
+========================================================= */
+
+function gerarEstrelas(
+nota
+) {
+
+const arredondada =
+Math.round(
+Number(nota) || 0
+);
+
+let resultado =
+"";
+
+for (
+let i = 1;
+i <= 5;
+i++
+) {
+
+resultado +=
+i <= arredondada
+? "★"
+: "☆";
+
+}
+
+return resultado;
+
+}
+
+/* =========================================================
+COMENTÁRIOS
 ========================================================= */
 
 function renderizarComentarios(
@@ -2559,12 +2611,8 @@ lista.innerHTML =
 
 if (!avaliacoes.length) {
 
-lista.innerHTML = `
-  <div class="empty-comments">
-    Ainda não há avaliações.<br>
-    Seja o primeiro a avaliar!
-  </div>
-`;
+lista.innerHTML =
+"<p>Ainda não há avaliações.</p>";
 
 return;
 
@@ -2573,80 +2621,48 @@ return;
 avaliacoes.forEach(
 avaliacao => {
 
-  const item =
-    document.createElement(
-      "article"
-    );
-
-  item.className =
-    "comentario-item";
-
-
-  const nome =
-    avaliacao.nome_usuario ||
-    "Usuário";
-
-
-  const nota =
-    Number(
-      avaliacao.nota ||
-      0
-    );
-
-
-  const comentario =
-    avaliacao.comentario ||
-    "";
-
-
-  const data =
-    formatarDataAvaliacao(
-      avaliacao.criado_em
-    );
-
-
-  item.innerHTML = `
-
-    <div class="comentario-cabecalho">
-
-      <div class="comentario-identificacao">
-
-        <strong class="comentario-nome">
-          ${escaparHTML(nome)}
-        </strong>
-
-        ${
-          data
-            ? `<span class="comentario-data">${escaparHTML(data)}</span>`
-            : ""
-        }
-
-      </div>
-
-      ${gerarEstrelasHTML(nota, "comentario")}
-
-    </div>
-
-
-    ${
-      comentario
-        ? `
-          <p class="comentario-texto">
-            ${escaparHTML(comentario)}
-          </p>
-        `
-        : ""
-    }
-
-  `;
-
-
-  lista.appendChild(
-    item
-  );
-}
-
+const item =
+document.createElement(
+"div"
 );
+
+item.className =
+"comentario-item";
+
+const nome =
+avaliacao.nome_usuario ||
+"Usuário";
+
+const nota =
+Number(
+avaliacao.nota ||
+0
+);
+
+const comentario =
+avaliacao.comentario ||
+"";
+
+item.innerHTML = `
+
+<div class="comentario-cabecalho">
+
+<strong> ${escaparHTML(nome)} </strong>
+
+<span> ${gerarEstrelas(nota)} </span>
+
+</div>
+
+<p> ${escaparHTML(comentario)} </p>
+
+`;
+
+lista.appendChild(
+item
+);
+
+});
+
 }
 
 /* =========================================================
@@ -2670,211 +2686,145 @@ return;
 try {
 
 const usuario =
-  await obterUsuarioAutenticadoLocal();
-
+await obterUsuarioAutenticadoLocal();
 
 const areaAuth =
-  document.getElementById(
-    "areaAutenticacao"
-  );
+document.getElementById(
+"areaAutenticacao"
+);
 
 const areaAvaliacao =
-  document.getElementById(
-    "areaAvaliacao"
-  );
+document.getElementById(
+"areaAvaliacao"
+);
 
 const mensagemAuth =
-  document.getElementById(
-    "mensagemAutenticacao"
-  );
-
+document.getElementById(
+"mensagemAutenticacao"
+);
 
 if (!usuario) {
 
-  if (areaAuth) {
-    areaAuth.style.display =
-      "";
-  }
-
-  if (areaAvaliacao) {
-    areaAvaliacao.style.display =
-      "none";
-  }
-
-  if (mensagemAuth) {
-
-    mensagemAuth.textContent =
-      "Faça login para avaliar este local.";
-  }
-
-  avaliacaoAtual =
-    null;
-
-  notaSelecionada =
-    0;
-
-  atualizarSeletorEstrelas();
-
-  return;
-}
-
-
 if (areaAuth) {
-  areaAuth.style.display =
-    "none";
+
+areaAuth.style.display =
+"";
+
 }
 
 if (areaAvaliacao) {
-  areaAvaliacao.style.display =
-    "";
+
+areaAvaliacao.style.display =
+"none";
+
 }
 
+if (mensagemAuth) {
+
+mensagemAuth.textContent =
+"Faça login para avaliar este local.";
+
+}
+
+avaliacaoAtual =
+null;
+
+return;
+
+}
+
+if (areaAuth) {
+
+areaAuth.style.display =
+"none";
+
+}
+
+if (areaAvaliacao) {
+
+areaAvaliacao.style.display =
+"";
+
+}
 
 const resposta =
-  await supabase
-    .from(
-      "avaliacoes"
-    )
-    .select("*")
-    .eq(
-      "local_id",
-      localAtual.id
-    )
-    .eq(
-      "usuario_id",
-      usuario.id
-    )
-    .maybeSingle();
-
+await supabase
+.from(
+"avaliacoes"
+)
+.select("*")
+.eq(
+"local_id",
+localAtual.id
+)
+.eq(
+"usuario_id",
+usuario.id
+)
+.maybeSingle();
 
 if (resposta.error) {
 
-  console.error(
-    "Erro ao verificar avaliação:",
-    resposta.error
-  );
+console.error(
+"Erro ao verificar avaliação:",
+resposta.error
+);
 
-  return;
+return;
+
 }
 
-
 avaliacaoAtual =
-  resposta.data ||
-  null;
-
+resposta.data ||
+null;
 
 const nomeUsuario =
-  document.getElementById(
-    "nomeUsuarioLogado"
-  );
-
+document.getElementById(
+"nomeUsuarioLogado"
+);
 
 if (nomeUsuario) {
 
-  nomeUsuario.textContent =
-    usuario.user_metadata?.nome ||
-    usuario.email ||
-    "Usuário";
+nomeUsuario.textContent =
+usuario.user_metadata?.nome ||
+usuario.email ||
+"Usuário";
+
 }
-
-
-const comentario =
-  document.getElementById(
-    "textoComentario"
-  );
-
 
 if (avaliacaoAtual) {
 
-  notaSelecionada =
-    Number(
-      avaliacaoAtual.nota
-    );
-
-
-  if (comentario) {
-
-    comentario.value =
-      avaliacaoAtual.comentario ||
-      "";
-  }
-
-} else {
-
-  notaSelecionada =
-    0;
-
-  if (comentario) {
-    comentario.value =
-      "";
-  }
-}
-
+notaSelecionada =
+Number(
+avaliacaoAtual.nota
+);
 
 atualizarSeletorEstrelas();
+
+const comentario =
+document.getElementById(
+"textoComentario"
+);
+
+if (comentario) {
+
+comentario.value =
+avaliacaoAtual.comentario ||
+"";
+
+}
+
+}
 
 } catch (erro) {
 
 console.error(
-  "Erro ao verificar avaliação:",
-  erro
+"Erro ao verificar avaliação:",
+erro
 );
 
 }
-}
 
-/* =========================================================
-ATUALIZAR ESTRELAS DO FORMULÁRIO
-========================================================= */
-
-function atualizarSeletorEstrelas(
-valorVisual = null
-) {
-
-const botoes =
-document.querySelectorAll(
-"#seletorEstrelas .star-button"
-);
-
-const valor =
-valorVisual !== null
-? Number(valorVisual)
-: Number(notaSelecionada);
-
-botoes.forEach(
-(
-botao,
-indice
-) => {
-
-  const nota =
-    indice + 1;
-
-  const imagem =
-    botao.querySelector(
-      "img"
-    );
-
-  const ativa =
-    nota <= valor;
-
-
-  botao.classList.toggle(
-    "selecionada",
-    ativa
-  );
-
-
-  if (imagem) {
-
-    imagem.src =
-      ativa
-        ? ESTRELA_ATIVA
-        : ESTRELA_INATIVA;
-  }
-}
-
-);
 }
 
 /* =========================================================
@@ -2889,6 +2839,33 @@ notaSelecionada =
 Number(nota);
 
 atualizarSeletorEstrelas();
+
+}
+
+function atualizarSeletorEstrelas() {
+
+const botoes =
+document.querySelectorAll(
+"#seletorEstrelas button"
+);
+
+botoes.forEach(
+(
+botao,
+indice
+) => {
+
+const valor =
+indice + 1;
+
+botao.classList.toggle(
+"selecionada",
+valor <=
+notaSelecionada
+);
+
+});
+
 }
 
 /* =========================================================
@@ -2946,93 +2923,81 @@ return;
 if (
 comentario.length > 500
 ) {
-
 return;
-
-}
-
-const botao =
-document.getElementById(
-"publicarComentario"
-);
-
-if (botao) {
-
-botao.disabled =
-  true;
-
-botao.textContent =
-  avaliacaoAtual
-    ? "Atualizando..."
-    : "Publicando...";
-
 }
 
 try {
 
+/* ===================================================
+ATUALIZAR
+=================================================== */
+
 if (avaliacaoAtual) {
 
-  const resposta =
-    await supabase
-      .from(
-        "avaliacoes"
-      )
-      .update({
+const resposta =
+await supabase
+.from(
+"avaliacoes"
+)
+.update({
 
-        nota:
-          notaSelecionada,
+nota:
+notaSelecionada,
 
-        comentario:
-          comentario
+comentario:
+comentario
 
-      })
-      .eq(
-        "id",
-        avaliacaoAtual.id
-      )
-      .eq(
-        "usuario_id",
-        usuario.id
-      );
+})
+.eq(
+"id",
+avaliacaoAtual.id
+)
+.eq(
+"usuario_id",
+usuario.id
+);
 
-
-  if (resposta.error) {
-    throw resposta.error;
-  }
+if (resposta.error) {
+throw resposta.error;
+}
 
 } else {
 
-  const resposta =
-    await supabase
-      .from(
-        "avaliacoes"
-      )
-      .insert({
+/* ===================================================
+CRIAR
+=================================================== */
 
-        local_id:
-          localAtual.id,
+const resposta =
+await supabase
+.from(
+"avaliacoes"
+)
+.insert({
 
-        usuario_id:
-          usuario.id,
+local_id:
+localAtual.id,
 
-        nome_usuario:
-          usuario.user_metadata?.nome ||
-          usuario.email ||
-          "Usuário",
+usuario_id:
+usuario.id,
 
-        nota:
-          notaSelecionada,
+nome_usuario:
+usuario.user_metadata?.nome ||
+usuario.email ||
+"Usuário",
 
-        comentario:
-          comentario
-      });
+nota:
+notaSelecionada,
 
+comentario:
+comentario
 
-  if (resposta.error) {
-    throw resposta.error;
-  }
+});
+
+if (resposta.error) {
+throw resposta.error;
 }
 
+}
 
 await carregarAvaliacoes();
 
@@ -3041,22 +3006,12 @@ await verificarAvaliacaoUsuario();
 } catch (erro) {
 
 console.error(
-  "Erro ao publicar avaliação:",
-  erro
+"Erro ao publicar avaliação:",
+erro
 );
 
-} finally {
-
-if (botao) {
-
-  botao.disabled =
-    false;
-
-  botao.textContent =
-    "Publicar avaliação";
 }
 
-}
 }
 
 /* =========================================================
@@ -3081,11 +3036,12 @@ window.location.reload();
 } catch (erro) {
 
 console.error(
-  "Erro ao sair:",
-  erro
+"Erro ao sair:",
+erro
 );
 
 }
+
 }
 
 /* =========================================================
@@ -3097,205 +3053,181 @@ document.addEventListener(
 () => {
 
 /* =====================================================
-   PUBLICAR COMENTÁRIO
-====================================================== */
+FECHAR VISUALIZADOR
+===================================================== */
+
+const fecharViewer =
+document.getElementById(
+"close-viewer"
+);
+
+if (fecharViewer) {
+
+fecharViewer.onclick =
+fecharVisualizador;
+
+}
+
+/* =====================================================
+PUBLICAR COMENTÁRIO
+===================================================== */
 
 const publicar =
-  document.getElementById(
-    "publicarComentario"
-  );
+document.getElementById(
+"publicarComentario"
+);
 
 if (publicar) {
 
-  publicar.onclick =
-    publicarAvaliacao;
+publicar.onclick =
+publicarAvaliacao;
+
 }
 
-
 /* =====================================================
-   SAIR
-====================================================== */
+SAIR
+===================================================== */
 
 const botaoSair =
-  document.getElementById(
-    "botaoSair"
-  );
+document.getElementById(
+"botaoSair"
+);
 
 if (botaoSair) {
 
-  botaoSair.onclick =
-    sairUsuarioLocal;
+botaoSair.onclick =
+sairUsuarioLocal;
+
 }
 
-
 /* =====================================================
-   ESTRELAS
-====================================================== */
+ESTRELAS
+===================================================== */
 
 const botoesEstrelas =
-  document.querySelectorAll(
-    "#seletorEstrelas .star-button"
-  );
-
-
-botoesEstrelas.forEach(
-  (
-    botao,
-    indice
-  ) => {
-
-    const nota =
-      indice + 1;
-
-
-    botao.addEventListener(
-      "mouseenter",
-      () => {
-
-        notaHover =
-          nota;
-
-        atualizarSeletorEstrelas(
-          notaHover
-        );
-      }
-    );
-
-
-    botao.addEventListener(
-      "click",
-      () => {
-
-        selecionarNota(
-          nota
-        );
-      }
-    );
-  }
+document.querySelectorAll(
+"#seletorEstrelas button"
 );
 
+botoesEstrelas.forEach(
+(
+botao,
+indice
+) => {
 
-const seletorEstrelas =
-  document.getElementById(
-    "seletorEstrelas"
-  );
+botao.addEventListener(
+"click",
+() => {
 
+selecionarNota(
+indice + 1
+);
 
-if (seletorEstrelas) {
-
-  seletorEstrelas.addEventListener(
-    "mouseleave",
-    () => {
-
-      notaHover =
-        0;
-
-      atualizarSeletorEstrelas();
-    }
-  );
 }
+);
 
+});
 
 /* =====================================================
-   MODAL DE EDIÇÃO
-====================================================== */
+MODAL DE EDIÇÃO
+===================================================== */
 
 const fecharEdicao =
-  document.getElementById(
-    "fecharModalEditarComercio"
-  );
+document.getElementById(
+"fecharModalEditarComercio"
+);
 
 if (fecharEdicao) {
 
-  fecharEdicao.onclick =
-    fecharEditorComercio;
+fecharEdicao.onclick =
+fecharEditorComercio;
+
 }
 
-
 const cancelarEdicao =
-  document.getElementById(
-    "cancelarEdicaoComercio"
-  );
+document.getElementById(
+"botaoCancelarEdicao"
+);
 
 if (cancelarEdicao) {
 
-  cancelarEdicao.onclick =
-    fecharEditorComercio;
+cancelarEdicao.onclick =
+fecharEditorComercio;
+
 }
 
-
 const formularioEdicao =
-  document.getElementById(
-    "formEditarComercio"
-  );
+document.getElementById(
+"formularioEditarComercio"
+);
 
 if (formularioEdicao) {
 
-  formularioEdicao.addEventListener(
-    "submit",
-    event => {
+formularioEdicao.addEventListener(
+"submit",
+event => {
 
-      event.preventDefault();
+event.preventDefault();
 
-      salvarEdicaoComercio();
+salvarEdicaoComercio();
 
-    }
-  );
+}
+);
+
 }
 
-
 /* =====================================================
-   FECHAR MODAL CLICANDO FORA
-====================================================== */
+FECHAR MODAL CLICANDO FORA
+===================================================== */
 
 const modalEdicao =
-  document.getElementById(
-    "modalEditarComercio"
-  );
-
+document.getElementById(
+"modalEditarComercio"
+);
 
 if (modalEdicao) {
 
-  modalEdicao.addEventListener(
-    "click",
-    event => {
+modalEdicao.addEventListener(
+"click",
+event => {
 
-      if (
-        event.target ===
-        modalEdicao
-      ) {
+if (
+event.target ===
+modalEdicao
+) {
 
-        fecharEditorComercio();
-      }
-    }
-  );
+fecharEditorComercio();
+
 }
 
+});
+
+}
 
 /* =====================================================
-   ESC
-====================================================== */
+ESC
+===================================================== */
 
 document.addEventListener(
-  "keydown",
-  event => {
+"keydown",
+event => {
 
-    if (
-      event.key ===
-      "Escape"
-    ) {
+if (
+event.key ===
+"Escape"
+) {
 
-      fecharVisualizador();
+fecharVisualizador();
 
-      fecharEditorComercio();
-    }
-  }
-);
+fecharEditorComercio();
 
+}
+
+});
 
 /* =====================================================
-   CARREGAR
-====================================================== */
+CARREGAR
+===================================================== */
 
 carregarLocal();
 
@@ -3310,58 +3242,54 @@ setTimeout(
 () => {
 
 const supabase =
-  obterSupabaseClient();
+obterSupabaseClient();
 
 if (!supabase) {
-  return;
+return;
 }
 
-
 supabase.auth.onAuthStateChange(
-  async (
-    evento,
-    sessao
-  ) => {
+async (
+evento,
+sessao
+) => {
 
-    const novoUsuario =
-      sessao?.user?.id ||
-      null;
+const novoUsuario =
+sessao?.user?.id ||
+null;
 
+if (
+novoUsuario ===
+usuarioProprietarioVerificado
+) {
 
-    if (
-      novoUsuario ===
-      usuarioProprietarioVerificado
-    ) {
+await verificarAvaliacaoUsuario();
 
-      await verificarAvaliacaoUsuario();
+return;
 
-      return;
-    }
+}
 
+usuarioProprietarioVerificado =
+novoUsuario;
 
-    usuarioProprietarioVerificado =
-      novoUsuario;
+await verificarAvaliacaoUsuario();
 
+await carregarAvaliacoes();
 
-    await verificarAvaliacaoUsuario();
+await verificarProprietarioComercio();
 
-    await carregarAvaliacoes();
-
-    await verificarProprietarioComercio();
-
-  }
+}
 );
 
-
 setTimeout(
-  async () => {
+async () => {
 
-    await verificarAvaliacaoUsuario();
+await verificarAvaliacaoUsuario();
 
-    await verificarProprietarioComercio();
+await verificarProprietarioComercio();
 
-  },
-  300
+},
+300
 );
 
 },
