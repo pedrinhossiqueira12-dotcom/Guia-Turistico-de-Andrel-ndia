@@ -32,6 +32,12 @@ const EDGE_FUNCTION_URL =
 const FALLBACK_IMAGE =
 "../img/icones/imgnaodisponivel.png";
 
+const ESTRELA_DESATIVADA =
+"../img/icones/estrela2.png";
+
+const ESTRELA_ATIVADA =
+"../img/icones/estrela.png";
+
 /* =========================================================
 ESTADO
 ========================================================= */
@@ -51,6 +57,8 @@ let mapaLocal = null;
 let imagensAtuais = [];
 
 let notaSelecionada = 0;
+
+let notaHover = 0;
 
 let avaliacaoAtual = null;
 
@@ -165,6 +173,7 @@ item.categoria ||
 );
 
 const categoriasComercio = [
+
 "comercio",
 "loja",
 "mercado",
@@ -182,6 +191,7 @@ const categoriasComercio = [
 "hotel",
 "pousada",
 "servico"
+
 ];
 
 return (
@@ -555,10 +565,8 @@ elemento.style.display =
 "none";
 
 if (nome) {
-
 nome.style.display =
 "none";
-
 }
 
 return;
@@ -585,6 +593,9 @@ elemento.style.display =
 "";
 
 if (nome) {
+
+nome.style.display =
+"";
 
 nome.textContent =
 localAtual.nome ||
@@ -627,10 +638,8 @@ elemento.style.display =
 "none";
 
 if (nome) {
-
 nome.style.display =
 "none";
-
 }
 
 return;
@@ -667,6 +676,9 @@ elemento.style.display =
 
 if (nome) {
 
+nome.style.display =
+"";
+
 nome.textContent =
 localAtual.nome ||
 "Instagram";
@@ -686,10 +698,6 @@ return [];
 }
 
 let imagens = [];
-
-/* =====================================================
-ARRAY DE IMAGENS
-===================================================== */
 
 if (
 Array.isArray(
@@ -711,10 +719,6 @@ imagem.trim()
 
 }
 
-/* =====================================================
-IMAGEM ÚNICA
-===================================================== */
-
 if (
 !imagens.length &&
 typeof localAtual.imagem === "string" &&
@@ -727,10 +731,6 @@ localAtual.imagem.trim()
 
 }
 
-/* =====================================================
-FALLBACK
-===================================================== */
-
 if (!imagens.length) {
 
 imagens = [
@@ -738,14 +738,6 @@ FALLBACK_IMAGE
 ];
 
 }
-
-/* =====================================================
-LIMITE
-
-1 FOTO PRINCIPAL
-+
-ATÉ 4 MINIATURAS
-===================================================== */
 
 return imagens.slice(
 0,
@@ -780,10 +772,6 @@ obterImagensLocal();
 imagensAtuais =
 imagens;
 
-/* =====================================================
-FOTO PRINCIPAL
-===================================================== */
-
 principal.src =
 imagens[0];
 
@@ -805,10 +793,6 @@ FALLBACK_IMAGE;
 
 };
 
-/* =====================================================
-CLIQUE NA FOTO PRINCIPAL
-===================================================== */
-
 principal.onclick =
 function () {
 
@@ -818,20 +802,12 @@ abrirVisualizador(
 
 };
 
-/* =====================================================
-MINIATURAS
-===================================================== */
-
 if (!miniaturas) {
 return;
 }
 
 miniaturas.innerHTML =
 "";
-
-/* =====================================================
-UMA ÚNICA IMAGEM
-===================================================== */
 
 if (imagens.length <= 1) {
 
@@ -842,16 +818,8 @@ return;
 
 }
 
-/* =====================================================
-MOSTRAR MINIATURAS
-===================================================== */
-
 miniaturas.style.display =
 "grid";
-
-/* =====================================================
-CRIAR MINIATURAS
-===================================================== */
 
 imagens
 .slice(
@@ -874,10 +842,6 @@ miniatura.type =
 
 miniatura.className =
 "thumbnail";
-
-/* ===================================================
-IMAGEM DA MINIATURA
-=================================================== */
 
 const img =
 document.createElement(
@@ -911,17 +875,9 @@ FALLBACK_IMAGE;
 
 };
 
-/* ===================================================
-COLOCAR IMAGEM DENTRO DO BOTÃO
-=================================================== */
-
 miniatura.appendChild(
 img
 );
-
-/* ===================================================
-PRIMEIRA MINIATURA ATIVA
-=================================================== */
 
 if (indice === 0) {
 
@@ -931,27 +887,15 @@ miniatura.classList.add(
 
 }
 
-/* ===================================================
-CLIQUE NA MINIATURA
-=================================================== */
-
 miniatura.addEventListener(
 "click",
 () => {
-
-/* -----------------------------------------------
-TROCAR FOTO PRINCIPAL
------------------------------------------------ */
 
 principal.src =
 imagem;
 
 principal.alt =
 `${localAtual?.nome || "Local"} — Foto ${indice + 1}`;
-
-/* -----------------------------------------------
-ATUALIZAR MINIATURA ATIVA
------------------------------------------------ */
 
 miniaturas
 .querySelectorAll(
@@ -971,10 +915,6 @@ miniatura.classList.add(
 "active"
 );
 
-/* -----------------------------------------------
-ABRIR VISUALIZADOR
------------------------------------------------ */
-
 abrirVisualizador(
 indice
 );
@@ -990,7 +930,7 @@ miniatura
 }
 
 /* =========================================================
-VISUALIZADOR DE FOTOS
+VISUALIZADOR
 ========================================================= */
 
 function abrirVisualizador(
@@ -1012,9 +952,7 @@ if (
 !imagem ||
 !imagensAtuais[indice]
 ) {
-
 return;
-
 }
 
 imagem.src =
@@ -1046,10 +984,6 @@ document.body.style.overflow =
 
 }
 
-/* =========================================================
-FECHAR VISUALIZADOR
-========================================================= */
-
 function fecharVisualizador() {
 
 const viewer =
@@ -1068,10 +1002,6 @@ document.body.style.overflow =
 "";
 
 }
-
-/* =========================================================
-COMPATIBILIDADE COM HTML ANTIGO
-========================================================= */
 
 function abrirFotoTelaCheia(
 indice = 0
@@ -1125,10 +1055,6 @@ if (!elemento) {
 return;
 }
 
-/* =====================================================
-VERIFICAR LEAFLET
-===================================================== */
-
 if (
 typeof L === "undefined"
 ) {
@@ -1140,10 +1066,6 @@ console.error(
 return;
 
 }
-
-/* =====================================================
-COORDENADAS
-===================================================== */
 
 const latitude =
 Number(
@@ -1167,10 +1089,6 @@ return;
 
 }
 
-/* =====================================================
-REMOVER MAPA ANTERIOR
-===================================================== */
-
 if (mapaLocal) {
 
 mapaLocal.remove();
@@ -1180,18 +1098,8 @@ null;
 
 }
 
-/* =====================================================
-DIMENSÃO
-
-O CSS controla a altura.
-===================================================== */
-
 elemento.style.width =
 "100%";
-
-/* =====================================================
-CRIAR MAPA
-===================================================== */
 
 mapaLocal =
 L.map(
@@ -1215,10 +1123,6 @@ longitude
 17
 );
 
-/* =====================================================
-ESRI WORLD IMAGERY
-===================================================== */
-
 const camadaEsri =
 L.tileLayer(
 "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
@@ -1241,10 +1145,6 @@ camadaEsri.addTo(
 mapaLocal
 );
 
-/* =====================================================
-MARCADOR
-===================================================== */
-
 const marcador =
 L.marker(
 [
@@ -1259,10 +1159,6 @@ mapaLocal
 marcador.bindPopup(
 `<strong>${escaparHTML(localAtual.nome || "")}</strong>`
 );
-
-/* =====================================================
-COMO CHEGAR
-===================================================== */
 
 const comoChegar =
 document.getElementById(
@@ -1282,20 +1178,16 @@ comoChegar.rel =
 
 }
 
-/* =====================================================
-CORRIGIR TAMANHO DO LEAFLET
-===================================================== */
-
 requestAnimationFrame(
 () => {
 
-if (!mapaLocal) {
-return;
-}
+if (mapaLocal) {
 
 mapaLocal.invalidateSize(
 true
 );
+
+}
 
 }
 );
@@ -1303,13 +1195,13 @@ true
 setTimeout(
 () => {
 
-if (!mapaLocal) {
-return;
-}
+if (mapaLocal) {
 
 mapaLocal.invalidateSize(
 true
 );
+
+}
 
 },
 300
@@ -1318,13 +1210,13 @@ true
 setTimeout(
 () => {
 
-if (!mapaLocal) {
-return;
-}
+if (mapaLocal) {
 
 mapaLocal.invalidateSize(
 true
 );
+
+}
 
 },
 800
@@ -1409,9 +1301,6 @@ area.id =
 area.style.display =
 "none";
 
-area.style.margin =
-"20px 0";
-
 const mapa =
 document.querySelector(
 ".local-map-section"
@@ -1467,10 +1356,6 @@ return;
 area.innerHTML =
 "";
 
-/* =====================================================
-TÍTULO
-===================================================== */
-
 const titulo =
 document.createElement(
 "div"
@@ -1482,10 +1367,6 @@ titulo.className =
 titulo.textContent =
 "Gerenciar meu comércio";
 
-/* =====================================================
-CONTAINER
-===================================================== */
-
 const botoes =
 document.createElement(
 "div"
@@ -1493,10 +1374,6 @@ document.createElement(
 
 botoes.className =
 "gerenciar-comercio-botoes";
-
-/* =====================================================
-EDITAR
-===================================================== */
 
 const editar =
 document.createElement(
@@ -1519,10 +1396,6 @@ editar.addEventListener(
 "click",
 editarMeuComercio
 );
-
-/* =====================================================
-EXCLUIR
-===================================================== */
 
 const excluir =
 document.createElement(
@@ -1566,10 +1439,6 @@ area.style.display =
 "block";
 
 }
-
-/* =========================================================
-ESCONDER BOTÕES
-========================================================= */
 
 function esconderBotoesProprietario() {
 
@@ -1657,10 +1526,6 @@ return;
 
 }
 
-/* ===================================================
-BUSCAR CADASTROS
-=================================================== */
-
 const resposta =
 await supabase
 .from(
@@ -1692,10 +1557,6 @@ console.log(
 "Cadastros do usuário encontrados:",
 cadastros
 );
-
-/* ===================================================
-COMPARAR COMÉRCIO
-=================================================== */
 
 const idAtual =
 String(
@@ -1789,7 +1650,7 @@ false;
 }
 
 /* =========================================================
-OBTER TOKEN
+TOKEN
 ========================================================= */
 
 async function obterTokenSupabase() {
@@ -1830,6 +1691,93 @@ erro
 return null;
 
 }
+
+}
+
+/* =========================================================
+PREENCHER IMAGENS DO EDITOR
+========================================================= */
+
+function preencherImagensEditor() {
+
+const container =
+document.getElementById(
+"editarImagensAtuais"
+);
+
+if (!container) {
+return;
+}
+
+container.innerHTML =
+"";
+
+const imagens =
+obterImagensLocal();
+
+if (!imagens.length) {
+return;
+}
+
+const titulo =
+document.createElement(
+"span"
+);
+
+titulo.className =
+"editar-imagens-titulo";
+
+titulo.textContent =
+"Fotos atuais";
+
+container.appendChild(
+titulo
+);
+
+const galeria =
+document.createElement(
+"div"
+);
+
+galeria.className =
+"editar-imagens-preview";
+
+imagens
+.slice(
+0,
+4
+)
+.forEach(
+imagem => {
+
+const img =
+document.createElement(
+"img"
+);
+
+img.src =
+imagem;
+
+img.alt =
+"Foto atual";
+
+img.onerror =
+function () {
+
+this.src =
+FALLBACK_IMAGE;
+
+};
+
+galeria.appendChild(
+img
+);
+
+});
+
+container.appendChild(
+galeria
+);
 
 }
 
@@ -1881,10 +1829,6 @@ console.error(
 return;
 
 }
-
-/* =====================================================
-CAMPOS
-===================================================== */
 
 const campos = {
 
@@ -1944,9 +1888,19 @@ cadastro[chave] ??
 }
 );
 
-/* =====================================================
-ABRIR MODAL
-===================================================== */
+preencherImagensEditor();
+
+const mensagem =
+document.getElementById(
+"mensagemEditarComercio"
+);
+
+if (mensagem) {
+
+mensagem.textContent =
+"";
+
+}
 
 modal.style.display =
 "flex";
@@ -2043,6 +1997,40 @@ modal.style.display =
 }
 
 /* =========================================================
+MENSAGEM DO EDITOR
+========================================================= */
+
+function mostrarMensagemEdicao(
+mensagem,
+tipo = ""
+) {
+
+const elemento =
+document.getElementById(
+"mensagemEditarComercio"
+);
+
+if (!elemento) {
+return;
+}
+
+elemento.textContent =
+mensagem;
+
+elemento.className =
+"mensagem-editar-comercio";
+
+if (tipo) {
+
+elemento.classList.add(
+tipo
+);
+
+}
+
+}
+
+/* =========================================================
 SALVAR EDIÇÃO
 ========================================================= */
 
@@ -2063,7 +2051,14 @@ const token =
 await obterTokenSupabase();
 
 if (!token) {
+
+mostrarMensagemEdicao(
+"Faça login novamente para continuar.",
+"erro"
+);
+
 return;
+
 }
 
 const obterValor =
@@ -2140,6 +2135,25 @@ localAtual.imagens
 
 };
 
+const botaoSalvar =
+document.getElementById(
+"salvarEdicaoComercio"
+);
+
+if (botaoSalvar) {
+
+botaoSalvar.disabled =
+true;
+
+botaoSalvar.textContent =
+"Salvando...";
+
+}
+
+mostrarMensagemEdicao(
+"Salvando alterações..."
+);
+
 try {
 
 const resposta =
@@ -2186,6 +2200,22 @@ console.error(
 resultado
 );
 
+mostrarMensagemEdicao(
+resultado?.erro ||
+"Não foi possível salvar as alterações.",
+"erro"
+);
+
+if (botaoSalvar) {
+
+botaoSalvar.disabled =
+false;
+
+botaoSalvar.textContent =
+"Salvar alterações";
+
+}
+
 return;
 
 }
@@ -2195,9 +2225,21 @@ console.log(
 resultado
 );
 
+mostrarMensagemEdicao(
+"Alterações salvas com sucesso.",
+"sucesso"
+);
+
+setTimeout(
+() => {
+
 fecharEditorComercio();
 
 window.location.reload();
+
+},
+800
+);
 
 } catch (erro) {
 
@@ -2205,6 +2247,21 @@ console.error(
 "Erro ao editar comércio:",
 erro
 );
+
+mostrarMensagemEdicao(
+"Erro de conexão. Tente novamente.",
+"erro"
+);
+
+if (botaoSalvar) {
+
+botaoSalvar.disabled =
+false;
+
+botaoSalvar.textContent =
+"Salvar alterações";
+
+}
 
 }
 
@@ -2359,9 +2416,7 @@ if (
 !supabase ||
 !localAtual
 ) {
-
 return;
-
 }
 
 try {
@@ -2418,6 +2473,66 @@ erro
 }
 
 /* =========================================================
+CRIAR ESTRELA EM HTML
+========================================================= */
+
+function criarEstrelaHTML(
+ativa = false,
+tamanho = ""
+) {
+
+return `
+<img
+class="estrela-avaliacao ${tamanho}"
+src="${ativa ? ESTRELA_ATIVADA : ESTRELA_DESATIVADA}"
+alt=""
+
+
+
+
+`;
+
+}
+
+/* =========================================================
+ESTRELAS PARA MÉDIA / COMENTÁRIOS
+========================================================= */
+
+function gerarEstrelas(
+nota,
+classe = ""
+) {
+
+const valor =
+Number(nota) || 0;
+
+const arredondada =
+Math.round(
+valor
+);
+
+let resultado =
+"";
+
+for (
+let i = 1;
+i <= 5;
+i++
+) {
+
+resultado +=
+criarEstrelaHTML(
+i <= arredondada,
+classe
+);
+
+}
+
+return resultado;
+
+}
+
+/* =========================================================
 RESUMO DAS AVALIAÇÕES
 ========================================================= */
 
@@ -2462,15 +2577,19 @@ document.getElementById(
 if (mediaElemento) {
 
 mediaElemento.textContent =
-media.toFixed(1);
+media.toFixed(1).replace(
+".",
+","
+);
 
 }
 
 if (estrelas) {
 
-estrelas.textContent =
+estrelas.innerHTML =
 gerarEstrelas(
-media
+media,
+"media"
 );
 
 }
@@ -2478,42 +2597,11 @@ media
 if (quantidadeElemento) {
 
 quantidadeElemento.textContent =
-`${quantidade} ${ quantidade === 1 ? "avaliação" : "avaliações" }`;
+quantidade === 0
+? "Nenhuma avaliação"
+: `${quantidade} ${ quantidade === 1 ? "avaliação" : "avaliações" }`;
 
 }
-
-}
-
-/* =========================================================
-ESTRELAS
-========================================================= */
-
-function gerarEstrelas(
-nota
-) {
-
-const arredondada =
-Math.round(
-Number(nota) || 0
-);
-
-let resultado =
-"";
-
-for (
-let i = 1;
-i <= 5;
-i++
-) {
-
-resultado +=
-i <= arredondada
-? "★"
-: "☆";
-
-}
-
-return resultado;
 
 }
 
@@ -2539,8 +2627,9 @@ lista.innerHTML =
 
 if (!avaliacoes.length) {
 
-lista.innerHTML =
-"<p>Ainda não há avaliações.</p>";
+lista.innerHTML = `
+
+<div class="empty-comments"> Ainda não há avaliações. <br> Seja o primeiro a avaliar! </div> `;
 
 return;
 
@@ -2551,39 +2640,110 @@ avaliacao => {
 
 const item =
 document.createElement(
-"div"
+"article"
 );
 
 item.className =
 "comentario-item";
 
-const nome =
+const cabecalho =
+document.createElement(
+"div"
+);
+
+cabecalho.className =
+"comentario-cabecalho";
+
+const usuario =
+document.createElement(
+"div"
+);
+
+usuario.className =
+"comentario-usuario";
+
+usuario.textContent =
 avaliacao.nome_usuario ||
 "Usuário";
 
-const nota =
+const estrelas =
+document.createElement(
+"div"
+);
+
+estrelas.className =
+"comentario-estrelas";
+
+estrelas.innerHTML =
+gerarEstrelas(
 Number(
 avaliacao.nota ||
 0
+),
+"comentario"
 );
 
-const comentario =
+cabecalho.appendChild(
+usuario
+);
+
+cabecalho.appendChild(
+estrelas
+);
+
+const texto =
+document.createElement(
+"p"
+);
+
+texto.className =
+"comentario-texto";
+
+texto.textContent =
 avaliacao.comentario ||
 "";
 
-item.innerHTML = `
+item.appendChild(
+cabecalho
+);
 
-<div class="comentario-cabecalho">
+item.appendChild(
+texto
+);
 
-<strong> ${escaparHTML(nome)} </strong>
+if (avaliacao.criado_em) {
 
-<span> ${gerarEstrelas(nota)} </span>
+const data =
+document.createElement(
+"time"
+);
 
-</div>
+data.className =
+"comentario-data";
 
-<p> ${escaparHTML(comentario)} </p>
+const dataObjeto =
+new Date(
+avaliacao.criado_em
+);
 
-`;
+if (
+!Number.isNaN(
+dataObjeto.getTime()
+)
+) {
+
+data.textContent =
+dataObjeto.toLocaleDateString(
+"pt-BR"
+);
+
+}
+
+item.appendChild(
+data
+);
+
+}
 
 lista.appendChild(
 item
@@ -2606,9 +2766,7 @@ if (
 !supabase ||
 !localAtual
 ) {
-
 return;
-
 }
 
 try {
@@ -2650,12 +2808,20 @@ areaAvaliacao.style.display =
 if (mensagemAuth) {
 
 mensagemAuth.textContent =
-"Faça login para avaliar este local.";
+"Entre ou crie uma conta para avaliar este local.";
 
 }
 
 avaliacaoAtual =
 null;
+
+notaSelecionada =
+0;
+
+notaHover =
+0;
+
+atualizarSeletorEstrelas();
 
 return;
 
@@ -2720,19 +2886,20 @@ usuario.email ||
 
 }
 
+const comentario =
+document.getElementById(
+"textoComentario"
+);
+
 if (avaliacaoAtual) {
 
 notaSelecionada =
 Number(
 avaliacaoAtual.nota
-);
+) || 0;
 
-atualizarSeletorEstrelas();
-
-const comentario =
-document.getElementById(
-"textoComentario"
-);
+notaHover =
+0;
 
 if (comentario) {
 
@@ -2742,7 +2909,24 @@ avaliacaoAtual.comentario ||
 
 }
 
+} else {
+
+notaSelecionada =
+0;
+
+notaHover =
+0;
+
+if (comentario) {
+
+comentario.value =
+"";
+
 }
+
+}
+
+atualizarSeletorEstrelas();
 
 } catch (erro) {
 
@@ -2752,6 +2936,63 @@ erro
 );
 
 }
+
+}
+
+/* =========================================================
+ATUALIZAR ESTRELAS DO FORMULÁRIO
+========================================================= */
+
+function atualizarSeletorEstrelas(
+valorVisual = null
+) {
+
+const botoes =
+document.querySelectorAll(
+"#seletorEstrelas .star-button"
+);
+
+const notaVisual =
+valorVisual !== null
+? Number(valorVisual)
+: (
+notaHover > 0
+? notaHover
+: notaSelecionada
+);
+
+botoes.forEach(
+(
+botao,
+indice
+) => {
+
+const valor =
+indice + 1;
+
+const imagem =
+botao.querySelector(
+"img"
+);
+
+const ativa =
+valor <= notaVisual;
+
+botao.classList.toggle(
+"selecionada",
+ativa
+);
+
+if (imagem) {
+
+imagem.src =
+ativa
+? ESTRELA_ATIVADA
+: ESTRELA_DESATIVADA;
+
+}
+
+});
 
 }
 
@@ -2766,33 +3007,10 @@ nota
 notaSelecionada =
 Number(nota);
 
+notaHover =
+0;
+
 atualizarSeletorEstrelas();
-
-}
-
-function atualizarSeletorEstrelas() {
-
-const botoes =
-document.querySelectorAll(
-"#seletorEstrelas button"
-);
-
-botoes.forEach(
-(
-botao,
-indice
-) => {
-
-const valor =
-indice + 1;
-
-botao.classList.toggle(
-"selecionada",
-valor <=
-notaSelecionada
-);
-
-});
 
 }
 
@@ -2809,9 +3027,7 @@ if (
 !supabase ||
 !localAtual
 ) {
-
 return;
-
 }
 
 const usuario =
@@ -2830,6 +3046,10 @@ notaSelecionada < 1 ||
 notaSelecionada > 5
 ) {
 
+alert(
+"Escolha uma nota de 1 a 5 estrelas."
+);
+
 return;
 
 }
@@ -2845,16 +3065,43 @@ campoComentario
 : "";
 
 if (!comentario) {
+
+alert(
+"Escreva um comentário antes de publicar."
+);
+
 return;
+
 }
 
 if (
 comentario.length > 500
 ) {
+
+alert(
+"O comentário pode ter no máximo 500 caracteres."
+);
+
 return;
+
 }
 
 try {
+
+const botao =
+document.getElementById(
+"publicarComentario"
+);
+
+if (botao) {
+
+botao.disabled =
+true;
+
+botao.textContent =
+"Publicando...";
+
+}
 
 /* ===================================================
 ATUALIZAR
@@ -2886,7 +3133,9 @@ usuario.id
 );
 
 if (resposta.error) {
+
 throw resposta.error;
+
 }
 
 } else {
@@ -2922,7 +3171,9 @@ comentario
 });
 
 if (resposta.error) {
+
 throw resposta.error;
+
 }
 
 }
@@ -2931,12 +3182,43 @@ await carregarAvaliacoes();
 
 await verificarAvaliacaoUsuario();
 
+if (botao) {
+
+botao.disabled =
+false;
+
+botao.textContent =
+avaliacaoAtual
+? "Atualizar avaliação"
+: "Publicar avaliação";
+
+}
+
 } catch (erro) {
 
 console.error(
 "Erro ao publicar avaliação:",
 erro
 );
+
+alert(
+"Não foi possível publicar a avaliação. Tente novamente."
+);
+
+const botao =
+document.getElementById(
+"publicarComentario"
+);
+
+if (botao) {
+
+botao.disabled =
+false;
+
+botao.textContent =
+"Publicar avaliação";
+
+}
 
 }
 
@@ -2973,6 +3255,65 @@ erro
 }
 
 /* =========================================================
+INICIALIZAR ESTRELAS
+========================================================= */
+
+function inicializarEstrelas() {
+
+const botoesEstrelas =
+document.querySelectorAll(
+"#seletorEstrelas .star-button"
+);
+
+botoesEstrelas.forEach(
+(
+botao,
+indice
+) => {
+
+const nota =
+indice + 1;
+
+botao.addEventListener(
+"mouseenter",
+() => {
+
+notaHover =
+nota;
+
+atualizarSeletorEstrelas();
+
+}
+);
+
+botao.addEventListener(
+"mouseleave",
+() => {
+
+notaHover =
+0;
+
+atualizarSeletorEstrelas();
+
+}
+);
+
+botao.addEventListener(
+"click",
+() => {
+
+selecionarNota(
+nota
+);
+
+}
+);
+
+});
+
+}
+
+/* =========================================================
 DOM
 ========================================================= */
 
@@ -2981,23 +3322,7 @@ document.addEventListener(
 () => {
 
 /* =====================================================
-FECHAR VISUALIZADOR
-===================================================== */
-
-const fecharViewer =
-document.getElementById(
-"close-viewer"
-);
-
-if (fecharViewer) {
-
-fecharViewer.onclick =
-fecharVisualizador;
-
-}
-
-/* =====================================================
-PUBLICAR COMENTÁRIO
+PUBLICAR AVALIAÇÃO
 ===================================================== */
 
 const publicar =
@@ -3032,29 +3357,7 @@ sairUsuarioLocal;
 ESTRELAS
 ===================================================== */
 
-const botoesEstrelas =
-document.querySelectorAll(
-"#seletorEstrelas button"
-);
-
-botoesEstrelas.forEach(
-(
-botao,
-indice
-) => {
-
-botao.addEventListener(
-"click",
-() => {
-
-selecionarNota(
-indice + 1
-);
-
-}
-);
-
-});
+inicializarEstrelas();
 
 /* =====================================================
 MODAL DE EDIÇÃO
@@ -3074,7 +3377,7 @@ fecharEditorComercio;
 
 const cancelarEdicao =
 document.getElementById(
-"botaoCancelarEdicao"
+"cancelarEdicaoComercio"
 );
 
 if (cancelarEdicao) {
@@ -3086,7 +3389,7 @@ fecharEditorComercio;
 
 const formularioEdicao =
 document.getElementById(
-"formularioEditarComercio"
+"formEditarComercio"
 );
 
 if (formularioEdicao) {
@@ -3159,8 +3462,7 @@ CARREGAR
 
 carregarLocal();
 
-}
-);
+});
 
 /* =========================================================
 MONITORAR LOGIN
@@ -3206,8 +3508,7 @@ await carregarAvaliacoes();
 
 await verificarProprietarioComercio();
 
-}
-);
+});
 
 setTimeout(
 async () => {
