@@ -17,7 +17,7 @@ Instagram
 Sugestão de alteração
 Avaliações
 Login compartilhado
-Verificação do proprietário do comércio
+Verificação do proprietário
 Editar meu comércio
 Excluir meu comércio
 ========================================================= */
@@ -43,9 +43,7 @@ URL
 ========================================================= */
 
 const params =
-new URLSearchParams(
-window.location.search
-);
+new URLSearchParams(window.location.search);
 
 const idLocal =
 params.get("id");
@@ -55,15 +53,10 @@ ESTADO
 ========================================================= */
 
 let localAtual = null;
-
 let mapaLocal = null;
-
 let imagensAtuais = [];
-
 let notaSelecionada = 0;
-
 let avaliacaoAtual = null;
-
 let supabaseClient = null;
 
 /* =========================================================
@@ -72,33 +65,18 @@ SUPABASE
 
 function obterSupabaseClient() {
 
-/*
-O login.js é a fonte principal do cliente.
-*/
-
-if (
-window.supabaseLoginClient
-) {
-
+if (window.supabaseLoginClient) {
 return window.supabaseLoginClient;
-
 }
-
-/*
-Fallback.
-*/
 
 if (
 window.supabase &&
-typeof window.supabase.createClient ===
-"function"
+typeof window.supabase.createClient === "function"
 ) {
 
 try {
 
-  if (
-    !window.__localSupabaseClient
-  ) {
+  if (!window.__localSupabaseClient) {
 
     window.__localSupabaseClient =
       window.supabase.createClient(
@@ -106,7 +84,6 @@ try {
         SUPABASE_ANON_KEY
       );
   }
-
 
   return window.__localSupabaseClient;
 
@@ -126,10 +103,7 @@ return null;
 function obterClienteAvaliacoes() {
 
 if (!supabaseClient) {
-
-supabaseClient =
-  obterSupabaseClient();
-
+supabaseClient = obterSupabaseClient();
 }
 
 return supabaseClient;
@@ -145,46 +119,26 @@ if (
 valor === null ||
 valor === undefined
 ) {
-
 return "";
-
 }
 
 return String(valor)
-.replace(
-/&/g,
-"&"
-)
-.replace(
-/</g,
-"<"
-)
-.replace(
-/>/g,
-">"
-)
-.replace(
-/"/g,
-'"'
-)
-.replace(
-/'/g,
-"'"
-);
+.replace(/&/g, "&")
+.replace(/</g, "<")
+.replace(/>/g, ">")
+.replace(/"/g, '"')
+.replace(/'/g, "'");
 }
 
 function primeiroValor(...valores) {
 
-for (
-const valor of valores
-) {
+for (const valor of valores) {
 
 if (
   valor !== null &&
   valor !== undefined &&
   String(valor).trim() !== ""
 ) {
-
   return valor;
 }
 
@@ -195,12 +149,8 @@ return "";
 
 function normalizarArray(valor) {
 
-if (
-Array.isArray(valor)
-) {
-
+if (Array.isArray(valor)) {
 return valor;
-
 }
 
 if (
@@ -213,11 +163,7 @@ try {
   const convertido =
     JSON.parse(valor);
 
-
-  if (
-    Array.isArray(convertido)
-  ) {
-
+  if (Array.isArray(convertido)) {
     return convertido;
   }
 
@@ -225,10 +171,7 @@ try {
 
   return valor
     .split(",")
-    .map(
-      item =>
-        item.trim()
-    )
+    .map(item => item.trim())
     .filter(Boolean);
 }
 
@@ -237,31 +180,20 @@ try {
 return [];
 }
 
-function corrigirCaminhoImagem(
-caminho
-) {
+function corrigirCaminhoImagem(caminho) {
 
 if (
 !caminho ||
 typeof caminho !== "string"
 ) {
-
 return FALLBACK_IMAGE;
-
 }
 
-let valor =
-caminho.trim();
+let valor = caminho.trim();
 
 if (!valor) {
-
 return FALLBACK_IMAGE;
-
 }
-
-/*
-URLs externas.
-*/
 
 if (
 valor.startsWith("http://") ||
@@ -269,58 +201,26 @@ valor.startsWith("https://") ||
 valor.startsWith("data:") ||
 valor.startsWith("blob:")
 ) {
-
 return valor;
-
 }
 
-/*
-Caminhos absolutos.
-*/
-
-if (
-valor.startsWith("/")
-) {
-
+if (valor.startsWith("/")) {
 return valor;
-
 }
 
-/*
-Caminhos relativos já preparados.
-*/
-
-if (
-valor.startsWith("../")
-) {
-
+if (valor.startsWith("../")) {
 return valor;
+}
 
+if (valor.startsWith("./")) {
+valor = valor.substring(2);
 }
 
 if (
-valor.startsWith("./")
-) {
-
-valor =
-  valor.substring(2);
-
-}
-
-if (
-valor.startsWith("img/")
-) {
-
-return `../${valor}`;
-
-}
-
-if (
+valor.startsWith("img/") ||
 valor.startsWith("IMG/")
 ) {
-
 return `../${valor}`;
-
 }
 
 return `../${valor}`;
@@ -336,22 +236,12 @@ if (!item) {
 return false;
 }
 
-if (
-item._tipo ===
-"comercio"
-) {
-
+if (item._tipo === "comercio") {
 return true;
-
 }
 
-if (
-item.fonte ===
-"comercios"
-) {
-
+if (item.fonte === "comercios") {
 return true;
-
 }
 
 const tipo =
@@ -360,32 +250,22 @@ item.tipo ||
 item.tipo_local ||
 item.origem ||
 ""
-)
-.toLowerCase();
+).toLowerCase();
 
 if (
 tipo.includes("comerc") ||
 tipo.includes("empresa") ||
 tipo.includes("negocio")
 ) {
-
 return true;
-
 }
-
-/*
-Categorias comuns de comércio.
-*/
 
 const categoria =
 String(
-item.categoria ||
-""
-)
-.toLowerCase();
+item.categoria || ""
+).toLowerCase();
 
-const categorias =
-[
+const categorias = [
 "comércio",
 "comercio",
 "lanchonete",
@@ -410,9 +290,7 @@ const categorias =
 
 return categorias.some(
 categoriaComercial =>
-categoria.includes(
-categoriaComercial
-)
+categoria.includes(categoriaComercial)
 );
 }
 
@@ -430,7 +308,6 @@ window.location.hostname
 ) {
 
 window.history.back();
-
 return;
 
 }
@@ -446,9 +323,7 @@ voltarPagina;
 CARREGAR JSON
 ========================================================= */
 
-async function carregarJSON(
-caminho
-) {
+async function carregarJSON(caminho) {
 
 const resposta =
 await fetch(
@@ -491,43 +366,26 @@ const [
   locais,
   comercios,
   hospedagem
-] =
-  await Promise.all([
-    carregarJSON(
-      "../DATA/locais.json"
-    ),
-
-    carregarJSON(
-      "../DATA/comercios.json"
-    ),
-
-    carregarJSON(
-      "../DATA/hospedagem.json"
-    )
-  ]);
-
+] = await Promise.all([
+  carregarJSON("../DATA/locais.json"),
+  carregarJSON("../DATA/comercios.json"),
+  carregarJSON("../DATA/hospedagem.json")
+]);
 
 const listaLocais =
   Array.isArray(locais)
     ? locais
     : [];
 
-
 const listaComercios =
   Array.isArray(comercios)
     ? comercios
     : [];
 
-
 const listaHospedagem =
   Array.isArray(hospedagem)
     ? hospedagem
     : [];
-
-
-/*
-  Procura primeiro nos locais.
-*/
 
 let encontrado =
   listaLocais.find(
@@ -535,7 +393,6 @@ let encontrado =
       String(item.id) ===
       String(idLocal)
   );
-
 
 if (encontrado) {
 
@@ -546,11 +403,6 @@ if (encontrado) {
     "locais";
 }
 
-
-/*
-  Depois procura nos comércios.
-*/
-
 if (!encontrado) {
 
   encontrado =
@@ -559,7 +411,6 @@ if (!encontrado) {
         String(item.id) ===
         String(idLocal)
     );
-
 
   if (encontrado) {
 
@@ -571,11 +422,6 @@ if (!encontrado) {
   }
 }
 
-
-/*
-  Depois procura nas hospedagens.
-*/
-
 if (!encontrado) {
 
   encontrado =
@@ -584,7 +430,6 @@ if (!encontrado) {
         String(item.id) ===
         String(idLocal)
     );
-
 
   if (encontrado) {
 
@@ -596,7 +441,6 @@ if (!encontrado) {
   }
 }
 
-
 if (!encontrado) {
 
   mostrarErroLocal(
@@ -606,21 +450,15 @@ if (!encontrado) {
   return;
 }
 
-
 localAtual =
   encontrado;
-
 
 console.log(
   "Local carregado:",
   localAtual
 );
 
-
-preencherPagina(
-  localAtual
-);
-
+preencherPagina(localAtual);
 
 await carregarAvaliacoes();
 
@@ -635,7 +473,6 @@ console.error(
   erro
 );
 
-
 mostrarErroLocal(
   "Não foi possível carregar as informações deste local."
 );
@@ -647,9 +484,7 @@ mostrarErroLocal(
 ERRO
 ========================================================= */
 
-function mostrarErroLocal(
-mensagem
-) {
+function mostrarErroLocal(mensagem) {
 
 const nome =
 document.getElementById(
@@ -657,10 +492,8 @@ document.getElementById(
 );
 
 if (nome) {
-
 nome.textContent =
-  mensagem;
-
+mensagem;
 }
 
 const conteudo =
@@ -685,9 +518,7 @@ conteudo.innerHTML = `
 PREENCHER PÁGINA
 ========================================================= */
 
-function preencherPagina(
-item
-) {
+function preencherPagina(item) {
 
 document.title =
 `${item.nome || "Local"} — Guia Turístico de Andrelândia`;
@@ -762,17 +593,11 @@ curiosidades.textContent =
 }
 
 preencherHorario(item);
-
 preencherEndereco(item);
-
 preencherWhatsApp(item);
-
 preencherInstagram(item);
-
 prepararSugestaoAlteracao(item);
-
 prepararGaleria(item);
-
 prepararMapa(item);
 }
 
@@ -780,9 +605,7 @@ prepararMapa(item);
 HORÁRIO
 ========================================================= */
 
-function preencherHorario(
-item
-) {
+function preencherHorario(item) {
 
 const elemento =
 document.getElementById(
@@ -810,32 +633,22 @@ return;
 }
 
 elemento.innerHTML =
-formatarHorario(
-horario
-);
+formatarHorario(horario);
 }
 
-function formatarHorario(
-horario
-) {
+function formatarHorario(horario) {
 
 if (
 typeof horario === "string" ||
 typeof horario === "number"
 ) {
 
-return escaparHTML(
-  horario
-).replace(
-  /\n/g,
-  "<br>"
-);
+return escaparHTML(horario)
+  .replace(/\n/g, "<br>");
 
 }
 
-if (
-Array.isArray(horario)
-) {
+if (Array.isArray(horario)) {
 
 return horario
   .map(
@@ -847,12 +660,11 @@ return horario
 }
 
 if (
-typeof horario === "object"
+typeof horario === "object" &&
+horario !== null
 ) {
 
-return Object.entries(
-  horario
-)
+return Object.entries(horario)
   .map(
     ([dia, valor]) =>
       `<strong>${escaparHTML(dia)}</strong>: ${escaparHTML(valor)}`
@@ -868,9 +680,7 @@ return "Não informado";
 ENDEREÇO
 ========================================================= */
 
-function preencherEndereco(
-item
-) {
+function preencherEndereco(item) {
 
 const elemento =
 document.getElementById(
@@ -897,9 +707,7 @@ endereco ||
 WHATSAPP
 ========================================================= */
 
-function obterNumeroWhatsApp(
-item
-) {
+function obterNumeroWhatsApp(item) {
 
 const valor =
 primeiroValor(
@@ -913,19 +721,11 @@ return "";
 }
 
 let numero =
-String(valor)
-.replace(
-/\D/g,
-""
-);
+String(valor).replace(/\D/g, "");
 
 if (!numero) {
 return "";
 }
-
-/*
-Brasil.
-*/
 
 if (
 numero.length === 10 ||
@@ -940,9 +740,7 @@ numero =
 return numero;
 }
 
-function criarMensagemWhatsApp(
-item
-) {
+function criarMensagemWhatsApp(item) {
 
 const nome =
 primeiroValor(
@@ -957,9 +755,7 @@ return (
 );
 }
 
-function preencherWhatsApp(
-item
-) {
+function preencherWhatsApp(item) {
 
 const botao =
 document.getElementById(
@@ -976,9 +772,7 @@ return;
 }
 
 const numero =
-obterNumeroWhatsApp(
-item
-);
+obterNumeroWhatsApp(item);
 
 if (!numero) {
 
@@ -990,9 +784,7 @@ return;
 }
 
 const mensagem =
-criarMensagemWhatsApp(
-item
-);
+criarMensagemWhatsApp(item);
 
 botao.href =
 `https://wa.me/${numero}?text=${encodeURIComponent(mensagem)}`;
@@ -1007,10 +799,8 @@ botao.style.display =
 "flex";
 
 if (texto) {
-
 texto.textContent =
-  "WhatsApp";
-
+"WhatsApp";
 }
 }
 
@@ -1018,9 +808,7 @@ texto.textContent =
 INSTAGRAM
 ========================================================= */
 
-function obterInstagramURL(
-valor
-) {
+function obterInstagramURL(valor) {
 
 if (!valor) {
 return "";
@@ -1034,12 +822,8 @@ return "";
 }
 
 if (
-instagram.startsWith(
-"http://"
-) ||
-instagram.startsWith(
-"https://"
-)
+instagram.startsWith("http://") ||
+instagram.startsWith("https://")
 ) {
 
 return instagram;
@@ -1048,18 +832,9 @@ return instagram;
 
 instagram =
 instagram
-.replace(
-/^@/,
-""
-)
-.replace(
-/^\/+/,
-""
-)
-.replace(
-/\/+$/,
-""
-);
+.replace(/^@/, "")
+.replace(/^\/+/, "")
+.replace(/\/+$/, "");
 
 if (!instagram) {
 return "";
@@ -1070,9 +845,7 @@ return (
 );
 }
 
-function preencherInstagram(
-item
-) {
+function preencherInstagram(item) {
 
 const botao =
 document.getElementById(
@@ -1096,9 +869,7 @@ item.rede_social
 );
 
 const url =
-obterInstagramURL(
-valor
-);
+obterInstagramURL(valor);
 
 if (!url) {
 
@@ -1122,20 +893,16 @@ botao.style.display =
 "flex";
 
 if (texto) {
-
 texto.textContent =
-  "Instagram";
-
+"Instagram";
 }
 }
 
 /* =========================================================
-SUGERIR ALTERAÇÃO
+SUGESTÃO DE ALTERAÇÃO
 ========================================================= */
 
-function prepararSugestaoAlteracao(
-item
-) {
+function prepararSugestaoAlteracao(item) {
 
 const botao =
 document.getElementById(
@@ -1163,9 +930,7 @@ if (
 !imagem ||
 typeof imagem !== "string"
 ) {
-
 return;
-
 }
 
 const valor =
@@ -1176,22 +941,14 @@ return;
 }
 
 const url =
-corrigirCaminhoImagem(
-valor
-);
+corrigirCaminhoImagem(valor);
 
-if (
-!lista.includes(url)
-) {
-
+if (!lista.includes(url)) {
 lista.push(url);
-
 }
 }
 
-function prepararGaleria(
-item
-) {
+function prepararGaleria(item) {
 
 const principal =
 document.getElementById(
@@ -1207,9 +964,7 @@ if (
 !principal ||
 !miniaturas
 ) {
-
 return;
-
 }
 
 const imagens = [];
@@ -1229,55 +984,43 @@ imagens,
 item.capa
 );
 
-const campos =
 [
 item.imagens,
 item.galeria,
 item.fotos,
 item.fotos_galeria
-];
+].forEach(campo => {
 
-campos.forEach(
-campo => {
+normalizarArray(campo)
+  .forEach(imagem => {
 
-  normalizarArray(
-    campo
-  ).forEach(
-    imagem => {
+    if (
+      typeof imagem === "string"
+    ) {
 
-      if (
-        typeof imagem === "string"
-      ) {
+      adicionarImagemUnica(
+        imagens,
+        imagem
+      );
 
-        adicionarImagemUnica(
-          imagens,
-          imagem
-        );
+    } else if (
+      imagem &&
+      typeof imagem === "object"
+    ) {
 
-      } else if (
-        imagem &&
-        typeof imagem === "object"
-      ) {
-
-        adicionarImagemUnica(
-          imagens,
-          imagem.url ||
-          imagem.src ||
-          imagem.imagem
-        );
-      }
+      adicionarImagemUnica(
+        imagens,
+        imagem.url ||
+        imagem.src ||
+        imagem.imagem
+      );
     }
-  );
-}
+  });
 
-);
+});
 
 if (!imagens.length) {
-
-imagens.push(
-  FALLBACK_IMAGE
-);
-
+imagens.push(FALLBACK_IMAGE);
 }
 
 imagensAtuais =
@@ -1293,11 +1036,8 @@ item.nome ||
 principal.onerror =
 function () {
 
-  this.onerror =
-    null;
-
-  this.src =
-    FALLBACK_IMAGE;
+  this.onerror = null;
+  this.src = FALLBACK_IMAGE;
 };
 
 miniaturas.innerHTML =
@@ -1306,64 +1046,38 @@ miniaturas.innerHTML =
 imagens
 .slice(0, 4)
 .forEach(
-(
-imagem,
-indice
-) => {
+(imagem, indice) => {
 
     const botao =
-      document.createElement(
-        "button"
-      );
-
+      document.createElement("button");
 
     botao.type =
       "button";
 
-
     botao.className =
       "thumbnail";
 
-
-    if (
-      indice === 0
-    ) {
-
-      botao.classList.add(
-        "active"
-      );
+    if (indice === 0) {
+      botao.classList.add("active");
     }
 
-
     const img =
-      document.createElement(
-        "img"
-      );
-
+      document.createElement("img");
 
     img.src =
       imagem;
 
-
     img.alt =
       `${item.nome || "Local"} — foto ${indice + 1}`;
-
 
     img.onerror =
       function () {
 
-        this.onerror =
-          null;
-
-        this.src =
-          FALLBACK_IMAGE;
+        this.onerror = null;
+        this.src = FALLBACK_IMAGE;
       };
 
-
-    botao.appendChild(
-      img
-    );
-
+    botao.appendChild(img);
 
     botao.addEventListener(
       "click",
@@ -1372,29 +1086,18 @@ indice
         principal.src =
           imagem;
 
-
         document
-          .querySelectorAll(
-            ".thumbnail"
-          )
+          .querySelectorAll(".thumbnail")
           .forEach(
             elemento =>
-              elemento.classList.remove(
-                "active"
-              )
+              elemento.classList.remove("active")
           );
 
-
-        botao.classList.add(
-          "active"
-        );
+        botao.classList.add("active");
       }
     );
 
-
-    miniaturas.appendChild(
-      botao
-    );
+    miniaturas.appendChild(botao);
   }
 );
 
@@ -1426,9 +1129,7 @@ if (
 !imagem ||
 !principal
 ) {
-
 return;
-
 }
 
 imagem.src =
@@ -1437,9 +1138,7 @@ principal.src;
 imagem.alt =
 principal.alt;
 
-viewer.classList.add(
-"open"
-);
+viewer.classList.add("open");
 
 document.body.style.overflow =
 "hidden";
@@ -1456,9 +1155,7 @@ if (!viewer) {
 return;
 }
 
-viewer.classList.remove(
-"open"
-);
+viewer.classList.remove("open");
 
 document.body.style.overflow =
 "";
@@ -1474,9 +1171,7 @@ fecharFotoTelaCheia;
 MAPA
 ========================================================= */
 
-function prepararMapa(
-item
-) {
+function prepararMapa(item) {
 
 const elemento =
 document.getElementById(
@@ -1498,7 +1193,6 @@ item.lat
 const longitude =
 Number(
 primeiroValor(
-item.longitude,
 item.longitude,
 item.lon,
 item.lng
@@ -1526,26 +1220,22 @@ elemento.innerHTML = `
   </div>
 `;
 
-
 prepararBotaoComoChegar(
   null,
   null
 );
-
 
 return;
 
 }
 
 if (
-typeof L ===
-"undefined"
+typeof L === "undefined"
 ) {
 
 console.error(
   "Leaflet não foi carregado."
 );
-
 
 return;
 
@@ -1582,11 +1272,10 @@ L.tileLayer(
 attribution:
 "Tiles © Esri",
 
-  subdomains:
-    [
-      "server",
-      "services"
-    ],
+  subdomains: [
+    "server",
+    "services"
+  ],
 
   maxNativeZoom:
     19,
@@ -1595,22 +1284,16 @@ attribution:
     22
 }
 
-).addTo(
-mapaLocal
-);
+).addTo(mapaLocal);
 
 const marcador =
-L.marker(
-[
+L.marker([
 latitude,
 longitude
-]
-).addTo(
-mapaLocal
-);
+]).addTo(mapaLocal);
 
 marcador.bindPopup(
-`<strong>${escaparHTML( item.nome || "Local" )}</strong>`
+`<strong>${escaparHTML(item.nome || "Local")}</strong>`
 );
 
 prepararBotaoComoChegar(
@@ -1622,7 +1305,6 @@ setTimeout(
 () => {
 
   if (mapaLocal) {
-
     mapaLocal.invalidateSize();
   }
 
@@ -1679,10 +1361,6 @@ USUÁRIO
 
 async function obterUsuarioAutenticadoLocal() {
 
-/*
-Primeiro tenta o estado mantido pelo login.js.
-*/
-
 if (
 window.usuarioAtualSupabase
 ) {
@@ -1695,9 +1373,7 @@ const cliente =
 obterSupabaseClient();
 
 if (!cliente) {
-
 return null;
-
 }
 
 try {
@@ -1708,7 +1384,6 @@ const {
 } =
   await cliente.auth.getUser();
 
-
 if (error) {
 
   console.warn(
@@ -1716,15 +1391,10 @@ if (error) {
     error
   );
 
-
   return null;
 }
 
-
-return (
-  data?.user ||
-  null
-);
+return data?.user || null;
 
 } catch (erro) {
 
@@ -1733,14 +1403,13 @@ console.error(
   erro
 );
 
-
 return null;
 
 }
 }
 
 /* =========================================================
-ÁREA DOS BOTÕES DO COMÉRCIO
+ÁREA DOS BOTÕES
 ========================================================= */
 
 function obterAreaBotoesComercio() {
@@ -1750,50 +1419,37 @@ document.getElementById(
 "areaExcluirComercio"
 );
 
-/*
-Se não existir no HTML,
-cria automaticamente.
-*/
-
-if (!area) {
+if (area) {
+return area;
+}
 
 area =
-  document.createElement(
-    "div"
-  );
-
+document.createElement("div");
 
 area.id =
-  "areaExcluirComercio";
-
+"areaExcluirComercio";
 
 const mapa =
-  document.querySelector(
-    ".local-map-section"
-  );
-
+document.querySelector(
+".local-map-section"
+);
 
 if (mapa) {
 
-  mapa.parentNode.insertBefore(
-    area,
-    mapa
-  );
+mapa.parentNode.insertBefore(
+  area,
+  mapa
+);
 
 } else {
 
-  const pagina =
-    document.querySelector(
-      ".local-page"
-    );
+const pagina =
+  document.querySelector(
+    ".local-page"
+  );
 
-
-  if (pagina) {
-
-    pagina.appendChild(
-      area
-    );
-  }
+if (pagina) {
+  pagina.appendChild(area);
 }
 
 }
@@ -1802,7 +1458,160 @@ return area;
 }
 
 /* =========================================================
-VERIFICAR PROPRIETÁRIO
+ESTILO DOS BOTÕES
+========================================================= */
+
+function prepararEstiloBotoesComercio() {
+
+if (
+document.getElementById(
+"estiloBotoesComercio"
+)
+) {
+return;
+}
+
+const estilo =
+document.createElement("style");
+
+estilo.id =
+"estiloBotoesComercio";
+
+estilo.textContent = `
+#areaExcluirComercio {
+display: none;
+width: 100%;
+margin: 20px 0;
+gap: 10px;
+}
+
+#botaoEditarComercio,
+#botaoExcluirComercio {
+  width: 100%;
+  border: 0;
+  border-radius: 8px;
+  padding: 13px 16px;
+  font-size: 14px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: opacity .2s ease;
+}
+
+#botaoEditarComercio {
+  background: #194138;
+  color: #ffffff;
+}
+
+#botaoExcluirComercio {
+  background: #8b2e2e;
+  color: #ffffff;
+}
+
+#botaoEditarComercio:hover,
+#botaoExcluirComercio:hover {
+  opacity: .88;
+}
+
+#botaoEditarComercio:disabled,
+#botaoExcluirComercio:disabled {
+  opacity: .55;
+  cursor: wait;
+}
+
+.editar-comercio-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100001;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(0,0,0,.65);
+}
+
+.editar-comercio-modal.aberto {
+  display: flex;
+}
+
+.editar-comercio-caixa {
+  width: 100%;
+  max-width: 600px;
+  max-height: 90vh;
+  overflow-y: auto;
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 22px;
+  box-sizing: border-box;
+}
+
+.editar-comercio-caixa h2 {
+  margin: 0 0 18px;
+  color: #091D1C;
+}
+
+.editar-comercio-campo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 13px;
+}
+
+.editar-comercio-campo label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #333333;
+}
+
+.editar-comercio-campo input,
+.editar-comercio-campo textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 11px 12px;
+  border: 1px solid #cccccc;
+  border-radius: 7px;
+  font-family: inherit;
+  font-size: 14px;
+  outline: none;
+}
+
+.editar-comercio-campo textarea {
+  min-height: 90px;
+  resize: vertical;
+}
+
+.editar-comercio-acoes {
+  display: flex;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.editar-comercio-acoes button {
+  flex: 1;
+  border: 0;
+  border-radius: 7px;
+  padding: 12px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 14px;
+}
+
+.editar-comercio-cancelar {
+  background: #eeeeee;
+  color: #333333;
+}
+
+.editar-comercio-salvar {
+  background: #194138;
+  color: #ffffff;
+}
+
+`;
+
+document.head.appendChild(estilo);
+}
+
+/* =========================================================
+VERIFICAR PROPRIETÁRIO DO COMÉRCIO
 ========================================================= */
 
 async function verificarProprietarioComercio() {
@@ -1814,22 +1623,19 @@ if (!area) {
 return;
 }
 
-/*
-Sempre começa escondido.
-*/
+prepararEstiloBotoesComercio();
 
 area.style.display =
 "none";
 
 /*
-Não é comércio.
+
+Só comércio possui proprietário.
 */
 
 if (
 !localAtual ||
-!pareceComercio(
-localAtual
-)
+!pareceComercio(localAtual)
 ) {
 
 return;
@@ -1845,7 +1651,6 @@ console.warn(
   "Supabase não disponível."
 );
 
-
 return;
 
 }
@@ -1858,7 +1663,6 @@ if (!usuario) {
 console.log(
   "Nenhum usuário logado."
 );
-
 
 return;
 
@@ -1875,276 +1679,162 @@ localAtual.id,
 localAtual.nome
 );
 
-let cadastro =
-null;
+let cadastro = null;
 
 try {
 
 /*
-  =====================================================
-  PRIMEIRA TENTATIVA
-  local_id
-  =====================================================
-*/
+ * =====================================================
+ * CORREÇÃO PRINCIPAL
+ *
+ * NÃO consultar:
+ *
+ * id = "pedrox-do-grau"
+ *
+ * porque cadastros_comercios.id é UUID.
+ *
+ * O ID público do JSON fica em local_id.
+ * =====================================================
+ */
 
-let resposta =
+const resposta =
   await cliente
-    .from(
-      "cadastros_comercios"
-    )
-    .select(
-      "*"
-    )
+    .from("cadastros_comercios")
+    .select("*")
     .eq(
       "local_id",
-      String(
-        localAtual.id
-      )
+      String(localAtual.id)
     )
-    .limit(1);
+    .eq(
+      "usuario_id",
+      usuario.id
+    )
+    .maybeSingle();
 
-
-if (
-  resposta.error
-) {
+if (resposta.error) {
 
   console.error(
-    "Erro ao buscar por local_id:",
+    "Erro ao buscar cadastro pelo local_id:",
     resposta.error
   );
 
-} else if (
-  resposta.data &&
-  resposta.data.length > 0
-) {
-
-  cadastro =
-    resposta.data[0];
+  return;
 }
 
-
-/*
-  =====================================================
-  SEGUNDA TENTATIVA
-  id
-  =====================================================
-*/
-
-if (!cadastro) {
-
-  resposta =
-    await cliente
-      .from(
-        "cadastros_comercios"
-      )
-      .select(
-        "*"
-      )
-      .eq(
-        "id",
-        String(
-          localAtual.id
-        )
-      )
-      .limit(1);
-
-
-  if (
-    resposta.error
-  ) {
-
-    console.error(
-      "Erro ao buscar por id:",
-      resposta.error
-    );
-
-  } else if (
-    resposta.data &&
-    resposta.data.length > 0
-  ) {
-
-    cadastro =
-      resposta.data[0];
-  }
-}
-
+cadastro =
+  resposta.data || null;
 
 console.log(
-  "Cadastro encontrado:",
+  "Cadastro encontrado pelo local_id:",
   cadastro
 );
 
-
 if (!cadastro) {
 
-  console.warn(
-    "Nenhum cadastro_comercios encontrado."
+  console.log(
+    "Nenhum cadastro do usuário encontrado para este comércio."
   );
-
 
   return;
 }
 
-
-console.log(
-  "usuario_id do cadastro:",
-  cadastro.usuario_id
-);
-
-
-console.log(
-  "usuario.id atual:",
-  usuario.id
-);
-
-
 /*
-  =====================================================
-  VERIFICA PROPRIETÁRIO
-  =====================================================
-*/
+ * Só comércio aprovado aparece publicamente.
+ */
 
 if (
-  String(
-    cadastro.usuario_id
-  ) !==
-  String(
-    usuario.id
-  )
+  String(cadastro.status || "")
+    .toLowerCase() !==
+  "aprovado"
 ) {
 
   console.log(
-    "Usuário não é proprietário."
+    "Cadastro encontrado, mas não está aprovado:",
+    cadastro.status
   );
 
-
   return;
 }
 
-
 /*
-  Não mostra para cadastro deletado.
-*/
-
-if (
-  String(
-    cadastro.status ||
-    ""
-  ).toLowerCase() ===
-  "deletado"
-) {
-
-  return;
-}
-
-
-/*
-  Guarda o cadastro.
-*/
+ * Guarda o cadastro.
+ */
 
 localAtual._cadastroSupabase =
   cadastro;
 
-
 /*
-  =====================================================
-  CRIA BOTÕES
-  =====================================================
-*/
+ * Limpa os botões anteriores.
+ */
 
 area.innerHTML =
   "";
 
+/*
+ * BOTÃO EDITAR
+ */
 
 const botaoEditar =
-  document.createElement(
-    "button"
-  );
-
+  document.createElement("button");
 
 botaoEditar.type =
   "button";
 
-
 botaoEditar.id =
   "botaoEditarComercio";
-
 
 botaoEditar.className =
   "botao-editar-comercio";
 
-
 botaoEditar.textContent =
   "Editar meu comércio";
-
 
 botaoEditar.addEventListener(
   "click",
   editarMeuComercio
 );
 
+/*
+ * BOTÃO EXCLUIR
+ */
 
 const botaoExcluir =
-  document.createElement(
-    "button"
-  );
-
+  document.createElement("button");
 
 botaoExcluir.type =
   "button";
 
-
 botaoExcluir.id =
   "botaoExcluirComercio";
-
 
 botaoExcluir.className =
   "botao-excluir-perfil";
 
-
 botaoExcluir.textContent =
   "Excluir meu comércio";
-
 
 botaoExcluir.addEventListener(
   "click",
   excluirMeuComercio
 );
 
-
 area.appendChild(
   botaoEditar
 );
-
 
 area.appendChild(
   botaoExcluir
 );
 
-
-/*
-  Mostra.
-*/
-
 area.style.display =
   "flex";
-
-
-area.style.flexDirection =
-  "column";
-
-
-area.style.gap =
-  "8px";
-
 
 console.log(
   "PROPRIETÁRIO CONFIRMADO."
 );
 
-
 console.log(
-  "Botões de editar e excluir exibidos."
+  "Botões Editar e Excluir exibidos."
 );
 
 } catch (erro) {
@@ -2169,7 +1859,6 @@ alert(
   "Comércio não identificado."
 );
 
-
 return;
 
 }
@@ -2182,7 +1871,6 @@ if (!cliente) {
 alert(
   "Não foi possível conectar ao sistema."
 );
-
 
 return;
 
@@ -2197,7 +1885,6 @@ alert(
   "Você precisa estar logado."
 );
 
-
 return;
 
 }
@@ -2211,160 +1898,394 @@ alert(
   "Cadastro do comércio não encontrado."
 );
 
-
 return;
 
 }
 
 /*
-=====================================================
-CAMPOS
-=====================================================
+
+Revalida proprietário no banco.
 */
 
-const nome =
-window.prompt(
-"Nome do comércio:",
-localAtual.nome ||
-""
+if (
+String(cadastro.usuario_id) !==
+String(usuario.id)
+) {
+
+alert(
+  "Você não é o proprietário deste comércio."
 );
 
-if (nome === null) {
 return;
+
 }
 
-const categoria =
-window.prompt(
-"Categoria:",
-localAtual.categoria ||
-""
+abrirModalEdicaoComercio();
+}
+
+function criarCampoEdicao(
+formulario,
+nome,
+valor,
+tipo = "input"
+) {
+
+const grupo =
+document.createElement("div");
+
+grupo.className =
+"editar-comercio-campo";
+
+const label =
+document.createElement("label");
+
+label.textContent =
+nome;
+
+const campo =
+document.createElement(
+tipo === "textarea"
+? "textarea"
+: "input"
 );
 
-if (categoria === null) {
-return;
-}
+campo.value =
+valor ?? "";
 
-const descricao =
-window.prompt(
-"Descrição:",
-localAtual.descricao ||
-""
+campo.dataset.campo =
+nome;
+
+grupo.appendChild(label);
+grupo.appendChild(campo);
+
+formulario.appendChild(
+grupo
 );
 
-if (descricao === null) {
-return;
+return campo;
 }
 
-const endereco =
-window.prompt(
-"Endereço:",
-localAtual.endereco ||
-localAtual.endereço ||
-""
+function obterHorarioParaEdicao(horario) {
+
+if (
+typeof horario === "string" ||
+typeof horario === "number"
+) {
+return String(horario);
+}
+
+if (Array.isArray(horario)) {
+return horario.join("\n");
+}
+
+if (
+typeof horario === "object" &&
+horario !== null
+) {
+
+return Object.entries(horario)
+  .map(
+    ([dia, valor]) =>
+      `${dia}: ${valor}`
+  )
+  .join("\n");
+
+}
+
+return "";
+}
+
+function abrirModalEdicaoComercio() {
+
+const existente =
+document.getElementById(
+"modalEditarComercio"
 );
 
-if (endereco === null) {
-return;
-}
+if (existente) {
 
-const horario =
-window.prompt(
-"Horário:",
-typeof localAtual.horario ===
-"string"
-? localAtual.horario
-: ""
+existente.classList.add(
+  "aberto"
 );
 
-if (horario === null) {
 return;
+
 }
 
-const telefone =
-window.prompt(
-"Telefone:",
-localAtual.telefone ||
-""
+const modal =
+document.createElement("div");
+
+modal.id =
+"modalEditarComercio";
+
+modal.className =
+"editar-comercio-modal";
+
+const caixa =
+document.createElement("div");
+
+caixa.className =
+"editar-comercio-caixa";
+
+const titulo =
+document.createElement("h2");
+
+titulo.textContent =
+"Editar meu comércio";
+
+caixa.appendChild(titulo);
+
+const formulario =
+document.createElement("div");
+
+const campoNome =
+criarCampoEdicao(
+formulario,
+"Nome",
+localAtual.nome,
+"input"
 );
 
-if (telefone === null) {
-return;
-}
+const campoCategoria =
+criarCampoEdicao(
+formulario,
+"Categoria",
+localAtual.categoria,
+"input"
+);
 
-const whatsapp =
-window.prompt(
-"WhatsApp:",
+const campoDescricao =
+criarCampoEdicao(
+formulario,
+"Descrição",
+localAtual.descricao,
+"textarea"
+);
+
+const campoEndereco =
+criarCampoEdicao(
+formulario,
+"Endereço",
+primeiroValor(
+localAtual.endereco,
+localAtual.endereço
+),
+"input"
+);
+
+const campoHorario =
+criarCampoEdicao(
+formulario,
+"Horário",
+obterHorarioParaEdicao(
+localAtual.horario
+),
+"textarea"
+);
+
+const campoTelefone =
+criarCampoEdicao(
+formulario,
+"Telefone",
+localAtual.telefone,
+"input"
+);
+
+const campoWhatsApp =
+criarCampoEdicao(
+formulario,
+"WhatsApp",
 localAtual.whatsapp ||
-localAtual.telefone ||
-""
+localAtual.telefone,
+"input"
 );
 
-if (whatsapp === null) {
-return;
-}
-
-const instagram =
-window.prompt(
-"Instagram:",
-localAtual.instagram ||
-""
+const campoInstagram =
+criarCampoEdicao(
+formulario,
+"Instagram",
+localAtual.instagram,
+"input"
 );
 
-if (instagram === null) {
-return;
+caixa.appendChild(
+formulario
+);
+
+const acoes =
+document.createElement("div");
+
+acoes.className =
+"editar-comercio-acoes";
+
+const cancelar =
+document.createElement("button");
+
+cancelar.type =
+"button";
+
+cancelar.className =
+"editar-comercio-cancelar";
+
+cancelar.textContent =
+"Cancelar";
+
+const salvar =
+document.createElement("button");
+
+salvar.type =
+"button";
+
+salvar.className =
+"editar-comercio-salvar";
+
+salvar.textContent =
+"Salvar alterações";
+
+acoes.appendChild(
+cancelar
+);
+
+acoes.appendChild(
+salvar
+);
+
+caixa.appendChild(
+acoes
+);
+
+modal.appendChild(
+caixa
+);
+
+document.body.appendChild(
+modal
+);
+
+cancelar.addEventListener(
+"click",
+() => {
+
+  modal.classList.remove(
+    "aberto"
+  );
 }
 
-/*
-=====================================================
-OBJETO
-=====================================================
-*/
+);
 
-const comercio =
-{
+modal.addEventListener(
+"click",
+evento => {
 
-  nome:
-    nome.trim(),
+  if (
+    evento.target ===
+    modal
+  ) {
 
-  categoria:
-    categoria.trim(),
+    modal.classList.remove(
+      "aberto"
+    );
+  }
+}
 
-  descricao:
-    descricao.trim(),
+);
 
-  endereco:
-    endereco.trim(),
+salvar.addEventListener(
+"click",
+async () => {
 
-  horario:
-    horario.trim(),
+  salvar.disabled =
+    true;
 
-  telefone:
-    telefone.trim(),
+  salvar.textContent =
+    "Salvando...";
 
-  whatsapp:
-    whatsapp.trim(),
+  try {
 
-  instagram:
-    instagram.trim(),
+    await enviarEdicaoComercio({
+      nome:
+        campoNome.value.trim(),
 
-  latitude:
-    localAtual.latitude,
+      categoria:
+        campoCategoria.value.trim(),
 
-  longitude:
-    localAtual.longitude,
+      descricao:
+        campoDescricao.value.trim(),
 
-  imagem:
-    localAtual.imagem,
+      endereco:
+        campoEndereco.value.trim(),
 
-  imagens:
-    localAtual.imagens
-};
+      horario:
+        campoHorario.value.trim(),
 
-/*
-=====================================================
-SESSÃO
-=====================================================
-*/
+      telefone:
+        campoTelefone.value.trim(),
+
+      whatsapp:
+        campoWhatsApp.value.trim(),
+
+      instagram:
+        campoInstagram.value.trim()
+    });
+
+    modal.classList.remove(
+      "aberto"
+    );
+
+  } catch (erro) {
+
+    console.error(
+      "Erro ao editar comércio:",
+      erro
+    );
+
+    alert(
+      erro.message ||
+      "Não foi possível atualizar o comércio."
+    );
+
+  } finally {
+
+    salvar.disabled =
+      false;
+
+    salvar.textContent =
+      "Salvar alterações";
+  }
+}
+
+);
+
+modal.classList.add(
+"aberto"
+);
+}
+
+async function enviarEdicaoComercio(
+dados
+) {
+
+const cliente =
+obterSupabaseClient();
+
+if (!cliente) {
+
+throw new Error(
+  "Sistema Supabase indisponível."
+);
+
+}
+
+const usuario =
+await obterUsuarioAutenticadoLocal();
+
+if (!usuario) {
+
+throw new Error(
+  "Sua sessão expirou. Faça login novamente."
+);
+
+}
 
 const {
 data,
@@ -2373,14 +2294,7 @@ error
 await cliente.auth.getSession();
 
 if (error) {
-
-alert(
-  "Não foi possível verificar sua sessão."
-);
-
-
-return;
-
+throw error;
 }
 
 const accessToken =
@@ -2388,136 +2302,126 @@ data?.session?.access_token;
 
 if (!accessToken) {
 
-alert(
-  "Sua sessão expirou. Faça login novamente."
+throw new Error(
+  "Sessão de usuário não encontrada."
 );
-
-
-return;
 
 }
 
-const botao =
-document.getElementById(
-"botaoEditarComercio"
-);
+const comercio = {
 
-if (botao) {
+id:
+  localAtual.id,
 
-botao.disabled =
-  true;
+nome:
+  dados.nome,
 
+categoria:
+  dados.categoria,
 
-botao.textContent =
-  "Salvando...";
+descricao:
+  dados.descricao,
 
-}
+endereco:
+  dados.endereco,
 
-try {
+horario:
+  dados.horario,
+
+telefone:
+  dados.telefone,
+
+whatsapp:
+  dados.whatsapp,
+
+instagram:
+  dados.instagram,
+
+latitude:
+  localAtual.latitude,
+
+longitude:
+  localAtual.longitude,
+
+imagem:
+  localAtual.imagem,
+
+imagens:
+  localAtual.imagens
+
+};
 
 const resposta =
-  await fetch(
-    EDGE_FUNCTION_URL,
-    {
-      method:
-        "POST",
+await fetch(
+EDGE_FUNCTION_URL,
+{
+method:
+"POST",
 
-      headers:
-        {
-          "Content-Type":
-            "application/json",
+    headers:
+      {
+        "Content-Type":
+          "application/json",
 
-          "Authorization":
-            `Bearer ${accessToken}`
-        },
+        "Authorization":
+          `Bearer ${accessToken}`
+      },
 
-      body:
-        JSON.stringify(
-          {
-            acao:
-              "editar_meu_comercio",
+    body:
+      JSON.stringify({
+        acao:
+          "editar_meu_comercio",
 
-            comercio_id:
-              localAtual.id,
+        comercio_id:
+          localAtual.id,
 
-            comercio:
-              comercio
-          }
-        )
-    }
-  );
+        comercio:
+          comercio
+      })
+  }
+);
 
-
-let resultado =
-  null;
-
+let resultado = null;
 
 try {
 
-  resultado =
-    await resposta.json();
+resultado =
+  await resposta.json();
 
 } catch {
 
-  resultado =
-    null;
-}
+resultado =
+  null;
 
+}
 
 if (!resposta.ok) {
 
-  throw new Error(
-    resultado?.erro ||
-    resultado?.error ||
-    `Erro HTTP ${resposta.status}`
-  );
-}
+throw new Error(
+  resultado?.erro ||
+  resultado?.error ||
+  `Erro HTTP ${resposta.status}`
+);
 
+}
 
 if (
-  resultado &&
-  resultado.sucesso === false
+resultado &&
+resultado.sucesso === false
 ) {
 
-  throw new Error(
-    resultado.erro ||
-    "Não foi possível atualizar o comércio."
-  );
-}
-
-
-alert(
-  "Comércio atualizado com sucesso."
-);
-
-
-window.location.reload();
-
-} catch (erro) {
-
-console.error(
-  "Erro ao editar comércio:",
-  erro
-);
-
-
-alert(
-  erro.message ||
+throw new Error(
+  resultado.erro ||
   "Não foi possível atualizar o comércio."
 );
 
-
-if (botao) {
-
-  botao.disabled =
-    false;
-
-
-  botao.textContent =
-    "Editar meu comércio";
 }
 
-}
+alert(
+"Comércio atualizado com sucesso."
+);
+
+window.location.reload();
 }
 
 window.editarMeuComercio =
@@ -2535,7 +2439,6 @@ alert(
   "Comércio não identificado."
 );
 
-
 return;
 
 }
@@ -2548,7 +2451,6 @@ if (!cliente) {
 alert(
   "Não foi possível conectar ao sistema."
 );
-
 
 return;
 
@@ -2563,14 +2465,35 @@ alert(
   "Você precisa estar logado para excluir seu comércio."
 );
 
+return;
+
+}
+
+const cadastro =
+localAtual._cadastroSupabase;
+
+if (!cadastro) {
+
+alert(
+  "Cadastro do comércio não encontrado."
+);
 
 return;
 
 }
 
-/*
-Confirmação.
-*/
+if (
+String(cadastro.usuario_id) !==
+String(usuario.id)
+) {
+
+alert(
+  "Você não é o proprietário deste comércio."
+);
+
+return;
+
+}
 
 const confirmou =
 window.confirm(
@@ -2592,7 +2515,6 @@ if (botao) {
 botao.disabled =
   true;
 
-
 botao.textContent =
   "Excluindo...";
 
@@ -2606,15 +2528,12 @@ const {
 } =
   await cliente.auth.getSession();
 
-
 if (error) {
   throw error;
 }
 
-
 const accessToken =
   data?.session?.access_token;
-
 
 if (!accessToken) {
 
@@ -2622,7 +2541,6 @@ if (!accessToken) {
     "Sessão de usuário não encontrada."
   );
 }
-
 
 const resposta =
   await fetch(
@@ -2641,22 +2559,17 @@ const resposta =
         },
 
       body:
-        JSON.stringify(
-          {
-            acao:
-              "excluir_meu_comercio",
+        JSON.stringify({
+          acao:
+            "excluir_meu_comercio",
 
-            comercio_id:
-              localAtual.id
-          }
-        )
+          comercio_id:
+            localAtual.id
+        })
     }
   );
 
-
-let resultado =
-  null;
-
+let resultado = null;
 
 try {
 
@@ -2669,7 +2582,6 @@ try {
     null;
 }
 
-
 if (!resposta.ok) {
 
   throw new Error(
@@ -2678,7 +2590,6 @@ if (!resposta.ok) {
     `Erro HTTP ${resposta.status}`
   );
 }
-
 
 if (
   resultado &&
@@ -2691,11 +2602,9 @@ if (
   );
 }
 
-
 alert(
   "Seu comércio foi excluído com sucesso."
 );
-
 
 window.location.href =
   "../index.html";
@@ -2707,18 +2616,15 @@ console.error(
   erro
 );
 
-
 alert(
   erro.message ||
   "Não foi possível excluir o comércio."
 );
 
-
 if (botao) {
 
   botao.disabled =
     false;
-
 
   botao.textContent =
     "Excluir meu comércio";
@@ -2771,7 +2677,6 @@ lista.innerHTML = `
   </div>
 `;
 
-
 return;
 
 }
@@ -2783,62 +2688,46 @@ const {
   error
 } =
   await cliente
-    .from(
-      "avaliacoes"
-    )
+    .from("avaliacoes")
     .select(
       "id, local_id, usuario_id, nome_usuario, nota, comentario, criado_em"
     )
     .eq(
       "local_id",
-      String(
-        localAtual.id
-      )
+      String(localAtual.id)
     )
     .order(
       "criado_em",
       {
-        ascending:
-          false
+        ascending: false
       }
     );
-
 
 if (error) {
   throw error;
 }
-
 
 const avaliacoes =
   Array.isArray(data)
     ? data
     : [];
 
-
-if (
-  !avaliacoes.length
-) {
+if (!avaliacoes.length) {
 
   if (media) {
-
     media.textContent =
       "0,0";
   }
 
-
   if (quantidade) {
-
     quantidade.textContent =
       "Nenhuma avaliação";
   }
 
-
   if (estrelas) {
-
     estrelas.innerHTML =
       criarHTMLestrelas(0);
   }
-
 
   lista.innerHTML = `
     <div class="empty-comments">
@@ -2847,52 +2736,37 @@ if (
     </div>
   `;
 
-
   return;
 }
 
-
 const soma =
   avaliacoes.reduce(
-    (
-      total,
-      avaliacao
-    ) =>
+    (total, avaliacao) =>
       total +
       Number(
-        avaliacao.nota ||
-        0
+        avaliacao.nota || 0
       ),
     0
   );
 
-
 const mediaCalculada =
-  soma /
-  avaliacoes.length;
-
+  soma / avaliacoes.length;
 
 if (media) {
 
   media.textContent =
     mediaCalculada
       .toFixed(1)
-      .replace(
-        ".",
-        ","
-      );
+      .replace(".", ",");
 }
-
 
 if (quantidade) {
 
   quantidade.textContent =
-    avaliacoes.length ===
-    1
+    avaliacoes.length === 1
       ? "1 avaliação"
       : `${avaliacoes.length} avaliações`;
 }
-
 
 if (estrelas) {
 
@@ -2901,7 +2775,6 @@ if (estrelas) {
       mediaCalculada
     );
 }
-
 
 lista.innerHTML =
   avaliacoes
@@ -2920,7 +2793,6 @@ console.error(
   erro
 );
 
-
 lista.innerHTML = `
   <div class="empty-comments">
     Não foi possível carregar as avaliações.
@@ -2934,13 +2806,10 @@ lista.innerHTML = `
 ESTRELAS
 ========================================================= */
 
-function criarHTMLestrelas(
-nota
-) {
+function criarHTMLestrelas(nota) {
 
 const valor =
-Number(nota) ||
-0;
+Number(nota) || 0;
 
 let html =
 "";
@@ -2956,7 +2825,6 @@ const imagem =
     ? "../img/icones/estrela.png"
     : "../img/icones/estrela2.png";
 
-
 html += `
   <img
     class="rating-star"
@@ -2970,9 +2838,7 @@ html += `
 return html;
 }
 
-function criarHTMLestrelasComentario(
-nota
-) {
+function criarHTMLestrelasComentario(nota) {
 
 let html =
 "";
@@ -2987,7 +2853,6 @@ const imagem =
   i <= nota
     ? "../img/icones/estrela.png"
     : "../img/icones/estrela2.png";
-
 
 html += `
   <img
@@ -3039,15 +2904,11 @@ window.usuarioAtualSupabase;
 
 const souDono =
 usuario &&
-String(
-usuario.id
-) ===
-String(
-avaliacao.usuario_id
-);
+String(usuario.id) ===
+String(avaliacao.usuario_id);
 
 return `
-<article class="comment" data-avaliacao-id="${escaparHTML( avaliacao.id )}" >
+<article class="comment" data-avaliacao-id="${escaparHTML(avaliacao.id)}" >
 
   <div class="comment-header">
 
@@ -3110,42 +2971,30 @@ return `
 DATA
 ========================================================= */
 
-function formatarData(
-valor
-) {
+function formatarData(valor) {
 
 if (!valor) {
 return "";
 }
 
 const data =
-new Date(
-valor
-);
+new Date(valor);
 
 if (
 Number.isNaN(
 data.getTime()
 )
 ) {
-
 return "";
-
 }
 
 return data.toLocaleDateString(
 "pt-BR",
 {
-day:
-"2-digit",
-
-  month:
-    "2-digit",
-
-  year:
-    "numeric"
+day: "2-digit",
+month: "2-digit",
+year: "numeric"
 }
-
 );
 }
 
@@ -3174,9 +3023,7 @@ if (
 !area ||
 !autenticacao
 ) {
-
 return;
-
 }
 
 const cliente =
@@ -3187,10 +3034,8 @@ if (!cliente) {
 area.style.display =
   "none";
 
-
 autenticacao.style.display =
   "block";
-
 
 return;
 
@@ -3204,10 +3049,8 @@ if (!usuario) {
 area.style.display =
   "none";
 
-
 autenticacao.style.display =
   "block";
-
 
 return;
 
@@ -3227,7 +3070,6 @@ const nome =
   usuario.email ||
   "Usuário";
 
-
 nomeUsuario.textContent =
   nome;
 
@@ -3240,24 +3082,19 @@ const {
   error
 } =
   await cliente
-    .from(
-      "avaliacoes"
-    )
+    .from("avaliacoes")
     .select(
       "id, local_id, usuario_id, nome_usuario, nota, comentario, criado_em"
     )
     .eq(
       "local_id",
-      String(
-        localAtual.id
-      )
+      String(localAtual.id)
     )
     .eq(
       "usuario_id",
       usuario.id
     )
     .maybeSingle();
-
 
 if (error) {
 
@@ -3266,19 +3103,14 @@ if (error) {
     error
   );
 
-
   avaliacaoAtual =
     null;
-
 
   return;
 }
 
-
 avaliacaoAtual =
-  data ||
-  null;
-
+  data || null;
 
 if (avaliacaoAtual) {
 
@@ -3287,17 +3119,14 @@ if (avaliacaoAtual) {
       avaliacaoAtual.nota
     );
 
-
   preencherSeletorEstrelas(
     notaSelecionada
   );
-
 
   const textarea =
     document.getElementById(
       "textoComentario"
     );
-
 
   if (textarea) {
 
@@ -3306,12 +3135,10 @@ if (avaliacaoAtual) {
       "";
   }
 
-
   const botao =
     document.getElementById(
       "publicarComentario"
     );
-
 
   if (botao) {
 
@@ -3324,30 +3151,21 @@ if (avaliacaoAtual) {
   notaSelecionada =
     0;
 
-
-  preencherSeletorEstrelas(
-    0
-  );
-
+  preencherSeletorEstrelas(0);
 
   const textarea =
     document.getElementById(
       "textoComentario"
     );
 
-
   if (textarea) {
-
-    textarea.value =
-      "";
+    textarea.value = "";
   }
-
 
   const botao =
     document.getElementById(
       "publicarComentario"
     );
-
 
   if (botao) {
 
@@ -3370,9 +3188,7 @@ console.error(
 SELETOR DE ESTRELAS
 ========================================================= */
 
-function preencherSeletorEstrelas(
-nota
-) {
+function preencherSeletorEstrelas(nota) {
 
 const botoes =
 document.querySelectorAll(
@@ -3387,17 +3203,14 @@ botao => {
       botao.dataset.rating
     );
 
-
   const imagem =
     botao.querySelector(
       "img"
     );
 
-
   if (!imagem) {
     return;
   }
-
 
   imagem.src =
     valor <= nota
@@ -3423,7 +3236,6 @@ alert(
   "Sistema de avaliações indisponível."
 );
 
-
 return;
 
 }
@@ -3437,7 +3249,6 @@ alert(
   "Entre na sua conta para avaliar este local."
 );
 
-
 return;
 
 }
@@ -3450,7 +3261,6 @@ notaSelecionada > 5
 alert(
   "Escolha uma nota de 1 a 5 estrelas."
 );
-
 
 return;
 
@@ -3467,14 +3277,12 @@ textarea
 : "";
 
 if (
-comentario.length >
-500
+comentario.length > 500
 ) {
 
 alert(
   "O comentário pode ter no máximo 500 caracteres."
 );
-
 
 return;
 
@@ -3496,7 +3304,6 @@ if (botao) {
 botao.disabled =
   true;
 
-
 botao.textContent =
   "Salvando...";
 
@@ -3510,21 +3317,17 @@ if (avaliacaoAtual) {
     error
   } =
     await cliente
-      .from(
-        "avaliacoes"
-      )
-      .update(
-        {
-          nota:
-            notaSelecionada,
+      .from("avaliacoes")
+      .update({
+        nota:
+          notaSelecionada,
 
-          comentario:
-            comentario,
+        comentario:
+          comentario,
 
-          nome_usuario:
-            nomeUsuario
-        }
-      )
+        nome_usuario:
+          nomeUsuario
+      })
       .eq(
         "id",
         avaliacaoAtual.id
@@ -3533,7 +3336,6 @@ if (avaliacaoAtual) {
         "usuario_id",
         usuario.id
       );
-
 
   if (error) {
     throw error;
@@ -3545,36 +3347,28 @@ if (avaliacaoAtual) {
     error
   } =
     await cliente
-      .from(
-        "avaliacoes"
-      )
-      .insert(
-        {
-          local_id:
-            String(
-              localAtual.id
-            ),
+      .from("avaliacoes")
+      .insert({
+        local_id:
+          String(localAtual.id),
 
-          usuario_id:
-            usuario.id,
+        usuario_id:
+          usuario.id,
 
-          nome_usuario:
-            nomeUsuario,
+        nome_usuario:
+          nomeUsuario,
 
-          nota:
-            notaSelecionada,
+        nota:
+          notaSelecionada,
 
-          comentario:
-            comentario
-        }
-      );
-
+        comentario:
+          comentario
+      });
 
   if (error) {
     throw error;
   }
 }
-
 
 await carregarAvaliacoes();
 
@@ -3587,7 +3381,6 @@ console.error(
   erro
 );
 
-
 alert(
   erro.message ||
   "Não foi possível salvar sua avaliação."
@@ -3596,7 +3389,6 @@ alert(
 } finally {
 
 if (botao) {
-
   botao.disabled =
     false;
 }
@@ -3608,9 +3400,7 @@ if (botao) {
 EDITAR AVALIAÇÃO
 ========================================================= */
 
-async function editarAvaliacao(
-id
-) {
+async function editarAvaliacao(id) {
 
 if (!id) {
 return;
@@ -3626,9 +3416,7 @@ if (
 !cliente ||
 !usuario
 ) {
-
 return;
-
 }
 
 try {
@@ -3638,9 +3426,7 @@ const {
   error
 } =
   await cliente
-    .from(
-      "avaliacoes"
-    )
+    .from("avaliacoes")
     .select(
       "id, nota, comentario"
     )
@@ -3654,11 +3440,9 @@ const {
     )
     .maybeSingle();
 
-
 if (error) {
   throw error;
 }
-
 
 if (!data) {
 
@@ -3666,31 +3450,23 @@ if (!data) {
     "Avaliação não encontrada."
   );
 
-
   return;
 }
-
 
 avaliacaoAtual =
   data;
 
-
 notaSelecionada =
-  Number(
-    data.nota
-  );
-
+  Number(data.nota);
 
 preencherSeletorEstrelas(
   notaSelecionada
 );
 
-
 const textarea =
   document.getElementById(
     "textoComentario"
   );
-
 
 if (textarea) {
 
@@ -3698,36 +3474,26 @@ if (textarea) {
     data.comentario ||
     "";
 
-
   textarea.focus();
 }
-
 
 const formulario =
   document.getElementById(
     "areaAvaliacao"
   );
 
-
 if (formulario) {
 
-  formulario.scrollIntoView(
-    {
-      behavior:
-        "smooth",
-
-      block:
-        "center"
-    }
-  );
+  formulario.scrollIntoView({
+    behavior: "smooth",
+    block: "center"
+  });
 }
-
 
 const botao =
   document.getElementById(
     "publicarComentario"
   );
-
 
 if (botao) {
 
@@ -3741,7 +3507,6 @@ console.error(
   "Erro ao editar avaliação:",
   erro
 );
-
 
 alert(
   "Não foi possível carregar sua avaliação."
@@ -3757,9 +3522,7 @@ editarAvaliacao;
 EXCLUIR AVALIAÇÃO
 ========================================================= */
 
-async function excluirAvaliacao(
-id
-) {
+async function excluirAvaliacao(id) {
 
 if (!id) {
 return;
@@ -3784,9 +3547,7 @@ if (
 !cliente ||
 !usuario
 ) {
-
 return;
-
 }
 
 try {
@@ -3795,9 +3556,7 @@ const {
   error
 } =
   await cliente
-    .from(
-      "avaliacoes"
-    )
+    .from("avaliacoes")
     .delete()
     .eq(
       "id",
@@ -3808,19 +3567,15 @@ const {
       usuario.id
     );
 
-
 if (error) {
   throw error;
 }
 
-
 avaliacaoAtual =
   null;
 
-
 notaSelecionada =
   0;
-
 
 await carregarAvaliacoes();
 
@@ -3832,7 +3587,6 @@ console.error(
   "Erro ao excluir avaliação:",
   erro
 );
-
 
 alert(
   erro.message ||
@@ -3851,10 +3605,6 @@ EVENTOS
 
 function configurarEventos() {
 
-/*
-Publicar avaliação.
-*/
-
 const publicar =
 document.getElementById(
 "publicarComentario"
@@ -3868,10 +3618,6 @@ publicar.addEventListener(
 );
 
 }
-
-/*
-Estrelas.
-*/
 
 const estrelas =
 document.querySelectorAll(
@@ -3893,7 +3639,6 @@ botao => {
     }
   );
 
-
   botao.addEventListener(
     "mouseleave",
     () => {
@@ -3904,7 +3649,6 @@ botao => {
     }
   );
 
-
   botao.addEventListener(
     "click",
     () => {
@@ -3913,7 +3657,6 @@ botao => {
         Number(
           botao.dataset.rating
         );
-
 
       preencherSeletorEstrelas(
         notaSelecionada
@@ -3924,10 +3667,6 @@ botao => {
 
 );
 
-/*
-Botões de editar/excluir avaliações.
-*/
-
 document.addEventListener(
 "click",
 evento => {
@@ -3937,23 +3676,19 @@ evento => {
       "[data-editar-avaliacao]"
     );
 
-
   if (editar) {
 
     editarAvaliacao(
       editar.dataset.editarAvaliacao
     );
 
-
     return;
   }
-
 
   const excluir =
     evento.target.closest(
       "[data-excluir-avaliacao]"
     );
-
 
   if (excluir) {
 
@@ -3964,10 +3699,6 @@ evento => {
 }
 
 );
-
-/*
-Foto viewer.
-*/
 
 const viewer =
 document.getElementById(
@@ -3992,10 +3723,6 @@ viewer.addEventListener(
 
 }
 
-/*
-ESC.
-*/
-
 document.addEventListener(
 "keydown",
 evento => {
@@ -4006,6 +3733,18 @@ evento => {
   ) {
 
     fecharFotoTelaCheia();
+
+    const modal =
+      document.getElementById(
+        "modalEditarComercio"
+      );
+
+    if (modal) {
+
+      modal.classList.remove(
+        "aberto"
+      );
+    }
   }
 }
 
@@ -4027,7 +3766,6 @@ console.warn(
   "Cliente Supabase não disponível para monitoramento."
 );
 
-
 return;
 
 }
@@ -4036,14 +3774,6 @@ try {
 
 cliente.auth.onAuthStateChange(
   () => {
-
-    /*
-      O login.js também atualiza
-      window.usuarioAtualSupabase.
-
-      O pequeno atraso evita que esta página
-      consulte o estado antes da atualização.
-    */
 
     setTimeout(
       async () => {
@@ -4082,16 +3812,14 @@ console.log(
   "LOCAL.JS iniciado."
 );
 
-
 supabaseClient =
   obterSupabaseClient();
 
+prepararEstiloBotoesComercio();
 
 configurarEventos();
 
-
 configurarMonitoramentoAuth();
-
 
 await carregarLocal();
 
