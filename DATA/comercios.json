@@ -2345,5 +2345,28 @@
     "latitude": null,
     "longitude": null,
     "whatsapp": ""
+  },
+  {
+    "id": "pedrox-teste",
+    "nome": "pedrox teste",
+    "categoria": "Restaurante",
+    "descricao": "",
+    "historia": "",
+    "curiosidades": "",
+    "endereco": "rerwtwert",
+    "horario": ",mnkl",
+    "entrada": "",
+    "telefone": "35999638094",
+    "whatsapp": "35999638094",
+    "instagram": "",
+    "site": "",
+    "latitude": null,
+    "longitude": null,
+    "imagem": "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790948964037-0-55h46ob-whatsapp-image-2026-09-23-at-11-43-26.jpeg",
+    "imagens": [
+      "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790948964037-0-55h46ob-whatsapp-image-2026-09-23-at-11-43-26.jpeg",
+      "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790948964410-1-2cp7m3h-whatsapp-image-2026-09-29-at-14-03-26--1-.jpeg",
+      "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790948964579-2-60irqx3-whatsapp-image-2026-09-29-at-14-03-26.jpeg"
+    ]
   }
 ]
