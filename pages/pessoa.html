@@ -182,6 +182,16 @@ content="#091D1C"
 
     </button>
 
+    <button
+      id="botaoEditarPerfil"
+      class="botao-editar-perfil"
+      type="button"
+      onclick="abrirEditorPerfil()"
+      style="display: none;"
+    >
+      <span>Editar meu perfil</span>
+    </button>
+
 
   </div>
 
@@ -264,6 +274,56 @@ content="#091D1C"
   alt=""
 >
 
+</div>
+
+<div id="modalEditarPerfil" class="modal-editar-perfil" style="display: none;" aria-hidden="true">
+  <div class="editor-perfil-admin">
+    <div class="editor-comercio-topo">
+      <div>
+        <span>EDITANDO PERFIL</span>
+        <h2>Editar meu perfil</h2>
+      </div>
+      <button type="button" class="editor-botao-fechar" onclick="fecharEditorPerfil()">Fechar</button>
+    </div>
+
+    <form id="formEditarPerfil" class="editor-perfil-campos">
+      <div class="editor-campo">
+        <label for="editarPessoaNome">Nome</label>
+        <input id="editarPessoaNome" type="text" maxlength="100" required>
+      </div>
+      <div class="editor-campo">
+        <label for="editarPessoaCategoria">Categoria</label>
+        <input id="editarPessoaCategoria" type="text" maxlength="80">
+      </div>
+      <div class="editor-campo editor-campo-largo">
+        <label for="editarPessoaInstagram">Instagram</label>
+        <input id="editarPessoaInstagram" type="text" maxlength="150" placeholder="@seuperfil">
+      </div>
+      <div class="editor-campo editor-campo-largo">
+        <label for="editarPessoaDescricao">Descrição</label>
+        <textarea id="editarPessoaDescricao" rows="4" maxlength="1000"></textarea>
+      </div>
+      <div class="editor-campo editor-campo-largo">
+        <label for="editarPessoaSobre">Sobre</label>
+        <textarea id="editarPessoaSobre" rows="5" maxlength="1500"></textarea>
+      </div>
+      <div class="editor-imagens editor-campo-largo">
+        <div class="editor-imagens-cabecalho">
+          <div><label>Imagens</label><small>Até 4 imagens. A primeira será a principal.</small></div>
+          <span id="contadorImagensPerfil" class="editor-contador-imagens">0/4</span>
+        </div>
+        <div id="imagensPerfilAtuais" class="editor-imagens-lista"></div>
+        <label for="editarPessoaImagens" class="editor-botao-imagem">+ Adicionar imagens</label>
+        <input id="editarPessoaImagens" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden>
+        <small class="editor-imagens-ajuda">JPG, PNG ou WEBP · máximo 5 MB por imagem</small>
+      </div>
+      <div id="mensagemEditarPerfil" class="mensagem-editar-perfil editor-campo-largo"></div>
+      <div class="editor-comercio-acoes editor-campo-largo">
+        <button type="button" class="editor-botao-cancelar" onclick="fecharEditorPerfil()">Cancelar</button>
+        <button type="submit" class="editor-botao-salvar" id="salvarEdicaoPerfil">Salvar alterações</button>
+      </div>
+    </form>
+  </div>
 </div>
 
 <!-- =======================================================
