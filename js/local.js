@@ -32,6 +32,12 @@ const EDGE_FUNCTION_URL =
 const FALLBACK_IMAGE =
 "../img/icones/imgnaodisponivel.png";
 
+const STORAGE_BUCKET =
+"cadastros";
+
+const LIMITE_IMAGENS_EDICAO =
+4;
+
 /* =========================================================
 ESTADO
 ========================================================= */
@@ -63,6 +69,8 @@ let supabaseClient = null;
 let usuarioProprietarioVerificado = null;
 
 let verificacaoProprietarioEmAndamento = false;
+
+let imagensEdicaoComercio = [];
 
 /* =========================================================
 SUPABASE
@@ -1913,6 +1921,202 @@ return null;
 EDITAR MEU COMÉRCIO
 ========================================================= */
 
+function obterImagensParaEdicao() {
+
+if (!localAtual) {
+return [];
+}
+
+let imagens = [];
+
+if (Array.isArray(localAtual.imagens)) {
+imagens = localAtual.imagens;
+} else if (Array.isArray(localAtual.galeria)) {
+imagens = localAtual.galeria;
+}
+
+if (!imagens.length && localAtual.imagem) {
+imagens = [localAtual.imagem];
+}
+
+if (!imagens.length && localAtual.capa) {
+imagens = [localAtual.capa];
+}
+
+return [...new Set(
+imagens
+.filter(imagem => typeof imagem === "string" && imagem.trim())
+.map(imagem => resolverCaminhoImagem(imagem))
+.filter(Boolean)
+)].slice(0, LIMITE_IMAGENS_EDICAO).map(url => ({
+url,
+arquivo: null,
+preview: ""
+}));
+
+}
+
+function liberarImagensEdicao() {
+
+imagensEdicaoComercio.forEach(item => {
+if (item.preview) {
+URL.revokeObjectURL(item.preview);
+}
+});
+
+imagensEdicaoComercio = [];
+
+}
+
+function renderizarImagensEdicaoComercio() {
+
+const lista =
+document.getElementById(
+"editarImagensAtuais"
+);
+
+if (!lista) {
+return;
+}
+
+lista.innerHTML = "";
+
+const contador =
+document.getElementById(
+"contadorImagensEdicao"
+);
+
+if (contador) {
+contador.textContent =
+`${imagensEdicaoComercio.length}/${LIMITE_IMAGENS_EDICAO}`;
+}
+
+if (!imagensEdicaoComercio.length) {
+lista.innerHTML =
+`<p class="editar-imagens-vazio">Nenhuma foto mantida. Adicione novas fotos abaixo.</p>`;
+return;
+}
+
+imagensEdicaoComercio.forEach((item, indice) => {
+
+const bloco =
+document.createElement("div");
+
+bloco.className =
+"editar-imagem-item";
+
+const origem =
+item.arquivo
+? item.preview
+: item.url;
+
+bloco.innerHTML = `
+<div class="editar-imagem-preview">
+<img src="${escaparHTML(origem)}" alt="Foto ${indice + 1}">
+${indice === 0 ? '<span class="editar-imagem-principal">Principal</span>' : ""}
+<button type="button" class="editar-imagem-remover" aria-label="Remover foto ${indice + 1}" title="Remover foto">×</button>
+</div>
+<span class="editar-imagem-legenda">Foto ${indice + 1}${item.arquivo ? " · nova" : ""}</span>
+`;
+
+bloco
+.querySelector(".editar-imagem-remover")
+.addEventListener("click", () => {
+
+const removida =
+imagensEdicaoComercio.splice(indice, 1)[0];
+
+if (removida?.preview) {
+URL.revokeObjectURL(removida.preview);
+}
+
+renderizarImagensEdicaoComercio();
+
+});
+
+lista.appendChild(bloco);
+
+});
+
+}
+
+function validarImagemEdicao(arquivo) {
+
+const tiposPermitidos = [
+"image/jpeg",
+"image/png",
+"image/webp"
+];
+
+if (!tiposPermitidos.includes(arquivo?.type)) {
+alert("Use somente imagens JPG, PNG ou WEBP.");
+return false;
+}
+
+if (arquivo.size > 5 * 1024 * 1024) {
+alert(`A imagem "${arquivo.name}" ultrapassa o limite de 5 MB.`);
+return false;
+}
+
+return true;
+
+}
+
+function gerarCaminhoImagemEdicao(usuarioId, arquivo) {
+
+const nome = arquivo.name
+.normalize("NFD")
+.replace(/[\\u0300-\\u036f]/g, "")
+.replace(/[^a-zA-Z0-9._-]/g, "-");
+
+const aleatorio =
+Math.random().toString(36).substring(2, 9);
+
+return `admin/${usuarioId}/${Date.now()}-${aleatorio}-${nome}`;
+
+}
+
+async function enviarImagemEdicao(arquivo, usuarioId) {
+
+const supabase =
+obterSupabaseClient();
+
+if (!supabase) {
+throw new Error("Cliente Supabase não disponível.");
+}
+
+const caminho =
+gerarCaminhoImagemEdicao(usuarioId, arquivo);
+
+const resposta =
+await supabase.storage
+.from(STORAGE_BUCKET)
+.upload(caminho, arquivo, {
+cacheControl: "3600",
+upsert: false,
+contentType: arquivo.type
+});
+
+if (resposta.error) {
+throw new Error(
+resposta.error.message ||
+"Não foi possível enviar a foto."
+);
+}
+
+const publico =
+supabase.storage
+.from(STORAGE_BUCKET)
+.getPublicUrl(caminho);
+
+if (!publico.data?.publicUrl) {
+throw new Error("Não foi possível obter a URL da foto.");
+}
+
+return publico.data.publicUrl;
+
+}
+
 function editarMeuComercio() {
 
 if (!localAtual) {
@@ -1955,6 +2159,64 @@ console.error(
 );
 
 return;
+
+}
+
+liberarImagensEdicao();
+
+imagensEdicaoComercio =
+obterImagensParaEdicao();
+
+renderizarImagensEdicaoComercio();
+
+const inputImagens =
+document.getElementById(
+"editarImagens"
+);
+
+if (
+inputImagens &&
+!inputImagens.dataset.editorFotosConfigurado
+) {
+
+inputImagens.dataset.editorFotosConfigurado =
+"true";
+
+inputImagens.addEventListener(
+"change",
+event => {
+
+const arquivos =
+Array.from(
+event.target.files || []
+);
+
+const vagas =
+LIMITE_IMAGENS_EDICAO -
+imagensEdicaoComercio.length;
+
+if (!vagas) {
+alert(`O limite é de ${LIMITE_IMAGENS_EDICAO} fotos.`);
+inputImagens.value = "";
+return;
+}
+
+arquivos
+.slice(0, vagas)
+.filter(validarImagemEdicao)
+.forEach(arquivo => {
+imagensEdicaoComercio.push({
+url: "",
+arquivo,
+preview: URL.createObjectURL(arquivo)
+});
+});
+
+inputImagens.value = "";
+renderizarImagensEdicaoComercio();
+
+}
+);
 
 }
 
@@ -2192,7 +2454,7 @@ return campo
 
 };
 
-const dadosComercio = {
+let dadosComercio = {
 
 nome:
 obterValor(
@@ -2258,6 +2520,46 @@ localAtual.imagens
 };
 
 try {
+
+const usuarioEdicao =
+await obterUsuarioAutenticadoLocal();
+
+if (!usuarioEdicao) {
+throw new Error("Usuário não autenticado.");
+}
+
+const imagensFinais = [];
+
+for (let indice = 0; indice < imagensEdicaoComercio.length; indice++) {
+
+const item = imagensEdicaoComercio[indice];
+
+if (item.arquivo) {
+mostrarMensagemEdicao(
+`Enviando foto ${indice + 1} de ${imagensEdicaoComercio.length}...`,
+"sucesso"
+);
+
+imagensFinais.push(
+await enviarImagemEdicao(
+item.arquivo,
+usuarioEdicao.id
+)
+);
+
+} else if (item.url) {
+
+imagensFinais.push(item.url);
+
+}
+
+}
+
+dadosComercio.imagem =
+imagensFinais[0] || null;
+
+dadosComercio.imagens =
+imagensFinais.slice(0, LIMITE_IMAGENS_EDICAO);
 
 const resposta =
 await fetch(
