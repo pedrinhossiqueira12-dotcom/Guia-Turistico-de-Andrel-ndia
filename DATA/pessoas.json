@@ -1,1 +1,17 @@
-[]
+[
+  {
+    "id": "pedro",
+    "nome": "Pedro",
+    "categoria": "Artista",
+    "descricao": "Nananan",
+    "sobre": "Nanandhsj",
+    "instagram": "Shs6dy6xhx",
+    "imagem": "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/mural-imagens/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790914797604-0-sguducm-1000436699.jpg",
+    "imagens": [
+      "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/mural-imagens/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790914797604-0-sguducm-1000436699.jpg",
+      "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/mural-imagens/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790914798569-1-eqe9x24-1000436700.jpg",
+      "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/mural-imagens/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790914799343-2-kexxbrt-1000436698.jpg",
+      "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/mural-imagens/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790914800410-3-6dij2lu-1000436769.png"
+    ]
+  }
+]
