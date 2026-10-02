@@ -3232,7 +3232,7 @@ fecharEditorComercio;
 
 const formularioEdicao =
 document.getElementById(
-"formularioEditarComercio"
+"formEditarComercio"
 );
 
 if (formularioEdicao) {
