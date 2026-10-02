@@ -6,7 +6,7 @@ RESPONSABILIDADES:
 
 Carregar local/comércio/hospedagem
 Galeria de imagens
-Mapa
+Mapa Esri
 WhatsApp / Instagram
 Sugestão de alteração
 Avaliações
@@ -36,7 +36,10 @@ const FALLBACK_IMAGE =
 ESTADO
 ========================================================= */
 
-const parametrosURL = new URLSearchParams(window.location.search);
+const parametrosURL =
+new URLSearchParams(
+window.location.search
+);
 
 const idLocal =
 parametrosURL.get("id");
@@ -104,8 +107,13 @@ ESCAPAR HTML
 
 function escaparHTML(valor) {
 
-if (valor === null || valor === undefined) {
+if (
+valor === null ||
+valor === undefined
+) {
+
 return "";
+
 }
 
 return String(valor)
@@ -155,7 +163,6 @@ item.categoria ||
 
 const categoriasComercio = [
 "comercio",
-"comércio",
 "loja",
 "mercado",
 "supermercado",
@@ -167,21 +174,18 @@ const categoriasComercio = [
 "bar",
 "mercearia",
 "farmacia",
-"farmácia",
 "autopecas",
-"auto peças",
 "oficina",
 "hotel",
 "pousada",
-"hospedagem",
-"servico",
-"serviço"
+"servico"
 ];
 
 return (
 tipo.includes("comerc") ||
-tipo.includes("comercio") ||
-categoriasComercio.includes(categoria)
+categoriasComercio.includes(
+categoria
+)
 );
 }
 
@@ -191,7 +195,9 @@ CARREGAR LOCAL
 
 async function carregarLocal() {
 
-console.log("LOCAL.JS iniciado.");
+console.log(
+"LOCAL.JS iniciado."
+);
 
 if (!idLocal) {
 
@@ -211,11 +217,17 @@ const [
   respostaHospedagem
 ] = await Promise.all([
 
-  fetch("../DATA/locais.json"),
+  fetch(
+    "../DATA/locais.json"
+  ),
 
-  fetch("../DATA/comercios.json"),
+  fetch(
+    "../DATA/comercios.json"
+  ),
 
-  fetch("../DATA/hospedagem.json")
+  fetch(
+    "../DATA/hospedagem.json"
+  )
 ]);
 
 
@@ -224,10 +236,12 @@ const locais =
     ? await respostaLocais.json()
     : [];
 
+
 const comercios =
   respostaComercios.ok
     ? await respostaComercios.json()
     : [];
+
 
 const hospedagem =
   respostaHospedagem.ok
@@ -239,26 +253,29 @@ let encontrado = null;
 
 
 /* =====================================================
-   PROCURAR NOS LOCAIS
+   LOCAIS
 ===================================================== */
 
 encontrado =
   locais.find(
     item =>
-      String(item.id) === String(idLocal)
+      String(item.id) ===
+      String(idLocal)
   );
 
 
 if (encontrado) {
 
-  encontrado._tipo = "local";
+  encontrado._tipo =
+    "local";
 
-  encontrado.fonte = "locais";
+  encontrado.fonte =
+    "locais";
 }
 
 
 /* =====================================================
-   PROCURAR NOS COMÉRCIOS
+   COMÉRCIOS
 ===================================================== */
 
 if (!encontrado) {
@@ -266,20 +283,24 @@ if (!encontrado) {
   encontrado =
     comercios.find(
       item =>
-        String(item.id) === String(idLocal)
+        String(item.id) ===
+        String(idLocal)
     );
+
 
   if (encontrado) {
 
-    encontrado._tipo = "comercio";
+    encontrado._tipo =
+      "comercio";
 
-    encontrado.fonte = "comercios";
+    encontrado.fonte =
+      "comercios";
   }
 }
 
 
 /* =====================================================
-   PROCURAR NA HOSPEDAGEM
+   HOSPEDAGEM
 ===================================================== */
 
 if (!encontrado) {
@@ -287,14 +308,18 @@ if (!encontrado) {
   encontrado =
     hospedagem.find(
       item =>
-        String(item.id) === String(idLocal)
+        String(item.id) ===
+        String(idLocal)
     );
+
 
   if (encontrado) {
 
-    encontrado._tipo = "hospedagem";
+    encontrado._tipo =
+      "hospedagem";
 
-    encontrado.fonte = "hospedagem";
+    encontrado.fonte =
+      "hospedagem";
   }
 }
 
@@ -322,7 +347,6 @@ console.log(
 
 preencherPagina();
 
-
 await carregarAvaliacoes();
 
 await verificarAvaliacaoUsuario();
@@ -349,18 +373,18 @@ if (!localAtual) {
 return;
 }
 
-/* =====================================================
-TÍTULO
-===================================================== */
-
 document.title =
 `${localAtual.nome || "Local"} — Guia Turístico de Andrelândia`;
 
 const categoria =
-document.getElementById("categoriaLocal");
+document.getElementById(
+"categoriaLocal"
+);
 
 const nome =
-document.getElementById("nomeLocal");
+document.getElementById(
+"nomeLocal"
+);
 
 if (categoria) {
 
@@ -383,7 +407,9 @@ DESCRIÇÃO
 ===================================================== */
 
 const descricao =
-document.getElementById("descricaoLocal");
+document.getElementById(
+"descricaoLocal"
+);
 
 if (descricao) {
 
@@ -399,20 +425,15 @@ HISTÓRIA
 ===================================================== */
 
 const historia =
-document.getElementById("historiaLocal");
+document.getElementById(
+"historiaLocal"
+);
 
 if (historia) {
 
-if (localAtual.historia) {
-
-  historia.textContent =
-    localAtual.historia;
-
-} else {
-
-  historia.textContent =
-    "Ainda não há informações históricas cadastradas.";
-}
+historia.textContent =
+  localAtual.historia ||
+  "Ainda não há informações históricas cadastradas.";
 
 }
 
@@ -427,16 +448,9 @@ document.getElementById(
 
 if (curiosidades) {
 
-if (localAtual.curiosidades) {
-
-  curiosidades.textContent =
-    localAtual.curiosidades;
-
-} else {
-
-  curiosidades.textContent =
-    "Ainda não há curiosidades cadastradas.";
-}
+curiosidades.textContent =
+  localAtual.curiosidades ||
+  "Ainda não há curiosidades cadastradas.";
 
 }
 
@@ -474,32 +488,16 @@ endereco.textContent =
 
 }
 
-/* =====================================================
-WHATSAPP
-===================================================== */
-
 preencherWhatsApp();
-
-/* =====================================================
-INSTAGRAM
-===================================================== */
 
 preencherInstagram();
 
-/* =====================================================
-GALERIA
-===================================================== */
-
 preencherGaleria();
-
-/* =====================================================
-MAPA
-===================================================== */
 
 inicializarMapa();
 
 /* =====================================================
-SUGESTÃO DE ALTERAÇÃO
+SUGESTÃO
 ===================================================== */
 
 const botaoSugerir =
@@ -545,10 +543,13 @@ if (!numero) {
 elemento.style.display =
   "none";
 
+
 if (nome) {
+
   nome.style.display =
     "none";
 }
+
 
 return;
 
@@ -614,22 +615,33 @@ if (!instagram) {
 elemento.style.display =
   "none";
 
+
 if (nome) {
+
   nome.style.display =
     "none";
 }
+
 
 return;
 
 }
 
 if (
-!instagram.startsWith("http://") &&
-!instagram.startsWith("https://")
+!instagram.startsWith(
+"http://"
+) &&
+!instagram.startsWith(
+"https://"
+)
 ) {
 
 instagram =
-  instagram.replace(/^@/, "");
+  instagram.replace(
+    /^@/,
+    ""
+  );
+
 
 instagram =
   `https://instagram.com/${instagram}`;
@@ -682,21 +694,26 @@ localAtual.imagens
 ) {
 
 imagens =
-  localAtual.imagens.filter(Boolean);
+  localAtual.imagens
+    .filter(Boolean);
 
 } else if (
 localAtual.imagem
 ) {
 
 imagens =
-  [localAtual.imagem];
+  [
+    localAtual.imagem
+  ];
 
 }
 
 if (!imagens.length) {
 
 imagens =
-  [FALLBACK_IMAGE];
+  [
+    FALLBACK_IMAGE
+  ];
 
 }
 
@@ -707,6 +724,7 @@ if (principal) {
 
 principal.src =
   imagens[0];
+
 
 principal.onerror =
   function () {
@@ -736,7 +754,10 @@ miniaturas.innerHTML =
 imagens
 .slice(0, 4)
 .forEach(
-(imagem, indice) => {
+(
+imagem,
+indice
+) => {
 
     const img =
       document.createElement(
@@ -746,6 +767,7 @@ imagens
 
     img.src =
       imagem;
+
 
     img.alt =
       `${localAtual.nome || "Local"} - Foto ${indice + 1}`;
@@ -784,10 +806,12 @@ imagens
 }
 
 /* =========================================================
-VISUALIZADOR DE FOTO
+VISUALIZADOR
 ========================================================= */
 
-function abrirVisualizador(indice) {
+function abrirVisualizador(
+indice
+) {
 
 const viewer =
 document.getElementById(
@@ -839,7 +863,7 @@ viewer.style.display =
 }
 
 /* =========================================================
-MAPA
+MAPA ESRI
 ========================================================= */
 
 function inicializarMapa() {
@@ -899,25 +923,35 @@ longitude
 17
 );
 
+/* =====================================================
+ESRI WORLD IMAGERY
+
+ URL CORRETA:
+ server.arcgisonline.com
+
+ Não utilizar:
+ serverservices.arcgisonline.com
+ serverserver.arcgisonline.com
+
+===================================================== */
+
 L.tileLayer(
-"https://server{ s }.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{ z }/{ y }/{ x }"
-.replace("{ s }", "{s}")
-.replace("{ z }", "{z}")
-.replace("{ y }", "{y}")
-.replace("{ x }", "{x}"),
+"https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
 {
 maxNativeZoom: 19,
 maxZoom: 22,
-subdomains: [
-"server",
-"services"
-],
-attribution:
-"Tiles © Esri"
+
+  attribution:
+    "Tiles © Esri"
 }
+
 ).addTo(
 mapaLocal
 );
+
+/* =====================================================
+MARCADOR
+===================================================== */
 
 const marcador =
 L.marker(
@@ -933,6 +967,10 @@ marcador.bindPopup(
 `<strong>${escaparHTML(localAtual.nome || "")}</strong>`
 );
 
+/* =====================================================
+COMO CHEGAR
+===================================================== */
+
 const comoChegar =
 document.getElementById(
 "comoChegar"
@@ -943,8 +981,10 @@ if (comoChegar) {
 comoChegar.href =
   `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`;
 
+
 comoChegar.target =
   "_blank";
+
 
 comoChegar.rel =
   "noopener noreferrer";
@@ -1013,13 +1053,14 @@ console.error(
   erro
 );
 
+
 return null;
 
 }
 }
 
 /* =========================================================
-ÁREA DE BOTÕES DO COMÉRCIO
+ÁREA DOS BOTÕES
 ========================================================= */
 
 function obterAreaBotoesComercio() {
@@ -1086,7 +1127,7 @@ return area;
 }
 
 /* =========================================================
-CRIAR BOTÕES DO PROPRIETÁRIO
+CRIAR BOTÕES
 ========================================================= */
 
 function criarBotoesProprietario() {
@@ -1129,6 +1170,10 @@ botoes.style.gap =
 botoes.style.flexWrap =
 "wrap";
 
+/* =====================================================
+EDITAR
+===================================================== */
+
 const editar =
 document.createElement(
 "button"
@@ -1166,6 +1211,10 @@ editar.style.fontWeight =
 
 editar.onclick =
 editarMeuComercio;
+
+/* =====================================================
+EXCLUIR
+===================================================== */
 
 const excluir =
 document.createElement(
@@ -1241,6 +1290,7 @@ if (area) {
 area.innerHTML =
   "";
 
+
 area.style.display =
   "none";
 
@@ -1248,7 +1298,7 @@ area.style.display =
 }
 
 /* =========================================================
-VERIFICAR PROPRIETÁRIO DO COMÉRCIO
+VERIFICAR PROPRIETÁRIO
 ========================================================= */
 
 async function verificarProprietarioComercio() {
@@ -1258,7 +1308,9 @@ return;
 }
 
 if (
-!pareceComercio(localAtual)
+!pareceComercio(
+localAtual
+)
 ) {
 
 esconderBotoesProprietario();
@@ -1315,23 +1367,15 @@ if (!supabase) {
 }
 
 
-/*
-  IMPORTANTE:
-
-  O ID público do comércio, por exemplo:
-
-    pedrox-do-grau
-
-  NÃO necessariamente é o ID UUID do cadastro
-  em cadastros_comercios.
-
-  Por isso buscamos os cadastros do usuário
-  e comparamos local_id / id / nome.
-*/
+/* ===================================================
+   BUSCAR CADASTROS DO USUÁRIO
+=================================================== */
 
 const resposta =
   await supabase
-    .from("cadastros_comercios")
+    .from(
+      "cadastros_comercios"
+    )
     .select("*")
     .eq(
       "usuario_id",
@@ -1345,6 +1389,7 @@ if (resposta.error) {
     "Erro ao buscar cadastros do usuário:",
     resposta.error
   );
+
 
   esconderBotoesProprietario();
 
@@ -1362,6 +1407,10 @@ console.log(
 );
 
 
+/* ===================================================
+   COMPARAR COMÉRCIO ATUAL
+=================================================== */
+
 const idAtual =
   String(
     localAtual.id || ""
@@ -1374,19 +1423,21 @@ const nomeAtual =
   );
 
 
-let cadastroEncontrado =
+const cadastroEncontrado =
   cadastros.find(
     cadastro => {
 
       const localId =
         String(
-          cadastro.local_id || ""
+          cadastro.local_id ||
+          ""
         );
 
 
       const cadastroId =
         String(
-          cadastro.id || ""
+          cadastro.id ||
+          ""
         );
 
 
@@ -1402,20 +1453,13 @@ let cadastroEncontrado =
         (
           nomeAtual &&
           nomeCadastro &&
-          nomeAtual === nomeCadastro
+          nomeAtual ===
+            nomeCadastro
         )
       );
     }
   );
 
-
-/*
-  Se encontramos pelo nome, local_id ou UUID,
-  guardamos o cadastro completo.
-
-  Isso é importante porque a Edge Function
-  precisa do UUID real de cadastros_comercios.
-*/
 
 if (cadastroEncontrado) {
 
@@ -1465,6 +1509,55 @@ esconderBotoesProprietario();
 
 verificacaoProprietarioEmAndamento =
   false;
+
+}
+}
+
+/* =========================================================
+OBTER TOKEN
+========================================================= */
+
+async function obterTokenSupabase() {
+
+try {
+
+const supabase =
+  obterSupabaseClient();
+
+
+if (!supabase) {
+  return null;
+}
+
+
+const resposta =
+  await supabase.auth.getSession();
+
+
+if (
+  resposta.error ||
+  !resposta.data ||
+  !resposta.data.session
+) {
+
+  return null;
+}
+
+
+return (
+  resposta.data.session
+    .access_token
+);
+
+} catch (erro) {
+
+console.error(
+  "Erro ao obter token:",
+  erro
+);
+
+
+return null;
 
 }
 }
@@ -1612,13 +1705,16 @@ instagram:
   instagram.trim(),
 
 latitude:
-  localAtual.latitude ?? null,
+  localAtual.latitude ??
+  null,
 
 longitude:
-  localAtual.longitude ?? null,
+  localAtual.longitude ??
+  null,
 
 imagem:
-  localAtual.imagem || null,
+  localAtual.imagem ||
+  null,
 
 imagens:
   Array.isArray(
@@ -1631,18 +1727,34 @@ imagens:
 
 try {
 
+const token =
+  await obterTokenSupabase();
+
+
+if (!token) {
+
+  alert(
+    "Sua sessão expirou. Faça login novamente."
+  );
+
+  return;
+}
+
+
 const resposta =
   await fetch(
     EDGE_FUNCTION_URL,
     {
-      method: "POST",
+      method:
+        "POST",
 
       headers: {
+
         "Content-Type":
           "application/json",
 
         "Authorization":
-          `Bearer ${localStorage.getItem("sb-access-token") || ""}`
+          `Bearer ${token}`
       },
 
       body:
@@ -1650,6 +1762,13 @@ const resposta =
 
           acao:
             "editar_meu_comercio",
+
+          /*
+            IMPORTANTE:
+
+            Aqui usamos o UUID real
+            do cadastro Supabase.
+          */
 
           comercio_id:
             cadastro.id,
@@ -1702,51 +1821,6 @@ console.error(
 alert(
   "Erro de conexão ao editar o comércio."
 );
-
-}
-}
-
-/* =========================================================
-OBTER TOKEN SUPABASE
-========================================================= */
-
-async function obterTokenSupabase() {
-
-try {
-
-const supabase =
-  obterSupabaseClient();
-
-
-if (!supabase) {
-  return null;
-}
-
-
-const resposta =
-  await supabase.auth.getSession();
-
-
-if (
-  resposta.error ||
-  !resposta.data ||
-  !resposta.data.session
-) {
-
-  return null;
-}
-
-
-return resposta.data.session.access_token;
-
-} catch (erro) {
-
-console.error(
-  "Erro ao obter token:",
-  erro
-);
-
-return null;
 
 }
 }
@@ -1816,9 +1890,11 @@ const resposta =
   await fetch(
     EDGE_FUNCTION_URL,
     {
-      method: "POST",
+      method:
+        "POST",
 
       headers: {
+
         "Content-Type":
           "application/json",
 
@@ -1833,10 +1909,8 @@ const resposta =
             "excluir_meu_comercio",
 
           /*
-            IMPORTANTE:
-
-            Enviamos o UUID real do cadastro
-            no Supabase, e não o slug público.
+            UUID real do cadastro
+            no Supabase.
           */
 
           comercio_id:
@@ -1925,8 +1999,13 @@ async function carregarAvaliacoes() {
 const supabase =
 obterSupabaseClient();
 
-if (!supabase || !localAtual) {
+if (
+!supabase ||
+!localAtual
+) {
+
 return;
+
 }
 
 try {
@@ -1942,7 +2021,8 @@ const resposta =
     .order(
       "criado_em",
       {
-        ascending: false
+        ascending:
+          false
       }
     );
 
@@ -1953,6 +2033,7 @@ if (resposta.error) {
     "Erro ao carregar avaliações:",
     resposta.error
   );
+
 
   return;
 }
@@ -2001,7 +2082,8 @@ avaliacao
 ) =>
 total +
 Number(
-avaliacao.nota || 0
+avaliacao.nota ||
+0
 ),
 0
 ) / quantidade
@@ -2051,7 +2133,7 @@ quantidadeElemento.textContent =
 }
 
 /* =========================================================
-GERAR ESTRELAS
+ESTRELAS
 ========================================================= */
 
 function gerarEstrelas(
@@ -2083,7 +2165,7 @@ return resultado;
 }
 
 /* =========================================================
-RENDERIZAR COMENTÁRIOS
+COMENTÁRIOS
 ========================================================= */
 
 function renderizarComentarios(
@@ -2131,7 +2213,8 @@ avaliacao => {
 
   const nota =
     Number(
-      avaliacao.nota || 0
+      avaliacao.nota ||
+      0
     );
 
 
@@ -2178,8 +2261,13 @@ async function verificarAvaliacaoUsuario() {
 const supabase =
 obterSupabaseClient();
 
-if (!supabase || !localAtual) {
+if (
+!supabase ||
+!localAtual
+) {
+
 return;
+
 }
 
 try {
@@ -2209,14 +2297,18 @@ const mensagemAuth =
 if (!usuario) {
 
   if (areaAuth) {
+
     areaAuth.style.display =
       "";
   }
 
+
   if (areaAvaliacao) {
+
     areaAvaliacao.style.display =
       "none";
   }
+
 
   if (mensagemAuth) {
 
@@ -2224,20 +2316,24 @@ if (!usuario) {
       "Faça login para avaliar este local.";
   }
 
+
   avaliacaoAtual =
     null;
+
 
   return;
 }
 
 
 if (areaAuth) {
+
   areaAuth.style.display =
     "none";
 }
 
 
 if (areaAvaliacao) {
+
   areaAvaliacao.style.display =
     "";
 }
@@ -2265,12 +2361,14 @@ if (resposta.error) {
     resposta.error
   );
 
+
   return;
 }
 
 
 avaliacaoAtual =
-  resposta.data || null;
+  resposta.data ||
+  null;
 
 
 const nomeUsuario =
@@ -2324,7 +2422,7 @@ console.error(
 }
 
 /* =========================================================
-SELETOR DE ESTRELAS
+SELECIONAR NOTA
 ========================================================= */
 
 function selecionarNota(
@@ -2345,7 +2443,10 @@ document.querySelectorAll(
 );
 
 botoes.forEach(
-(botao, indice) => {
+(
+botao,
+indice
+) => {
 
   const valor =
     indice + 1;
@@ -2353,7 +2454,8 @@ botoes.forEach(
 
   botao.classList.toggle(
     "selecionada",
-    valor <= notaSelecionada
+    valor <=
+      notaSelecionada
   );
 }
 
@@ -2369,8 +2471,13 @@ async function publicarAvaliacao() {
 const supabase =
 obterSupabaseClient();
 
-if (!supabase || !localAtual) {
+if (
+!supabase ||
+!localAtual
+) {
+
 return;
+
 }
 
 const usuario =
@@ -2409,9 +2516,7 @@ campoComentario
 ? campoComentario.value.trim()
 : "";
 
-if (
-comentario.length < 1
-) {
+if (!comentario) {
 
 alert(
   "Escreva um comentário."
@@ -2460,6 +2565,7 @@ if (avaliacaoAtual) {
 
 
   if (resposta.error) {
+
     throw resposta.error;
   }
 
@@ -2491,6 +2597,7 @@ if (avaliacaoAtual) {
 
 
   if (resposta.error) {
+
     throw resposta.error;
   }
 }
@@ -2521,7 +2628,7 @@ alert(
 }
 
 /* =========================================================
-SAIR DA CONTA
+SAIR
 ========================================================= */
 
 async function sairUsuarioLocal() {
@@ -2550,7 +2657,7 @@ console.error(
 }
 
 /* =========================================================
-EVENTOS
+DOM
 ========================================================= */
 
 document.addEventListener(
@@ -2603,7 +2710,10 @@ const botoesEstrelas =
 
 
 botoesEstrelas.forEach(
-  (botao, indice) => {
+  (
+    botao,
+    indice
+  ) => {
 
     botao.addEventListener(
       "click",
@@ -2667,9 +2777,7 @@ supabase.auth.onAuthStateChange(
 
     await verificarAvaliacaoUsuario();
 
-
     await carregarAvaliacoes();
-
 
     await verificarProprietarioComercio();
   }
