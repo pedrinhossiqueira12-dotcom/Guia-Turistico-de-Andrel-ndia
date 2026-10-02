@@ -22,11 +22,11 @@ content="#091D1C"
 
 <title>Pessoa — Guia Turístico de Andrelândia</title>
 
-<link rel="stylesheet" href="../styles/pessoa.css">
+<link rel="stylesheet" href="../styles/pessoa.css" >
 
 <!-- ROBOTO -->
 
-<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.googleapis.com" >
 
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin >
 
@@ -38,180 +38,205 @@ content="#091D1C"
 
 <main class="pessoa-page">
 
-<!-- ===================================================== CABEÇALHO ====================================================== -->
+<!-- =====================================================
+     CABEÇALHO
+====================================================== -->
 
 <header class="pessoa-header">
 
-<button
-class="back-button"
-type="button"
-onclick="voltarPagina()"
-aria-label="Voltar"
+  <button
+    class="back-button"
+    type="button"
+    onclick="voltarPagina()"
+    aria-label="Voltar"
+  >
+
+    <img
+      src="../img/icones/seta.png"
+      alt=""
+    >
+
+  </button>
 
 
+  <div class="pessoa-header-title">
 
+    <span id="categoriaPessoa">
+      ARTISTA
+    </span>
 
-<img
-src="../img/icones/seta.png"
-alt=""
+    <h1 id="nomePessoa">
+      Carregando...
+    </h1>
 
-
-
-
-</button>
-
-<div class="pessoa-header-title">
-
-<span id="categoriaPessoa"> ARTISTA </span>
-
-<h1 id="nomePessoa"> Carregando... </h1>
-
-</div>
+  </div>
 
 </header>
 
-<!-- ===================================================== APRESENTAÇÃO ====================================================== -->
+
+<!-- =====================================================
+     APRESENTAÇÃO
+====================================================== -->
 
 <section class="pessoa-apresentacao">
 
-<!-- FOTO -->
 
-<div class="pessoa-capa">
+  <!-- FOTO -->
 
-<img
-id="fotoPessoa"
-src=""
-alt=""
+  <div class="pessoa-capa">
 
-
-
-
-<button
-class="fullscreen-button"
-type="button"
-onclick="abrirFotoTelaCheia()"
-aria-label="Abrir foto em tela cheia"
+    <img
+      id="fotoPessoa"
+      src="../img/sem-foto.png"
+      alt=""
+    >
 
 
+    <button
+      class="fullscreen-button"
+      type="button"
+      onclick="abrirVisualizador(document.getElementById('fotoPessoa').src)"
+      aria-label="Abrir foto em tela cheia"
+    >
+
+      ⛶
+
+    </button>
+
+  </div>
 
 
-⛶
+  <!-- INFORMAÇÕES -->
 
-</button>
-
-</div>
-
-<!-- INFORMAÇÕES -->
-
-<div class="pessoa-introducao">
-
-<span
-id="categoriaPessoaTexto"
-class="pessoa-categoria"
+  <div class="pessoa-introducao">
 
 
+    <span
+      id="categoriaPessoaTexto"
+      class="pessoa-categoria"
+    >
+      ARTISTA
+    </span>
 
 
-ARTISTA
-
-</span>
-
-<h2 id="tituloPessoa">
-
-Carregando...
-
-</h2>
-
-<p id="descricaoPessoa" class="pessoa-descricao" >
-
-Carregando...
-
-</p>
-
-<!-- INSTAGRAM -->
-
-<a
-id="instagramPessoa"
-class="instagram-button"
-href="#"
-target="_blank"
-rel="noopener noreferrer"
+    <h2 id="tituloPessoa">
+      Carregando...
+    </h2>
 
 
+    <p
+      id="descricaoPessoa"
+      class="pessoa-descricao"
+    >
+      Carregando...
+    </p>
 
 
-<span class="instagram-button-icon">
+    <!-- INSTAGRAM -->
 
-  <img
-    src="../img/icones/instagram.png"
-    alt=""
-  >
+    <a
+      id="instagramPessoa"
+      class="instagram-button"
+      href="#"
+      target="_blank"
+      rel="noopener noreferrer"
+      style="display: none;"
+    >
 
-</span>
+      <span class="instagram-button-icon">
 
-<span class="instagram-button-text">
+        <img
+          src="../img/icones/instagram.png"
+          alt=""
+        >
 
-  Instagram
-
-</span>
-
-</a>
-
-<!-- ================================================= EXCLUSÃO DO PRÓPRIO PERFIL ================================================== -->
-
-<button
-id="botaoExcluirPerfil"
-class="botao-excluir-perfil"
-type="button"
-onclick="excluirMeuPerfil()"
-style="display: none;"
+      </span>
 
 
+      <span class="instagram-button-text">
+        Instagram
+      </span>
+
+    </a>
 
 
-<span class="botao-excluir-perfil-icone">
-  ×
-</span>
+    <!-- =================================================
+         EXCLUSÃO DO PRÓPRIO PERFIL
+    ================================================== -->
 
-<span>
-  Excluir meu perfil
-</span>
+    <button
+      id="botaoExcluirPerfil"
+      class="botao-excluir-perfil"
+      type="button"
+      onclick="excluirMeuPerfil()"
+      style="display: none;"
+    >
 
-</button>
+      <span class="botao-excluir-perfil-icone">
+        ×
+      </span>
 
-</div>
+      <span>
+        Excluir meu perfil
+      </span>
+
+    </button>
+
+
+  </div>
 
 </section>
 
-<!-- ===================================================== SOBRE ====================================================== -->
+
+<!-- =====================================================
+     SOBRE
+====================================================== -->
 
 <section class="sobre-pessoa">
 
-<div class="section-heading">
+  <div class="section-heading">
 
-<span> CONHEÇA </span>
+    <span>
+      CONHEÇA
+    </span>
 
-<h2> Sobre </h2>
+    <h2>
+      Sobre
+    </h2>
 
-</div>
+  </div>
 
-<p id="sobrePessoa"> Carregando... </p>
+
+  <p id="sobrePessoa">
+    Carregando...
+  </p>
 
 </section>
 
-<!-- ===================================================== GALERIA ====================================================== -->
+
+<!-- =====================================================
+     GALERIA
+====================================================== -->
 
 <section class="galeria-pessoa">
 
-<div class="section-heading">
+  <div class="section-heading">
 
-<span> MOMENTOS </span>
+    <span>
+      MOMENTOS
+    </span>
 
-<h2> Galeria </h2>
+    <h2>
+      Galeria
+    </h2>
 
-</div>
+  </div>
 
-<div id="galeriaPessoa" class="galeria-grid" ></div>
+
+  <div
+    id="galeriaPessoa"
+    class="galeria-grid"
+  ></div>
 
 </section>
 
@@ -222,25 +247,22 @@ style="display: none;"
 <div id="photoViewer" class="photo-viewer" >
 
 <button
-class="close-viewer"
-type="button"
-onclick="fecharFotoTelaCheia()"
-aria-label="Fechar"
+  class="close-viewer"
+  type="button"
+  onclick="fecharVisualizador()"
+  aria-label="Fechar"
+>
 
-
-
-
-×
+  ×
 
 </button>
 
+
 <img
-id="viewerImage"
-src=""
-alt=""
-
-
-
+  id="viewerImage"
+  src=""
+  alt=""
+>
 
 </div>
 
