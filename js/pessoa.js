@@ -134,7 +134,7 @@ const pessoas =
 pessoaAtual =
   pessoas.find(
     pessoa =>
-      String(pessoa.id) === String(id)
+      String(pessoa.id) === String(id) && String(pessoa.status || "").toLowerCase() === "ativo"
   );
 
 
@@ -871,8 +871,9 @@ const ehProprietario =
 */
 
 const statusPermitido =
-  cadastroMuralAtual.status ===
-  "aprovado";
+  ["aprovado", "ativo"].includes(
+    String(cadastroMuralAtual.status || "").trim().toLowerCase()
+  );
 
 
 if (
@@ -1171,10 +1172,8 @@ Confirmação antes de iniciar a exclusão.
 
 const confirmou =
 confirm(
-"Tem certeza que deseja excluir seu perfil?\n\n" +
-"O perfil será removido do mural público e " +
-"marcado como deletado no sistema.\n\n" +
-"Esta ação não poderá ser desfeita."
+"Tem certeza que deseja desativar seu perfil?\n\n" +
+"O perfil ficará oculto do mural público e continuará no histórico administrativo."
 );
 
 if (!confirmou) {
@@ -1200,7 +1199,7 @@ if (botao) {
     "wait";
 
   botao.innerHTML =
-    "Excluindo...";
+    "Desativando...";
 
 }
 
@@ -1260,7 +1259,7 @@ const resposta =
       body:
         JSON.stringify({
           acao:
-            "excluir_mural",
+            "marcar_meu_mural_deletado",
 
           pessoa_id:
             pessoaAtual.id
@@ -1326,7 +1325,7 @@ if (
 
 alert(
   resultado.mensagem ||
-  "Seu perfil foi excluído com sucesso."
+  "Seu perfil foi desativado e ocultado do mural público."
 );
 
 

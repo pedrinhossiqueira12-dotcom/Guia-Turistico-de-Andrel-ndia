@@ -1904,7 +1904,7 @@ if (
 const horarios = [];
 
 const regex =
-/(\d{1,2})\s*:\s*(\d{2})\s*(?:às|-|a)\s*(\d{1,2})\s*:\s*(\d{2})/g;
+/(\d{1,2})\s*:\s*(\d{2})\s*(?:as|-|a)\s*(\d{1,2})\s*:\s*(\d{2})/g;
 
 let resultado;
 
@@ -1979,43 +1979,8 @@ const CATEGORIAS_COMIDA = [
 "acai"
 ];
 
-function comercioEhAlimentacao(
-comercio
-) {
-
-const texto =
-normalizarTexto(
-`${comercio?.categoria || ""} ${comercio?.nome || ""}`
-);
-
-const palavras = [
-
-"restaurante",
-"lanchonete",
-"lanch",
-"lanche",
-"cafe",
-"cafeteria",
-"sorvete",
-"sorveteria",
-"acai",
-"pizzaria",
-"hamburguer",
-"hamburg",
-"alimentacao",
-"doceria",
-"padaria"
-
-];
-
-return palavras.some(
-palavra =>
-texto.includes(
-normalizarTexto(
-palavra
-)
-)
-);
+function comercioEhAlimentacao(comercio) {
+  return AndrelandiaComercioUtils.secaoDoEstabelecimento(comercio) === "alimentacao";
 }
 
 function comercioPertenceCategoria(
@@ -2114,50 +2079,27 @@ return false;
 }
 
 function obterComerciosFiltrados() {
+  const filtrados = dadosComercios.filter((comercio) => {
+    if (!AndrelandiaComercioUtils.estaAtivo(comercio) || !comercioEhAlimentacao(comercio)) {
+      return false;
+    }
 
-return dadosComercios.filter(
-comercio => {
+    if (!comercioPertenceCategoria(comercio, categoriaComerFiltro)) {
+      return false;
+    }
 
-  if (
-    !comercioEhAlimentacao(
-      comercio
-    )
-  ) {
-    return false;
-  }
+    if (pesquisaComerTexto && !comercioCombinaPesquisa(comercio, pesquisaComerTexto)) {
+      return false;
+    }
 
-  if (
-    !comercioPertenceCategoria(
-      comercio,
-      categoriaComerFiltro
-    )
-  ) {
-    return false;
-  }
+    if (mostrarSomenteAbertos && !comercioEstaAberto(comercio)) {
+      return false;
+    }
 
-  if (
-    pesquisaComerTexto &&
-    !comercioCombinaPesquisa(
-      comercio,
-      pesquisaComerTexto
-    )
-  ) {
-    return false;
-  }
+    return true;
+  });
 
-  if (
-    mostrarSomenteAbertos &&
-    !comercioEstaAberto(
-      comercio
-    )
-  ) {
-    return false;
-  }
-
-  return true;
-}
-
-);
+  return AndrelandiaComercioUtils.ordenarComDestaque(filtrados, avaliacoes);
 }
 
 /* =========================================================
@@ -2348,6 +2290,26 @@ filtroAberto.classList.add(
 }
 }
 
+function criarHTMLStatusEstabelecimento(estabelecimento, avaliacaoHTML = "") {
+  const possuiHorario = Boolean(String(estabelecimento?.horario || "").trim());
+  const aberto = possuiHorario && comercioEstaAberto(estabelecimento);
+  const texto = possuiHorario
+    ? (aberto ? "Aberto agora" : "Fechado")
+    : "Horário não informado";
+  const classe = possuiHorario
+    ? (aberto ? "aberto" : "fechado")
+    : "horario-indefinido";
+  const destaque = AndrelandiaComercioUtils.estaEmDestaque(estabelecimento)
+    ? '<span class="comer-destaque">Destaque</span>'
+    : "";
+
+  return `<div class="comer-status-linha">
+    <div class="comer-horario ${classe}">${texto}</div>
+    ${destaque}
+    ${avaliacaoHTML}
+  </div>`;
+}
+
 /* =========================================================
 CARD — ONDE COMER
 ========================================================= */
@@ -2428,15 +2390,7 @@ elemento.innerHTML = `
     ${escaparHTML(categoria)}
   </div>
 
-  <div class="comer-status-linha">
-
-    <div class="comer-horario ${classeStatus}">
-      ${textoStatusCard}
-    </div>
-
-    ${avaliacaoHTML}
-
-  </div>
+  ${criarHTMLStatusEstabelecimento(comercio, avaliacaoHTML)}
 
 </div>
 
@@ -2799,71 +2753,27 @@ pesquisaComer.addEventListener(
 }
 
 function obterComerciosPesquisa() {
+  const filtrados = dadosComercios.filter((comercio) => {
+    if (!AndrelandiaComercioUtils.estaAtivo(comercio) || comercioEhAlimentacao(comercio)) {
+      return false;
+    }
 
-return dadosComercios.filter(
-comercio => {
+    if (AndrelandiaComercioUtils.secaoDoEstabelecimento(comercio) === "hospedagem") {
+      return false;
+    }
 
-  if (
-    comercioEhAlimentacao(
-      comercio
-    )
-  ) {
-    return false;
-  }
+    if (!comercioCombinaPesquisa(comercio, pesquisaComercioTexto)) {
+      return false;
+    }
 
-  const categoria =
-    normalizarTexto(
-      comercio.categoria
-    );
+    if (mostrarSomenteComercioAbertos && !comercioEstaAberto(comercio)) {
+      return false;
+    }
 
-  const nome =
-    normalizarTexto(
-      comercio.nome
-    );
+    return true;
+  });
 
-  const hospedagem =
-    categoria.includes(
-      "hosped"
-    ) ||
-    categoria.includes(
-      "hotel"
-    ) ||
-    categoria.includes(
-      "pousada"
-    ) ||
-    nome.includes(
-      "hotel"
-    ) ||
-    nome.includes(
-      "pousada"
-    );
-
-  if (hospedagem) {
-    return false;
-  }
-
-  if (
-    !comercioCombinaPesquisa(
-      comercio,
-      pesquisaComercioTexto
-    )
-  ) {
-    return false;
-  }
-
-  if (
-    mostrarSomenteComercioAbertos &&
-    !comercioEstaAberto(
-      comercio
-    )
-  ) {
-    return false;
-  }
-
-  return true;
-}
-
-);
+  return AndrelandiaComercioUtils.ordenarComDestaque(filtrados, avaliacoes);
 }
 
 /* =========================================================
@@ -2946,15 +2856,7 @@ elemento.innerHTML = `
     ${escaparHTML(categoria)}
   </div>
 
-  <div class="comer-status-linha">
-
-    <div class="comer-horario ${classeStatus}">
-      ${textoStatusCard}
-    </div>
-
-    ${avaliacaoHTML}
-
-  </div>
+  ${criarHTMLStatusEstabelecimento(comercio, avaliacaoHTML)}
 
 </div>
 
@@ -3197,6 +3099,8 @@ elemento.innerHTML = `
     ${escaparHTML(endereco)}
   </div>
 
+  ${criarHTMLStatusEstabelecimento(hospedagem)}
+
   ${
     avaliacaoHTML
       ? `
@@ -3224,64 +3128,29 @@ return elemento;
 }
 
 function renderizarHospedagens() {
+  if (!ficarList) return;
 
-if (!ficarList) {
-return;
-}
+  ficarList.innerHTML = "";
+  const lista = AndrelandiaComercioUtils.ordenarComDestaque(dadosHospedagem, avaliacoes);
 
-ficarList.innerHTML = "";
-
-if (!dadosHospedagem.length) {
-
-ficarList.innerHTML = `
-  <div class="ficar-empty">
-    Nenhuma hospedagem encontrada.
-  </div>
-`;
-
-if (mostrarMaisFicar) {
-  mostrarMaisFicar.hidden = true;
-}
-
-return;
-
-}
-
-const quantidade =
-Math.min(
-limiteFicar,
-dadosHospedagem.length
-);
-
-dadosHospedagem
-.slice(
-0,
-quantidade
-)
-.forEach(
-hospedagem => {
-
-    ficarList.appendChild(
-      criarCardHospedagem(
-        hospedagem
-      )
-    );
-
+  if (!lista.length) {
+    ficarList.innerHTML = `
+      <div class="ficar-empty">Nenhuma hospedagem encontrada.</div>
+    `;
+    if (mostrarMaisFicar) mostrarMaisFicar.hidden = true;
+    return;
   }
-);
 
-configurarMostrarMais({
+  const quantidade = Math.min(limiteFicar, lista.length);
+  lista.slice(0, quantidade).forEach((hospedagem) => {
+    ficarList.appendChild(criarCardHospedagem(hospedagem));
+  });
 
-botao:
-  mostrarMaisFicar,
-
-total:
-  dadosHospedagem.length,
-
-limite:
-  limiteFicar
-
-});
+  configurarMostrarMais({
+    botao: mostrarMaisFicar,
+    total: lista.length,
+    limite: limiteFicar,
+  });
 }
 
 /* =========================================================
@@ -3400,30 +3269,14 @@ avaliacoes = [];
 IDENTIFICAR HOSPEDAGEM
 ========================================================= */
 
-function itemEhHospedagem(
-item
-) {
-
-const texto =
-normalizarTexto(
-`${item?.categoria || ""} ${item?.nome || ""}`
-);
-
-return (
-texto.includes("hosped") ||
-texto.includes("hotel") ||
-texto.includes("pousada")
-);
+function itemEhHospedagem(item) {
+  return AndrelandiaComercioUtils.secaoDoEstabelecimento(item) === "hospedagem";
 }
 
 function obterHospedagensDosComercios() {
-
-return dadosComercios.filter(
-item =>
-itemEhHospedagem(
-item
-)
-);
+  return dadosComercios.filter((item) =>
+    AndrelandiaComercioUtils.estaAtivo(item) && itemEhHospedagem(item)
+  );
 }
 
 /* =========================================================
@@ -3431,136 +3284,40 @@ CARREGAR TODOS OS DADOS
 ========================================================= */
 
 async function carregarDados() {
+  const resultados = await Promise.all([
+    carregarJSON("./DATA/locais.json", "locais.json"),
+    carregarJSON("./DATA/comercios.json", "comercios.json"),
+  ]);
 
-const resultados =
-await Promise.all([
+  dadosLocais = resultados[0];
+  dadosComercios = Array.isArray(resultados[1])
+    ? resultados[1].filter(AndrelandiaComercioUtils.estaAtivo)
+    : [];
 
-  carregarJSON(
-    "./DATA/locais.json",
-    "locais.json"
-  ),
+  await carregarAvaliacoes();
+  dadosHospedagem = obterHospedagensDosComercios();
 
-  carregarJSON(
-    "./DATA/comercios.json",
-    "comercios.json"
-  ),
-
-  carregarJSON(
-    "./DATA/hospedagem.json",
-    "hospedagem.json"
-  )
-
-]);
-
-dadosLocais =
-resultados[0];
-
-dadosComercios =
-resultados[1];
-
-if (
-resultados[2].length
-) {
-
-dadosHospedagem =
-  resultados[2];
-
-} else {
-
-dadosHospedagem =
-  obterHospedagensDosComercios();
-
-}
-
-await carregarAvaliacoes();
-
-marcadores.forEach(
-registro => {
-
-  if (
-    homeMap &&
-    homeMap.hasLayer(
-      registro.marcador
-    )
-  ) {
-
-    homeMap.removeLayer(
-      registro.marcador
-    );
-
-  }
-
-}
-
-);
-
-marcadores.length = 0;
-
-dadosLocais.forEach(
-adicionarMarcador
-);
-
-dadosComercios.forEach(
-adicionarMarcador
-);
-
-if (
-resultados[2].length
-) {
-
-dadosHospedagem.forEach(
-  hospedagem => {
-
-    const jaExiste =
-      dadosComercios.some(
-        comercio =>
-          String(
-            comercio.id
-          ) ===
-          String(
-            hospedagem.id
-          )
-      );
-
-    if (!jaExiste) {
-
-      adicionarMarcador(
-        hospedagem
-      );
-
+  marcadores.forEach((registro) => {
+    if (homeMap && homeMap.hasLayer(registro.marcador)) {
+      homeMap.removeLayer(registro.marcador);
     }
+  });
+  marcadores.length = 0;
 
+  dadosLocais.forEach(adicionarMarcador);
+  dadosComercios.forEach(adicionarMarcador);
+
+  renderizarOQueVisitar();
+  atualizarStatusBotao();
+  renderizarComercios();
+  atualizarStatusComercio();
+  renderizarComercioLocal();
+  renderizarHospedagens();
+  configurarFiltrosMapa();
+
+  if (homeMap) {
+    setTimeout(() => homeMap.invalidateSize(), 500);
   }
-);
-
-}
-
-renderizarOQueVisitar();
-
-atualizarStatusBotao();
-
-renderizarComercios();
-
-atualizarStatusComercio();
-
-renderizarComercioLocal();
-
-renderizarHospedagens();
-
-configurarFiltrosMapa();
-
-if (homeMap) {
-
-setTimeout(
-  () => {
-
-    homeMap.invalidateSize();
-
-  },
-  500
-);
-
-}
 }
 
 /* =========================================================
@@ -3603,7 +3360,7 @@ if (!Array.isArray(dados)) {
 }
 
 pessoas =
-  dados;
+  dados.filter(AndrelandiaComercioUtils.estaAtivo);
 
 console.log(
   "Pessoas carregadas:",

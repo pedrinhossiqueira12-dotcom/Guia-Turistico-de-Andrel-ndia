@@ -420,6 +420,8 @@ async function aprovarCadastro(cadastro, botao) {
   try {
     const resultado = await chamarEdgeFunction("aprovar_cadastro", {
       cadastro_id: cadastro.id,
+      status_publicado: "ativo",
+      destaque: false,
     });
 
     if (resultado?.sucesso) {
@@ -709,70 +711,56 @@ function renderizarComerciosAdmin() {
 CARD COMÉRCIO PUBLICADO
 ========================================================= */
 
+function rotuloStatusComercio(status) {
+  const normalizado = String(status || "ativo").trim().toLowerCase();
+  const rotulos = {
+    ativo: ["Ativo", "ativo"],
+    pendente: ["Pendente", "pendente"],
+    rejeitado: ["Rejeitado", "rejeitado"],
+    deletado: ["Arquivado (deletado)", "deletado"],
+  };
+  return rotulos[normalizado] || ["Status desconhecido", "outro"];
+}
+
 function criarCardComercioAdmin(comercio) {
   const card = document.createElement("article");
   card.className = "admin-comercio-card";
 
   const imagem = obterImagemComercio(comercio);
   const imagens = obterImagensComercio(comercio);
+  const [statusTexto, statusClasse] = rotuloStatusComercio(comercio.status);
+  const ativo = AndrelandiaComercioUtils.estaAtivo(comercio);
+  const destaque = AndrelandiaComercioUtils.estaEmDestaque(comercio);
+  const destaqueTexto = destaque ? "Remover destaque" : "Destacar";
+  const exclusaoTexto = statusClasse === "deletado" ? "Arquivado" : "Arquivar";
 
   card.innerHTML = `
     <div class="admin-comercio-imagem">
-      ${
-        imagem
-          ? `
-            <img
-              src="${escaparHTML(imagem)}"
-              alt="${escaparHTML(comercio.nome || "Comércio")}"
-              loading="lazy"
-              onerror="this.parentElement.classList.add('sem-imagem'); this.style.display='none';"
-            >
-          `
-          : `
-            <div class="admin-comercio-sem-imagem">Sem imagem</div>
-          `
-      }
+      ${imagem
+        ? `<img src="${escaparHTML(imagem)}" alt="${escaparHTML(comercio.nome || "Comércio")}" loading="lazy" onerror="this.parentElement.classList.add('sem-imagem'); this.style.display='none';">`
+        : `<div class="admin-comercio-sem-imagem">Sem imagem</div>`}
     </div>
-
     <div class="admin-comercio-conteudo">
-
-      <span class="admin-comercio-categoria">
-        ${escaparHTML(comercio.categoria || "Sem categoria")}
-      </span>
-
-      <h3>${escaparHTML(comercio.nome || "Sem nome")}</h3>
-
-      <p>${escaparHTML(comercio.endereco || "Endereço não informado")}</p>
-
-      <small>ID: ${escaparHTML(comercio.id)}</small>
-
-      <small>
-        ${imagens.length} ${imagens.length === 1 ? "imagem" : "imagens"}
-      </small>
-
-      <div class="admin-comercio-acoes">
-
-        <button type="button" class="admin-botao-editar" data-acao="editar">
-          Editar
-        </button>
-
-        <button type="button" class="admin-botao-excluir" data-acao="excluir">
-          Excluir
-        </button>
-
+      <div class="admin-comercio-selos">
+        <span class="admin-comercio-categoria">${escaparHTML(comercio.categoria || "Sem categoria")}</span>
+        <span class="admin-comercio-status admin-comercio-status-${statusClasse}">${statusTexto}</span>
+        <span class="admin-comercio-status ${destaque ? "admin-comercio-status-destaque" : "admin-comercio-status-destaque-off"}">Destaque: ${destaque ? "ATIVADO" : "DESATIVADO"}</span>
       </div>
-
+      <h3>${escaparHTML(comercio.nome || "Sem nome")}</h3>
+      <p>${escaparHTML(comercio.endereco || "Endereço não informado")}</p>
+      <small>ID: ${escaparHTML(comercio.id)}</small>
+      <small>${imagens.length} ${imagens.length === 1 ? "imagem" : "imagens"}</small>
+      <div class="admin-comercio-acoes">
+        <button type="button" class="admin-botao-editar" data-acao="editar">Editar</button>
+        <button type="button" class="admin-botao-destaque" data-acao="destaque" ${ativo ? "" : "disabled"}>${destaqueTexto}</button>
+        <button type="button" class="admin-botao-excluir" data-acao="excluir" ${statusClasse === "deletado" ? "disabled" : ""}>${exclusaoTexto}</button>
+      </div>
     </div>
   `;
 
-  card
-    .querySelector('[data-acao="editar"]')
-    ?.addEventListener("click", () => abrirEditorComercio(comercio));
-
-  card
-    .querySelector('[data-acao="excluir"]')
-    ?.addEventListener("click", () => excluirComercio(comercio.id));
-
+  card.querySelector('[data-acao="editar"]')?.addEventListener("click", () => abrirEditorComercio(comercio));
+  card.querySelector('[data-acao="destaque"]')?.addEventListener("click", (event) => atualizarDestaqueComercio(comercio, event.currentTarget));
+  card.querySelector('[data-acao="excluir"]')?.addEventListener("click", (event) => excluirComercio(comercio.id, event.currentTarget));
   return card;
 }
 
@@ -1208,6 +1196,8 @@ async function salvarComercioPublicado(comercio, imagensEditor, botao) {
       curiosidades: valorCampo("curiosidades"),
       imagem: imagensFinais[0] || "",
       imagens: imagensFinais.slice(0, LIMITE_IMAGENS),
+      status: comercio.status || "ativo",
+      destaque: AndrelandiaComercioUtils.estaEmDestaque(comercio),
     };
 
     /* EDGE FUNCTION */
@@ -1249,41 +1239,73 @@ function fecharEditorComercio() {
   comercioEditandoId = null;
 }
 
-/* =========================================================
-EXCLUI COMÉRCIO
-========================================================= */
-
-async function excluirComercio(id) {
-  const comercio = comerciosPublicados.find((item) => item.id === id);
-
-  if (!comercio) {
+async function atualizarDestaqueComercio(comercio, botao = null) {
+  if (!comercio || !AndrelandiaComercioUtils.estaAtivo(comercio)) {
+    mostrarMensagem("Somente estabelecimentos ativos podem receber destaque.", "erro");
     return;
   }
 
-  const confirmado = confirm(
-    `Excluir "${comercio.nome}" do site?\n\n` +
-      "Esta ação removerá o comércio do DATA/comercios.json " +
-      "e será publicada no GitHub.",
-  );
-
-  if (!confirmado) {
-    return;
+  const novoValor = !AndrelandiaComercioUtils.estaEmDestaque(comercio);
+  const textoOriginal = botao?.textContent || "Destacar";
+  if (botao) {
+    botao.disabled = true;
+    botao.textContent = "Salvando...";
   }
 
   try {
-    mostrarMensagem("Excluindo comércio...", "sucesso");
-
-    await chamarEdgeFunction("excluir_comercio", { comercio_id: id });
-
-    if (comercioEditandoId === id) {
-      fecharEditorComercio();
-    }
-
-    mostrarMensagem("Comércio excluído com sucesso.", "sucesso");
+    await chamarEdgeFunction("atualizar_destaque_comercio", {
+      comercio_id: String(comercio.id),
+      destaque: novoValor,
+    });
+    mostrarMensagem(novoValor ? "Destaque ativado." : "Destaque desativado.", "sucesso");
     await carregarComerciosPublicados();
   } catch (erro) {
-    console.error("Erro ao excluir comércio:", erro);
-    mostrarMensagem(erro.message || "Erro ao excluir comércio.", "erro");
+    console.error("Erro ao atualizar destaque:", erro);
+    mostrarMensagem(erro.message || "Não foi possível atualizar o destaque.", "erro");
+  } finally {
+    if (botao) {
+      botao.disabled = false;
+      botao.textContent = textoOriginal;
+    }
+  }
+}
+
+/* =========================================================
+ARQUIVAR COMÉRCIO (SOFT-DELETE)
+========================================================= */
+
+async function excluirComercio(id, botao = null) {
+  const comercio = comerciosPublicados.find((item) => String(item.id) === String(id));
+  if (!comercio || String(comercio.status || "ativo").toLowerCase() === "deletado") return;
+
+  const confirmado = confirm(
+    `Arquivar "${comercio.nome}"?
+
+` +
+      'O status mudará para "deletado". O registro será ocultado do público, mas permanecerá no histórico administrativo.'
+  );
+  if (!confirmado) return;
+
+  const textoOriginal = botao?.textContent || "Arquivar";
+  if (botao) {
+    botao.disabled = true;
+    botao.textContent = "Arquivando...";
+  }
+
+  try {
+    mostrarMensagem("Arquivando comércio...", "sucesso");
+    await chamarEdgeFunction("marcar_comercio_deletado", { comercio_id: String(id) });
+    if (comercioEditandoId === id) fecharEditorComercio();
+    mostrarMensagem("Comércio arquivado e mantido no histórico.", "sucesso");
+    await carregarComerciosPublicados();
+  } catch (erro) {
+    console.error("Erro ao arquivar comércio:", erro);
+    mostrarMensagem(erro.message || "Erro ao arquivar comércio.", "erro");
+  } finally {
+    if (botao) {
+      botao.disabled = false;
+      botao.textContent = textoOriginal;
+    }
   }
 }
 

@@ -61,7 +61,8 @@ const TIPOS_IMAGEM_MURAL = [
 
 const STATUS_ATIVOS_MURAL = [
 "pendente",
-"aprovado"
+"aprovado",
+"ativo"
 ];
 
 /* =========================================================
@@ -1393,8 +1394,9 @@ usuario;
 Verificar limite de 3 perfis.
 
 
-Somente pendente e aprovado
-ocupam vaga.
+Pendente e publicado ocupam vaga.
+"aprovado" continua aceito durante a
+migração do estado legado para "ativo".
 */
 
 const limite =

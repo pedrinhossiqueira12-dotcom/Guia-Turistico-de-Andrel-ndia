@@ -3661,3 +3661,9 @@ footer .footer-copy {
   }
 
 }
+
+
+/* Selo de destaque e horário não informado */
+.comer-status-linha { flex-wrap: wrap; justify-content: flex-start; }
+.comer-destaque { display: inline-flex; align-items: center; min-height: 25px; margin-top: 7px; padding: 0 8px; border-radius: 2px; background: #111; color: #fff; font-size: 10px; font-weight: 700; line-height: 1; white-space: nowrap; }
+.comer-horario.horario-indefinido { min-width: 0; height: auto; min-height: 25px; padding: 5px 9px; background: #e7e9e7; color: #535a56; line-height: 1.2; white-space: normal; }

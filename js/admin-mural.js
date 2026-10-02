@@ -1513,39 +1513,18 @@ cadastro.status ||
 "pendente"
 ).toLowerCase();
 
-if (
-statusAtual ===
-"aprovado"
-) {
-
-status.classList.add(
-  "admin-mural-status-aprovado"
-);
-
-status.textContent =
-  "Aprovado";
-
-} else if (
-statusAtual ===
-"recusado"
-) {
-
-status.classList.add(
-  "admin-mural-status-recusado"
-);
-
-status.textContent =
-  "Recusado";
-
+if (["aprovado", "ativo"].includes(statusAtual)) {
+  status.classList.add("admin-mural-status-aprovado");
+  status.textContent = statusAtual === "ativo" ? "Ativo" : "Aprovado";
+} else if (["recusado", "rejeitado"].includes(statusAtual)) {
+  status.classList.add("admin-mural-status-recusado");
+  status.textContent = "Rejeitado";
+} else if (statusAtual === "deletado") {
+  status.classList.add("admin-mural-status-deletado");
+  status.textContent = "Arquivado (deletado)";
 } else {
-
-status.classList.add(
-  "admin-mural-status-pendente"
-);
-
-status.textContent =
-  "Pendente";
-
+  status.classList.add("admin-mural-status-pendente");
+  status.textContent = "Pendente";
 }
 
 conteudo.appendChild(
@@ -1975,7 +1954,7 @@ editorRejeitar.style.display =
 if (editorRecusaBloco) {
 
 editorRecusaBloco.style.display =
-  statusAtual === "recusado"
+  ["recusado", "rejeitado"].includes(statusAtual)
     ? ""
     : "none";
 
@@ -2252,7 +2231,9 @@ await chamarEdgeFunction(
   "aprovar_mural",
   {
     cadastro_id:
-      cadastro.id
+      cadastro.id,
+    status_publicado:
+      "ativo"
   }
 );
 
@@ -2839,11 +2820,16 @@ document.createElement(
 "span"
 );
 
-status.className =
-"admin-mural-status admin-mural-status-aprovado";
+const estado = String(pessoa.status || "ativo").trim().toLowerCase();
+const statusVisual = {
+  ativo: ["Ativo — publicado", "admin-mural-status-aprovado"],
+  pendente: ["Pendente", "admin-mural-status-pendente"],
+  rejeitado: ["Rejeitado", "admin-mural-status-rejeitado"],
+  deletado: ["Arquivado (deletado)", "admin-mural-status-deletado"],
+}[estado] || ["Status desconhecido", "admin-mural-status-pendente"];
 
-status.textContent =
-"Publicado";
+status.className = `admin-mural-status ${statusVisual[1]}`;
+status.textContent = statusVisual[0];
 
 conteudo.appendChild(
 status
@@ -3024,8 +3010,9 @@ excluir.type =
 excluir.className =
 "admin-mural-botao-excluir";
 
-excluir.textContent =
-"Excluir";
+const arquivado = String(pessoa.status || "ativo").trim().toLowerCase() === "deletado";
+excluir.textContent = arquivado ? "Arquivado" : "Arquivar";
+excluir.disabled = arquivado;
 
 excluir.addEventListener(
 "click",
@@ -3060,143 +3047,44 @@ return card;
 EXCLUIR PERFIL PUBLICADO
 ========================================================= */
 
-async function excluirMuralPublicado(
-pessoa,
-botao = null
-) {
-
-if (
-!pessoa ||
-!pessoa.id
-) {
-
-mostrarMensagem(
-  "Não foi possível identificar o perfil que será excluído.",
-  "erro"
-);
-
-return;
-
-}
-
-const nome =
-pessoa.nome ||
-"este perfil";
-
-const id =
-String(
-pessoa.id
-);
-
-const confirmar =
-window.confirm(
-`Deseja realmente excluir "${nome}" do Mural?\n\nID: ${id}\n\nEssa ação removerá o perfil da publicação.`
-);
-
-if (!confirmar) {
-return;
-}
-
-const confirmarNovamente =
-window.confirm(
-`Confirme a exclusão de "${nome}".\n\nO perfil será removido do Mural publicado.`
-);
-
-if (!confirmarNovamente) {
-return;
-}
-
-if (botao) {
-
-botao.disabled =
-  true;
-
-botao.textContent =
-  "Excluindo...";
-
-}
-
-try {
-
-mostrarMensagem(
-  `Excluindo "${nome}"...`,
-  "sucesso"
-);
-
-await chamarEdgeFunction(
-  "excluir_mural",
-  {
-    pessoa_id:
-      id
+async function excluirMuralPublicado(pessoa, botao = null) {
+  if (!pessoa || !pessoa.id) {
+    mostrarMensagem("Não foi possível identificar o perfil que será arquivado.", "erro");
+    return;
   }
-);
 
-mostrarMensagem(
-  `O perfil "${nome}" foi excluído do Mural.`,
-  "sucesso"
-);
+  const nome = pessoa.nome || "este perfil";
+  const id = String(pessoa.id);
+  if (String(pessoa.status || "ativo").trim().toLowerCase() === "deletado") return;
 
-await carregarCadastrosMural();
+  const confirmar = window.confirm(
+    `Arquivar "${nome}"?\n\nO perfil ficará oculto ao público e permanecerá no histórico administrativo.\n\nID: ${id}`
+  );
+  if (!confirmar) return;
 
-await carregarMuralPublicados();
+  if (botao) {
+    botao.disabled = true;
+    botao.textContent = "Arquivando...";
+  }
 
-} catch (erro) {
-
-console.error(
-  "Erro ao excluir perfil publicado:",
-  erro
-);
-
-console.error(
-  "HTTP:",
-  erro?.status
-);
-
-console.error(
-  "Detalhe:",
-  erro?.detalhe
-);
-
-console.error(
-  "Código:",
-  erro?.codigo
-);
-
-console.error(
-  "Details:",
-  erro?.details
-);
-
-console.error(
-  "Hint:",
-  erro?.hint
-);
-
-console.error(
-  "Cadastro ID:",
-  erro?.cadastro_id
-);
-
-mostrarMensagem(
-  erro.message ||
-  "Não foi possível excluir o perfil publicado.",
-  "erro"
-);
-
-} finally {
-
-if (botao) {
-
-  botao.disabled =
-    false;
-
-  botao.textContent =
-    "Excluir";
-
-}
-
-}
-
+  try {
+    mostrarMensagem(`Arquivando "${nome}"...`, "sucesso");
+    await chamarEdgeFunction("marcar_mural_deletado", { pessoa_id: id });
+    mostrarMensagem(`O perfil "${nome}" foi arquivado e permanece no histórico.`, "sucesso");
+    await carregarCadastrosMural();
+    await carregarMuralPublicados();
+  } catch (erro) {
+    console.error("Erro ao arquivar perfil publicado:", erro);
+    console.error("HTTP:", erro?.status);
+    console.error("Detalhe:", erro?.detalhe);
+    console.error("Código:", erro?.codigo);
+    mostrarMensagem(erro.message || "Não foi possível arquivar o perfil publicado.", "erro");
+  } finally {
+    if (botao) {
+      botao.disabled = false;
+      botao.textContent = "Arquivar";
+    }
+  }
 }
 
 /* =========================================================

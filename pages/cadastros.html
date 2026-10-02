@@ -22,7 +22,7 @@ content="#091D1C"
 
 <title>Cadastros — Andrelândia — Guia Turístico</title>
 
-<style> :root { --verde: #194138; --verde-escuro: #091d1c; --branco: #ffffff; --fundo: #f5f3ef; --texto: #222222; --texto-secundario: #666666; --borda: #dddddd; --cinza: #f0f0f0; } * { box-sizing: border-box; margin: 0; padding: 0; } body { font-family: Arial, Helvetica, sans-serif; background: var(--fundo); color: var(--texto); min-height: 100vh; } /* ===================================================== CABEÇALHO ===================================================== */ .cabecalho { background: var(--verde-escuro); color: var(--branco); padding: 18px 20px; } .cabecalho-conteudo { width: 100%; max-width: 900px; margin: 0 auto; display: flex; align-items: center; gap: 14px; } .botao-voltar { width: 40px; height: 40px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.08); color: white; display: flex; align-items: center; justify-content: center; text-decoration: none; font-size: 22px; flex-shrink: 0; } .cabecalho-texto h1 { font-size: 20px; font-weight: 600; margin-bottom: 4px; } .cabecalho-texto p { font-size: 13px; color: rgba(255,255,255,0.72); } /* ===================================================== CONTEÚDO ===================================================== */ .pagina { width: 100%; max-width: 900px; margin: 0 auto; padding: 28px 18px 50px; } .introducao { margin-bottom: 24px; } .introducao h2 { font-size: 25px; line-height: 1.25; margin-bottom: 9px; color: var(--verde-escuro); } .introducao p { font-size: 15px; line-height: 1.6; color: var(--texto-secundario); } /* ===================================================== OPÇÕES ===================================================== */ .opcoes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; } .opcao { background: var(--branco); border: 1px solid var(--borda); border-radius: 14px; padding: 22px; cursor: pointer; transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease; } .opcao:hover { transform: translateY(-2px); border-color: var(--verde); box-shadow: 0 6px 20px rgba(0,0,0,0.06); } .opcao-icone { width: 48px; height: 48px; border-radius: 12px; background: var(--verde); color: white; display: flex; align-items: center; justify-content: center; font-size: 23px; margin-bottom: 16px; } .opcao h3 { font-size: 18px; color: var(--verde-escuro); margin-bottom: 8px; } .opcao p { font-size: 14px; line-height: 1.55; color: var(--texto-secundario); } .opcao-seta { margin-top: 18px; color: var(--verde); font-size: 14px; font-weight: 600; } /* ===================================================== FORMULÁRIO ===================================================== */ .formulario-container { display: none; background: var(--branco); border: 1px solid var(--borda); border-radius: 14px; padding: 24px; margin-top: 20px; } .formulario-container.ativo { display: block; } .formulario-cabecalho { margin-bottom: 24px; } .formulario-cabecalho h2 { color: var(--verde-escuro); font-size: 21px; margin-bottom: 7px; } .formulario-cabecalho p { color: var(--texto-secundario); font-size: 14px; line-height: 1.5; } .campo { margin-bottom: 17px; } .campo label { display: block; font-size: 13px; font-weight: 600; color: var(--verde-escuro); margin-bottom: 7px; } .campo input, .campo select, .campo textarea { width: 100%; border: 1px solid var(--borda); border-radius: 9px; background: white; color: var(--texto); font-family: inherit; font-size: 14px; padding: 11px 12px; outline: none; } .campo input:focus, .campo select:focus, .campo textarea:focus { border-color: var(--verde); } .campo textarea { min-height: 105px; resize: vertical; } .campo-ajuda { display: block; margin-top: 5px; color: #777; font-size: 11px; line-height: 1.4; } .linha { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; } .acoes-formulario { display: flex; gap: 10px; margin-top: 24px; } .botao { border: 0; border-radius: 9px; padding: 12px 18px; font-size: 14px; font-weight: 600; cursor: pointer; } .botao-principal { background: var(--verde); color: white; flex: 1; } .botao-principal:hover { background: var(--verde-escuro); } .botao-secundario { background: var(--cinza); color: var(--texto); } /* ===================================================== AVISOS ===================================================== */ .aviso { display: none; padding: 13px 15px; border-radius: 9px; margin-bottom: 18px; font-size: 13px; line-height: 1.5; } .aviso.ativo { display: block; } .aviso-info { background: #eef4f2; color: var(--verde-escuro); border: 1px solid #d5e3df; } .aviso-erro { background: #fff1f1; color: #8a2020; border: 1px solid #edcccc; } /* ===================================================== RODAPÉ ===================================================== */ .rodape { text-align: center; color: #777; font-size: 12px; margin-top: 30px; line-height: 1.5; } /* ===================================================== RESPONSIVO ===================================================== */ @media (max-width: 650px) { .pagina { padding: 22px 14px 40px; } .opcoes { grid-template-columns: 1fr; } .linha { grid-template-columns: 1fr; gap: 0; } .formulario-container { padding: 18px; } .acoes-formulario { flex-direction: column-reverse; } .botao { width: 100%; } }/* =====================================================
+<style> :root { --verde: #194138; --verde-escuro: #091d1c; --branco: #ffffff; --fundo: #f5f3ef; --texto: #222222; --texto-secundario: #666666; --borda: #dddddd; --cinza: #f0f0f0; } * { box-sizing: border-box; margin: 0; padding: 0; } body { font-family: Arial, Helvetica, sans-serif; background: var(--fundo); color: var(--texto); min-height: 100vh; } /* ===================================================== CABEÇALHO ===================================================== */ .cabecalho { background: var(--verde-escuro); color: var(--branco); padding: 18px 20px; } .cabecalho-conteudo { width: 100%; max-width: 900px; margin: 0 auto; display: flex; align-items: center; gap: 14px; } .botao-voltar { width: 40px; height: 40px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.08); color: white; display: flex; align-items: center; justify-content: center; text-decoration: none; font-size: 22px; flex-shrink: 0; } .cabecalho-texto h1 { font-size: 20px; font-weight: 600; margin-bottom: 4px; } .cabecalho-texto p { font-size: 13px; color: rgba(255,255,255,0.72); } /* ===================================================== CONTEÚDO ===================================================== */ .pagina { width: 100%; max-width: 900px; margin: 0 auto; padding: 28px 18px 50px; } .introducao { margin-bottom: 24px; } .introducao h2 { font-size: 25px; line-height: 1.25; margin-bottom: 9px; color: var(--verde-escuro); } .introducao p { font-size: 15px; line-height: 1.6; color: var(--texto-secundario); } /* ===================================================== OPÇÕES ===================================================== */ .opcoes { display: grid; grid-template-columns: minmax(0, 1fr); max-width: 520px; gap: 16px; } .opcao { background: var(--branco); border: 1px solid var(--borda); border-radius: 14px; padding: 22px; cursor: pointer; transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease; } .opcao:hover { transform: translateY(-2px); border-color: var(--verde); box-shadow: 0 6px 20px rgba(0,0,0,0.06); } .opcao-icone { width: 48px; height: 48px; border-radius: 12px; background: var(--verde); color: white; display: flex; align-items: center; justify-content: center; font-size: 23px; margin-bottom: 16px; } .opcao h3 { font-size: 18px; color: var(--verde-escuro); margin-bottom: 8px; } .opcao p { font-size: 14px; line-height: 1.55; color: var(--texto-secundario); } .opcao-seta { margin-top: 18px; color: var(--verde); font-size: 14px; font-weight: 600; } /* ===================================================== FORMULÁRIO ===================================================== */ .formulario-container { display: none; background: var(--branco); border: 1px solid var(--borda); border-radius: 14px; padding: 24px; margin-top: 20px; } .formulario-container.ativo { display: block; } .formulario-cabecalho { margin-bottom: 24px; } .formulario-cabecalho h2 { color: var(--verde-escuro); font-size: 21px; margin-bottom: 7px; } .formulario-cabecalho p { color: var(--texto-secundario); font-size: 14px; line-height: 1.5; } .campo { margin-bottom: 17px; } .campo label { display: block; font-size: 13px; font-weight: 600; color: var(--verde-escuro); margin-bottom: 7px; } .campo input, .campo select, .campo textarea { width: 100%; border: 1px solid var(--borda); border-radius: 9px; background: white; color: var(--texto); font-family: inherit; font-size: 14px; padding: 11px 12px; outline: none; } .campo input:focus, .campo select:focus, .campo textarea:focus { border-color: var(--verde); } .campo textarea { min-height: 105px; resize: vertical; } .campo-ajuda { display: block; margin-top: 5px; color: #777; font-size: 11px; line-height: 1.4; } .linha { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; } .acoes-formulario { display: flex; gap: 10px; margin-top: 24px; } .botao { border: 0; border-radius: 9px; padding: 12px 18px; font-size: 14px; font-weight: 600; cursor: pointer; } .botao-principal { background: var(--verde); color: white; flex: 1; } .botao-principal:hover { background: var(--verde-escuro); } .botao-secundario { background: var(--cinza); color: var(--texto); } /* ===================================================== AVISOS ===================================================== */ .aviso { display: none; padding: 13px 15px; border-radius: 9px; margin-bottom: 18px; font-size: 13px; line-height: 1.5; } .aviso.ativo { display: block; } .aviso-info { background: #eef4f2; color: var(--verde-escuro); border: 1px solid #d5e3df; } .aviso-erro { background: #fff1f1; color: #8a2020; border: 1px solid #edcccc; } /* ===================================================== RODAPÉ ===================================================== */ .rodape { text-align: center; color: #777; font-size: 12px; margin-top: 30px; line-height: 1.5; } /* ===================================================== RESPONSIVO ===================================================== */ @media (max-width: 650px) { .pagina { padding: 22px 14px 40px; } .opcoes { grid-template-columns: 1fr; } .linha { grid-template-columns: 1fr; gap: 0; } .formulario-container { padding: 18px; } .acoes-formulario { flex-direction: column-reverse; } .botao { width: 100%; } }/* =====================================================
 IMAGENS DO CADASTRO
 ===================================================== */
 
@@ -269,7 +269,7 @@ height: 105px;
     <h1>Andrelândia — Guia Turístico</h1>
 
     <p>
-      Cadastro e atualização de informações
+      Cadastro de estabelecimentos
     </p>
 
   </div>
@@ -285,13 +285,11 @@ height: 105px;
 <section class="introducao">
 
   <h2>
-    Ajude a atualizar o guia
+    Cadastre um estabelecimento no guia
   </h2>
 
   <p>
-    Você pode cadastrar um comércio que ainda não aparece
-    no guia ou sugerir uma correção nas informações de um
-    estabelecimento já cadastrado.
+    Cadastre os dados do estabelecimento para análise antes da publicação no Guia Turístico de Andrelândia.
   </p>
 
 </section>
@@ -321,8 +319,8 @@ height: 105px;
     </h3>
 
     <p>
-      Cadastre um restaurante, lanchonete, loja, hotel,
-      cafeteria ou outro estabelecimento de Andrelândia.
+      Cadastre um restaurante, lanchonete, loja, hotel, pousada,
+      aluguel por temporada ou outro estabelecimento de Andrelândia.
     </p>
 
     <div class="opcao-seta">
@@ -330,34 +328,6 @@ height: 105px;
     </div>
 
   </button>
-
-
-  <button
-    type="button"
-    class="opcao"
-    id="opcaoAlteracao"
-  >
-
-    <div class="opcao-icone">
-      ✎
-    </div>
-
-    <h3>
-      Sugerir alteração
-    </h3>
-
-    <p>
-      Encontrou alguma informação incorreta em um comércio
-      que já aparece no guia? Envie a informação correta
-      para análise.
-    </p>
-
-    <div class="opcao-seta">
-      Corrigir informação →
-    </div>
-
-  </button>
-
 </section>
 
 
@@ -467,8 +437,16 @@ height: 105px;
           Loja
         </option>
 
-        <option value="Hotel/Pousada">
-          Hotel / Pousada
+        <option value="Hotel">
+          Hotel
+        </option>
+
+        <option value="Pousada">
+          Pousada
+        </option>
+
+        <option value="Aluguel">
+          Aluguel
         </option>
 
         <option value="Outro">
