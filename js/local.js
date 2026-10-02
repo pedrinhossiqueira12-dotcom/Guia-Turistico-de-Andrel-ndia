@@ -4,18 +4,22 @@ LOCAL.JS
 
 RESPONSABILIDADES:
 
-Carregar locais, comércios e hospedagens
-Preencher a página de detalhes
-Galeria de imagens
+Carregar locais
+Carregar comércios
+Carregar hospedagens
+Preencher página
+Galeria
+Foto em tela cheia
 Mapa Leaflet + Esri
 Google Maps
 WhatsApp
 Instagram
 Sugestão de alteração
 Avaliações
-Integração com login.js
-Verificação do proprietário
-Exclusão do próprio comércio
+Login compartilhado
+Verificação do proprietário do comércio
+Editar meu comércio
+Excluir meu comércio
 ========================================================= */
 
 /* =========================================================
@@ -25,48 +29,84 @@ CONFIGURAÇÕES
 const SUPABASE_URL =
 "https://xdmbkflufsfqziixzpxc.supabase.co";
 
-const MURAL_EDGE_FUNCTION_URL =
-`${SUPABASE_URL}/functions/v1/whatsapp-bot`;
+const SUPABASE_ANON_KEY =
+"sb_publishable_dvwNkLDf3oZrCqvZ5uAaRA_VsfiuZFy";
 
-const COMERCIO_EDGE_FUNCTION_URL =
+const EDGE_FUNCTION_URL =
 `${SUPABASE_URL}/functions/v1/whatsapp-bot`;
 
 const FALLBACK_IMAGE =
 "../img/icones/imgnaodisponivel.png";
 
+/* =========================================================
+URL
+========================================================= */
+
 const params =
-new URLSearchParams(window.location.search);
+new URLSearchParams(
+window.location.search
+);
 
 const idLocal =
 params.get("id");
 
 /* =========================================================
-SUPABASE
-O login.js cria window.supabaseLoginClient
+ESTADO
 ========================================================= */
+
+let localAtual = null;
+
+let mapaLocal = null;
+
+let imagensAtuais = [];
+
+let notaSelecionada = 0;
+
+let avaliacaoAtual = null;
 
 let supabaseClient = null;
 
+/* =========================================================
+SUPABASE
+========================================================= */
+
 function obterSupabaseClient() {
 
-if (window.supabaseLoginClient) {
+/*
+O login.js é a fonte principal do cliente.
+*/
+
+if (
+window.supabaseLoginClient
+) {
+
 return window.supabaseLoginClient;
+
 }
+
+/*
+Fallback.
+*/
 
 if (
 window.supabase &&
-typeof window.supabase.createClient === "function"
+typeof window.supabase.createClient ===
+"function"
 ) {
+
 try {
 
-  if (!window.__localSupabaseClient) {
+  if (
+    !window.__localSupabaseClient
+  ) {
 
     window.__localSupabaseClient =
       window.supabase.createClient(
         SUPABASE_URL,
-        "sb_publishable_dvwNkLDf3oZrCqvZ5uAaRA_VsfiuZFy"
+        SUPABASE_ANON_KEY
       );
   }
+
 
   return window.__localSupabaseClient;
 
@@ -83,17 +123,17 @@ try {
 return null;
 }
 
-/* =========================================================
-ESTADO
-========================================================= */
+function obterClienteAvaliacoes() {
 
-let localAtual = null;
-let mapaLocal = null;
+if (!supabaseClient) {
 
-let notaSelecionada = 0;
-let avaliacaoAtual = null;
+supabaseClient =
+  obterSupabaseClient();
 
-let imagensAtuais = [];
+}
+
+return supabaseClient;
+}
 
 /* =========================================================
 UTILITÁRIOS
@@ -105,71 +145,62 @@ if (
 valor === null ||
 valor === undefined
 ) {
+
 return "";
+
 }
 
 return String(valor)
-.replace(/&/g, "&")
-.replace(/</g, "<")
-.replace(/>/g, ">")
-.replace(/"/g, '&quot;')
-.replace(/'/g, "'");
+.replace(
+/&/g,
+"&"
+)
+.replace(
+/</g,
+"<"
+)
+.replace(
+/>/g,
+">"
+)
+.replace(
+/"/g,
+'"'
+)
+.replace(
+/'/g,
+"'"
+);
 }
 
-function corrigirCaminhoImagem(caminho) {
+function primeiroValor(...valores) {
+
+for (
+const valor of valores
+) {
 
 if (
-!caminho ||
-typeof caminho !== "string"
+  valor !== null &&
+  valor !== undefined &&
+  String(valor).trim() !== ""
 ) {
-return FALLBACK_IMAGE;
+
+  return valor;
 }
 
-caminho = caminho.trim();
-
-if (!caminho) {
-return FALLBACK_IMAGE;
 }
 
-/* URLs externas */
-if (
-caminho.startsWith("http://") ||
-caminho.startsWith("https://") ||
-caminho.startsWith("data:") ||
-caminho.startsWith("blob:")
-) {
-return caminho;
-}
-
-/* Caminhos absolutos */
-if (caminho.startsWith("/")) {
-return caminho;
-}
-
-/* Página está dentro de /pages/ */
-if (caminho.startsWith("../")) {
-return caminho;
-}
-
-if (caminho.startsWith("./")) {
-caminho = caminho.substring(2);
-}
-
-if (caminho.startsWith("img/")) {
-return `../${caminho}`;
-}
-
-if (caminho.startsWith("IMG/")) {
-return `../${caminho}`;
-}
-
-return `../${caminho}`;
+return "";
 }
 
 function normalizarArray(valor) {
 
-if (Array.isArray(valor)) {
+if (
+Array.isArray(valor)
+) {
+
 return valor;
+
 }
 
 if (
@@ -182,15 +213,22 @@ try {
   const convertido =
     JSON.parse(valor);
 
-  if (Array.isArray(convertido)) {
+
+  if (
+    Array.isArray(convertido)
+  ) {
+
     return convertido;
   }
 
-} catch (erro) {
+} catch {
 
   return valor
     .split(",")
-    .map(item => item.trim())
+    .map(
+      item =>
+        item.trim()
+    )
     .filter(Boolean);
 }
 
@@ -199,61 +237,98 @@ try {
 return [];
 }
 
-function primeiroValor(...valores) {
-
-for (const valor of valores) {
+function corrigirCaminhoImagem(
+caminho
+) {
 
 if (
-  valor !== null &&
-  valor !== undefined &&
-  String(valor).trim() !== ""
+!caminho ||
+typeof caminho !== "string"
 ) {
-  return valor;
-}
+
+return FALLBACK_IMAGE;
 
 }
 
-return "";
+let valor =
+caminho.trim();
+
+if (!valor) {
+
+return FALLBACK_IMAGE;
+
+}
+
+/*
+URLs externas.
+*/
+
+if (
+valor.startsWith("http://") ||
+valor.startsWith("https://") ||
+valor.startsWith("data:") ||
+valor.startsWith("blob:")
+) {
+
+return valor;
+
+}
+
+/*
+Caminhos absolutos.
+*/
+
+if (
+valor.startsWith("/")
+) {
+
+return valor;
+
+}
+
+/*
+Caminhos relativos já preparados.
+*/
+
+if (
+valor.startsWith("../")
+) {
+
+return valor;
+
+}
+
+if (
+valor.startsWith("./")
+) {
+
+valor =
+  valor.substring(2);
+
+}
+
+if (
+valor.startsWith("img/")
+) {
+
+return `../${valor}`;
+
+}
+
+if (
+valor.startsWith("IMG/")
+) {
+
+return `../${valor}`;
+
+}
+
+return `../${valor}`;
 }
 
 /* =========================================================
-IDENTIFICAÇÃO DO TIPO DE LOCAL
+IDENTIFICAÇÃO DO TIPO
 ========================================================= */
-
-function identificarTipoLocal(item) {
-
-if (!item) {
-return "local";
-}
-
-const tipo =
-String(
-item.tipo ||
-item.origem ||
-item.tipo_local ||
-""
-)
-.trim()
-.toLowerCase();
-
-if (
-tipo.includes("comerc") ||
-tipo.includes("empresa") ||
-tipo.includes("negocio")
-) {
-return "comercio";
-}
-
-if (
-tipo.includes("hosped") ||
-tipo.includes("hotel") ||
-tipo.includes("pousada")
-) {
-return "hospedagem";
-}
-
-return "local";
-}
 
 function pareceComercio(item) {
 
@@ -261,66 +336,84 @@ if (!item) {
 return false;
 }
 
-if (item._tipo === "comercio") {
+if (
+item._tipo ===
+"comercio"
+) {
+
 return true;
+
 }
 
-if (item.fonte === "comercios") {
+if (
+item.fonte ===
+"comercios"
+) {
+
 return true;
+
 }
 
 const tipo =
-identificarTipoLocal(item);
+String(
+item.tipo ||
+item.tipo_local ||
+item.origem ||
+""
+)
+.toLowerCase();
 
-if (tipo === "comercio") {
+if (
+tipo.includes("comerc") ||
+tipo.includes("empresa") ||
+tipo.includes("negocio")
+) {
+
 return true;
+
 }
 
 /*
-Caso o JSON de comércio não tenha um campo tipo,
-verificamos alguns campos característicos.
+Categorias comuns de comércio.
 */
 
-if (
-item.whatsapp ||
-item.telefone ||
-item.instagram
-) {
-
 const categoria =
-  String(item.categoria || "")
-    .toLowerCase();
+String(
+item.categoria ||
+""
+)
+.toLowerCase();
 
-const categoriasComerciais = [
-  "comércio",
-  "comercio",
-  "lanchonete",
-  "sorveteria",
-  "restaurante",
-  "cafeteria",
-  "padaria",
-  "loja",
-  "mercado",
-  "farmácia",
-  "farmacia",
-  "bar",
-  "pizzaria",
-  "doceria",
-  "artesanato"
+const categorias =
+[
+"comércio",
+"comercio",
+"lanchonete",
+"sorveteria",
+"restaurante",
+"cafeteria",
+"padaria",
+"loja",
+"mercado",
+"farmácia",
+"farmacia",
+"bar",
+"pizzaria",
+"doceria",
+"artesanato",
+"açougue",
+"acougue",
+"pet shop",
+"salão",
+"salao"
 ];
 
-if (
-  categoriasComerciais.some(
-    categoriaComercial =>
-      categoria.includes(categoriaComercial)
-  )
-) {
-  return true;
-}
-
-}
-
-return false;
+return categorias.some(
+categoriaComercial =>
+categoria.includes(
+categoriaComercial
+)
+);
 }
 
 /* =========================================================
@@ -342,22 +435,28 @@ return;
 
 }
 
-window.location.href = "../index.html";
+window.location.href =
+"../index.html";
 }
 
 window.voltarPagina =
 voltarPagina;
 
 /* =========================================================
-CARREGAR DADOS
+CARREGAR JSON
 ========================================================= */
 
-async function carregarJSON(caminho) {
+async function carregarJSON(
+caminho
+) {
 
 const resposta =
-await fetch(caminho, {
+await fetch(
+caminho,
+{
 cache: "no-cache"
-});
+}
+);
 
 if (!resposta.ok) {
 
@@ -369,6 +468,10 @@ throw new Error(
 
 return resposta.json();
 }
+
+/* =========================================================
+CARREGAR LOCAL
+========================================================= */
 
 async function carregarLocal() {
 
@@ -388,14 +491,20 @@ const [
   locais,
   comercios,
   hospedagem
-] = await Promise.all([
+] =
+  await Promise.all([
+    carregarJSON(
+      "../DATA/locais.json"
+    ),
 
-  carregarJSON("../DATA/locais.json"),
+    carregarJSON(
+      "../DATA/comercios.json"
+    ),
 
-  carregarJSON("../DATA/comercios.json"),
-
-  carregarJSON("../DATA/hospedagem.json")
-]);
+    carregarJSON(
+      "../DATA/hospedagem.json"
+    )
+  ]);
 
 
 const listaLocais =
@@ -403,10 +512,12 @@ const listaLocais =
     ? locais
     : [];
 
+
 const listaComercios =
   Array.isArray(comercios)
     ? comercios
     : [];
+
 
 const listaHospedagem =
   Array.isArray(hospedagem)
@@ -414,14 +525,11 @@ const listaHospedagem =
     : [];
 
 
-let encontrado = null;
+/*
+  Procura primeiro nos locais.
+*/
 
-
-/* =====================================================
-   LOCAIS
-===================================================== */
-
-encontrado =
+let encontrado =
   listaLocais.find(
     item =>
       String(item.id) ===
@@ -439,9 +547,9 @@ if (encontrado) {
 }
 
 
-/* =====================================================
-   COMÉRCIOS
-===================================================== */
+/*
+  Depois procura nos comércios.
+*/
 
 if (!encontrado) {
 
@@ -451,6 +559,7 @@ if (!encontrado) {
         String(item.id) ===
         String(idLocal)
     );
+
 
   if (encontrado) {
 
@@ -463,9 +572,9 @@ if (!encontrado) {
 }
 
 
-/* =====================================================
-   HOSPEDAGEM
-===================================================== */
+/*
+  Depois procura nas hospedagens.
+*/
 
 if (!encontrado) {
 
@@ -475,6 +584,7 @@ if (!encontrado) {
         String(item.id) ===
         String(idLocal)
     );
+
 
   if (encontrado) {
 
@@ -501,7 +611,16 @@ localAtual =
   encontrado;
 
 
-preencherPagina(localAtual);
+console.log(
+  "Local carregado:",
+  localAtual
+);
+
+
+preencherPagina(
+  localAtual
+);
+
 
 await carregarAvaliacoes();
 
@@ -516,6 +635,7 @@ console.error(
   erro
 );
 
+
 mostrarErroLocal(
   "Não foi possível carregar as informações deste local."
 );
@@ -527,7 +647,9 @@ mostrarErroLocal(
 ERRO
 ========================================================= */
 
-function mostrarErroLocal(mensagem) {
+function mostrarErroLocal(
+mensagem
+) {
 
 const nome =
 document.getElementById(
@@ -535,7 +657,10 @@ document.getElementById(
 );
 
 if (nome) {
-nome.textContent = mensagem;
+
+nome.textContent =
+  mensagem;
+
 }
 
 const conteudo =
@@ -547,7 +672,9 @@ if (conteudo) {
 
 conteudo.innerHTML = `
   <div class="section-block">
-    <p>${escaparHTML(mensagem)}</p>
+    <p>
+      ${escaparHTML(mensagem)}
+    </p>
   </div>
 `;
 
@@ -558,7 +685,9 @@ conteudo.innerHTML = `
 PREENCHER PÁGINA
 ========================================================= */
 
-function preencherPagina(item) {
+function preencherPagina(
+item
+) {
 
 document.title =
 `${item.nome || "Local"} — Guia Turístico de Andrelândia`;
@@ -651,7 +780,9 @@ prepararMapa(item);
 HORÁRIO
 ========================================================= */
 
-function preencherHorario(item) {
+function preencherHorario(
+item
+) {
 
 const elemento =
 document.getElementById(
@@ -679,10 +810,14 @@ return;
 }
 
 elemento.innerHTML =
-formatarHorario(horario);
+formatarHorario(
+horario
+);
 }
 
-function formatarHorario(horario) {
+function formatarHorario(
+horario
+) {
 
 if (
 typeof horario === "string" ||
@@ -703,8 +838,9 @@ Array.isArray(horario)
 ) {
 
 return horario
-  .map(item =>
-    escaparHTML(item)
+  .map(
+    item =>
+      escaparHTML(item)
   )
   .join("<br>");
 
@@ -714,7 +850,9 @@ if (
 typeof horario === "object"
 ) {
 
-return Object.entries(horario)
+return Object.entries(
+  horario
+)
   .map(
     ([dia, valor]) =>
       `<strong>${escaparHTML(dia)}</strong>: ${escaparHTML(valor)}`
@@ -730,7 +868,9 @@ return "Não informado";
 ENDEREÇO
 ========================================================= */
 
-function preencherEndereco(item) {
+function preencherEndereco(
+item
+) {
 
 const elemento =
 document.getElementById(
@@ -757,7 +897,9 @@ endereco ||
 WHATSAPP
 ========================================================= */
 
-function obterNumeroWhatsApp(item) {
+function obterNumeroWhatsApp(
+item
+) {
 
 const valor =
 primeiroValor(
@@ -772,19 +914,17 @@ return "";
 
 let numero =
 String(valor)
-.replace(/\D/g, "");
+.replace(
+/\D/g,
+""
+);
 
 if (!numero) {
 return "";
 }
 
 /*
-Números brasileiros normalmente possuem
-DDD + número.
-
-Se o número tiver 10 ou 11 dígitos,
-adicionamos o código do Brasil.
-
+Brasil.
 */
 
 if (
@@ -800,7 +940,9 @@ numero =
 return numero;
 }
 
-function criarMensagemWhatsApp(item) {
+function criarMensagemWhatsApp(
+item
+) {
 
 const nome =
 primeiroValor(
@@ -815,7 +957,9 @@ return (
 );
 }
 
-function preencherWhatsApp(item) {
+function preencherWhatsApp(
+item
+) {
 
 const botao =
 document.getElementById(
@@ -832,7 +976,9 @@ return;
 }
 
 const numero =
-obterNumeroWhatsApp(item);
+obterNumeroWhatsApp(
+item
+);
 
 if (!numero) {
 
@@ -844,7 +990,9 @@ return;
 }
 
 const mensagem =
-criarMensagemWhatsApp(item);
+criarMensagemWhatsApp(
+item
+);
 
 botao.href =
 `https://wa.me/${numero}?text=${encodeURIComponent(mensagem)}`;
@@ -870,7 +1018,9 @@ texto.textContent =
 INSTAGRAM
 ========================================================= */
 
-function obterInstagramURL(valor) {
+function obterInstagramURL(
+valor
+) {
 
 if (!valor) {
 return "";
@@ -884,8 +1034,12 @@ return "";
 }
 
 if (
-instagram.startsWith("http://") ||
-instagram.startsWith("https://")
+instagram.startsWith(
+"http://"
+) ||
+instagram.startsWith(
+"https://"
+)
 ) {
 
 return instagram;
@@ -894,9 +1048,18 @@ return instagram;
 
 instagram =
 instagram
-.replace(/^@/, "")
-.replace(/^\/+/, "")
-.replace(/\/+$/, "");
+.replace(
+/^@/,
+""
+)
+.replace(
+/^\/+/,
+""
+)
+.replace(
+/\/+$/,
+""
+);
 
 if (!instagram) {
 return "";
@@ -907,7 +1070,9 @@ return (
 );
 }
 
-function preencherInstagram(item) {
+function preencherInstagram(
+item
+) {
 
 const botao =
 document.getElementById(
@@ -931,7 +1096,9 @@ item.rede_social
 );
 
 const url =
-obterInstagramURL(valor);
+obterInstagramURL(
+valor
+);
 
 if (!url) {
 
@@ -966,7 +1133,9 @@ texto.textContent =
 SUGERIR ALTERAÇÃO
 ========================================================= */
 
-function prepararSugestaoAlteracao(item) {
+function prepararSugestaoAlteracao(
+item
+) {
 
 const botao =
 document.getElementById(
@@ -985,13 +1154,18 @@ botao.href =
 GALERIA
 ========================================================= */
 
-function adicionarImagemUnica(lista, imagem) {
+function adicionarImagemUnica(
+lista,
+imagem
+) {
 
 if (
 !imagem ||
 typeof imagem !== "string"
 ) {
+
 return;
+
 }
 
 const valor =
@@ -1002,7 +1176,9 @@ return;
 }
 
 const url =
-corrigirCaminhoImagem(valor);
+corrigirCaminhoImagem(
+valor
+);
 
 if (
 !lista.includes(url)
@@ -1013,7 +1189,9 @@ lista.push(url);
 }
 }
 
-function prepararGaleria(item) {
+function prepararGaleria(
+item
+) {
 
 const principal =
 document.getElementById(
@@ -1025,15 +1203,16 @@ document.getElementById(
 "miniaturas"
 );
 
-if (!principal || !miniaturas) {
+if (
+!principal ||
+!miniaturas
+) {
+
 return;
+
 }
 
 const imagens = [];
-
-/*
-Imagem principal
-*/
 
 adicionarImagemUnica(
 imagens,
@@ -1050,22 +1229,21 @@ imagens,
 item.capa
 );
 
-/*
-Arrays de imagens
-*/
-
-const camposGaleria = [
+const campos =
+[
 item.imagens,
 item.galeria,
 item.fotos,
 item.fotos_galeria
 ];
 
-camposGaleria.forEach(
+campos.forEach(
 campo => {
 
-  normalizarArray(campo)
-    .forEach(imagem => {
+  normalizarArray(
+    campo
+  ).forEach(
+    imagem => {
 
       if (
         typeof imagem === "string"
@@ -1088,7 +1266,8 @@ campo => {
           imagem.imagem
         );
       }
-    });
+    }
+  );
 }
 
 );
@@ -1112,9 +1291,10 @@ item.nome ||
 "Imagem do local";
 
 principal.onerror =
-function() {
+function () {
 
-  this.onerror = null;
+  this.onerror =
+    null;
 
   this.src =
     FALLBACK_IMAGE;
@@ -1126,20 +1306,28 @@ miniaturas.innerHTML =
 imagens
 .slice(0, 4)
 .forEach(
-(imagem, indice) => {
+(
+imagem,
+indice
+) => {
 
     const botao =
       document.createElement(
         "button"
       );
 
+
     botao.type =
       "button";
+
 
     botao.className =
       "thumbnail";
 
-    if (indice === 0) {
+
+    if (
+      indice === 0
+    ) {
 
       botao.classList.add(
         "active"
@@ -1152,24 +1340,29 @@ imagens
         "img"
       );
 
+
     img.src =
       imagem;
+
 
     img.alt =
       `${item.nome || "Local"} — foto ${indice + 1}`;
 
 
     img.onerror =
-      function() {
+      function () {
 
-        this.onerror = null;
+        this.onerror =
+          null;
 
         this.src =
           FALLBACK_IMAGE;
       };
 
 
-    botao.appendChild(img);
+    botao.appendChild(
+      img
+    );
 
 
     botao.addEventListener(
@@ -1178,6 +1371,7 @@ imagens
 
         principal.src =
           imagem;
+
 
         document
           .querySelectorAll(
@@ -1189,6 +1383,7 @@ imagens
                 "active"
               )
           );
+
 
         botao.classList.add(
           "active"
@@ -1231,7 +1426,9 @@ if (
 !imagem ||
 !principal
 ) {
+
 return;
+
 }
 
 imagem.src =
@@ -1273,25 +1470,13 @@ abrirFotoTelaCheia;
 window.fecharFotoTelaCheia =
 fecharFotoTelaCheia;
 
-document.addEventListener(
-"keydown",
-evento => {
-
-if (
-  evento.key === "Escape"
-) {
-
-  fecharFotoTelaCheia();
-}
-
-}
-);
-
 /* =========================================================
 MAPA
 ========================================================= */
 
-function prepararMapa(item) {
+function prepararMapa(
+item
+) {
 
 const elemento =
 document.getElementById(
@@ -1313,6 +1498,7 @@ item.lat
 const longitude =
 Number(
 primeiroValor(
+item.longitude,
 item.longitude,
 item.lon,
 item.lng
@@ -1346,17 +1532,20 @@ prepararBotaoComoChegar(
   null
 );
 
+
 return;
 
 }
 
 if (
-typeof L === "undefined"
+typeof L ===
+"undefined"
 ) {
 
 console.error(
   "Leaflet não foi carregado."
 );
+
 
 return;
 
@@ -1378,8 +1567,12 @@ elemento,
 scrollWheelZoom: true,
 zoomControl: true
 }
-).setView(
-[latitude, longitude],
+)
+.setView(
+[
+latitude,
+longitude
+],
 17
 );
 
@@ -1389,14 +1582,17 @@ L.tileLayer(
 attribution:
 "Tiles © Esri",
 
-  subdomains: [
-    "server",
-    "services"
-  ],
+  subdomains:
+    [
+      "server",
+      "services"
+    ],
 
-  maxNativeZoom: 19,
+  maxNativeZoom:
+    19,
 
-  maxZoom: 22
+  maxZoom:
+    22
 }
 
 ).addTo(
@@ -1404,10 +1600,12 @@ mapaLocal
 );
 
 const marcador =
-L.marker([
+L.marker(
+[
 latitude,
 longitude
-]).addTo(
+]
+).addTo(
 mapaLocal
 );
 
@@ -1476,13 +1674,13 @@ botao.rel =
 }
 
 /* =========================================================
-PROPRIETÁRIO DO COMÉRCIO
+USUÁRIO
 ========================================================= */
 
-function obterUsuarioAtual() {
+async function obterUsuarioAutenticadoLocal() {
 
 /*
-O login.js mantém esta variável global.
+Primeiro tenta o estado mantido pelo login.js.
 */
 
 if (
@@ -1493,27 +1691,13 @@ return window.usuarioAtualSupabase;
 
 }
 
-/*
-Fallback para o cliente Supabase.
-*/
-
 const cliente =
 obterSupabaseClient();
 
 if (!cliente) {
-return null;
-}
 
 return null;
-}
 
-async function obterUsuarioAutenticadoLocal() {
-
-const cliente =
-obterSupabaseClient();
-
-if (!cliente) {
-return null;
 }
 
 try {
@@ -1528,15 +1712,19 @@ const {
 if (error) {
 
   console.warn(
-    "Não foi possível obter usuário:",
+    "Erro ao obter usuário:",
     error
   );
+
 
   return null;
 }
 
 
-return data?.user || null;
+return (
+  data?.user ||
+  null
+);
 
 } catch (erro) {
 
@@ -1545,36 +1733,103 @@ console.error(
   erro
 );
 
+
 return null;
 
 }
 }
 
-async function verificarProprietarioComercio() {
+/* =========================================================
+ÁREA DOS BOTÕES DO COMÉRCIO
+========================================================= */
 
-const area =
+function obterAreaBotoesComercio() {
+
+let area =
 document.getElementById(
 "areaExcluirComercio"
 );
+
+/*
+Se não existir no HTML,
+cria automaticamente.
+*/
+
+if (!area) {
+
+area =
+  document.createElement(
+    "div"
+  );
+
+
+area.id =
+  "areaExcluirComercio";
+
+
+const mapa =
+  document.querySelector(
+    ".local-map-section"
+  );
+
+
+if (mapa) {
+
+  mapa.parentNode.insertBefore(
+    area,
+    mapa
+  );
+
+} else {
+
+  const pagina =
+    document.querySelector(
+      ".local-page"
+    );
+
+
+  if (pagina) {
+
+    pagina.appendChild(
+      area
+    );
+  }
+}
+
+}
+
+return area;
+}
+
+/* =========================================================
+VERIFICAR PROPRIETÁRIO
+========================================================= */
+
+async function verificarProprietarioComercio() {
+
+const area =
+obterAreaBotoesComercio();
 
 if (!area) {
 return;
 }
 
 /*
-Começa sempre escondido.
+Sempre começa escondido.
 */
 
 area.style.display =
 "none";
 
 /*
-Só comércio pode exibir esse botão.
+Não é comércio.
 */
 
 if (
 !localAtual ||
-!pareceComercio(localAtual)
+!pareceComercio(
+localAtual
+)
 ) {
 
 return;
@@ -1587,8 +1842,9 @@ obterSupabaseClient();
 if (!cliente) {
 
 console.warn(
-  "Cliente Supabase não disponível."
+  "Supabase não disponível."
 );
+
 
 return;
 
@@ -1598,28 +1854,54 @@ const usuario =
 await obterUsuarioAutenticadoLocal();
 
 if (!usuario) {
+
+console.log(
+  "Nenhum usuário logado."
+);
+
+
 return;
+
 }
 
-/*
-Busca o cadastro pelo local_id.
-*/
+console.log(
+"Usuário logado:",
+usuario.id
+);
 
-let cadastro = null;
+console.log(
+"Comércio atual:",
+localAtual.id,
+localAtual.nome
+);
+
+let cadastro =
+null;
 
 try {
 
+/*
+  =====================================================
+  PRIMEIRA TENTATIVA
+  local_id
+  =====================================================
+*/
+
 let resposta =
   await cliente
-    .from("cadastros_comercios")
+    .from(
+      "cadastros_comercios"
+    )
     .select(
-      "id, local_id, usuario_id, status, nome"
+      "*"
     )
     .eq(
       "local_id",
-      String(localAtual.id)
+      String(
+        localAtual.id
+      )
     )
-    .maybeSingle();
+    .limit(1);
 
 
 if (
@@ -1627,36 +1909,44 @@ if (
 ) {
 
   console.error(
-    "Erro ao buscar cadastro do comércio:",
+    "Erro ao buscar por local_id:",
     resposta.error
   );
 
-  return;
+} else if (
+  resposta.data &&
+  resposta.data.length > 0
+) {
+
+  cadastro =
+    resposta.data[0];
 }
 
 
-cadastro =
-  resposta.data;
-
-
 /*
-  Compatibilidade caso o cadastro use o
-  próprio id como local_id.
+  =====================================================
+  SEGUNDA TENTATIVA
+  id
+  =====================================================
 */
 
 if (!cadastro) {
 
   resposta =
     await cliente
-      .from("cadastros_comercios")
+      .from(
+        "cadastros_comercios"
+      )
       .select(
-        "id, local_id, usuario_id, status, nome"
+        "*"
       )
       .eq(
         "id",
-        String(localAtual.id)
+        String(
+          localAtual.id
+        )
       )
-      .maybeSingle();
+      .limit(1);
 
 
   if (
@@ -1664,44 +1954,83 @@ if (!cadastro) {
   ) {
 
     console.error(
-      "Erro ao buscar cadastro do comércio:",
+      "Erro ao buscar por id:",
       resposta.error
     );
 
-    return;
+  } else if (
+    resposta.data &&
+    resposta.data.length > 0
+  ) {
+
+    cadastro =
+      resposta.data[0];
   }
-
-
-  cadastro =
-    resposta.data;
 }
+
+
+console.log(
+  "Cadastro encontrado:",
+  cadastro
+);
 
 
 if (!cadastro) {
+
+  console.warn(
+    "Nenhum cadastro_comercios encontrado."
+  );
+
+
   return;
 }
 
 
+console.log(
+  "usuario_id do cadastro:",
+  cadastro.usuario_id
+);
+
+
+console.log(
+  "usuario.id atual:",
+  usuario.id
+);
+
+
 /*
-  O usuário só pode excluir o próprio comércio.
+  =====================================================
+  VERIFICA PROPRIETÁRIO
+  =====================================================
 */
 
 if (
-  String(cadastro.usuario_id) !==
-  String(usuario.id)
+  String(
+    cadastro.usuario_id
+  ) !==
+  String(
+    usuario.id
+  )
 ) {
 
+  console.log(
+    "Usuário não é proprietário."
+  );
+
+
   return;
 }
 
 
 /*
-  Comércio já deletado não deve mostrar
-  o botão.
+  Não mostra para cadastro deletado.
 */
 
 if (
-  cadastro.status ===
+  String(
+    cadastro.status ||
+    ""
+  ).toLowerCase() ===
   "deletado"
 ) {
 
@@ -1709,13 +2038,119 @@ if (
 }
 
 
+/*
+  Guarda o cadastro.
+*/
+
+localAtual._cadastroSupabase =
+  cadastro;
+
+
+/*
+  =====================================================
+  CRIA BOTÕES
+  =====================================================
+*/
+
+area.innerHTML =
+  "";
+
+
+const botaoEditar =
+  document.createElement(
+    "button"
+  );
+
+
+botaoEditar.type =
+  "button";
+
+
+botaoEditar.id =
+  "botaoEditarComercio";
+
+
+botaoEditar.className =
+  "botao-editar-comercio";
+
+
+botaoEditar.textContent =
+  "Editar meu comércio";
+
+
+botaoEditar.addEventListener(
+  "click",
+  editarMeuComercio
+);
+
+
+const botaoExcluir =
+  document.createElement(
+    "button"
+  );
+
+
+botaoExcluir.type =
+  "button";
+
+
+botaoExcluir.id =
+  "botaoExcluirComercio";
+
+
+botaoExcluir.className =
+  "botao-excluir-perfil";
+
+
+botaoExcluir.textContent =
+  "Excluir meu comércio";
+
+
+botaoExcluir.addEventListener(
+  "click",
+  excluirMeuComercio
+);
+
+
+area.appendChild(
+  botaoEditar
+);
+
+
+area.appendChild(
+  botaoExcluir
+);
+
+
+/*
+  Mostra.
+*/
+
 area.style.display =
-  "block";
+  "flex";
+
+
+area.style.flexDirection =
+  "column";
+
+
+area.style.gap =
+  "8px";
+
+
+console.log(
+  "PROPRIETÁRIO CONFIRMADO."
+);
+
+
+console.log(
+  "Botões de editar e excluir exibidos."
+);
 
 } catch (erro) {
 
 console.error(
-  "Erro ao verificar proprietário do comércio:",
+  "Erro ao verificar proprietário:",
   erro
 );
 
@@ -1723,16 +2158,17 @@ console.error(
 }
 
 /* =========================================================
-EXCLUIR MEU COMÉRCIO
+EDITAR MEU COMÉRCIO
 ========================================================= */
 
-async function excluirMeuComercio() {
+async function editarMeuComercio() {
 
 if (!localAtual) {
 
 alert(
-  "Não foi possível identificar o comércio."
+  "Comércio não identificado."
 );
+
 
 return;
 
@@ -1747,6 +2183,373 @@ alert(
   "Não foi possível conectar ao sistema."
 );
 
+
+return;
+
+}
+
+const usuario =
+await obterUsuarioAutenticadoLocal();
+
+if (!usuario) {
+
+alert(
+  "Você precisa estar logado."
+);
+
+
+return;
+
+}
+
+const cadastro =
+localAtual._cadastroSupabase;
+
+if (!cadastro) {
+
+alert(
+  "Cadastro do comércio não encontrado."
+);
+
+
+return;
+
+}
+
+/*
+=====================================================
+CAMPOS
+=====================================================
+*/
+
+const nome =
+window.prompt(
+"Nome do comércio:",
+localAtual.nome ||
+""
+);
+
+if (nome === null) {
+return;
+}
+
+const categoria =
+window.prompt(
+"Categoria:",
+localAtual.categoria ||
+""
+);
+
+if (categoria === null) {
+return;
+}
+
+const descricao =
+window.prompt(
+"Descrição:",
+localAtual.descricao ||
+""
+);
+
+if (descricao === null) {
+return;
+}
+
+const endereco =
+window.prompt(
+"Endereço:",
+localAtual.endereco ||
+localAtual.endereço ||
+""
+);
+
+if (endereco === null) {
+return;
+}
+
+const horario =
+window.prompt(
+"Horário:",
+typeof localAtual.horario ===
+"string"
+? localAtual.horario
+: ""
+);
+
+if (horario === null) {
+return;
+}
+
+const telefone =
+window.prompt(
+"Telefone:",
+localAtual.telefone ||
+""
+);
+
+if (telefone === null) {
+return;
+}
+
+const whatsapp =
+window.prompt(
+"WhatsApp:",
+localAtual.whatsapp ||
+localAtual.telefone ||
+""
+);
+
+if (whatsapp === null) {
+return;
+}
+
+const instagram =
+window.prompt(
+"Instagram:",
+localAtual.instagram ||
+""
+);
+
+if (instagram === null) {
+return;
+}
+
+/*
+=====================================================
+OBJETO
+=====================================================
+*/
+
+const comercio =
+{
+
+  nome:
+    nome.trim(),
+
+  categoria:
+    categoria.trim(),
+
+  descricao:
+    descricao.trim(),
+
+  endereco:
+    endereco.trim(),
+
+  horario:
+    horario.trim(),
+
+  telefone:
+    telefone.trim(),
+
+  whatsapp:
+    whatsapp.trim(),
+
+  instagram:
+    instagram.trim(),
+
+  latitude:
+    localAtual.latitude,
+
+  longitude:
+    localAtual.longitude,
+
+  imagem:
+    localAtual.imagem,
+
+  imagens:
+    localAtual.imagens
+};
+
+/*
+=====================================================
+SESSÃO
+=====================================================
+*/
+
+const {
+data,
+error
+} =
+await cliente.auth.getSession();
+
+if (error) {
+
+alert(
+  "Não foi possível verificar sua sessão."
+);
+
+
+return;
+
+}
+
+const accessToken =
+data?.session?.access_token;
+
+if (!accessToken) {
+
+alert(
+  "Sua sessão expirou. Faça login novamente."
+);
+
+
+return;
+
+}
+
+const botao =
+document.getElementById(
+"botaoEditarComercio"
+);
+
+if (botao) {
+
+botao.disabled =
+  true;
+
+
+botao.textContent =
+  "Salvando...";
+
+}
+
+try {
+
+const resposta =
+  await fetch(
+    EDGE_FUNCTION_URL,
+    {
+      method:
+        "POST",
+
+      headers:
+        {
+          "Content-Type":
+            "application/json",
+
+          "Authorization":
+            `Bearer ${accessToken}`
+        },
+
+      body:
+        JSON.stringify(
+          {
+            acao:
+              "editar_meu_comercio",
+
+            comercio_id:
+              localAtual.id,
+
+            comercio:
+              comercio
+          }
+        )
+    }
+  );
+
+
+let resultado =
+  null;
+
+
+try {
+
+  resultado =
+    await resposta.json();
+
+} catch {
+
+  resultado =
+    null;
+}
+
+
+if (!resposta.ok) {
+
+  throw new Error(
+    resultado?.erro ||
+    resultado?.error ||
+    `Erro HTTP ${resposta.status}`
+  );
+}
+
+
+if (
+  resultado &&
+  resultado.sucesso === false
+) {
+
+  throw new Error(
+    resultado.erro ||
+    "Não foi possível atualizar o comércio."
+  );
+}
+
+
+alert(
+  "Comércio atualizado com sucesso."
+);
+
+
+window.location.reload();
+
+} catch (erro) {
+
+console.error(
+  "Erro ao editar comércio:",
+  erro
+);
+
+
+alert(
+  erro.message ||
+  "Não foi possível atualizar o comércio."
+);
+
+
+if (botao) {
+
+  botao.disabled =
+    false;
+
+
+  botao.textContent =
+    "Editar meu comércio";
+}
+
+}
+}
+
+window.editarMeuComercio =
+editarMeuComercio;
+
+/* =========================================================
+EXCLUIR MEU COMÉRCIO
+========================================================= */
+
+async function excluirMeuComercio() {
+
+if (!localAtual) {
+
+alert(
+  "Comércio não identificado."
+);
+
+
+return;
+
+}
+
+const cliente =
+obterSupabaseClient();
+
+if (!cliente) {
+
+alert(
+  "Não foi possível conectar ao sistema."
+);
+
+
 return;
 
 }
@@ -1760,12 +2563,13 @@ alert(
   "Você precisa estar logado para excluir seu comércio."
 );
 
+
 return;
 
 }
 
 /*
-Confirmação antes da exclusão.
+Confirmação.
 */
 
 const confirmou =
@@ -1787,6 +2591,7 @@ if (botao) {
 
 botao.disabled =
   true;
+
 
 botao.textContent =
   "Excluindo...";
@@ -1821,30 +2626,36 @@ if (!accessToken) {
 
 const resposta =
   await fetch(
-    COMERCIO_EDGE_FUNCTION_URL,
+    EDGE_FUNCTION_URL,
     {
-      method: "POST",
+      method:
+        "POST",
 
-      headers: {
-        "Content-Type":
-          "application/json",
+      headers:
+        {
+          "Content-Type":
+            "application/json",
 
-        "Authorization":
-          `Bearer ${accessToken}`
-      },
+          "Authorization":
+            `Bearer ${accessToken}`
+        },
 
-      body: JSON.stringify({
-        acao:
-          "excluir_meu_comercio",
+      body:
+        JSON.stringify(
+          {
+            acao:
+              "excluir_meu_comercio",
 
-        comercio_id:
-          localAtual.id
-      })
+            comercio_id:
+              localAtual.id
+          }
+        )
     }
   );
 
 
-let resultado = null;
+let resultado =
+  null;
 
 
 try {
@@ -1854,7 +2665,8 @@ try {
 
 } catch {
 
-  resultado = null;
+  resultado =
+    null;
 }
 
 
@@ -1885,10 +2697,6 @@ alert(
 );
 
 
-/*
-  Depois da exclusão, voltamos para a página inicial.
-*/
-
 window.location.href =
   "../index.html";
 
@@ -1911,6 +2719,7 @@ if (botao) {
   botao.disabled =
     false;
 
+
   botao.textContent =
     "Excluir meu comércio";
 }
@@ -1923,22 +2732,6 @@ excluirMeuComercio;
 
 /* =========================================================
 AVALIAÇÕES
-========================================================= */
-
-function obterClienteAvaliacoes() {
-
-if (!supabaseClient) {
-
-supabaseClient =
-  obterSupabaseClient();
-
-}
-
-return supabaseClient;
-}
-
-/* =========================================================
-CARREGAR AVALIAÇÕES
 ========================================================= */
 
 async function carregarAvaliacoes() {
@@ -1978,6 +2771,7 @@ lista.innerHTML = `
   </div>
 `;
 
+
 return;
 
 }
@@ -1989,18 +2783,23 @@ const {
   error
 } =
   await cliente
-    .from("avaliacoes")
+    .from(
+      "avaliacoes"
+    )
     .select(
       "id, local_id, usuario_id, nome_usuario, nota, comentario, criado_em"
     )
     .eq(
       "local_id",
-      String(localAtual.id)
+      String(
+        localAtual.id
+      )
     )
     .order(
       "criado_em",
       {
-        ascending: false
+        ascending:
+          false
       }
     );
 
@@ -2016,19 +2815,26 @@ const avaliacoes =
     : [];
 
 
-if (!avaliacoes.length) {
+if (
+  !avaliacoes.length
+) {
 
   if (media) {
+
     media.textContent =
       "0,0";
   }
 
+
   if (quantidade) {
+
     quantidade.textContent =
       "Nenhuma avaliação";
   }
 
+
   if (estrelas) {
+
     estrelas.innerHTML =
       criarHTMLestrelas(0);
   }
@@ -2040,6 +2846,7 @@ if (!avaliacoes.length) {
       Seja o primeiro a avaliar!
     </div>
   `;
+
 
   return;
 }
@@ -2053,7 +2860,8 @@ const soma =
     ) =>
       total +
       Number(
-        avaliacao.nota || 0
+        avaliacao.nota ||
+        0
       ),
     0
   );
@@ -2069,14 +2877,18 @@ if (media) {
   media.textContent =
     mediaCalculada
       .toFixed(1)
-      .replace(".", ",");
+      .replace(
+        ".",
+        ","
+      );
 }
 
 
 if (quantidade) {
 
   quantidade.textContent =
-    avaliacoes.length === 1
+    avaliacoes.length ===
+    1
       ? "1 avaliação"
       : `${avaliacoes.length} avaliações`;
 }
@@ -2127,9 +2939,11 @@ nota
 ) {
 
 const valor =
-Number(nota) || 0;
+Number(nota) ||
+0;
 
-let html = "";
+let html =
+"";
 
 for (
 let i = 1;
@@ -2155,6 +2969,42 @@ html += `
 
 return html;
 }
+
+function criarHTMLestrelasComentario(
+nota
+) {
+
+let html =
+"";
+
+for (
+let i = 1;
+i <= 5;
+i++
+) {
+
+const imagem =
+  i <= nota
+    ? "../img/icones/estrela.png"
+    : "../img/icones/estrela2.png";
+
+
+html += `
+  <img
+    class="comment-star"
+    src="${imagem}"
+    alt=""
+  >
+`;
+
+}
+
+return html;
+}
+
+/* =========================================================
+HTML DE UMA AVALIAÇÃO
+========================================================= */
 
 function criarHTMLAvaliacao(
 avaliacao
@@ -2229,9 +3079,9 @@ return `
           <button
             type="button"
             class="delete-comment"
-            onclick="editarAvaliacao('${String(
+            data-editar-avaliacao="${escaparHTML(
               avaliacao.id
-            )}')"
+            )}"
           >
             Editar
           </button>
@@ -2239,9 +3089,9 @@ return `
           <button
             type="button"
             class="delete-comment"
-            onclick="excluirAvaliacao('${String(
+            data-excluir-avaliacao="${escaparHTML(
               avaliacao.id
-            )}')"
+            )}"
           >
             Excluir
           </button>
@@ -2254,37 +3104,6 @@ return `
 </article>
 
 `;
-}
-
-function criarHTMLestrelasComentario(
-nota
-) {
-
-let html = "";
-
-for (
-let i = 1;
-i <= 5;
-i++
-) {
-
-const imagem =
-  i <= nota
-    ? "../img/icones/estrela.png"
-    : "../img/icones/estrela2.png";
-
-
-html += `
-  <img
-    class="comment-star"
-    src="${imagem}"
-    alt=""
-  >
-`;
-
-}
-
-return html;
 }
 
 /* =========================================================
@@ -2300,23 +3119,33 @@ return "";
 }
 
 const data =
-new Date(valor);
+new Date(
+valor
+);
 
 if (
 Number.isNaN(
 data.getTime()
 )
 ) {
+
 return "";
+
 }
 
 return data.toLocaleDateString(
 "pt-BR",
 {
-day: "2-digit",
-month: "2-digit",
-year: "numeric"
+day:
+"2-digit",
+
+  month:
+    "2-digit",
+
+  year:
+    "numeric"
 }
+
 );
 }
 
@@ -2341,8 +3170,13 @@ document.getElementById(
 "nomeUsuarioLogado"
 );
 
-if (!area || !autenticacao) {
+if (
+!area ||
+!autenticacao
+) {
+
 return;
+
 }
 
 const cliente =
@@ -2353,8 +3187,10 @@ if (!cliente) {
 area.style.display =
   "none";
 
+
 autenticacao.style.display =
   "block";
+
 
 return;
 
@@ -2368,8 +3204,10 @@ if (!usuario) {
 area.style.display =
   "none";
 
+
 autenticacao.style.display =
   "block";
+
 
 return;
 
@@ -2402,13 +3240,17 @@ const {
   error
 } =
   await cliente
-    .from("avaliacoes")
+    .from(
+      "avaliacoes"
+    )
     .select(
       "id, local_id, usuario_id, nome_usuario, nota, comentario, criado_em"
     )
     .eq(
       "local_id",
-      String(localAtual.id)
+      String(
+        localAtual.id
+      )
     )
     .eq(
       "usuario_id",
@@ -2424,8 +3266,10 @@ if (error) {
     error
   );
 
+
   avaliacaoAtual =
     null;
+
 
   return;
 }
@@ -2493,6 +3337,7 @@ if (avaliacaoAtual) {
 
 
   if (textarea) {
+
     textarea.value =
       "";
   }
@@ -2554,18 +3399,10 @@ botao => {
   }
 
 
-  if (
+  imagem.src =
     valor <= nota
-  ) {
-
-    imagem.src =
-      "../img/icones/estrela.png";
-
-  } else {
-
-    imagem.src =
-      "../img/icones/estrela2.png";
-  }
+      ? "../img/icones/estrela.png"
+      : "../img/icones/estrela2.png";
 }
 
 );
@@ -2586,6 +3423,7 @@ alert(
   "Sistema de avaliações indisponível."
 );
 
+
 return;
 
 }
@@ -2599,12 +3437,12 @@ alert(
   "Entre na sua conta para avaliar este local."
 );
 
+
 return;
 
 }
 
 if (
-!notaSelecionada ||
 notaSelecionada < 1 ||
 notaSelecionada > 5
 ) {
@@ -2612,6 +3450,7 @@ notaSelecionada > 5
 alert(
   "Escolha uma nota de 1 a 5 estrelas."
 );
+
 
 return;
 
@@ -2622,18 +3461,20 @@ document.getElementById(
 "textoComentario"
 );
 
-const texto =
+const comentario =
 textarea
 ? textarea.value.trim()
 : "";
 
 if (
-texto.length > 500
+comentario.length >
+500
 ) {
 
 alert(
   "O comentário pode ter no máximo 500 caracteres."
 );
+
 
 return;
 
@@ -2655,6 +3496,7 @@ if (botao) {
 botao.disabled =
   true;
 
+
 botao.textContent =
   "Salvando...";
 
@@ -2668,17 +3510,21 @@ if (avaliacaoAtual) {
     error
   } =
     await cliente
-      .from("avaliacoes")
-      .update({
-        nota:
-          notaSelecionada,
+      .from(
+        "avaliacoes"
+      )
+      .update(
+        {
+          nota:
+            notaSelecionada,
 
-        comentario:
-          texto,
+          comentario:
+            comentario,
 
-        nome_usuario:
-          nomeUsuario
-      })
+          nome_usuario:
+            nomeUsuario
+        }
+      )
       .eq(
         "id",
         avaliacaoAtual.id
@@ -2699,23 +3545,29 @@ if (avaliacaoAtual) {
     error
   } =
     await cliente
-      .from("avaliacoes")
-      .insert({
-        local_id:
-          String(localAtual.id),
+      .from(
+        "avaliacoes"
+      )
+      .insert(
+        {
+          local_id:
+            String(
+              localAtual.id
+            ),
 
-        usuario_id:
-          usuario.id,
+          usuario_id:
+            usuario.id,
 
-        nome_usuario:
-          nomeUsuario,
+          nome_usuario:
+            nomeUsuario,
 
-        nota:
-          notaSelecionada,
+          nota:
+            notaSelecionada,
 
-        comentario:
-          texto
-      });
+          comentario:
+            comentario
+        }
+      );
 
 
   if (error) {
@@ -2767,18 +3619,13 @@ return;
 const cliente =
 obterClienteAvaliacoes();
 
-if (!cliente) {
-return;
-}
-
 const usuario =
 await obterUsuarioAutenticadoLocal();
 
-if (!usuario) {
-
-alert(
-  "Você precisa estar logado."
-);
+if (
+!cliente ||
+!usuario
+) {
 
 return;
 
@@ -2791,7 +3638,9 @@ const {
   error
 } =
   await cliente
-    .from("avaliacoes")
+    .from(
+      "avaliacoes"
+    )
     .select(
       "id, nota, comentario"
     )
@@ -2816,6 +3665,7 @@ if (!data) {
   alert(
     "Avaliação não encontrada."
   );
+
 
   return;
 }
@@ -2848,6 +3698,7 @@ if (textarea) {
     data.comentario ||
     "";
 
+
   textarea.focus();
 }
 
@@ -2860,10 +3711,15 @@ const formulario =
 
 if (formulario) {
 
-  formulario.scrollIntoView({
-    behavior: "smooth",
-    block: "center"
-  });
+  formulario.scrollIntoView(
+    {
+      behavior:
+        "smooth",
+
+      block:
+        "center"
+    }
+  );
 }
 
 
@@ -2921,18 +3777,13 @@ return;
 const cliente =
 obterClienteAvaliacoes();
 
-if (!cliente) {
-return;
-}
-
 const usuario =
 await obterUsuarioAutenticadoLocal();
 
-if (!usuario) {
-
-alert(
-  "Você precisa estar logado."
-);
+if (
+!cliente ||
+!usuario
+) {
 
 return;
 
@@ -2944,7 +3795,9 @@ const {
   error
 } =
   await cliente
-    .from("avaliacoes")
+    .from(
+      "avaliacoes"
+    )
     .delete()
     .eq(
       "id",
@@ -2963,6 +3816,7 @@ if (error) {
 
 avaliacaoAtual =
   null;
+
 
 notaSelecionada =
   0;
@@ -2998,7 +3852,7 @@ EVENTOS
 function configurarEventos() {
 
 /*
-Botão publicar avaliação
+Publicar avaliação.
 */
 
 const publicar =
@@ -3016,7 +3870,7 @@ publicar.addEventListener(
 }
 
 /*
-Estrelas
+Estrelas.
 */
 
 const estrelas =
@@ -3031,14 +3885,10 @@ botao => {
     "mouseenter",
     () => {
 
-      const nota =
+      preencherSeletorEstrelas(
         Number(
           botao.dataset.rating
-        );
-
-
-      preencherSeletorEstrelas(
-        nota
+        )
       );
     }
   );
@@ -3075,7 +3925,48 @@ botao => {
 );
 
 /*
-Fechar visualizador clicando fora da imagem
+Botões de editar/excluir avaliações.
+*/
+
+document.addEventListener(
+"click",
+evento => {
+
+  const editar =
+    evento.target.closest(
+      "[data-editar-avaliacao]"
+    );
+
+
+  if (editar) {
+
+    editarAvaliacao(
+      editar.dataset.editarAvaliacao
+    );
+
+
+    return;
+  }
+
+
+  const excluir =
+    evento.target.closest(
+      "[data-excluir-avaliacao]"
+    );
+
+
+  if (excluir) {
+
+    excluirAvaliacao(
+      excluir.dataset.excluirAvaliacao
+    );
+  }
+}
+
+);
+
+/*
+Foto viewer.
 */
 
 const viewer =
@@ -3100,6 +3991,25 @@ viewer.addEventListener(
 );
 
 }
+
+/*
+ESC.
+*/
+
+document.addEventListener(
+"keydown",
+evento => {
+
+  if (
+    evento.key ===
+    "Escape"
+  ) {
+
+    fecharFotoTelaCheia();
+  }
+}
+
+);
 }
 
 /* =========================================================
@@ -3117,6 +4027,7 @@ console.warn(
   "Cliente Supabase não disponível para monitoramento."
 );
 
+
 return;
 
 }
@@ -3124,11 +4035,14 @@ return;
 try {
 
 cliente.auth.onAuthStateChange(
-  async () => {
+  () => {
 
     /*
-      Pequeno atraso para permitir que o
-      login.js atualize window.usuarioAtualSupabase.
+      O login.js também atualiza
+      window.usuarioAtualSupabase.
+
+      O pequeno atraso evita que esta página
+      consulte o estado antes da atualização.
     */
 
     setTimeout(
@@ -3141,7 +4055,7 @@ cliente.auth.onAuthStateChange(
         await verificarProprietarioComercio();
 
       },
-      100
+      150
     );
   }
 );
@@ -3164,13 +4078,20 @@ document.addEventListener(
 "DOMContentLoaded",
 async () => {
 
+console.log(
+  "LOCAL.JS iniciado."
+);
+
+
 supabaseClient =
   obterSupabaseClient();
 
 
 configurarEventos();
 
+
 configurarMonitoramentoAuth();
+
 
 await carregarLocal();
 
