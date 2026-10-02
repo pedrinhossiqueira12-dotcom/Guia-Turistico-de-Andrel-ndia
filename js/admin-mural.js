@@ -17,13 +17,10 @@ Comunicação com a Edge Function administrativa
 IMPORTANTE:
 
 O ID público do perfil nunca é recriado durante edição.
-
-A aprovação deve preservar o mesmo ID utilizado em
-votos_pessoas.pessoa_id.
-
-A exclusão de um perfil publicado também é feita pela
-Edge Function para que o arquivo DATA/pessoas.json e
-os dados relacionados sejam tratados no servidor.
+A aprovação preserva o mesmo ID utilizado em votos_pessoas.pessoa_id.
+A exclusão de um perfil publicado é feita pela Edge Function.
+A comunicação com a Edge Function registra no console os detalhes
+completos de erros HTTP para facilitar o diagnóstico.
 ========================================================= */
 
 /* =========================================================
@@ -42,9 +39,6 @@ const EDGE_FUNCTION_URL =
 const ADMIN_USER_ID =
 "4b9a0233-6b72-4573-aebd-d596c5b15e1b";
 
-/*
-Bucket correto utilizado pelos perfis do Mural.
-*/
 const STORAGE_BUCKET =
 "mural-imagens";
 
@@ -270,23 +264,23 @@ valor === undefined
 )
 .replace(
 /&/g,
-"&amp;"
+"&"
 )
 .replace(
 /</g,
-"&lt;"
+"<"
 )
 .replace(
 />/g,
-"&gt;"
+">"
 )
 .replace(
 /"/g,
-"&quot;"
+'"'
 )
 .replace(
 /'/g,
-"&#039;"
+"'"
 );
 
 }
@@ -377,11 +371,6 @@ imagens =
   );
 
 }
-
-/*
-Compatibilidade caso a tabela utilize
-uma imagem principal separada.
-*/
 
 if (
 cadastro &&
@@ -492,7 +481,10 @@ editorImagensLista.innerHTML =
 "";
 
 imagensMuralEditando.forEach(
-(imagem, index) => {
+(
+imagem,
+index
+) => {
 
   const item =
     document.createElement(
@@ -530,7 +522,9 @@ imagensMuralEditando.forEach(
     };
 
 
-  if (index === 0) {
+  if (
+    index === 0
+  ) {
 
     const capa =
       document.createElement(
@@ -690,7 +684,9 @@ error
 } =
 await supabaseClient
 .storage
-.from(STORAGE_BUCKET)
+.from(
+STORAGE_BUCKET
+)
 .upload(
 caminho,
 arquivo,
@@ -713,7 +709,9 @@ data
 } =
 supabaseClient
 .storage
-.from(STORAGE_BUCKET)
+.from(
+STORAGE_BUCKET
+)
 .getPublicUrl(
 caminho
 );
@@ -798,8 +796,10 @@ mostrarMensagem(
 
 }
 
+if (editorImagemArquivo) {
 editorImagemArquivo.disabled =
 true;
+}
 
 if (editorBotaoImagem) {
 
@@ -819,25 +819,21 @@ for (
     "sucesso"
   );
 
-
   const url =
     await fazerUploadImagem(
       arquivo,
       usuarioId
     );
 
-
   imagensMuralEditando.push(
     url
   );
-
 
   atualizarEstadoImagens();
 
   renderizarImagensEditor();
 
 }
-
 
 mostrarMensagem(
   "Imagens atualizadas no editor.",
@@ -851,7 +847,6 @@ console.error(
   erro
 );
 
-
 mostrarMensagem(
   erro.message ||
   "Não foi possível enviar a imagem.",
@@ -860,9 +855,15 @@ mostrarMensagem(
 
 } finally {
 
-editorImagemArquivo.disabled =
-  false;
+if (editorImagemArquivo) {
 
+  editorImagemArquivo.disabled =
+    false;
+
+  editorImagemArquivo.value =
+    "";
+
+}
 
 if (editorBotaoImagem) {
 
@@ -870,10 +871,6 @@ if (editorBotaoImagem) {
     "";
 
 }
-
-
-editorImagemArquivo.value =
-  "";
 
 }
 
@@ -946,25 +943,175 @@ resultado =
 
 }
 
+/* =====================================================
+DIAGNÓSTICO COMPLETO
+===================================================== */
+
+console.group(
+"🔎 RESPOSTA DA EDGE FUNCTION"
+);
+
+console.log(
+"Ação:",
+acao
+);
+
+console.log(
+"HTTP:",
+resposta.status
+);
+
+console.log(
+"OK:",
+resposta.ok
+);
+
+console.log(
+"Resposta completa:",
+resultado
+);
+
+console.log(
+"sucesso:",
+resultado?.sucesso
+);
+
+console.log(
+"erro:",
+resultado?.erro
+);
+
+console.log(
+"error:",
+resultado?.error
+);
+
+console.log(
+"message:",
+resultado?.message
+);
+
+console.log(
+"detalhe:",
+resultado?.detalhe
+);
+
+console.log(
+"codigo:",
+resultado?.codigo
+);
+
+console.log(
+"details:",
+resultado?.details
+);
+
+console.log(
+"hint:",
+resultado?.hint
+);
+
+console.log(
+"cadastro_id:",
+resultado?.cadastro_id
+);
+
+console.groupEnd();
+
+/* =====================================================
+ERRO HTTP
+===================================================== */
+
 if (!resposta.ok) {
 
-throw new Error(
+const mensagemErro =
+  resultado?.detalhe ||
   resultado?.erro ||
   resultado?.error ||
   resultado?.message ||
-  `Erro HTTP ${resposta.status}.`
+  `Erro HTTP ${resposta.status}.`;
+
+const erro =
+  new Error(
+    mensagemErro
+  );
+
+erro.status =
+  resposta.status;
+
+erro.detalhe =
+  resultado?.detalhe ||
+  null;
+
+erro.codigo =
+  resultado?.codigo ||
+  null;
+
+erro.details =
+  resultado?.details ||
+  null;
+
+erro.hint =
+  resultado?.hint ||
+  null;
+
+erro.cadastro_id =
+  resultado?.cadastro_id ||
+  null;
+
+console.error(
+  "❌ ERRO DETALHADO DA EDGE FUNCTION:",
+  erro
 );
 
+throw erro;
+
 }
+
+/* =====================================================
+ERRO DEVOLVIDO NO JSON
+===================================================== */
 
 if (
 resultado &&
 resultado.erro
 ) {
 
-throw new Error(
-  resultado.erro
+const erro =
+  new Error(
+    resultado.detalhe ||
+    resultado.erro
+  );
+
+erro.status =
+  resposta.status;
+
+erro.detalhe =
+  resultado.detalhe ||
+  null;
+
+erro.codigo =
+  resultado.codigo ||
+  null;
+
+erro.details =
+  resultado.details ||
+  null;
+
+erro.hint =
+  resultado.hint ||
+  null;
+
+erro.cadastro_id =
+  resultado.cadastro_id ||
+  null;
+
+console.error(
+  "❌ ERRO DEVOLVIDO PELA EDGE FUNCTION:",
+  erro
 );
+
+throw erro;
 
 }
 
@@ -973,9 +1120,41 @@ resultado &&
 resultado.error
 ) {
 
-throw new Error(
-  resultado.error
+const erro =
+  new Error(
+    resultado.detalhe ||
+    resultado.error
+  );
+
+erro.status =
+  resposta.status;
+
+erro.detalhe =
+  resultado.detalhe ||
+  null;
+
+erro.codigo =
+  resultado.codigo ||
+  null;
+
+erro.details =
+  resultado.details ||
+  null;
+
+erro.hint =
+  resultado.hint ||
+  null;
+
+erro.cadastro_id =
+  resultado.cadastro_id ||
+  null;
+
+console.error(
+  "❌ ERROR DEVOLVIDO PELA EDGE FUNCTION:",
+  erro
 );
+
+throw erro;
 
 }
 
@@ -998,7 +1177,6 @@ const {
 } =
   await supabaseClient.auth.getSession();
 
-
 if (!session) {
 
   window.location.href =
@@ -1008,10 +1186,8 @@ if (!session) {
 
 }
 
-
 const usuario =
   session.user;
-
 
 if (
   !usuario ||
@@ -1023,18 +1199,14 @@ if (
     "Acesso restrito ao administrador."
   );
 
-
   await supabaseClient.auth.signOut();
-
 
   window.location.href =
     "../index.html";
 
-
   return false;
 
 }
-
 
 return true;
 
@@ -1045,15 +1217,12 @@ console.error(
   erro
 );
 
-
 alert(
   "Não foi possível verificar seu acesso."
 );
 
-
 window.location.href =
   "../index.html";
-
 
 return false;
 
@@ -1095,7 +1264,9 @@ const {
   error
 } =
   await supabaseClient
-    .from("mural_cadastros")
+    .from(
+      "mural_cadastros"
+    )
     .select("*")
     .eq(
       "status",
@@ -1108,19 +1279,16 @@ const {
       }
     );
 
-
 if (error) {
 
   throw error;
 
 }
 
-
 cadastrosMural =
   Array.isArray(data)
     ? data
     : [];
-
 
 renderizarCadastrosMural();
 
@@ -1130,7 +1298,6 @@ console.error(
   "Erro ao carregar cadastros do mural:",
   erro
 );
-
 
 mostrarMensagem(
   `Não foi possível carregar os cadastros do mural: ${erro.message}`,
@@ -1236,7 +1403,10 @@ imagens.length
 ) {
 
 imagens.forEach(
-  (url, index) => {
+  (
+    url,
+    index
+  ) => {
 
     const div =
       document.createElement(
@@ -1245,7 +1415,6 @@ imagens.forEach(
 
     div.className =
       "admin-mural-imagem";
-
 
     if (
       index === 0
@@ -1256,7 +1425,6 @@ imagens.forEach(
       );
 
     }
-
 
     const img =
       document.createElement(
@@ -1274,11 +1442,9 @@ imagens.forEach(
     img.loading =
       "lazy";
 
-
     div.appendChild(
       img
     );
-
 
     imagensDiv.appendChild(
       div
@@ -1314,7 +1480,6 @@ div.style.color =
 
 div.textContent =
   "Sem imagem";
-
 
 imagensDiv.appendChild(
   div
@@ -1415,7 +1580,6 @@ categoria.className =
 categoria.textContent =
   cadastro.categoria;
 
-
 conteudo.appendChild(
   categoria
 );
@@ -1436,7 +1600,6 @@ descricao.className =
 
 descricao.textContent =
   cadastro.descricao;
-
 
 conteudo.appendChild(
   descricao
@@ -1527,7 +1690,6 @@ instagramMeta.className =
 instagramMeta.innerHTML =
   `<strong>Instagram:</strong> ${escaparHTML(cadastro.instagram)}`;
 
-
 metadados.appendChild(
   instagramMeta
 );
@@ -1596,7 +1758,6 @@ aprovar.className =
 aprovar.textContent =
   "Aprovar";
 
-
 aprovar.addEventListener(
   "click",
   () => {
@@ -1608,7 +1769,6 @@ aprovar.addEventListener(
 
   }
 );
-
 
 acoes.appendChild(
   aprovar
@@ -1629,7 +1789,6 @@ rejeitar.className =
 rejeitar.textContent =
   "Rejeitar";
 
-
 rejeitar.addEventListener(
   "click",
   () => {
@@ -1641,7 +1800,6 @@ rejeitar.addEventListener(
 
   }
 );
-
 
 acoes.appendChild(
   rejeitar
@@ -1681,42 +1839,64 @@ obterImagensCadastro(
 cadastro
 );
 
+if (editorId) {
 editorId.value =
 cadastro.id || "";
+}
 
+if (editorNome) {
 editorNome.value =
 cadastro.nome || "";
+}
 
+if (editorCategoria) {
 editorCategoria.value =
 cadastro.categoria || "";
+}
 
+if (editorInstagram) {
 editorInstagram.value =
 cadastro.instagram || "";
+}
 
+if (editorDescricao) {
 editorDescricao.value =
 cadastro.descricao || "";
+}
 
+if (editorSobre) {
 editorSobre.value =
 cadastro.sobre || "";
+}
 
+if (editorStatus) {
 editorStatus.value =
 cadastro.status || "";
+}
 
+if (editorUsuario) {
 editorUsuario.value =
 cadastro.usuario_id || "";
+}
 
+if (editorCriado) {
 editorCriado.value =
 formatarData(
 cadastro.criado_em
 );
+}
 
+if (editorAtualizado) {
 editorAtualizado.value =
 formatarData(
 cadastro.atualizado_em
 );
+}
 
+if (editorMotivoRecusa) {
 editorMotivoRecusa.value =
 cadastro.motivo_recusa || "";
+}
 
 atualizarEstadoImagens();
 
@@ -1797,7 +1977,7 @@ if (editorRecusaBloco) {
 editorRecusaBloco.style.display =
   statusAtual === "recusado"
     ? ""
-    : "";
+    : "none";
 
 }
 
@@ -1815,19 +1995,29 @@ id:
   muralEditandoId,
 
 nome:
-  editorNome.value.trim(),
+  editorNome
+    ? editorNome.value.trim()
+    : "",
 
 categoria:
-  editorCategoria.value.trim(),
+  editorCategoria
+    ? editorCategoria.value.trim()
+    : "",
 
 descricao:
-  editorDescricao.value.trim(),
+  editorDescricao
+    ? editorDescricao.value.trim()
+    : "",
 
 sobre:
-  editorSobre.value.trim(),
+  editorSobre
+    ? editorSobre.value.trim()
+    : "",
 
 instagram:
-  editorInstagram.value.trim(),
+  editorInstagram
+    ? editorInstagram.value.trim()
+    : "",
 
 imagem:
   imagensMuralEditando[0] ||
@@ -1942,29 +2132,17 @@ validarDadosEditor(
   dados
 );
 
+if (editorSalvar) {
 
-editorSalvar.disabled =
-  true;
+  editorSalvar.disabled =
+    true;
 
+}
 
 mostrarMensagem(
   "Salvando alterações...",
   "sucesso"
 );
-
-
-/*
-IMPORTANTE:
-
-A Edge Function utiliza:
-
-pessoa_id -> ID público do perfil
-
-pessoa -> dados atualizados do perfil
-
-O ID NÃO é recriado durante a edição.
-*/
-
 
 await chamarEdgeFunction(
   "editar_mural",
@@ -1977,15 +2155,12 @@ await chamarEdgeFunction(
   }
 );
 
-
 mostrarMensagem(
   "Perfil atualizado com sucesso.",
   "sucesso"
 );
 
-
 fecharEditorMural();
-
 
 await carregarCadastrosMural();
 
@@ -1998,6 +2173,25 @@ console.error(
   erro
 );
 
+console.error(
+  "Detalhe:",
+  erro?.detalhe
+);
+
+console.error(
+  "Código:",
+  erro?.codigo
+);
+
+console.error(
+  "Details:",
+  erro?.details
+);
+
+console.error(
+  "Hint:",
+  erro?.hint
+);
 
 mostrarMensagem(
   erro.message ||
@@ -2007,8 +2201,12 @@ mostrarMensagem(
 
 } finally {
 
-editorSalvar.disabled =
-  false;
+if (editorSalvar) {
+
+  editorSalvar.disabled =
+    false;
+
+}
 
 }
 
@@ -2050,7 +2248,6 @@ mostrarMensagem(
   "sucesso"
 );
 
-
 await chamarEdgeFunction(
   "aprovar_mural",
   {
@@ -2059,12 +2256,10 @@ await chamarEdgeFunction(
   }
 );
 
-
 mostrarMensagem(
   "Perfil aprovado e publicado com sucesso.",
   "sucesso"
 );
-
 
 await carregarCadastrosMural();
 
@@ -2076,7 +2271,6 @@ console.error(
   "Erro ao aprovar mural:",
   erro
 );
-
 
 mostrarMensagem(
   erro.message ||
@@ -2150,7 +2344,6 @@ mostrarMensagem(
   "sucesso"
 );
 
-
 await chamarEdgeFunction(
   "rejeitar_mural",
   {
@@ -2162,12 +2355,10 @@ await chamarEdgeFunction(
   }
 );
 
-
 mostrarMensagem(
   "Cadastro rejeitado.",
   "sucesso"
 );
-
 
 await carregarCadastrosMural();
 
@@ -2177,7 +2368,6 @@ console.error(
   "Erro ao rejeitar mural:",
   erro
 );
-
 
 mostrarMensagem(
   erro.message ||
@@ -2291,7 +2481,6 @@ const resposta =
     }
   );
 
-
 if (!resposta.ok) {
 
   throw new Error(
@@ -2300,16 +2489,13 @@ if (!resposta.ok) {
 
 }
 
-
 const dados =
   await resposta.json();
-
 
 muralPublicados =
   Array.isArray(dados)
     ? dados
     : [];
-
 
 renderizarMuralPublicados();
 
@@ -2320,10 +2506,8 @@ console.error(
   erro
 );
 
-
 muralPublicados =
   [];
-
 
 if (listaPublicados) {
 
@@ -2331,7 +2515,6 @@ if (listaPublicados) {
     "";
 
 }
-
 
 if (semPublicados) {
 
@@ -2342,7 +2525,6 @@ if (semPublicados) {
     "Não foi possível carregar os perfis publicados.";
 
 }
-
 
 mostrarMensagem(
   `Não foi possível carregar os perfis publicados: ${erro.message}`,
@@ -2388,7 +2570,6 @@ pessoa => {
       return true;
     }
 
-
     const texto = [
       pessoa.id,
       pessoa.nome,
@@ -2401,7 +2582,6 @@ pessoa => {
         normalizarTexto
       )
       .join(" ");
-
 
     return texto.includes(
       pesquisa
@@ -2558,7 +2738,10 @@ imagens.length
 ) {
 
 imagens.forEach(
-  (url, index) => {
+  (
+    url,
+    index
+  ) => {
 
     const div =
       document.createElement(
@@ -2567,7 +2750,6 @@ imagens.forEach(
 
     div.className =
       "admin-mural-imagem";
-
 
     if (
       index === 0
@@ -2578,7 +2760,6 @@ imagens.forEach(
       );
 
     }
-
 
     const img =
       document.createElement(
@@ -2596,11 +2777,9 @@ imagens.forEach(
     img.loading =
       "lazy";
 
-
     div.appendChild(
       img
     );
-
 
     galeria.appendChild(
       div
@@ -2636,7 +2815,6 @@ div.style.color =
 
 div.textContent =
   "Sem imagem";
-
 
 galeria.appendChild(
   div
@@ -2699,7 +2877,6 @@ categoria.className =
 categoria.textContent =
   pessoa.categoria;
 
-
 conteudo.appendChild(
   categoria
 );
@@ -2720,7 +2897,6 @@ descricao.className =
 
 descricao.textContent =
   pessoa.descricao;
-
 
 conteudo.appendChild(
   descricao
@@ -2765,7 +2941,6 @@ instagram.className =
 
 instagram.innerHTML =
   `<strong>Instagram:</strong> ${escaparHTML(pessoa.instagram)}`;
-
 
 metadados.appendChild(
   instagram
@@ -2836,9 +3011,7 @@ acoes.appendChild(
 editar
 );
 
-/* =======================================================
-EXCLUIR
-======================================================== */
+/* EXCLUIR */
 
 const excluir =
 document.createElement(
@@ -2950,7 +3123,6 @@ mostrarMensagem(
   "sucesso"
 );
 
-
 await chamarEdgeFunction(
   "excluir_mural",
   {
@@ -2959,12 +3131,10 @@ await chamarEdgeFunction(
   }
 );
 
-
 mostrarMensagem(
   `O perfil "${nome}" foi excluído do Mural.`,
   "sucesso"
 );
-
 
 await carregarCadastrosMural();
 
@@ -2977,6 +3147,35 @@ console.error(
   erro
 );
 
+console.error(
+  "HTTP:",
+  erro?.status
+);
+
+console.error(
+  "Detalhe:",
+  erro?.detalhe
+);
+
+console.error(
+  "Código:",
+  erro?.codigo
+);
+
+console.error(
+  "Details:",
+  erro?.details
+);
+
+console.error(
+  "Hint:",
+  erro?.hint
+);
+
+console.error(
+  "Cadastro ID:",
+  erro?.cadastro_id
+);
 
 mostrarMensagem(
   erro.message ||
@@ -3008,6 +3207,10 @@ function abrirEditorPublicado(
 pessoa
 ) {
 
+if (!editorMural) {
+return;
+}
+
 muralEditandoId =
 pessoa.id;
 
@@ -3016,43 +3219,87 @@ obterImagensPublicado(
 pessoa
 );
 
+if (editorId) {
+
 editorId.value =
-pessoa.id || "";
+  pessoa.id || "";
+
+}
+
+if (editorNome) {
 
 editorNome.value =
-pessoa.nome || "";
+  pessoa.nome || "";
+
+}
+
+if (editorCategoria) {
 
 editorCategoria.value =
-pessoa.categoria || "";
+  pessoa.categoria || "";
+
+}
+
+if (editorInstagram) {
 
 editorInstagram.value =
-pessoa.instagram || "";
+  pessoa.instagram || "";
+
+}
+
+if (editorDescricao) {
 
 editorDescricao.value =
-pessoa.descricao || "";
+  pessoa.descricao || "";
+
+}
+
+if (editorSobre) {
 
 editorSobre.value =
-pessoa.sobre || "";
+  pessoa.sobre || "";
+
+}
+
+if (editorStatus) {
 
 editorStatus.value =
-"publicado";
+  "publicado";
+
+}
+
+if (editorUsuario) {
 
 editorUsuario.value =
-pessoa.usuario_id ||
-"—";
+  pessoa.usuario_id ||
+  "—";
+
+}
+
+if (editorCriado) {
 
 editorCriado.value =
-formatarData(
-pessoa.criado_em
-);
+  formatarData(
+    pessoa.criado_em
+  );
+
+}
+
+if (editorAtualizado) {
 
 editorAtualizado.value =
-formatarData(
-pessoa.atualizado_em
-);
+  formatarData(
+    pessoa.atualizado_em
+  );
+
+}
+
+if (editorMotivoRecusa) {
 
 editorMotivoRecusa.value =
-"";
+  "";
+
+}
 
 atualizarEstadoImagens();
 
@@ -3068,6 +3315,13 @@ editorAprovar.style.display =
 if (editorRejeitar) {
 
 editorRejeitar.style.display =
+  "none";
+
+}
+
+if (editorRecusaBloco) {
+
+editorRecusaBloco.style.display =
   "none";
 
 }
@@ -3096,7 +3350,6 @@ evento => {
 
   pesquisaMuralAdmin =
     evento.target.value;
-
 
   renderizarMuralPublicados();
 
@@ -3263,7 +3516,6 @@ if (
   return;
 
 }
-
 
 if (
   evento ===
