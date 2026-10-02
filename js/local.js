@@ -2311,6 +2311,22 @@ if (
 !resposta.ok ||
 resultado?.sucesso === false
 ) {
+if (
+resultado?.atualizado === true &&
+resultado?.sucesso === false
+) {
+
+console.warn(
+"O site foi atualizado, mas o cadastro no Supabase retornou erro:",
+resultado?.detalhe || resultado?.erro
+);
+
+mostrarMensagemEdicao(
+"O site foi atualizado, mas o perfil do cadastro ainda precisa ser sincronizado."
+);
+
+return;
+}
 
 console.error(
 "Erro ao editar comércio:",
