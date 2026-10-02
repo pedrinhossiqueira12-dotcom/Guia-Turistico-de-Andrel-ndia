@@ -1,876 +1,883 @@
-:root {
+:root{
 
-  --verde: #194138;
-  --verde-escuro: #091d1c;
+--verde: #194138;
+--verde-escuro: #091d1c;
 
-  --fundo: #f5f3ef;
+--fundo: #f5f3ef;
 
-  --branco: #ffffff;
+--branco: #ffffff;
 
-  --texto: #666a68;
-  --texto-escuro: #303533;
-  --texto-claro: #858987;
+--texto: #666a68;
+--texto-escuro: #303533;
+--texto-claro: #858987;
 
-  --borda: #d8d8d4;
+--borda: #d8d8d4;
 
-  --fonte-texto: "Roboto", Arial, sans-serif;
-  --fonte-titulo: "Roboto", Arial, sans-serif;
+--fonte-texto: "Roboto", Arial, sans-serif;
+--fonte-titulo: "Roboto", Arial, sans-serif;
 
 }
 
-
 /* =========================================================
-   RESET
+RESET
 ========================================================= */
 
 * {
-  box-sizing: border-box;
+box-sizing: border-box;
 }
 
 html {
-  scroll-behavior: smooth;
+scroll-behavior: smooth;
 }
 
 body {
 
-  margin: 0;
+margin: 0;
 
-  background: var(--fundo);
+background: var(--fundo);
 
-  color: var(--texto);
+color: var(--texto);
 
-  font-family: var(--fonte-texto);
+font-family: var(--fonte-texto);
 
-  -webkit-font-smoothing: antialiased;
+-webkit-font-smoothing: antialiased;
 
-  text-rendering: optimizeLegibility;
+text-rendering: optimizeLegibility;
 
 }
 
 button,
 input,
 textarea {
-  font: inherit;
+font: inherit;
 }
 
 button {
-  cursor: pointer;
+cursor: pointer;
 }
 
 a {
-  color: inherit;
-  text-decoration: none;
+color: inherit;
+text-decoration: none;
 }
 
-
 /* =========================================================
-   PÁGINA
+PÁGINA
 ========================================================= */
 
 .pessoa-page {
 
-  width: 100%;
+width: 100%;
 
-  max-width: 900px;
+max-width: 900px;
 
-  min-height: 100vh;
+min-height: 100vh;
 
-  margin: 0 auto;
+margin: 0 auto;
 
-  background: var(--fundo);
+background: var(--fundo);
 
 }
 
-
 /* =========================================================
-   CABEÇALHO
+CABEÇALHO
 ========================================================= */
 
 .pessoa-header {
 
-  display: flex;
+display: flex;
 
-  align-items: center;
+align-items: center;
 
-  gap: 14px;
+gap: 14px;
 
-  min-height: 76px;
+min-height: 76px;
 
-  padding: 14px 18px;
+padding: 14px 18px;
 
-  background: var(--fundo);
+background: var(--fundo);
 
 }
-
 
 .back-button {
 
-  flex: 0 0 42px;
+flex: 0 0 42px;
 
-  width: 42px;
-  height: 42px;
+width: 42px;
+height: 42px;
 
-  display: grid;
+display: grid;
 
-  place-items: center;
+place-items: center;
 
-  padding: 0;
+padding: 0;
 
-  border: 0;
+border: 0;
 
-  border-radius: 50%;
+border-radius: 50%;
 
-  background: rgba(25, 65, 56, .08);
+background: rgba(25, 65, 56, .08);
 
-  transition:
-    background .2s ease,
-    transform .2s ease;
+transition:
+background .2s ease,
+transform .2s ease;
 
 }
-
 
 .back-button img {
 
-  width: 25px;
-  height: 25px;
+width: 25px;
+height: 25px;
 
-  display: block;
+display: block;
 
-  object-fit: contain;
-
-}
-
-
-.back-button:hover {
-
-  background: rgba(25, 65, 56, .15);
+object-fit: contain;
 
 }
 
+.back-button {
 
-.back-button:active {
-
-  transform: scale(.92);
+background: rgba(25, 65, 56, .15);
 
 }
 
+.back-button {
+
+transform: scale(.92);
+
+}
 
 .pessoa-header-title {
 
-  min-width: 0;
+min-width: 0;
 
-  flex: 1;
+flex: 1;
 
 }
-
 
 .pessoa-header-title span {
 
-  display: block;
+display: block;
 
-  margin-bottom: 4px;
+margin-bottom: 4px;
 
-  color: #929694;
+color: #929694;
 
-  font-size: 9px;
+font-size: 9px;
 
-  font-weight: 600;
+font-weight: 600;
 
-  letter-spacing: 1.5px;
+letter-spacing: 1.5px;
 
-  text-transform: uppercase;
+text-transform: uppercase;
 
 }
-
 
 .pessoa-header-title h1 {
 
-  margin: 0;
+margin: 0;
 
-  color: #000;
+color: #000;
 
-  font-size: clamp(20px, 5vw, 28px);
+font-size: clamp(20px, 5vw, 28px);
 
-  font-weight: 600;
+font-weight: 600;
 
-  line-height: 1.15;
+line-height: 1.15;
 
 }
 
-
 /* =========================================================
-   APRESENTAÇÃO
+APRESENTAÇÃO
 ========================================================= */
 
 .pessoa-apresentacao {
 
-  display: grid;
+display: grid;
 
-  grid-template-columns: 240px minmax(0, 1fr);
+grid-template-columns: 240px minmax(0, 1fr);
 
-  gap: 24px;
+gap: 24px;
 
-  padding: 18px;
+padding: 18px;
 
 }
 
-
 /* =========================================================
-   FOTO DA PESSOA
+FOTO DA PESSOA
 ========================================================= */
 
 .pessoa-capa {
 
-  position: relative;
+position: relative;
 
-  width: 100%;
+width: 100%;
 
-  aspect-ratio: 3 / 4;
+aspect-ratio: 3 / 4;
 
-  overflow: hidden;
+overflow: hidden;
 
-  border-radius: 16px;
+border-radius: 16px;
 
-  background: #ddd;
+background: #ddd;
 
-  box-shadow:
-    0 8px 25px rgba(0, 0, 0, .10);
+box-shadow:
+0 8px 25px rgba(0, 0, 0, .10);
 
 }
-
 
 .pessoa-capa img {
 
-  width: 100%;
-  height: 100%;
+width: 100%;
+height: 100%;
 
-  display: block;
+display: block;
 
-  object-fit: cover;
+object-fit: cover;
 
 }
 
-
 /* =========================================================
-   BOTÃO TELA CHEIA
+BOTÃO TELA CHEIA
 ========================================================= */
 
 .fullscreen-button {
 
-  position: absolute;
+position: absolute;
 
-  right: 10px;
-  bottom: 10px;
+right: 10px;
+bottom: 10px;
 
-  width: 38px;
-  height: 38px;
+width: 38px;
+height: 38px;
 
-  display: grid;
+display: grid;
 
-  place-items: center;
+place-items: center;
 
-  padding: 0;
+padding: 0;
 
-  border: 0;
+border: 0;
 
-  border-radius: 50%;
+border-radius: 50%;
 
-  background: rgba(0, 0, 0, .55);
+background: rgba(0, 0, 0, .55);
 
-  color: #fff;
+color: #fff;
 
-  font-size: 19px;
+font-size: 19px;
 
-  transition:
-    transform .18s ease,
-    background .18s ease;
-
-}
-
-
-.fullscreen-button:hover {
-
-  background: rgba(0, 0, 0, .72);
+transition:
+transform .18s ease,
+background .18s ease;
 
 }
 
+.fullscreen-button {
 
-.fullscreen-button:active {
-
-  transform: scale(.92);
+background: rgba(0, 0, 0, .72);
 
 }
 
+.fullscreen-button {
+
+transform: scale(.92);
+
+}
 
 /* =========================================================
-   INTRODUÇÃO
+INTRODUÇÃO
 ========================================================= */
 
 .pessoa-introducao {
 
-  min-width: 0;
+min-width: 0;
 
-  display: flex;
+display: flex;
 
-  flex-direction: column;
+flex-direction: column;
 
-  justify-content: center;
+justify-content: center;
 
 }
-
 
 .pessoa-categoria {
 
-  display: block;
+display: block;
 
-  margin-bottom: 7px;
+margin-bottom: 7px;
 
-  color: #929694;
+color: #929694;
 
-  font-size: 9px;
+font-size: 9px;
 
-  font-weight: 600;
+font-weight: 600;
 
-  letter-spacing: 1.4px;
+letter-spacing: 1.4px;
 
-  text-transform: uppercase;
+text-transform: uppercase;
 
 }
-
 
 .pessoa-introducao h2 {
 
-  margin: 0 0 12px;
+margin: 0 0 12px;
 
-  color: var(--verde);
+color: var(--verde);
 
-  font-size: clamp(25px, 5vw, 34px);
+font-size: clamp(25px, 5vw, 34px);
 
-  font-weight: 600;
+font-weight: 600;
 
-  line-height: 1.15;
+line-height: 1.15;
 
 }
-
 
 .pessoa-descricao {
 
-  margin: 0;
+margin: 0;
 
-  color: var(--texto);
+color: var(--texto);
 
-  font-size: 14px;
+font-size: 14px;
 
-  line-height: 1.75;
+line-height: 1.75;
 
 }
 
-
 /* =========================================================
-   INSTAGRAM
+INSTAGRAM
 ========================================================= */
 
 .instagram-button {
 
-  display: flex;
+display: flex;
 
-  align-items: center;
+align-items: center;
 
-  gap: 11px;
+gap: 11px;
 
-  width: 100%;
+width: 100%;
 
-  max-width: 300px;
+max-width: 300px;
 
-  margin-top: 22px;
+margin-top: 22px;
 
-  padding: 11px 13px;
+padding: 11px 13px;
 
-  background: var(--verde);
+background: var(--verde);
 
-  color: #fff;
+color: #fff;
 
-  border-radius: 11px;
+border-radius: 11px;
 
-  transition:
-    transform .18s ease,
-    background .18s ease;
-
-}
-
-
-.instagram-button:hover {
-
-  background: var(--verde-escuro);
-
-  transform: translateY(-2px);
+transition:
+transform .18s ease,
+background .18s ease;
 
 }
 
+.instagram-button {
 
-.instagram-button:active {
+background: var(--verde-escuro);
 
-  transform: scale(.98);
+transform: translateY(-2px);
 
 }
 
+.instagram-button {
+
+transform: scale(.98);
+
+}
 
 .instagram-button-icon {
 
-  width: 34px;
-  height: 34px;
+width: 34px;
+height: 34px;
 
-  flex: 0 0 34px;
+flex: 0 0 34px;
 
-  display: grid;
+display: grid;
 
-  place-items: center;
+place-items: center;
 
-  background:rgba(255, 255, 255, .12);
+background: rgba(255, 255, 255, .12);
 
-  border-radius: 50%;
+border-radius: 50%;
 
 }
-
 
 .instagram-button-icon img {
 
-  width: 21px;
-  height: 21px;
+width: 21px;
+height: 21px;
 
-  object-fit: contain;
+object-fit: contain;
 
 }
-
 
 .instagram-button-text {
 
-  flex: 1;
+flex: 1;
 
-  font-size: 12px;
+font-size: 12px;
 
-  font-weight: 700;
+font-weight: 700;
 
 }
 
+/* =========================================================
+BOTÃO EXCLUIR PERFIL
+========================================================= */
+
+.botao-excluir-perfil {
+
+display: none;
+
+align-items: center;
+
+justify-content: center;
+
+gap: 8px;
+
+width: 100%;
+
+max-width: 300px;
+
+margin-top: 10px;
+
+padding: 11px 13px;
+
+border: 1px solid #b42318;
+
+border-radius: 11px;
+
+background: #fff;
+
+color: #b42318;
+
+font-size: 12px;
+
+font-weight: 700;
+
+line-height: 1.2;
+
+transition:
+background .18s ease,
+transform .18s ease,
+border-color .18s ease;
+
+}
+
+.botao-excluir-perfil {
+
+background: #fff5f4;
+
+border-color: #9f1d13;
+
+transform: translateY(-1px);
+
+}
+
+.botao-excluir-perfil {
+
+transform: scale(.98);
+
+}
+
+.botao-excluir-perfil {
+
+opacity: .6;
+
+cursor: wait;
+
+transform: none;
+
+}
+
+.botao-excluir-perfil-icone {
+
+display: inline-flex;
+
+align-items: center;
+
+justify-content: center;
+
+width: 22px;
+height: 22px;
+
+border-radius: 50%;
+
+background: rgba(180, 35, 24, .08);
+
+font-size: 17px;
+
+line-height: 1;
+
+}
 
 /* =========================================================
-   SEÇÕES
+SEÇÕES
 ========================================================= */
 
 .sobre-pessoa,
 .galeria-pessoa {
 
-  padding: 28px 18px 10px;
+padding: 28px 18px 10px;
 
 }
-
 
 .section-heading span {
 
-  display: block;
+display: block;
 
-  color: #929694;
+color: #929694;
 
-  font-size: 9px;
+font-size: 9px;
 
-  font-weight: 600;
+font-weight: 600;
 
-  letter-spacing: 1.3px;
+letter-spacing: 1.3px;
 
-  text-transform: uppercase;
+text-transform: uppercase;
 
 }
-
 
 .section-heading h2 {
 
-  margin: 4px 0 13px;
+margin: 4px 0 13px;
 
-  color: var(--verde);
+color: var(--verde);
 
-  font-size: 24px;
+font-size: 24px;
 
-  font-weight: 600;
+font-weight: 600;
 
-  line-height: 1.25;
+line-height: 1.25;
 
 }
 
-
 /* =========================================================
-   SOBRE
+SOBRE
 ========================================================= */
 
 .sobre-pessoa p {
 
-  margin: 0;
+margin: 0;
 
-  color: var(--texto);
+color: var(--texto);
 
-  font-size: 13.5px;
+font-size: 13.5px;
 
-  line-height: 1.8;
+line-height: 1.8;
 
 }
 
-
 /* =========================================================
-   GALERIA
+GALERIA
 ========================================================= */
 
 .galeria-grid {
 
-  display: grid;
+display: grid;
 
-  grid-template-columns:
-    repeat(3, minmax(0, 1fr));
+grid-template-columns:
+repeat(3, minmax(0, 1fr));
 
-  gap: 10px;
-
-}
-
-
-.galeria-item {
-
-  position: relative;
-
-  width: 100%;
-
-  aspect-ratio: 4 / 3;
-
-  padding: 0;
-
-  overflow: hidden;
-
-  border: 0;
-
-  border-radius: 12px;
-
-  background: #ddd;
+gap: 10px;
 
 }
 
+/*
+O pessoa.js atual cria as imagens
+diretamente dentro de #galeriaPessoa.
+*/
 
-.galeria-item img {
+.galeria-grid img {
 
-  width: 100%;
-  height: 100%;
+width: 100%;
+height: 100%;
 
-  display: block;
+display: block;
 
-  object-fit: cover;
+aspect-ratio: 4 / 3;
 
-  transition:
-    transform .3s ease;
+object-fit: cover;
 
-}
+padding: 0;
 
+overflow: hidden;
 
-.galeria-item:hover img {
+border: 0;
 
-  transform: scale(1.05);
+border-radius: 12px;
 
-}
+background: #ddd;
 
+cursor: pointer;
 
-.galeria-item::after {
-
-  content: "";
-
-  position: absolute;
-
-  inset: 0;
-
-  pointer-events: none;
-
-  background: rgba(9, 29, 28, 0);
-
-  transition:
-    background .2s ease;
+transition:
+transform .3s ease;
 
 }
 
+.galeria-grid img {
 
-.galeria-item:hover::after {
-
-  background: rgba(9, 29, 28, .08);
+transform: scale(1.05);
 
 }
-
 
 /* =========================================================
-   VISUALIZADOR DE FOTO
+VISUALIZADOR DE FOTO
 ========================================================= */
 
 .photo-viewer {
 
-  position: fixed;
+position: fixed;
 
-  inset: 0;
+inset: 0;
 
-  z-index: 99999;
+z-index: 99999;
 
-  display: none;
+display: none;
 
-  align-items: center;
+align-items: center;
 
-  justify-content: center;
+justify-content: center;
 
-  padding: 20px;
+padding: 20px;
 
-  background: rgba(0, 0, 0, .94);
+background: rgba(0, 0, 0, .94);
 
 }
-
 
 .photo-viewer.open {
 
-  display: flex;
+display: flex;
 
 }
-
 
 .photo-viewer img {
 
-  max-width: 100%;
+max-width: 100%;
 
-  max-height: 90vh;
+max-height: 90vh;
 
-  object-fit: contain;
+object-fit: contain;
 
-  border-radius: 5px;
+border-radius: 5px;
 
 }
-
 
 .close-viewer {
 
-  position: absolute;
+position: absolute;
 
-  top: 15px;
+top: 15px;
 
-  right: 15px;
+right: 15px;
 
-  width: 42px;
-  height: 42px;
+width: 42px;
+height: 42px;
 
-  display: grid;
+display: grid;
 
-  place-items: center;
+place-items: center;
 
-  padding: 0;
+padding: 0;
 
-  border: 0;
+border: 0;
 
-  border-radius: 50%;
+border-radius: 50%;
 
-  background: rgba(255, 255, 255, .15);
+background: rgba(255, 255, 255, .15);
 
-  color: #fff;
+color: #fff;
 
-  font-size: 28px;
-
-}
-
-
-.close-viewer:hover {
-
-  background: rgba(255, 255, 255, .25);
+font-size: 28px;
 
 }
 
+.close-viewer {
+
+background: rgba(255, 255, 255, .25);
+
+}
 
 /* =========================================================
-   MOBILE
+MOBILE
 ========================================================= */
 
 @media (max-width: 599px) {
 
-  .pessoa-apresentacao {
+.pessoa-apresentacao {
 
-    grid-template-columns: 1fr;
+grid-template-columns: 1fr;
 
-    gap: 20px;
+gap: 20px;
 
-    padding-top: 10px;
-
-  }
-
-
-  .pessoa-capa {
-
-    width: min(72vw, 280px);
-
-    margin: 0 auto;
-
-  }
-
-
-  .pessoa-introducao {
-
-    justify-content: flex-start;
-
-  }
-
-
-  .pessoa-introducao h2 {
-
-    font-size: 25px;
-
-  }
-
-
-  .instagram-button {
-
-    max-width: none;
-
-  }
-
-
-  .galeria-grid {
-
-    grid-template-columns:
-      repeat(2, minmax(0, 1fr));
-
-  }
+padding-top: 10px;
 
 }
 
+.pessoa-capa {
+
+width: min(72vw, 280px);
+
+margin: 0 auto;
+
+}
+
+.pessoa-introducao {
+
+justify-content: flex-start;
+
+}
+
+.pessoa-introducao h2 {
+
+font-size: 25px;
+
+}
+
+.instagram-button,
+.botao-excluir-perfil {
+
+max-width: none;
+
+}
+
+.galeria-grid {
+
+grid-template-columns:
+  repeat(2, minmax(0, 1fr));
+
+}
+
+}
 
 /* =========================================================
-   TELAS MUITO PEQUENAS
+TELAS MUITO PEQUENAS
 ========================================================= */
 
 @media (max-width: 360px) {
 
-  .pessoa-header {
+.pessoa-header {
 
-    padding-left: 14px;
-    padding-right: 14px;
-
-  }
-
-
-  .pessoa-apresentacao,
-  .sobre-pessoa,
-  .galeria-pessoa {
-
-    padding-left: 14px;
-    padding-right: 14px;
-
-  }
-
-
-  .pessoa-capa {
-
-    width: min(75vw, 250px);
-
-  }
-
-
-  .galeria-grid {
-
-    gap: 7px;
-
-  }
-
-
-  .galeria-item {
-
-    border-radius: 9px;
-
-  }
+padding-left: 14px;
+padding-right: 14px;
 
 }
 
+.pessoa-apresentacao,
+.sobre-pessoa,
+.galeria-pessoa {
+
+padding-left: 14px;
+padding-right: 14px;
+
+}
+
+.pessoa-capa {
+
+width: min(75vw, 250px);
+
+}
+
+.galeria-grid {
+
+gap: 7px;
+
+}
+
+.galeria-grid img {
+
+border-radius: 9px;
+
+}
+
+}
 
 /* =========================================================
-   DESKTOP
+DESKTOP
 ========================================================= */
 
 @media (min-width: 700px) {
 
-  body {
+body {
 
-    padding: 30px 0;
+padding: 30px 0;
 
-    background: #e7e4dc;
+background: #e7e4dc;
 
-  }
+}
 
+.pessoa-page {
 
-  .pessoa-page {
+min-height: calc(100vh - 60px);
 
-    min-height: calc(100vh - 60px);
+border-radius: 25px;
 
-    border-radius: 25px;
+overflow: hidden;
 
-    overflow: hidden;
+box-shadow:
+  0 20px 70px rgba(0, 0, 0, .14);
 
-    box-shadow:
-      0 20px 70px rgba(0, 0, 0, .14);
+}
 
-  }
+.pessoa-header {
 
+padding-left: 30px;
+padding-right: 30px;
 
-  .pessoa-header {
+}
 
-    padding-left: 30px;
-    padding-right: 30px;
+.pessoa-apresentacao,
+.sobre-pessoa,
+.galeria-pessoa {
 
-  }
+padding-left: 30px;
+padding-right: 30px;
 
+}
 
-  .pessoa-apresentacao,
-  .sobre-pessoa,
-  .galeria-pessoa {
+.pessoa-apresentacao {
 
-    padding-left: 30px;
-    padding-right: 30px;
+grid-template-columns:
+  240px minmax(0, 1fr);
 
-  }
+gap: 30px;
 
+}
 
-  .pessoa-apresentacao {
+.pessoa-capa {
 
-    grid-template-columns: 240px minmax(0, 1fr);
+width: 240px;
 
-    gap: 30px;
+}
 
-  }
+.sobre-pessoa {
 
+padding-top: 40px;
 
-  .pessoa-capa {
+}
 
-    width: 240px;
+.galeria-pessoa {
 
-  }
+padding-top: 35px;
 
+padding-bottom: 50px;
 
-  .sobre-pessoa {
+}
 
-    padding-top: 40px;
+.galeria-grid {
 
-  }
+grid-template-columns:
+  repeat(4, minmax(0, 1fr));
 
+gap: 12px;
 
-  .galeria-pessoa {
-
-    padding-top: 35px;
-
-    padding-bottom: 50px;
-
-  }
-
-
-  .galeria-grid {
-
-    grid-template-columns:
-      repeat(4, minmax(0, 1fr));
-
-    gap: 12px;
-
-  }
+}
 
 }
