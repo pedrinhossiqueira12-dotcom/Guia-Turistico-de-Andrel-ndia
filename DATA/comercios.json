@@ -18,7 +18,9 @@
     "imagem": "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/admin/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790861367071-mab1766-1000452987.jpg",
     "imagens": [
       "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/admin/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790861367071-mab1766-1000452987.jpg"
-    ]
+    ],
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "mega-lanches",
@@ -39,7 +41,9 @@
     "imagem": "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/admin/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790862243472-38oi5y5-1000453048.png",
     "imagens": [
       "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/admin/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790862243472-38oi5y5-1000453048.png"
-    ]
+    ],
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "restaurante-andrelandia",
@@ -60,7 +64,9 @@
     "imagem": "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/admin/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790862376387-nd293et-1000453060.jpg",
     "imagens": [
       "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/admin/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790862376387-nd293et-1000453060.jpg"
-    ]
+    ],
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "restaurante-fazenda-pasto-grande",
@@ -81,7 +87,9 @@
     "imagem": "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/admin/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790862486268-qnry9oo-1000453061.jpg",
     "imagens": [
       "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/admin/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790862486268-qnry9oo-1000453061.jpg"
-    ]
+    ],
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "uaiso-gastronomia",
@@ -100,7 +108,9 @@
     "longitude": null,
     "whatsapp": "",
     "imagem": "",
-    "imagens": []
+    "imagens": [],
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "paradex-dos-amigos",
@@ -117,7 +127,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "pizzaria-paulistana",
@@ -134,7 +146,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "cafe-memoria-de-andrelandia",
@@ -151,7 +165,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "doce-com-amor",
@@ -168,7 +184,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "padaria-do-carlinhos",
@@ -185,7 +203,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "padaria-do-areao",
@@ -202,7 +222,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "pub-house-choperia",
@@ -219,7 +241,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "bar-do-prudente",
@@ -236,7 +260,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "supermercado-santa-helena",
@@ -253,7 +279,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "mercado-sao-benedito",
@@ -270,7 +298,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "lojao-da-economia",
@@ -287,7 +317,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "rede-inova-andrelandia",
@@ -304,7 +336,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "drogaria-descontao",
@@ -321,7 +355,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "hotel-real",
@@ -338,7 +374,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "pousada-do-ribeirao",
@@ -355,7 +393,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "fernando-auto-pecas",
@@ -372,7 +412,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "gl-auto-pecas",
@@ -389,7 +431,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "oficina-do-marcos",
@@ -406,7 +450,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "rc-auto-mecanica-praca-joao-zuquim",
@@ -423,7 +469,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "rc-auto-mecanica-ribeiro-salgado",
@@ -440,7 +488,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "tr-oficina-borracharia",
@@ -457,7 +507,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "auto-mecanica-almeida",
@@ -474,7 +526,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "oficina-fernando-l-costa",
@@ -491,7 +545,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "oficina-antonio-marcos-almeida",
@@ -508,7 +564,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "gleydison-cassio-chagas",
@@ -525,7 +583,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "cpbyke-motos",
@@ -542,7 +602,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "cartorio-1-oficio-notas",
@@ -559,7 +621,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "despachante-oliveiros",
@@ -576,7 +640,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "lava-jato-do-xereco",
@@ -593,7 +659,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "vipebox-vidracaria",
@@ -610,7 +678,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "lojas-edmil",
@@ -627,7 +697,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "uticelulares-andrelandia",
@@ -644,7 +716,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "movimente-academia",
@@ -661,7 +735,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "cartorio-registro-imoveis",
@@ -678,7 +754,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "juninho-despachante",
@@ -695,7 +773,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "lava-jato-carioca",
@@ -712,7 +792,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "vidracaria-vidromar",
@@ -729,7 +811,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "maria-bonita",
@@ -746,7 +830,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "casa-das-artes-nossa-senhora-aparecida",
@@ -763,7 +849,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "bar-bante-bar-restaurante",
@@ -780,7 +868,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "bar-merceria-do-alcides",
@@ -797,7 +887,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "agencia-dos-correios",
@@ -814,7 +906,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "eletrozema-andrelandia",
@@ -831,7 +925,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "encantaris-presentes",
@@ -848,7 +944,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "gdois-graphics",
@@ -865,7 +963,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "krypton-solucoes",
@@ -882,7 +982,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "movelandia-informatica-tecnologia",
@@ -899,7 +1001,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "net-video-eventos",
@@ -916,7 +1020,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "raquel-com",
@@ -933,7 +1039,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "simao-pedro-aparecido",
@@ -950,7 +1058,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "sul-minas-embalagens",
@@ -967,7 +1077,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "ti-z-tecnologia-informacao",
@@ -984,7 +1096,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "valuty-andrelandia",
@@ -1001,7 +1115,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "e-telecom-comunicacoes",
@@ -1018,7 +1134,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "cr-comercios-gerais",
@@ -1035,7 +1153,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "comercial-j-mangia-moveis",
@@ -1052,7 +1172,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "andrade-paiva-reformas",
@@ -1069,7 +1191,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "aprolema-associacao-produtores-leite",
@@ -1086,7 +1210,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "wm-studio-fitness",
@@ -1103,7 +1229,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "rodoviaria-andrelandia",
@@ -1120,7 +1248,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "loja-da-dircea",
@@ -1137,7 +1267,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "eletromania-andrelandia",
@@ -1154,7 +1286,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "carola-sorveteria-artesanal",
@@ -1171,7 +1305,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "altos-acai",
@@ -1188,7 +1324,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "emporio-do-acai",
@@ -1205,7 +1343,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "japa-brasa",
@@ -1222,7 +1362,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "expresso-gourmet",
@@ -1239,7 +1381,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "re-r-empadas",
@@ -1256,7 +1400,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "doce-sabor-confeitaria",
@@ -1273,7 +1419,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "acai-da-celia",
@@ -1290,7 +1438,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "quiosque-avenida",
@@ -1307,7 +1457,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "raquel-confeitaria-lanchonete",
@@ -1324,7 +1476,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "casa-da-esfiha",
@@ -1341,7 +1495,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "lanchonete-ed-mais",
@@ -1358,7 +1514,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "pizzaria-la-fornalha",
@@ -1375,7 +1533,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "padaria-sao-dimas",
@@ -1392,7 +1552,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "restaurante-pizzaria-nova-era",
@@ -1409,7 +1571,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "lanchonete-pastelaria-bartalo",
@@ -1426,7 +1590,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "doce-com-amor-2",
@@ -1443,7 +1609,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "arte-cafe-cultura-armazem",
@@ -1460,7 +1628,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "emporio-alimentacao-andrelandia",
@@ -1477,7 +1647,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "bar-santos-dumont",
@@ -1494,7 +1666,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "bar-mercearia-sao-pedro",
@@ -1511,7 +1685,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "mouras-bar",
@@ -1528,7 +1704,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "bar-sao-jose",
@@ -1545,7 +1723,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "mercearia-santos-dumont",
@@ -1562,7 +1742,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "mercearia-do-rauzinho",
@@ -1579,7 +1761,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "mercearia-ideal",
@@ -1596,7 +1780,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "mercearia-salvador",
@@ -1613,7 +1799,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "padaria-mercearia-joao-paulo",
@@ -1630,7 +1818,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "toninho-lanches",
@@ -1647,7 +1837,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "agropecuaria-bom-pastor",
@@ -1664,7 +1856,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "agropecuaria-santos-dumont",
@@ -1681,7 +1875,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "agropecuaria-nsa",
@@ -1698,7 +1894,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "agrunutri",
@@ -1715,7 +1913,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "pet-shop-sao-francisco-assis",
@@ -1732,7 +1932,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "mil-bichos",
@@ -1749,7 +1951,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "jose-roberto-pio-materiais",
@@ -1766,7 +1970,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "marcio-eduardo-materiais",
@@ -1783,7 +1989,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "miudesa-da-casa",
@@ -1800,7 +2008,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "tudo-tem-construcoes-reparos",
@@ -1817,7 +2027,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "pizzaria-andrelandia",
@@ -1834,7 +2046,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "rn-pizzaria",
@@ -1851,7 +2065,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "brutus-burger",
@@ -1868,7 +2084,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "vinicola-abn",
@@ -1885,7 +2103,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "cariocas-bar",
@@ -1902,7 +2122,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "emporio-nova-alianca",
@@ -1919,7 +2141,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "horti-fruti-andrelandense",
@@ -1936,7 +2160,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "carlo-alberto-ribeiro-gaspar",
@@ -1953,7 +2179,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "pe-na-roca",
@@ -1970,7 +2198,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "bar-dorbal",
@@ -1987,7 +2217,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "bar-restaurante-bartalo",
@@ -2004,7 +2236,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "bar-restaurante-safira",
@@ -2021,7 +2255,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "edina-buffet",
@@ -2038,7 +2274,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "edson-f-silva-alimentacao",
@@ -2055,7 +2293,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "panificadora-nossa-senhora-aparecida",
@@ -2072,7 +2312,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "pastelaria-novo-milenio",
@@ -2089,7 +2331,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "desfrutti-confeitaria",
@@ -2106,7 +2350,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "bar-sao-jose-andrelandia",
@@ -2123,7 +2369,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "carola-cafeteria",
@@ -2140,7 +2388,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "minas-pastelaria",
@@ -2157,7 +2407,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "piratas-sushi",
@@ -2174,7 +2426,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "restaurante-sorveteria-trem-bom",
@@ -2191,7 +2445,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "cozinha-teca",
@@ -2208,7 +2464,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "lfv-buffet",
@@ -2225,7 +2483,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "bar-restaurante-neguita",
@@ -2242,7 +2502,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "minas-pastelaria-2",
@@ -2259,7 +2521,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "maysa-lanches",
@@ -2276,7 +2540,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "lanches-mil-grau",
@@ -2293,7 +2559,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "mercearia-do-doni",
@@ -2310,7 +2578,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "bar-do-marcio",
@@ -2327,7 +2597,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "churras-grelhados",
@@ -2344,7 +2616,9 @@
     "instagram": "",
     "latitude": null,
     "longitude": null,
-    "whatsapp": ""
+    "whatsapp": "",
+    "status": "ativo",
+    "destaque": false
   },
   {
     "id": "pedrox-do-grau",
@@ -2367,6 +2641,38 @@
       "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/admin/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790961582758-n1xirey-adesivo.png",
       "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/admin/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790961583086-6job3r8-ile_cebaadcd.png",
       "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/admin/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790961583589-ovat3sd-__.png"
-    ]
+    ],
+    "status": "ativo",
+    "destaque": false
+  },
+  {
+    "id": "pousada-exemplo",
+    "nome": "Pousada Exemplo",
+    "categoria": "Pousada",
+    "descricao": "Uma opção de hospedagem confortável em Andrelândia.",
+    "historia": "",
+    "curiosidades": "",
+    "endereco": "Rua Exemplo, 123, Centro, Andrelândia - MG",
+    "horario": "",
+    "entrada": "",
+    "telefone": "(35) 99999-9999",
+    "whatsapp": "5535999999999",
+    "site": "",
+    "instagram": "https://www.instagram.com/pousadaexemplo/",
+    "latitude": -21.74,
+    "longitude": -44.309,
+    "x": 47795,
+    "y": 32280,
+    "capa": "./img/sem-foto.png",
+    "galeria": [
+      "./img/sem-foto.png"
+    ],
+    "pagina": "local.html",
+    "imagem": "./img/sem-foto.png",
+    "imagens": [
+      "./img/sem-foto.png"
+    ],
+    "status": "pendente",
+    "destaque": false
   }
 ]

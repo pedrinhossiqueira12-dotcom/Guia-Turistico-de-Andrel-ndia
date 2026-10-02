@@ -2153,3 +2153,16 @@ body {
 overflow-x: hidden;
 
 }
+
+
+/* Estados de publicação, histórico lógico e destaque */
+.admin-comercio-selos { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-bottom: 8px; }
+.admin-comercio-status { display: inline-flex; align-items: center; border-radius: 999px; padding: 4px 8px; font-size: 11px; font-weight: 700; background: #eef1ef; color: #26312c; }
+.admin-comercio-status-ativo { background: #e4f3e8; color: #23603a; }
+.admin-comercio-status-pendente { background: #fff3d8; color: #795800; }
+.admin-comercio-status-rejeitado, .admin-comercio-status-deletado { background: #fce8e6; color: #8a2520; }
+.admin-comercio-status-destaque { background: #171717; color: #fff; }
+.admin-botao-destaque { border: 1px solid #222; border-radius: 8px; padding: 8px 11px; background: #222; color: #fff; cursor: pointer; }
+.admin-botao-destaque:disabled { opacity: .5; cursor: not-allowed; }
+.admin-mural-status-deletado, .admin-mural-status-rejeitado { background: #fce8e6; color: #8a2520; }
+.admin-comercio-status-destaque-off { background: #e7e7e7; color: #555; }

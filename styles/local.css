@@ -1062,47 +1062,6 @@ transform: scale(0.92);
 }
 
 /* =========================================================
-SUGERIR ALTERAÇÃO
-========================================================= */
-
-.sugerir-alteracao {
-display: flex;
-align-items: center;
-justify-content: space-between;
-
-gap: 12px;
-
-margin: 18px 0 8px;
-
-padding: 13px 15px;
-
-border-top: 1px solid #e5e5e5;
-border-bottom: 1px solid #e5e5e5;
-
-font-size: 12px;
-}
-
-.sugerir-alteracao span {
-color: #777;
-
-line-height: 1.4;
-}
-
-.sugerir-alteracao a {
-color: var(--verde);
-
-text-decoration: none;
-
-font-weight: 600;
-
-white-space: nowrap;
-}
-
-.sugerir-alteracao a {
-text-decoration: underline;
-}
-
-/* =========================================================
 GERENCIAMENTO DO COMÉRCIO
 ========================================================= */
 
@@ -1430,15 +1389,6 @@ border-radius: 12px;
 
 }
 
-.sugerir-alteracao {
-align-items: flex-start;
-
-flex-direction: column;
-
-gap: 6px;
-
-}
-
 }
 
 /* =========================================================
@@ -1759,3 +1709,11 @@ letter-spacing: .1em;
 .botao-cancelar-edicao, .botao-salvar-edicao { width: 100%; }
 }
 #formEditarComercio > .editar-fotos-campo { grid-column: 1 / -1; }
+
+
+/* Estado acessível quando o local não está mais publicado */
+.local-indisponivel { display: grid; justify-items: center; gap: 12px; max-width: 640px; margin: clamp(48px, 10vh, 120px) auto; padding: 32px 24px; border: 1px solid var(--borda); border-radius: 16px; background: var(--branco); text-align: center; }
+.local-indisponivel h1 { margin: 0; color: var(--verde-escuro); }
+.local-indisponivel p { margin: 0; line-height: 1.6; }
+.local-indisponivel a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px; border-radius: 8px; background: var(--verde); color: var(--branco); font-weight: 700; }
+@media (max-width: 600px) { .local-indisponivel { margin: 32px 16px; padding: 24px 18px; } }

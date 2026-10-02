@@ -246,172 +246,77 @@ CARREGAR LOCAL
 ========================================================= */
 
 async function carregarLocal() {
+  console.log("LOCAL.JS iniciado.");
 
-console.log(
-"LOCAL.JS iniciado."
-);
+  if (!idLocal) {
+    mostrarLocalIndisponivel("Nenhum local foi identificado.");
+    return;
+  }
 
-if (!idLocal) {
+  try {
+    const [respostaLocais, respostaComercios] = await Promise.all([
+      fetch("../DATA/locais.json"),
+      fetch("../DATA/comercios.json"),
+    ]);
 
-console.error(
-"Nenhum ID foi informado na URL."
-);
+    const locais = respostaLocais.ok ? await respostaLocais.json() : [];
+    const comercios = respostaComercios.ok ? await respostaComercios.json() : [];
 
-return;
+    let encontrado = locais.find((item) => String(item.id) === String(idLocal));
+    if (encontrado) {
+      encontrado._tipo = "local";
+      encontrado.fonte = "locais";
+    } else {
+      encontrado = comercios.find((item) => String(item.id) === String(idLocal));
+      if (encontrado) {
+        encontrado._tipo = "comercio";
+        encontrado.fonte = "comercios";
+      }
+    }
 
+    if (!encontrado) {
+      mostrarLocalIndisponivel("Este local não está disponível no Guia.");
+      return;
+    }
+
+    if (encontrado._tipo === "comercio" && String(encontrado.status || "").toLowerCase() !== "ativo") {
+      mostrarLocalIndisponivel("Este estabelecimento não está disponível publicamente.");
+      return;
+    }
+
+    localAtual = encontrado;
+    console.log("Local carregado:", localAtual);
+
+    preencherPagina();
+    await carregarAvaliacoes();
+    await verificarAvaliacaoUsuario();
+    await verificarProprietarioComercio();
+  } catch (erro) {
+    console.error("Erro ao carregar local:", erro);
+    mostrarLocalIndisponivel("Não foi possível carregar este local.");
+  }
 }
 
-try {
+function mostrarLocalIndisponivel(mensagem) {
+  const principal = document.querySelector("main");
+  if (!principal) return;
 
-const [
-respostaLocais,
-respostaComercios,
-respostaHospedagem
-] = await Promise.all([
+  const aviso = document.createElement("section");
+  aviso.className = "local-indisponivel";
+  aviso.setAttribute("role", "status");
 
-fetch(
-"../DATA/locais.json"
-),
+  const titulo = document.createElement("h1");
+  titulo.textContent = "Local indisponível";
+  const texto = document.createElement("p");
+  texto.textContent = mensagem;
+  const link = document.createElement("a");
+  link.href = "../index.html";
+  link.textContent = "Voltar ao guia";
 
-fetch(
-"../DATA/comercios.json"
-),
-
-fetch(
-"../DATA/hospedagem.json"
-)
-
-]);
-
-const locais =
-respostaLocais.ok
-? await respostaLocais.json()
-: [];
-
-const comercios =
-respostaComercios.ok
-? await respostaComercios.json()
-: [];
-
-const hospedagem =
-respostaHospedagem.ok
-? await respostaHospedagem.json()
-: [];
-
-let encontrado = null;
-
-/* =====================================================
-LOCAIS
-===================================================== */
-
-encontrado =
-locais.find(
-item =>
-String(item.id) ===
-String(idLocal)
-);
-
-if (encontrado) {
-
-encontrado._tipo =
-"local";
-
-encontrado.fonte =
-"locais";
-
+  aviso.append(titulo, texto, link);
+  principal.replaceChildren(aviso);
 }
 
-/* =====================================================
-COMÉRCIOS
-===================================================== */
-
-if (!encontrado) {
-
-encontrado =
-comercios.find(
-item =>
-String(item.id) ===
-String(idLocal)
-);
-
-if (encontrado) {
-
-encontrado._tipo =
-"comercio";
-
-encontrado.fonte =
-"comercios";
-
-}
-
-}
-
-/* =====================================================
-HOSPEDAGEM
-===================================================== */
-
-if (!encontrado) {
-
-encontrado =
-hospedagem.find(
-item =>
-String(item.id) ===
-String(idLocal)
-);
-
-if (encontrado) {
-
-encontrado._tipo =
-"hospedagem";
-
-encontrado.fonte =
-"hospedagem";
-
-}
-
-}
-
-/* =====================================================
-VERIFICAR RESULTADO
-===================================================== */
-
-if (!encontrado) {
-
-console.error(
-"Local não encontrado:",
-idLocal
-);
-
-return;
-
-}
-
-localAtual =
-encontrado;
-
-console.log(
-"Local carregado:",
-localAtual
-);
-
-preencherPagina();
-
-await carregarAvaliacoes();
-
-await verificarAvaliacaoUsuario();
-
-await verificarProprietarioComercio();
-
-} catch (erro) {
-
-console.error(
-"Erro ao carregar local:",
-erro
-);
-
-}
-
-}
 
 /* =========================================================
 PREENCHER PÁGINA
@@ -553,22 +458,6 @@ preencherInstagram();
 preencherGaleria();
 
 inicializarMapa();
-
-/* =====================================================
-SUGESTÃO
-===================================================== */
-
-const botaoSugerir =
-document.getElementById(
-"botaoSugerirAlteracao"
-);
-
-if (botaoSugerir) {
-
-botaoSugerir.onclick =
-sugerirAlteracao;
-
-}
 
 }
 
@@ -2710,7 +2599,7 @@ return;
 
 const confirmacao =
 confirm(
-`Tem certeza que deseja excluir "${localAtual.nome}"?\n\nO comércio será removido do Guia Turístico.`
+`Deseja desativar "${localAtual.nome}"?\n\nO estabelecimento deixará de aparecer publicamente, mas será mantido no histórico administrativo.`
 );
 
 if (!confirmacao) {
@@ -2723,6 +2612,7 @@ const token =
 await obterTokenSupabase();
 
 if (!token) {
+window.alert("Sua sessão expirou. Entre novamente e tente arquivar o estabelecimento.");
 return;
 }
 
@@ -2747,7 +2637,7 @@ body:
 JSON.stringify({
 
 acao:
-"excluir_meu_comercio",
+"marcar_meu_comercio_deletado",
 
 comercio_id:
 cadastro.id
@@ -2760,11 +2650,16 @@ cadastro.id
 const resultado =
 await resposta.json();
 
-if (!resposta.ok) {
+if (!resposta.ok || resultado?.sucesso !== true) {
 
 console.error(
 "Erro ao excluir comércio:",
 resultado
+);
+
+window.alert(
+resultado?.erro ||
+"Não foi possível arquivar o estabelecimento. Ele continua ativo. Tente novamente mais tarde."
 );
 
 return;
@@ -2781,32 +2676,11 @@ console.error(
 erro
 );
 
-}
-
-}
-
-/* =========================================================
-SUGERIR ALTERAÇÃO
-========================================================= */
-
-function sugerirAlteracao() {
-
-if (!localAtual) {
-return;
-}
-
-const assunto =
-encodeURIComponent(
-`Sugestão de alteração — ${localAtual.nome || ""}`
+window.alert(
+"Não foi possível conectar ao servidor para arquivar o estabelecimento. Ele continua ativo. Tente novamente mais tarde."
 );
 
-const corpo =
-encodeURIComponent(
-`Olá!\n\nGostaria de sugerir uma alteração no cadastro de "${localAtual.nome || ""}" no Guia Turístico de Andrelândia.\n\nSugestão:\n`
-);
-
-window.location.href =
-`mailto:pedrinhossiqueira12@gmail.com?subject=${assunto}&body=${corpo}`;
+}
 
 }
 

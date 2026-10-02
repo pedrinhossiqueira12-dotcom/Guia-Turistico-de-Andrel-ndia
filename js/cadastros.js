@@ -47,11 +47,6 @@ document.getElementById(
 "opcaoNovo"
 );
 
-const opcaoAlteracao =
-document.getElementById(
-"opcaoAlteracao"
-);
-
 const opcoes =
 document.getElementById(
 "opcoes"
@@ -137,9 +132,6 @@ preview: string
 /* =========================================================
 ESTADO
 ========================================================= */
-
-let tipoCadastro =
-"novo_comercio";
 
 /* =========================================================
 AVISO
@@ -540,107 +532,21 @@ function () {
 ABRIR FORMULÁRIO
 ========================================================= */
 
-function abrirFormulario(
-tipo
-) {
+function abrirFormulario() {
+  if (!formulario) return;
 
-if (
-!formulario
-) {
+  formulario.reset();
+  limparImagensCadastro();
+  limparAviso();
 
-return;
+  if (formularioContainer) formularioContainer.classList.add("ativo");
+  if (opcoes) opcoes.style.display = "none";
 
-}
-
-formulario.reset();
-
-limparImagensCadastro();
-
-limparAviso();
-
-tipoCadastro =
-tipo;
-
-if (
-formularioContainer
-) {
-
-formularioContainer.classList.add(
-  "ativo"
-);
-
-}
-
-if (
-opcoes
-) {
-
-opcoes.style.display =
-  "none";
-
-}
-
-/* -------------------------------------------------------
-NOVO COMÉRCIO
-------------------------------------------------------- */
-
-if (
-tipo ===
-"novo_comercio"
-) {
-
-if (
-  tituloFormulario
-) {
-
-  tituloFormulario.textContent =
-    "Cadastrar comércio";
-
-}
-
-
-if (
-  descricaoFormulario
-) {
-
-  descricaoFormulario.textContent =
-    "Preencha as informações abaixo. " +
-    "O cadastro será analisado antes de ser publicado no guia.";
-
-}
-
-return;
-
-}
-
-/* -------------------------------------------------------
-ALTERAÇÃO
-------------------------------------------------------- */
-
-if (
-tituloFormulario
-) {
-
-tituloFormulario.textContent =
-  "Sugerir alteração";
-
-}
-
-if (
-descricaoFormulario
-) {
-
-descricaoFormulario.textContent =
-  "A seleção do comércio existente será adicionada " +
-  "na próxima etapa.";
-
-}
-
-mostrarAviso(
-"A função de alteração será ativada na próxima etapa. " +
-"Primeiro vamos concluir o cadastro de novos comércios."
-);
-
+  if (tituloFormulario) tituloFormulario.textContent = "Cadastrar comércio";
+  if (descricaoFormulario) {
+    descricaoFormulario.textContent =
+      "Preencha as informações abaixo. O cadastro será analisado antes de ser publicado no guia.";
+  }
 }
 
 /* =========================================================
@@ -679,10 +585,6 @@ formulario.reset();
 }
 
 limparAviso();
-
-tipoCadastro =
-"novo_comercio";
-
 }
 
 /* =========================================================
@@ -1190,23 +1092,6 @@ return;
 
 }
 
-/* -------------------------------------------------------
-TIPO
-------------------------------------------------------- */
-
-if (
-tipoCadastro !==
-"novo_comercio"
-) {
-
-mostrarAviso(
-  "A função de alteração será ativada na próxima etapa.",
-  "erro"
-);
-
-return;
-
-}
 
 /* -------------------------------------------------------
 BOTÃO
@@ -1475,9 +1360,6 @@ const cadastro = {
   tipo:
     "novo_comercio",
 
-  local_id:
-    null,
-
   telefone_usuario:
     whatsapp ||
     null,
@@ -1661,27 +1543,7 @@ opcaoNovo.addEventListener(
 "click",
 function () {
 
-  abrirFormulario(
-    "novo_comercio"
-  );
-
-}
-
-);
-
-}
-
-if (
-opcaoAlteracao
-) {
-
-opcaoAlteracao.addEventListener(
-"click",
-function () {
-
-  abrirFormulario(
-    "alteracao_comercio"
-  );
+  abrirFormulario();
 
 }
 
