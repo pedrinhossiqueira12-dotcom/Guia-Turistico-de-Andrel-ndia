@@ -99,6 +99,7 @@ console.error(
 );
 
 return null;
+
 }
 
 /* =========================================================
@@ -122,6 +123,7 @@ return String(valor)
 .replace(/>/g, ">")
 .replace(/"/g, '"')
 .replace(/'/g, "'");
+
 }
 
 /* =========================================================
@@ -135,6 +137,7 @@ return String(valor || "")
 .toLowerCase()
 .normalize("NFD")
 .replace(/[\u0300-\u036f]/g, "");
+
 }
 
 /* =========================================================
@@ -187,6 +190,7 @@ categoriasComercio.includes(
 categoria
 )
 );
+
 }
 
 /* =========================================================
@@ -319,6 +323,10 @@ encontrado.fonte =
 
 }
 
+/* =====================================================
+VERIFICAR RESULTADO
+===================================================== */
+
 if (!encontrado) {
 
 console.error(
@@ -370,14 +378,13 @@ return;
 document.title =
 `${localAtual.nome || "Local"} — Guia Turístico de Andrelândia`;
 
+/* =====================================================
+CATEGORIA
+===================================================== */
+
 const categoria =
 document.getElementById(
 "categoriaLocal"
-);
-
-const nome =
-document.getElementById(
-"nomeLocal"
 );
 
 if (categoria) {
@@ -387,6 +394,15 @@ localAtual.categoria ||
 "";
 
 }
+
+/* =====================================================
+NOME
+===================================================== */
+
+const nome =
+document.getElementById(
+"nomeLocal"
+);
 
 if (nome) {
 
@@ -622,12 +638,8 @@ return;
 }
 
 if (
-!instagram.startsWith(
-"http://"
-) &&
-!instagram.startsWith(
-"https://"
-)
+!instagram.startsWith("http://") &&
+!instagram.startsWith("https://")
 ) {
 
 instagram =
@@ -728,10 +740,11 @@ FALLBACK_IMAGE
 }
 
 /* =====================================================
-LIMITE DA GALERIA
+LIMITE
 
-A página possui uma foto principal
-e até quatro miniaturas.
+1 FOTO PRINCIPAL
++
+ATÉ 4 MINIATURAS
 ===================================================== */
 
 return imagens.slice(
@@ -740,6 +753,10 @@ return imagens.slice(
 );
 
 }
+
+/* =========================================================
+PREENCHER GALERIA
+========================================================= */
 
 function preencherGaleria() {
 
@@ -753,15 +770,15 @@ document.getElementById(
 "miniaturas"
 );
 
+if (!principal) {
+return;
+}
+
 const imagens =
 obterImagensLocal();
 
 imagensAtuais =
 imagens;
-
-if (!principal) {
-return;
-}
 
 /* =====================================================
 FOTO PRINCIPAL
@@ -771,34 +788,33 @@ principal.src =
 imagens[0];
 
 principal.alt =
-`${localAtual.nome || "Local"} — foto principal`;
-
-principal.loading =
-"eager";
-
-principal.decoding =
-"async";
+`${localAtual?.nome || "Local"} — foto principal`;
 
 principal.onerror =
 function () {
 
-if (
-this.src !==
-window.location.origin +
-FALLBACK_IMAGE
-) {
+if (this.dataset.fallbackAplicado) {
+return;
+}
+
+this.dataset.fallbackAplicado =
+"1";
 
 this.src =
 FALLBACK_IMAGE;
 
-}
-
 };
+
+/* =====================================================
+CLIQUE NA FOTO PRINCIPAL
+===================================================== */
 
 principal.onclick =
 function () {
 
-abrirVisualizador(0);
+abrirVisualizador(
+0
+);
 
 };
 
@@ -813,10 +829,9 @@ return;
 miniaturas.innerHTML =
 "";
 
-/*
-Se existir somente uma imagem,
-não criamos miniaturas vazias.
-*/
+/* =====================================================
+UMA ÚNICA IMAGEM
+===================================================== */
 
 if (imagens.length <= 1) {
 
@@ -827,16 +842,42 @@ return;
 
 }
 
+/* =====================================================
+MOSTRAR MINIATURAS
+===================================================== */
+
 miniaturas.style.display =
 "grid";
 
+/* =====================================================
+CRIAR MINIATURAS
+===================================================== */
+
 imagens
-.slice(0, 4)
+.slice(
+0,
+4
+)
 .forEach(
 (
 imagem,
 indice
 ) => {
+
+const miniatura =
+document.createElement(
+"button"
+);
+
+miniatura.type =
+"button";
+
+miniatura.className =
+"thumbnail";
+
+/* ===================================================
+IMAGEM DA MINIATURA
+=================================================== */
 
 const img =
 document.createElement(
@@ -847,7 +888,7 @@ img.src =
 imagem;
 
 img.alt =
-`${localAtual.nome || "Local"} — foto ${indice + 1}`;
+`${localAtual?.nome || "Local"} — Foto ${indice + 1}`;
 
 img.loading =
 "lazy";
@@ -855,48 +896,105 @@ img.loading =
 img.decoding =
 "async";
 
-img.className =
-"miniatura-galeria";
-
 img.onerror =
 function () {
+
+if (this.dataset.fallbackAplicado) {
+return;
+}
+
+this.dataset.fallbackAplicado =
+"1";
 
 this.src =
 FALLBACK_IMAGE;
 
 };
 
-img.onclick =
-function () {
+/* ===================================================
+COLOCAR IMAGEM DENTRO DO BOTÃO
+=================================================== */
+
+miniatura.appendChild(
+img
+);
+
+/* ===================================================
+PRIMEIRA MINIATURA ATIVA
+=================================================== */
+
+if (indice === 0) {
+
+miniatura.classList.add(
+"active"
+);
+
+}
+
+/* ===================================================
+CLIQUE NA MINIATURA
+=================================================== */
+
+miniatura.addEventListener(
+"click",
+() => {
+
+/* -----------------------------------------------
+TROCAR FOTO PRINCIPAL
+----------------------------------------------- */
 
 principal.src =
 imagem;
 
 principal.alt =
-`${localAtual.nome || "Local"} — foto ${indice + 1}`;
+`${localAtual?.nome || "Local"} — Foto ${indice + 1}`;
+
+/* -----------------------------------------------
+ATUALIZAR MINIATURA ATIVA
+----------------------------------------------- */
+
+miniaturas
+.querySelectorAll(
+".thumbnail"
+)
+.forEach(
+item => {
+
+item.classList.remove(
+"active"
+);
+
+}
+);
+
+miniatura.classList.add(
+"active"
+);
+
+/* -----------------------------------------------
+ABRIR VISUALIZADOR
+----------------------------------------------- */
 
 abrirVisualizador(
 indice
 );
 
-};
+});
 
 miniaturas.appendChild(
-img
+miniatura
 );
 
-}
-
-);
+});
 
 }
 
 /* =========================================================
-VISUALIZADOR
+VISUALIZADOR DE FOTOS
 ========================================================= */
 
 function abrirVisualizador(
-indice
+indice = 0
 ) {
 
 const viewer =
@@ -928,6 +1026,13 @@ imagem.alt =
 imagem.onerror =
 function () {
 
+if (this.dataset.fallbackAplicado) {
+return;
+}
+
+this.dataset.fallbackAplicado =
+"1";
+
 this.src =
 FALLBACK_IMAGE;
 
@@ -936,7 +1041,14 @@ FALLBACK_IMAGE;
 viewer.style.display =
 "flex";
 
+document.body.style.overflow =
+"hidden";
+
 }
+
+/* =========================================================
+FECHAR VISUALIZADOR
+========================================================= */
 
 function fecharVisualizador() {
 
@@ -951,6 +1063,50 @@ viewer.style.display =
 "none";
 
 }
+
+document.body.style.overflow =
+"";
+
+}
+
+/* =========================================================
+COMPATIBILIDADE COM HTML ANTIGO
+========================================================= */
+
+function abrirFotoTelaCheia(
+indice = 0
+) {
+
+abrirVisualizador(
+indice
+);
+
+}
+
+function fecharFotoTelaCheia() {
+
+fecharVisualizador();
+
+}
+
+/* =========================================================
+VOLTAR
+========================================================= */
+
+function voltarPagina() {
+
+if (
+window.history.length > 1
+) {
+
+window.history.back();
+
+return;
+
+}
+
+window.location.href =
+"../index.html";
 
 }
 
@@ -970,7 +1126,7 @@ return;
 }
 
 /* =====================================================
-GARANTIR QUE O LEAFLET EXISTE
+VERIFICAR LEAFLET
 ===================================================== */
 
 if (
@@ -984,6 +1140,10 @@ console.error(
 return;
 
 }
+
+/* =====================================================
+COORDENADAS
+===================================================== */
 
 const latitude =
 Number(
@@ -1021,14 +1181,13 @@ null;
 }
 
 /* =====================================================
-GARANTIR DIMENSÕES
+DIMENSÃO
+
+O CSS controla a altura.
 ===================================================== */
 
 elemento.style.width =
 "100%";
-
-elemento.style.minHeight =
-"300px";
 
 /* =====================================================
 CRIAR MAPA
@@ -1047,7 +1206,8 @@ true,
 attributionControl:
 true
 }
-).setView(
+)
+.setView(
 [
 latitude,
 longitude
@@ -1057,8 +1217,6 @@ longitude
 
 /* =====================================================
 ESRI WORLD IMAGERY
-
-URL CORRETA
 ===================================================== */
 
 const camadaEsri =
@@ -1093,7 +1251,8 @@ L.marker(
 latitude,
 longitude
 ]
-).addTo(
+)
+.addTo(
 mapaLocal
 );
 
@@ -1125,9 +1284,6 @@ comoChegar.rel =
 
 /* =====================================================
 CORRIGIR TAMANHO DO LEAFLET
-
-Isso evita o mapa aparecer cortado,
-cinza ou deslocado.
 ===================================================== */
 
 requestAnimationFrame(
@@ -1292,10 +1448,11 @@ area
 }
 
 return area;
+
 }
 
 /* =========================================================
-CRIAR BOTÕES
+CRIAR BOTÕES DO PROPRIETÁRIO
 ========================================================= */
 
 function criarBotoesProprietario() {
@@ -1326,7 +1483,7 @@ titulo.textContent =
 "Gerenciar meu comércio";
 
 /* =====================================================
-BOTÕES
+CONTAINER
 ===================================================== */
 
 const botoes =
@@ -1501,7 +1658,7 @@ return;
 }
 
 /* ===================================================
-BUSCAR CADASTROS DO USUÁRIO
+BUSCAR CADASTROS
 =================================================== */
 
 const resposta =
@@ -1537,7 +1694,7 @@ cadastros
 );
 
 /* ===================================================
-COMPARAR COMÉRCIO ATUAL
+COMPARAR COMÉRCIO
 =================================================== */
 
 const idAtual =
@@ -1678,15 +1835,6 @@ return null;
 
 /* =========================================================
 EDITAR MEU COMÉRCIO
-
-IMPORTANTE:
-
-Agora NÃO usamos prompt().
-
-O botão apenas abre o formulário
-visual de edição que será colocado
-no local.html.
-
 ========================================================= */
 
 function editarMeuComercio() {
@@ -1719,15 +1867,6 @@ return;
 
 }
 
-/*
-O formulário será criado no
-local.html.
-
-Procuramos pelo ID para evitar
-criar outro elemento ou alterar
-a estrutura existente.
-*/
-
 const modal =
 document.getElementById(
 "modalEditarComercio"
@@ -1744,7 +1883,7 @@ return;
 }
 
 /* =====================================================
-PREENCHER CAMPOS
+CAMPOS
 ===================================================== */
 
 const campos = {
@@ -1908,14 +2047,6 @@ SALVAR EDIÇÃO
 ========================================================= */
 
 async function salvarEdicaoComercio() {
-
-/*
-Esta função será ligada ao formulário
-do modal.
-
-O upload de novas imagens e a montagem
-final do objeto serão feitos aqui.
-*/
 
 if (!localAtual) {
 return;
@@ -2128,9 +2259,7 @@ const token =
 await obterTokenSupabase();
 
 if (!token) {
-
 return;
-
 }
 
 const resposta =
@@ -2460,9 +2589,7 @@ lista.appendChild(
 item
 );
 
-}
-
-);
+});
 
 }
 
@@ -2665,9 +2792,7 @@ valor <=
 notaSelecionada
 );
 
-}
-
-);
+});
 
 }
 
@@ -2720,20 +2845,20 @@ campoComentario
 : "";
 
 if (!comentario) {
-
 return;
-
 }
 
 if (
 comentario.length > 500
 ) {
-
 return;
-
 }
 
 try {
+
+/* ===================================================
+ATUALIZAR
+=================================================== */
 
 if (avaliacaoAtual) {
 
@@ -2761,12 +2886,14 @@ usuario.id
 );
 
 if (resposta.error) {
-
 throw resposta.error;
-
 }
 
 } else {
+
+/* ===================================================
+CRIAR
+=================================================== */
 
 const resposta =
 await supabase
@@ -2795,9 +2922,7 @@ comentario
 });
 
 if (resposta.error) {
-
 throw resposta.error;
-
 }
 
 }
@@ -2855,6 +2980,10 @@ document.addEventListener(
 "DOMContentLoaded",
 () => {
 
+/* =====================================================
+FECHAR VISUALIZADOR
+===================================================== */
+
 const fecharViewer =
 document.getElementById(
 "close-viewer"
@@ -2866,6 +2995,10 @@ fecharViewer.onclick =
 fecharVisualizador;
 
 }
+
+/* =====================================================
+PUBLICAR COMENTÁRIO
+===================================================== */
 
 const publicar =
 document.getElementById(
@@ -2879,6 +3012,10 @@ publicarAvaliacao;
 
 }
 
+/* =====================================================
+SAIR
+===================================================== */
+
 const botaoSair =
 document.getElementById(
 "botaoSair"
@@ -2890,6 +3027,10 @@ botaoSair.onclick =
 sairUsuarioLocal;
 
 }
+
+/* =====================================================
+ESTRELAS
+===================================================== */
 
 const botoesEstrelas =
 document.querySelectorAll(
@@ -2913,11 +3054,10 @@ indice + 1
 }
 );
 
-}
-);
+});
 
 /* =====================================================
-BOTÕES DO MODAL DE EDIÇÃO
+MODAL DE EDIÇÃO
 ===================================================== */
 
 const fecharEdicao =
@@ -2988,8 +3128,7 @@ fecharEditorComercio();
 
 }
 
-}
-);
+});
 
 }
 
@@ -3012,8 +3151,11 @@ fecharEditorComercio();
 
 }
 
-}
-);
+});
+
+/* =====================================================
+CARREGAR
+===================================================== */
 
 carregarLocal();
 
