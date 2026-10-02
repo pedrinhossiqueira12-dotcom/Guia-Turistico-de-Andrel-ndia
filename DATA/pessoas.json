@@ -1,1 +1,17 @@
-[]
+[
+  {
+    "id": "pedrox-do-grau",
+    "nome": "pedrox do grau",
+    "categoria": "Músico",
+    "descricao": "fhudtdu",
+    "sobre": "dfudtfdu",
+    "instagram": "lufdyicjl,k89",
+    "imagem": "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/mural-imagens/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790904132895-0-xhzey8r-images.jpeg",
+    "imagens": [
+      "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/mural-imagens/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790904132895-0-xhzey8r-images.jpeg",
+      "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/mural-imagens/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790904133201-1-xgumwgr-img_20260901_183503.png",
+      "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/mural-imagens/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790904133687-2-75gcacz-whatsapp-image-2026-07-14-at-22-24-56--1-.jpeg",
+      "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/mural-imagens/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790904133868-3-0xqkvct-whatsapp-image-2026-08-13-at-22-22-23.jpeg"
+    ]
+  }
+]
