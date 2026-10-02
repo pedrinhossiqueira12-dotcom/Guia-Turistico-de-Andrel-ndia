@@ -2345,5 +2345,29 @@
     "latitude": null,
     "longitude": null,
     "whatsapp": ""
+  },
+  {
+    "id": "pedrox-do-grau",
+    "nome": "pedrox do grau",
+    "categoria": "Restaurante",
+    "descricao": "",
+    "historia": "",
+    "curiosidades": "",
+    "endereco": "ydyhdyrhbdf",
+    "horario": "zds",
+    "entrada": "",
+    "telefone": "35999638094",
+    "whatsapp": "35999638094",
+    "instagram": "",
+    "site": "",
+    "latitude": null,
+    "longitude": null,
+    "imagem": "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790958643105-0-sfj5dzz-whatsapp-image-2026-07-14-at-22-24-56--1-.jpeg",
+    "imagens": [
+      "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790958643105-0-sfj5dzz-whatsapp-image-2026-07-14-at-22-24-56--1-.jpeg",
+      "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790958643638-1-whssinr-whatsapp-image-2026-08-13-at-22-22-23.jpeg",
+      "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790958643824-2-yhy9rj6-whatsapp-image-2026-09-23-at-11-43-26.jpeg",
+      "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790958644003-3-ytsui38-whatsapp-image-2026-09-29-at-14-03-26--1-.jpeg"
+    ]
   }
 ]
