@@ -1,8 +1,19 @@
-let pessoaAtual = null;
-let cadastroMuralAtual = null;
+/* =========================================================
+ANDRELÂNDIA — GUIA TURÍSTICO
+PESSOA.JS
+
+RESPONSABILIDADES:
+
+Carregar perfil público
+Exibir foto e galeria
+Exibir Instagram
+Verificar proprietário do perfil
+Exibir botão "Excluir meu perfil"
+Solicitar exclusão segura pela Edge Function
+========================================================= */
 
 /* =========================================================
-CONFIGURAÇÃO
+CONFIGURAÇÕES
 ========================================================= */
 
 const SUPABASE_URL =
@@ -21,44 +32,34 @@ const FALLBACK_IMAGE =
 "../img/sem-foto.png";
 
 /* =========================================================
+ESTADO
+========================================================= */
+
+let pessoaAtual = null;
+let cadastroMuralAtual = null;
+
+/* =========================================================
 CLIENTE SUPABASE
 ========================================================= */
 
-let pessoaSupabase = null;
-
 function obterClienteSupabasePessoa() {
 
-/*
-
-Se o login.js já criou um cliente global,
-tentamos reutilizá-lo.
-*/
-
-if (
-typeof window.supabaseClient !== "undefined" &&
-window.supabaseClient
-) {
-
+if (window.supabaseClient) {
 return window.supabaseClient;
-
 }
 
 if (
-typeof window.supabase !== "undefined" &&
+window.supabase &&
 typeof window.supabase.createClient === "function"
 ) {
 
-if (!pessoaSupabase) {
+window.supabaseClient =
+  window.supabase.createClient(
+    SUPABASE_URL,
+    SUPABASE_ANON_KEY
+  );
 
-  pessoaSupabase =
-    window.supabase.createClient(
-      SUPABASE_URL,
-      SUPABASE_ANON_KEY
-    );
-
-}
-
-return pessoaSupabase;
+return window.supabaseClient;
 
 }
 
@@ -75,562 +76,105 @@ carregarPessoa
 );
 
 /* =========================================================
-NORMALIZAR IMAGEM
-========================================================= */
-
-function corrigirCaminhoImagem(valor) {
-
-if (!valor) {
-return "";
-}
-
-/* =======================================================
-OBJETO DE IMAGEM
-======================================================= */
-
-if (typeof valor === "object") {
-
-if (valor.url) {
-  return corrigirCaminhoImagem(valor.url);
-}
-
-if (valor.publicUrl) {
-  return corrigirCaminhoImagem(valor.publicUrl);
-}
-
-if (valor.public_url) {
-  return corrigirCaminhoImagem(valor.public_url);
-}
-
-if (valor.path) {
-  return corrigirCaminhoImagem(valor.path);
-}
-
-if (valor.name) {
-  return corrigirCaminhoImagem(valor.name);
-}
-
-return "";
-
-}
-
-if (typeof valor !== "string") {
-return "";
-}
-
-let caminho = valor.trim();
-
-if (!caminho) {
-return "";
-}
-
-/* =======================================================
-URL ABSOLUTA
-======================================================= */
-
-if (
-caminho.startsWith("http://") ||
-caminho.startsWith("https://")
-) {
-
-return caminho;
-
-}
-
-/* =======================================================
-URL DO SUPABASE SEM DOMÍNIO
-======================================================= */
-
-if (
-caminho.startsWith(
-"storage/v1/object/public/"
-)
-) {
-
-return `${SUPABASE_URL}/${caminho}`;
-
-}
-
-if (
-caminho.startsWith(
-"/storage/v1/object/public/"
-)
-) {
-
-return `${SUPABASE_URL}${caminho}`;
-
-}
-
-if (
-caminho.startsWith(
-"object/public/"
-)
-) {
-
-return `${SUPABASE_URL}/storage/v1/${caminho}`;
-
-}
-
-/* =======================================================
-CAMINHO DO STORAGE COM BUCKET
-======================================================= */
-
-caminho = caminho.replace(/^\/+/, "");
-
-if (
-caminho.startsWith(
-`${SUPABASE_MURAL_BUCKET}/`
-)
-) {
-
-caminho =
-  caminho.substring(
-    SUPABASE_MURAL_BUCKET.length + 1
-  );
-
-return (
-  `${SUPABASE_URL}` +
-  `/storage/v1/object/public/` +
-  `${SUPABASE_MURAL_BUCKET}/` +
-  caminho
-);
-
-}
-
-/*
-
-Caso venha no formato:
-
-
-public/mural-imagens/arquivo.webp
-*/
-
-const prefixoPublico =
-`public/${SUPABASE_MURAL_BUCKET}/`;
-
-if (
-caminho.startsWith(prefixoPublico)
-) {
-
-caminho =
-  caminho.substring(
-    prefixoPublico.length
-  );
-
-return (
-  `${SUPABASE_URL}` +
-  `/storage/v1/object/public/` +
-  `${SUPABASE_MURAL_BUCKET}/` +
-  caminho
-);
-
-}
-
-/* =======================================================
-CAMINHOS LOCAIS DO SITE
-======================================================= */
-
-if (
-caminho.startsWith("./")
-) {
-
-return (
-  "../" +
-  caminho.substring(2)
-);
-
-}
-
-if (
-caminho.startsWith("../")
-) {
-
-return caminho;
-
-}
-
-if (
-caminho.startsWith("img/") ||
-caminho.startsWith("IMG/") ||
-caminho.startsWith("images/") ||
-caminho.startsWith("assets/")
-) {
-
-return "../" + caminho;
-
-}
-
-/*
-
-Caminho absoluto do próprio site.
-*/
-
-if (
-caminho.startsWith("/")
-) {
-
-return caminho;
-
-}
-
-/* =======================================================
-CAMINHO DE IMAGEM DO MURAL
-======================================================= */
-
-/*
-
-Se não parece ser um caminho local,
-tratamos como arquivo do bucket mural-imagens.
-
-
-Exemplos:
-
-
-usuario-id/foto.webp
-123456/foto.jpg
-perfil/foto.png
-*/
-
-return (
-`${SUPABASE_URL}` +
-`/storage/v1/object/public/` +
-`${SUPABASE_MURAL_BUCKET}/` +
-caminho
-);
-}
-
-/* =========================================================
-OBTER VALOR DE IMAGEM
-========================================================= */
-
-function obterImagemPessoa(pessoa) {
-
-if (!pessoa) {
-return "";
-}
-
-/* =======================================================
-CAMPOS PRINCIPAIS
-======================================================= */
-
-const camposPrincipais = [
-
-pessoa.imagem,
-
-pessoa.imagem_url,
-
-pessoa.foto,
-
-pessoa.foto_url,
-
-pessoa.avatar,
-
-pessoa.avatar_url,
-
-pessoa.capa
-
-];
-
-for (
-const imagem of camposPrincipais
-) {
-
-const caminho =
-  corrigirCaminhoImagem(imagem);
-
-if (caminho) {
-  return caminho;
-}
-
-}
-
-/* =======================================================
-ARRAYS DE IMAGENS
-======================================================= */
-
-const colecoes = [
-
-pessoa.imagens,
-
-pessoa.galeria,
-
-pessoa.fotos
-
-];
-
-for (
-const colecao of colecoes
-) {
-
-if (!Array.isArray(colecao)) {
-  continue;
-}
-
-for (
-  const imagem of colecao
-) {
-
-  const caminho =
-    corrigirCaminhoImagem(imagem);
-
-  if (caminho) {
-    return caminho;
-  }
-
-}
-
-}
-
-return "";
-}
-
-/* =========================================================
-OBTER TODAS AS IMAGENS
-========================================================= */
-
-function obterGaleriaPessoa(pessoa) {
-
-if (!pessoa) {
-return [];
-}
-
-const imagens = [];
-
-function adicionarImagem(valor) {
-
-const caminho =
-  corrigirCaminhoImagem(valor);
-
-if (
-  caminho &&
-  !imagens.includes(caminho)
-) {
-
-  imagens.push(caminho);
-
-}
-
-}
-
-/* =======================================================
-CAMPOS PRINCIPAIS
-======================================================= */
-
-adicionarImagem(
-pessoa.imagem
-);
-
-adicionarImagem(
-pessoa.imagem_url
-);
-
-adicionarImagem(
-pessoa.foto
-);
-
-adicionarImagem(
-pessoa.foto_url
-);
-
-adicionarImagem(
-pessoa.avatar
-);
-
-adicionarImagem(
-pessoa.avatar_url
-);
-
-adicionarImagem(
-pessoa.capa
-);
-
-/* =======================================================
-ARRAYS
-======================================================= */
-
-const colecoes = [
-
-pessoa.imagens,
-
-pessoa.galeria,
-
-pessoa.fotos
-
-];
-
-for (
-const colecao of colecoes
-) {
-
-if (!Array.isArray(colecao)) {
-  continue;
-}
-
-colecao.forEach(
-  adicionarImagem
-);
-
-}
-
-return imagens;
-}
-
-/* =========================================================
 CARREGAR PESSOA
 ========================================================= */
 
 async function carregarPessoa() {
 
-const params =
-new URLSearchParams(
-window.location.search
-);
+try {
+
+const parametros =
+  new URLSearchParams(
+    window.location.search
+  );
 
 const id =
-params.get("id");
+  parametros.get("id");
 
 if (!id) {
 
-mostrarErro(
-  "Pessoa não encontrada."
-);
+  mostrarErro(
+    "Perfil não encontrado."
+  );
 
-return;
-
+  return;
 }
-
-try {
 
 const resposta =
   await fetch(
-    "../DATA/pessoas.json?t=" +
-    Date.now()
+    `../DATA/pessoas.json?t=${Date.now()}`
   );
 
 if (!resposta.ok) {
-
   throw new Error(
-    "Não foi possível carregar pessoas.json."
+    "Não foi possível carregar os perfis."
   );
-
 }
 
 const pessoas =
   await resposta.json();
 
-if (!Array.isArray(pessoas)) {
-
-  throw new Error(
-    "pessoas.json não possui um array válido."
-  );
-
-}
-
 pessoaAtual =
   pessoas.find(
     pessoa =>
-      String(pessoa.id) ===
-      String(id)
+      String(pessoa.id) === String(id)
   );
 
 if (!pessoaAtual) {
 
   mostrarErro(
-    "Pessoa não encontrada."
+    "Perfil não encontrado."
   );
 
   return;
-
 }
 
 preencherPagina(
   pessoaAtual
 );
 
-/*
- * Depois de preencher a página,
- * verificamos se o usuário atual
- * é dono deste perfil.
- */
-
 await verificarProprietarioPerfil(
   pessoaAtual.id
 );
 
-}
-
-catch (erro) {
+} catch (erro) {
 
 console.error(
-  "Erro ao carregar pessoa:",
+  "Erro ao carregar perfil:",
   erro
 );
 
 mostrarErro(
-  "Não foi possível carregar as informações."
+  "Não foi possível carregar este perfil."
 );
 
 }
-
 }
 
 /* =========================================================
 PREENCHER PÁGINA
 ========================================================= */
 
-function preencherPagina(pessoa) {
-
-const nome =
-pessoa.nome ||
-"Pessoa";
-
-const categoria =
-pessoa.categoria ||
-"Pessoa";
+function preencherPagina(
+pessoa
+) {
 
 document.title =
-`${nome} — Guia Turístico de Andrelândia`;
-
-/* =======================================================
-CABEÇALHO
-======================================================= */
-
-const categoriaCabecalho =
-document.getElementById(
-"categoriaPessoa"
-);
-
-const nomeCabecalho =
-document.getElementById(
-"nomePessoa"
-);
-
-if (categoriaCabecalho) {
-
-categoriaCabecalho.textContent =
-  categoria;
-
-}
-
-if (nomeCabecalho) {
-
-nomeCabecalho.textContent =
-  nome;
-
-}
-
-/* =======================================================
-INTRODUÇÃO
-======================================================= */
-
-const categoriaTexto =
-document.getElementById(
-"categoriaPessoaTexto"
-);
+`${pessoa.nome || "Perfil"} — Andrelândia`;
 
 const titulo =
 document.getElementById(
 "tituloPessoa"
+);
+
+const nome =
+document.getElementById(
+"nomePessoa"
+);
+
+const categoria =
+document.getElementById(
+"categoriaPessoa"
 );
 
 const descricao =
@@ -638,114 +182,311 @@ document.getElementById(
 "descricaoPessoa"
 );
 
-if (categoriaTexto) {
-
-categoriaTexto.textContent =
-  categoria;
-
-}
-
-if (titulo) {
-
-titulo.textContent =
-  nome;
-
-}
-
-if (descricao) {
-
-descricao.textContent =
-  pessoa.descricao ||
-  "";
-
-}
-
-/* =======================================================
-SOBRE
-======================================================= */
-
 const sobre =
 document.getElementById(
 "sobrePessoa"
 );
-
-if (sobre) {
-
-sobre.textContent =
-  pessoa.sobre ||
-  pessoa.descricao ||
-  "";
-
-}
-
-/* =======================================================
-FOTO PRINCIPAL
-======================================================= */
 
 const foto =
 document.getElementById(
 "fotoPessoa"
 );
 
-const imagemPrincipal =
-obterImagemPessoa(
-pessoa
-);
+if (titulo) {
+titulo.textContent =
+pessoa.nome || "Perfil";
+}
+
+if (nome) {
+nome.textContent =
+pessoa.nome || "";
+}
+
+if (categoria) {
+
+categoria.textContent =
+  pessoa.categoria || "";
+
+categoria.style.display =
+  pessoa.categoria
+    ? ""
+    : "none";
+
+}
+
+if (descricao) {
+
+descricao.textContent =
+  pessoa.descricao || "";
+
+descricao.style.display =
+  pessoa.descricao
+    ? ""
+    : "none";
+
+}
+
+if (sobre) {
+
+sobre.textContent =
+  pessoa.sobre || "";
+
+sobre.style.display =
+  pessoa.sobre
+    ? ""
+    : "none";
+
+}
 
 if (foto) {
 
 foto.src =
-  imagemPrincipal ||
-  FALLBACK_IMAGE;
+  obterImagemPessoa(
+    pessoa
+  );
 
 foto.alt =
-  nome;
+  pessoa.nome
+    ? `Foto de ${pessoa.nome}`
+    : "Foto do perfil";
 
 foto.onerror =
   function () {
 
-    if (
-      this.dataset.fallback ===
-      "true"
-    ) {
-
-      return;
-
-    }
-
-    this.dataset.fallback =
-      "true";
-
-    this.src =
-      FALLBACK_IMAGE;
+    this.onerror = null;
+    this.src = FALLBACK_IMAGE;
 
   };
 
 }
 
-/* =======================================================
-INSTAGRAM
-======================================================= */
-
 configurarInstagram(
 pessoa
 );
 
-/* =======================================================
-GALERIA
-======================================================= */
-
 montarGaleria(
 pessoa
 );
+}
 
+/* =========================================================
+CORRIGIR CAMINHO DE IMAGEM
+========================================================= */
+
+function corrigirCaminhoImagem(
+imagem
+) {
+
+if (!imagem) {
+return FALLBACK_IMAGE;
+}
+
+/* -----------------------------------------
+OBJETO
+----------------------------------------- */
+
+if (
+typeof imagem === "object" &&
+imagem !== null
+) {
+
+imagem =
+  imagem.url ||
+  imagem.path ||
+  imagem.caminho ||
+  imagem.src ||
+  imagem.nome ||
+  "";
+
+}
+
+if (
+typeof imagem !== "string"
+) {
+
+return FALLBACK_IMAGE;
+
+}
+
+let caminho =
+imagem.trim();
+
+if (!caminho) {
+return FALLBACK_IMAGE;
+}
+
+/* -----------------------------------------
+URL ABSOLUTA
+----------------------------------------- */
+
+if (
+caminho.startsWith("http://") ||
+caminho.startsWith("https://") ||
+caminho.startsWith("data:")
+) {
+
+return caminho;
+
+}
+
+/* -----------------------------------------
+CAMINHO SUPABASE STORAGE
+----------------------------------------- */
+
+if (
+caminho.includes("/storage/v1/object/")
+) {
+
+if (
+  caminho.includes(
+    "/storage/v1/object/public/"
+  )
+) {
+
+  return caminho;
+}
+
+const indice =
+  caminho.indexOf(
+    "/storage/v1/object/"
+  );
+
+if (indice !== -1) {
+
+  const parte =
+    caminho.substring(
+      indice
+    );
+
+  return (
+    SUPABASE_URL +
+    parte.replace(
+      "/storage/v1/object/",
+      "/storage/v1/object/public/"
+    )
+  );
+}
+
+}
+
+/* -----------------------------------------
+REMOVER BARRAS INICIAIS
+----------------------------------------- */
+
+caminho =
+caminho.replace(
+/^\/+/
+,""
+);
+
+/* -----------------------------------------
+JÁ É CAMINHO LOCAL
+----------------------------------------- */
+
+if (
+caminho.startsWith("../") ||
+caminho.startsWith("./") ||
+caminho.startsWith("img/")
+) {
+
+return caminho;
+
+}
+
+/* -----------------------------------------
+CAMINHO DO BUCKET MURAL
+----------------------------------------- */
+
+if (
+caminho.startsWith(
+`${SUPABASE_MURAL_BUCKET}/`
+)
+) {
+
+const arquivo =
+  caminho.substring(
+    `${SUPABASE_MURAL_BUCKET}/`.length
+  );
+
+return (
+  `${SUPABASE_URL}/storage/v1/object/public/` +
+  `${SUPABASE_MURAL_BUCKET}/${arquivo}`
+);
+
+}
+
+/* -----------------------------------------
+ARQUIVO DO BUCKET
+----------------------------------------- */
+
+return (
+`${SUPABASE_URL}/storage/v1/object/public/` +
+`${SUPABASE_MURAL_BUCKET}/${caminho}`
+);
+}
+
+/* =========================================================
+OBTER IMAGEM PRINCIPAL
+========================================================= */
+
+function obterImagemPessoa(
+pessoa
+) {
+
+if (!pessoa) {
+return FALLBACK_IMAGE;
+}
+
+const imagem =
+pessoa.imagem ||
+pessoa.foto ||
+pessoa.image ||
+pessoa.avatar;
+
+return corrigirCaminhoImagem(
+imagem
+);
+}
+
+/* =========================================================
+OBTER GALERIA
+========================================================= */
+
+function obterGaleriaPessoa(
+pessoa
+) {
+
+if (!pessoa) {
+return [];
+}
+
+let galeria =
+pessoa.imagens ||
+pessoa.galeria ||
+pessoa.fotos ||
+[];
+
+if (!Array.isArray(galeria)) {
+
+galeria =
+  [galeria];
+
+}
+
+return galeria
+.filter(Boolean)
+.map(
+corrigirCaminhoImagem
+);
 }
 
 /* =========================================================
 INSTAGRAM
 ========================================================= */
 
-function configurarInstagram(pessoa) {
+function configurarInstagram(
+pessoa
+) {
 
 const botao =
 document.getElementById(
@@ -756,22 +497,11 @@ if (!botao) {
 return;
 }
 
-if (
-!pessoa.instagram ||
-pessoa.instagram === "#"
-) {
-
-botao.style.display =
-  "none";
-
-return;
-
-}
-
 let instagram =
-String(
-pessoa.instagram
-).trim();
+pessoa.instagram || "";
+
+instagram =
+String(instagram).trim();
 
 if (!instagram) {
 
@@ -782,44 +512,19 @@ return;
 
 }
 
-/*
-
-Caso o JSON tenha apenas:
-
-
-@usuario
-*/
-
 if (
-instagram.startsWith("@")
+!instagram.startsWith("http://") &&
+!instagram.startsWith("https://")
 ) {
 
 instagram =
-  "https://instagram.com/" +
-  instagram.substring(1);
-
-}
-
-/*
-
-Caso tenha apenas:
-
-
-instagram.com/usuario
-*/
-
-if (
-!instagram.startsWith(
-"http://"
-) &&
-!instagram.startsWith(
-"https://"
-)
-) {
+  instagram.replace(
+    /^@/,
+    ""
+  );
 
 instagram =
-  "https://" +
-  instagram;
+  `https://instagram.com/${instagram}`;
 
 }
 
@@ -834,106 +539,93 @@ botao.rel =
 
 botao.style.display =
 "";
-
 }
 
 /* =========================================================
 GALERIA
 ========================================================= */
 
-function montarGaleria(pessoa) {
+function montarGaleria(
+pessoa
+) {
 
-const galeria =
+const galeriaElemento =
 document.getElementById(
 "galeriaPessoa"
 );
 
-if (!galeria) {
+if (!galeriaElemento) {
 return;
 }
 
-galeria.innerHTML =
+galeriaElemento.innerHTML =
 "";
 
-const fotos =
+const imagens =
 obterGaleriaPessoa(
 pessoa
 );
 
-if (
-fotos.length === 0
-) {
+const imagemPrincipal =
+obterImagemPessoa(
+pessoa
+);
 
-return;
+const todasImagens = [
+imagemPrincipal,
+...imagens
+];
 
-}
+const imagensUnicas =
+[...new Set(
+todasImagens.filter(Boolean)
+)];
 
-fotos.forEach(
-(caminho, index) => {
-
-  if (!caminho) {
-    return;
-  }
+imagensUnicas.forEach(
+(imagem, indice) => {
 
   const item =
-    document.createElement(
-      "button"
-    );
-
-  item.type =
-    "button";
-
-  item.className =
-    "galeria-item";
-
-  item.setAttribute(
-    "aria-label",
-    `Abrir foto ${index + 1}`
-  );
-
-  const img =
     document.createElement(
       "img"
     );
 
-  img.src =
-    caminho;
+  item.src =
+    imagem;
 
-  img.alt =
-    `${pessoa.nome || "Pessoa"} — foto ${index + 1}`;
+  item.alt =
+    `${pessoa.nome || "Perfil"} — foto ${indice + 1}`;
 
-  img.loading =
-    index === 0
-      ? "eager"
-      : "lazy";
+  item.loading =
+    "lazy";
 
-  img.onerror =
+  item.onerror =
     function () {
 
-      item.remove();
+      this.onerror = null;
+      this.src = FALLBACK_IMAGE;
 
     };
 
-  item.appendChild(
-    img
-  );
 
   item.addEventListener(
     "click",
-    () =>
-      abrirFoto(
-        caminho
-      )
+    () => {
+
+      abrirVisualizador(
+        imagem
+      );
+
+    }
   );
 
-  galeria.appendChild(
+
+  galeriaElemento.appendChild(
     item
   );
 
 }
 
 );
-
 }
 
 /* =========================================================
@@ -953,188 +645,149 @@ if (!botao) {
 return;
 }
 
-/*
-
-Por segurança, começa sempre oculto.
-*/
-
 botao.style.display =
 "none";
 
-cadastroMuralAtual =
-null;
-
 try {
 
-/*
- * Primeiro tentamos usar a função
- * existente do sistema de login.
- */
-
 let usuario = null;
+
+
+/* -----------------------------------------
+   TENTAR SISTEMA DE LOGIN EXISTENTE
+   ----------------------------------------- */
 
 if (
   typeof obterUsuarioLogin ===
   "function"
 ) {
 
-  try {
-
-    usuario =
-      await obterUsuarioLogin();
-
-  }
-
-  catch (erro) {
-
-    console.warn(
-      "Não foi possível obter usuário pelo login.js.",
-      erro
-    );
-
-  }
-
-}
-
-/*
- * Se não conseguimos pelo login.js,
- * tentamos diretamente no Supabase.
- */
-
-const cliente =
-  obterClienteSupabasePessoa();
-
-if (
-  !usuario &&
-  cliente
-) {
-
-  const resultado =
-    await cliente.auth.getUser();
-
   usuario =
-    resultado?.data?.user ||
-    null;
-
+    await obterUsuarioLogin();
 }
+
+
+/* -----------------------------------------
+   FALLBACK PARA SUPABASE
+   ----------------------------------------- */
 
 if (!usuario) {
 
-  return;
+  const supabase =
+    obterClienteSupabasePessoa();
 
+  if (!supabase) {
+    return;
+  }
+
+
+  const resultado =
+    await supabase.auth.getUser();
+
+
+  usuario =
+    resultado.data?.user || null;
 }
 
-if (!cliente) {
 
-  console.warn(
-    "Cliente Supabase não disponível para verificar proprietário."
-  );
-
+if (!usuario) {
   return;
-
 }
 
-/*
- * Procuramos o cadastro correspondente
- * ao ID público da pessoa.
- */
 
-const resultado =
-  await cliente
+const supabase =
+  obterClienteSupabasePessoa();
+
+
+if (!supabase) {
+  return;
+}
+
+
+/* -----------------------------------------
+   LOCALIZAR CADASTRO DO PERFIL
+   ----------------------------------------- */
+
+const resposta =
+  await supabase
     .from("mural_cadastros")
-    .select(
-      "id, usuario_id, status, nome"
-    )
+    .select("*")
     .eq(
       "id",
       pessoaId
     )
     .maybeSingle();
 
-if (
-  resultado.error
-) {
+
+if (resposta.error) {
 
   console.error(
-    "Erro ao consultar proprietário do perfil:",
-    resultado.error
+    "Erro ao verificar proprietário:",
+    resposta.error
   );
 
   return;
-
 }
 
-const cadastro =
-  resultado.data;
-
-if (!cadastro) {
-
-  /*
-   * Perfil antigo/manual no JSON.
-   * Não existe vínculo com usuário.
-   */
-
-  return;
-
-}
 
 cadastroMuralAtual =
-  cadastro;
+  resposta.data;
 
-/*
- * Só o próprio usuário pode
- * visualizar o botão.
- */
+
+if (
+  !cadastroMuralAtual
+) {
+
+  return;
+}
+
+
+/* -----------------------------------------
+   CONFIRMAR PROPRIETÁRIO
+   ----------------------------------------- */
 
 const ehProprietario =
   String(
-    cadastro.usuario_id
+    cadastroMuralAtual.usuario_id
   ) ===
   String(
     usuario.id
   );
 
-/*
- * Perfis deletados não podem
- * ser excluídos novamente.
- */
 
-const perfilAtivo =
-  cadastro.status ===
-    "aprovado" ||
-  cadastro.status ===
-    "pendente";
+const statusPermitido =
+  [
+    "pendente",
+    "aprovado"
+  ].includes(
+    cadastroMuralAtual.status
+  );
+
 
 if (
   ehProprietario &&
-  perfilAtivo
+  statusPermitido
 ) {
 
   botao.style.display =
-    "flex";
+    "inline-flex";
 
   configurarEstiloBotaoExcluir();
 
 }
 
-}
-
-catch (erro) {
+} catch (erro) {
 
 console.error(
-  "Erro ao verificar proprietário:",
+  "Erro ao verificar proprietário do perfil:",
   erro
 );
 
-botao.style.display =
-  "none";
-
 }
-
 }
 
 /* =========================================================
-ESTILO DO BOTÃO DE EXCLUSÃO
+ESTILO DO BOTÃO EXCLUIR
 ========================================================= */
 
 function configurarEstiloBotaoExcluir() {
@@ -1147,15 +800,6 @@ document.getElementById(
 if (!botao) {
 return;
 }
-
-/*
-
-O botão recebe somente os estilos necessários
-caso eles ainda não existam no pessoa.css.
-*/
-
-botao.style.display =
-"flex";
 
 botao.style.alignItems =
 "center";
@@ -1170,13 +814,13 @@ botao.style.width =
 "100%";
 
 botao.style.marginTop =
-"12px";
+"20px";
 
 botao.style.padding =
-"12px 16px";
+"12px 18px";
 
 botao.style.border =
-"1px solid #d6d6d6";
+"1px solid #b42318";
 
 botao.style.borderRadius =
 "8px";
@@ -1185,10 +829,7 @@ botao.style.background =
 "#ffffff";
 
 botao.style.color =
-"#555555";
-
-botao.style.fontFamily =
-"Roboto, sans-serif";
+"#b42318";
 
 botao.style.fontSize =
 "14px";
@@ -1199,31 +840,8 @@ botao.style.fontWeight =
 botao.style.cursor =
 "pointer";
 
-botao.style.transition =
-"all 0.2s ease";
-
-botao.onmouseenter =
-function () {
-
-  this.style.background =
-    "#f5f5f5";
-
-  this.style.borderColor =
-    "#bdbdbd";
-
-};
-
-botao.onmouseleave =
-function () {
-
-  this.style.background =
-    "#ffffff";
-
-  this.style.borderColor =
-    "#d6d6d6";
-
-};
-
+botao.style.boxSizing =
+"border-box";
 }
 
 /* =========================================================
@@ -1232,99 +850,80 @@ EXCLUIR MEU PERFIL
 
 async function excluirMeuPerfil() {
 
+if (!pessoaAtual) {
+
+alert(
+  "Perfil não encontrado."
+);
+
+return;
+
+}
+
+const confirmou =
+confirm(
+"Tem certeza que deseja excluir seu perfil?\n\n" +
+"O perfil será removido do mural público e " +
+"marcado como deletado no sistema.\n\n" +
+"Esta ação não poderá ser desfeita."
+);
+
+if (!confirmou) {
+return;
+}
+
 const botao =
 document.getElementById(
 "botaoExcluirPerfil"
 );
 
-if (!botao) {
-return;
-}
-
-if (!cadastroMuralAtual) {
-
-alert(
-  "Não foi possível identificar o cadastro deste perfil."
-);
-
-return;
-
-}
-
-const confirmacao =
-window.confirm(
-"Tem certeza que deseja excluir seu perfil do Mural?\n\n" +
-"O perfil será removido da página pública e ficará marcado como deletado. " +
-"Você poderá cadastrar outro perfil depois."
-);
-
-if (!confirmacao) {
-return;
-}
-
-const confirmacaoFinal =
-window.confirm(
-"Esta ação removerá seu perfil do Mural.\n\n" +
-"Deseja realmente continuar?"
-);
-
-if (!confirmacaoFinal) {
-return;
-}
-
-const cliente =
-obterClienteSupabasePessoa();
-
-if (!cliente) {
-
-alert(
-  "Não foi possível conectar ao sistema de autenticação."
-);
-
-return;
-
-}
-
 try {
 
-botao.disabled =
-  true;
+if (botao) {
 
-const textoOriginal =
-  botao.innerHTML;
+  botao.disabled =
+    true;
 
-botao.dataset.textoOriginal =
-  textoOriginal;
+  botao.textContent =
+    "Excluindo...";
+}
 
-botao.innerHTML =
-  "<span>Excluindo...</span>";
 
-/*
- * Obtém a sessão atual para enviar
- * o JWT à Edge Function.
- */
+const supabase =
+  obterClienteSupabasePessoa();
+
+
+if (!supabase) {
+
+  throw new Error(
+    "Não foi possível conectar ao Supabase."
+  );
+}
+
+
+/* -----------------------------------------
+   OBTER SESSÃO
+   ----------------------------------------- */
 
 const sessao =
-  await cliente.auth.getSession();
+  await supabase.auth.getSession();
+
 
 const accessToken =
-  sessao?.data?.session?.access_token;
+  sessao.data?.session?.access_token;
+
 
 if (!accessToken) {
 
   throw new Error(
-    "Sessão de usuário não encontrada."
+    "Sua sessão expirou. Faça login novamente."
   );
-
 }
 
-/*
- * A Edge Function faz a verificação
- * definitiva de propriedade.
- *
- * Nunca confiamos apenas no JavaScript
- * do navegador para autorização.
- */
+
+/* -----------------------------------------
+   CHAMAR EDGE FUNCTION
+   ----------------------------------------- */
 
 const resposta =
   await fetch(
@@ -1341,171 +940,145 @@ const resposta =
       },
 
       body: JSON.stringify({
-        action:
-          "excluir_mural",
-
-        pessoa_id:
-          pessoaAtual.id
+        acao: "excluir_mural",
+        pessoa_id: pessoaAtual.id
       })
     }
   );
 
-const resultado =
-  await resposta.json()
-  .catch(
-    () => ({})
-  );
+
+let resultado = null;
+
+
+try {
+
+  resultado =
+    await resposta.json();
+
+} catch {
+
+  resultado = {};
+}
+
+
+/* -----------------------------------------
+   ERRO HTTP
+   ----------------------------------------- */
 
 if (!resposta.ok) {
 
   throw new Error(
+    resultado.erro ||
     resultado.error ||
     resultado.message ||
     "Não foi possível excluir o perfil."
   );
-
 }
 
+
+/* -----------------------------------------
+   ERRO RETORNADO PELA EDGE FUNCTION
+   ----------------------------------------- */
+
 if (
-  resultado.success === false
+  resultado.sucesso === false
 ) {
 
   throw new Error(
+    resultado.erro ||
     resultado.error ||
+    resultado.message ||
     "A exclusão não foi concluída."
   );
-
 }
 
+
+/* -----------------------------------------
+   SUCESSO
+   ----------------------------------------- */
+
 alert(
+  resultado.mensagem ||
   "Seu perfil foi excluído com sucesso."
 );
 
-/*
- * O perfil já foi removido do JSON
- * pela Edge Function.
- *
- * Voltamos para a página inicial.
- */
 
 window.location.href =
   "../index.html";
 
-}
-
-catch (erro) {
+} catch (erro) {
 
 console.error(
   "Erro ao excluir perfil:",
   erro
 );
 
+
 alert(
   erro.message ||
-  "Não foi possível excluir seu perfil."
+  "Não foi possível excluir o perfil."
 );
 
-botao.disabled =
-  false;
 
-if (
-  botao.dataset.textoOriginal
-) {
+if (botao) {
 
-  botao.innerHTML =
-    botao.dataset.textoOriginal;
+  botao.disabled =
+    false;
 
+  botao.textContent =
+    "Excluir meu perfil";
+
+  configurarEstiloBotaoExcluir();
 }
 
-configurarEstiloBotaoExcluir();
-
 }
-
 }
 
 /* =========================================================
-ABRIR FOTO
+VISUALIZADOR DE FOTOS
 ========================================================= */
 
-function abrirFoto(foto) {
-
-if (!foto) {
-return;
-}
+function abrirVisualizador(
+imagem
+) {
 
 const viewer =
 document.getElementById(
 "photoViewer"
 );
 
-const image =
+const viewerImage =
 document.getElementById(
 "viewerImage"
 );
 
 if (
 !viewer ||
-!image
+!viewerImage
 ) {
-
 return;
-
 }
 
-image.src =
-foto;
+viewerImage.src =
+imagem;
 
-image.alt =
-pessoaAtual?.nome ||
-"Foto";
+viewerImage.alt =
+pessoaAtual?.nome
+? `Foto de ${pessoaAtual.nome}`
+: "Foto do perfil";
 
-image.onerror =
-function () {
-
-  this.src =
-    FALLBACK_IMAGE;
-
-};
-
-viewer.classList.add(
-"open"
-);
+viewer.style.display =
+"flex";
 
 document.body.style.overflow =
 "hidden";
-
 }
 
 /* =========================================================
-FOTO PRINCIPAL EM TELA CHEIA
+FECHAR VISUALIZADOR
 ========================================================= */
 
-function abrirFotoTelaCheia() {
-
-if (!pessoaAtual) {
-return;
-}
-
-const foto =
-obterImagemPessoa(
-pessoaAtual
-);
-
-if (foto) {
-
-abrirFoto(
-  foto
-);
-
-}
-
-}
-
-/* =========================================================
-FECHAR FOTO
-========================================================= */
-
-function fecharFotoTelaCheia() {
+function fecharVisualizador() {
 
 const viewer =
 document.getElementById(
@@ -1516,58 +1089,57 @@ if (!viewer) {
 return;
 }
 
-viewer.classList.remove(
-"open"
-);
+viewer.style.display =
+"none";
 
 document.body.style.overflow =
 "";
-
 }
 
 /* =========================================================
-ESC
+ESC FECHA VISUALIZADOR
 ========================================================= */
 
 document.addEventListener(
 "keydown",
-event => {
+function (evento) {
 
 if (
-  event.key ===
-  "Escape"
+  evento.key === "Escape"
 ) {
 
-  fecharFotoTelaCheia();
-
+  fecharVisualizador();
 }
 
 }
 );
 
 /* =========================================================
-CLICAR FORA DA FOTO
+CLIQUE FORA DA IMAGEM
 ========================================================= */
 
-document
-.getElementById(
-"photoViewer"
-)
-?.addEventListener(
+document.addEventListener(
 "click",
-event => {
+function (evento) {
 
-  if (
-    event.target.id ===
+const viewer =
+  document.getElementById(
     "photoViewer"
-  ) {
+  );
 
-    fecharFotoTelaCheia();
-
-  }
-
+if (!viewer) {
+  return;
 }
 
+
+if (
+  evento.target === viewer
+) {
+
+  fecharVisualizador();
+}
+
+}
 );
 
 /* =========================================================
@@ -1577,49 +1149,36 @@ VOLTAR
 function voltarPagina() {
 
 if (
-document.referrer &&
-document.referrer.includes(
-window.location.hostname
-)
+window.history.length > 1
 ) {
 
 window.history.back();
 
-}
-
-else {
+} else {
 
 window.location.href =
   "../index.html";
 
 }
-
 }
 
 /* =========================================================
-ERRO
+MOSTRAR ERRO
 ========================================================= */
 
 function mostrarErro(
 mensagem
 ) {
 
-const categoria =
-document.getElementById(
-"categoriaPessoa"
-);
-
 const nome =
 document.getElementById(
 "nomePessoa"
 );
 
-if (categoria) {
-
-categoria.textContent =
-  "ERRO";
-
-}
+const descricao =
+document.getElementById(
+"descricaoPessoa"
+);
 
 if (nome) {
 
@@ -1628,40 +1187,37 @@ nome.textContent =
 
 }
 
-const apresentacao =
-document.querySelector(
-".pessoa-apresentacao"
-);
+if (descricao) {
 
-const sobre =
-document.querySelector(
-".sobre-pessoa"
-);
+descricao.textContent =
+  "";
 
-const galeria =
-document.querySelector(
-".galeria-pessoa"
-);
-
-if (apresentacao) {
-
-apresentacao.style.display =
+descricao.style.display =
   "none";
 
 }
 
-if (sobre) {
+const foto =
+document.getElementById(
+"fotoPessoa"
+);
 
-sobre.style.display =
-  "none";
+if (foto) {
 
-}
-
-if (galeria) {
-
-galeria.style.display =
-  "none";
+foto.src =
+  FALLBACK_IMAGE;
 
 }
 
+const botaoExcluir =
+document.getElementById(
+"botaoExcluirPerfil"
+);
+
+if (botaoExcluir) {
+
+botaoExcluir.style.display =
+  "none";
+
+}
 }
