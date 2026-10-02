@@ -25,6 +25,9 @@ const SUPABASE_ANON_KEY =
 const SUPABASE_MURAL_BUCKET =
 "mural-imagens";
 
+const LIMITE_IMAGENS_PERFIL =
+4;
+
 const EDGE_FUNCTION_URL =
 `${SUPABASE_URL}/functions/v1/whatsapp-bot`;
 
@@ -883,6 +886,16 @@ if (
 
   configurarEstiloBotaoExcluir();
 
+  const botaoEditar =
+    document.getElementById(
+      "botaoEditarPerfil"
+    );
+
+  if (botaoEditar) {
+    botaoEditar.style.display =
+      "inline-flex";
+  }
+
 }
 
 } catch (erro) {
@@ -964,6 +977,176 @@ botao.style.cursor =
 botao.style.boxSizing =
 "border-box";
 
+}
+
+/* =========================================================
+EDITOR DO MEU PERFIL
+========================================================= */
+
+function mostrarMensagemEditarPerfil(mensagem, tipo = "erro") {
+const elemento = document.getElementById("mensagemEditarPerfil");
+if (!elemento) return;
+elemento.textContent = mensagem;
+elemento.style.display = "block";
+elemento.style.color = tipo === "sucesso" ? "#1f6b45" : "#a32626";
+}
+
+function obterImagensEdicaoPerfil() {
+const imagens = Array.isArray(pessoaAtual?.imagens)
+? pessoaAtual.imagens
+: (pessoaAtual?.imagem ? [pessoaAtual.imagem] : []);
+return [...new Set(imagens.map(corrigirCaminhoImagem).filter(Boolean))]
+.slice(0, LIMITE_IMAGENS_PERFIL)
+.map(url => ({ url, arquivo: null, preview: "" }));
+}
+
+function renderizarImagensPerfilEditor() {
+const lista = document.getElementById("imagensPerfilAtuais");
+const contador = document.getElementById("contadorImagensPerfil");
+if (!lista) return;
+lista.innerHTML = "";
+if (contador) contador.textContent = `${imagensEdicaoPerfil.length}/${LIMITE_IMAGENS_PERFIL}`;
+
+imagensEdicaoPerfil.forEach((item, indice) => {
+const bloco = document.createElement("div");
+bloco.className = "editor-imagem-item";
+const origem = item.arquivo ? item.preview : item.url;
+bloco.innerHTML = `
+<div class="editor-imagem-preview">
+<img src="${origem.replace(/"/g, "&quot;")}" alt="Foto ${indice + 1}">
+${indice === 0 ? '<span class="editor-imagem-principal">Principal</span>' : ""}
+<button type="button" class="editor-imagem-remover" aria-label="Remover foto">×</button>
+</div>
+<span class="editor-imagem-legenda">Foto ${indice + 1}${item.arquivo ? " · nova" : ""}</span>`;
+bloco.querySelector(".editor-imagem-remover").addEventListener("click", () => {
+const removida = imagensEdicaoPerfil.splice(indice, 1)[0];
+if (removida?.preview) URL.revokeObjectURL(removida.preview);
+renderizarImagensPerfilEditor();
+});
+lista.appendChild(bloco);
+});
+}
+
+function validarImagemPerfil(arquivo) {
+if (!["image/jpeg", "image/png", "image/webp"].includes(arquivo?.type)) {
+alert("Use somente imagens JPG, PNG ou WEBP.");
+return false;
+}
+if (arquivo.size > 5 * 1024 * 1024) {
+alert(`A imagem "${arquivo.name}" ultrapassa o limite de 5 MB.`);
+return false;
+}
+return true;
+}
+
+function abrirEditorPerfil() {
+if (!pessoaAtual || !cadastroMuralAtual) {
+mostrarMensagemEditarPerfil("Não foi possível identificar seu perfil.");
+return;
+}
+
+imagensEdicaoPerfil.forEach(item => item.preview && URL.revokeObjectURL(item.preview));
+imagensEdicaoPerfil = obterImagensEdicaoPerfil();
+
+document.getElementById("editarPessoaNome").value = pessoaAtual.nome || "";
+document.getElementById("editarPessoaCategoria").value = pessoaAtual.categoria || "";
+document.getElementById("editarPessoaInstagram").value = pessoaAtual.instagram || "";
+document.getElementById("editarPessoaDescricao").value = pessoaAtual.descricao || "";
+document.getElementById("editarPessoaSobre").value = pessoaAtual.sobre || "";
+renderizarImagensPerfilEditor();
+const input =
+document.getElementById(
+"editarPessoaImagens"
+);
+
+if (input && !input.dataset.configurado) {
+input.dataset.configurado = "true";
+input.addEventListener("change", evento => {
+const vagas = LIMITE_IMAGENS_PERFIL - imagensEdicaoPerfil.length;
+Array.from(evento.target.files || [])
+.slice(0, Math.max(0, vagas))
+.filter(validarImagemPerfil)
+.forEach(arquivo => imagensEdicaoPerfil.push({
+url: "",
+arquivo,
+preview: URL.createObjectURL(arquivo)
+}));
+input.value = "";
+renderizarImagensPerfilEditor();
+});
+}
+
+const formulario =
+document.getElementById(
+"formEditarPerfil"
+);
+
+if (formulario && !formulario.dataset.configurado) {
+formulario.dataset.configurado = "true";
+formulario.addEventListener("submit", salvarEdicaoPerfil);
+}
+
+const modal = document.getElementById("modalEditarPerfil");
+modal.style.display = "flex";
+modal.setAttribute("aria-hidden", "false");
+}
+
+function fecharEditorPerfil() {
+const modal = document.getElementById("modalEditarPerfil");
+if (!modal) return;
+modal.style.display = "none";
+modal.setAttribute("aria-hidden", "true");
+}
+
+async function enviarImagemPerfil(arquivo, usuarioId, indice) {
+const supabase = obterClienteSupabasePessoa();
+const nome = arquivo.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9._-]/g, "-");
+const caminho = `${usuarioId}/${Date.now()}-${indice}-${nome}`;
+const resposta = await supabase.storage.from(SUPABASE_MURAL_BUCKET).upload(caminho, arquivo, {
+cacheControl: "3600", upsert: false, contentType: arquivo.type
+});
+if (resposta.error) throw new Error(resposta.error.message || "Não foi possível enviar a imagem.");
+const publico = supabase.storage.from(SUPABASE_MURAL_BUCKET).getPublicUrl(caminho);
+return publico.data?.publicUrl;
+}
+
+async function salvarEdicaoPerfil(evento) {
+evento.preventDefault();
+const botao = document.getElementById("salvarEdicaoPerfil");
+const supabase = obterClienteSupabasePessoa();
+try {
+if (botao) { botao.disabled = true; botao.textContent = "Salvando..."; }
+const sessao = await supabase.auth.getSession();
+const token = sessao.data?.session?.access_token;
+const usuario = sessao.data?.session?.user;
+if (!token || !usuario) throw new Error("Sua sessão expirou. Faça login novamente.");
+const imagens = [];
+for (let indice = 0; indice < imagensEdicaoPerfil.length; indice++) {
+const item = imagensEdicaoPerfil[indice];
+imagens.push(item.arquivo ? await enviarImagemPerfil(item.arquivo, usuario.id, indice) : item.url);
+}
+const resposta = await fetch(EDGE_FUNCTION_URL, {
+method: "POST",
+headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}`, "apikey": SUPABASE_ANON_KEY },
+body: JSON.stringify({ acao: "editar_meu_mural", pessoa_id: pessoaAtual.id, pessoa: {
+nome: document.getElementById("editarPessoaNome").value.trim(),
+categoria: document.getElementById("editarPessoaCategoria").value.trim(),
+instagram: document.getElementById("editarPessoaInstagram").value.trim(),
+descricao: document.getElementById("editarPessoaDescricao").value.trim(),
+sobre: document.getElementById("editarPessoaSobre").value.trim(),
+imagem: imagens[0] || "", imagens: imagens.slice(0, LIMITE_IMAGENS_PERFIL)
+} })
+});
+const resultado = await resposta.json();
+if (!resposta.ok || resultado.sucesso === false) throw new Error(resultado.erro || resultado.detalhe || "Não foi possível salvar o perfil.");
+mostrarMensagemEditarPerfil("Perfil atualizado com sucesso.", "sucesso");
+setTimeout(() => window.location.reload(), 500);
+} catch (erro) {
+console.error("Erro ao editar perfil:", erro);
+mostrarMensagemEditarPerfil(erro.message || "Não foi possível salvar o perfil.");
+} finally {
+if (botao) { botao.disabled = false; botao.textContent = "Salvar alterações"; }
+}
 }
 
 /* =========================================================
@@ -1396,3 +1579,4 @@ botaoExcluir.style.display =
 }
 
 }
+let imagensEdicaoPerfil = [];
