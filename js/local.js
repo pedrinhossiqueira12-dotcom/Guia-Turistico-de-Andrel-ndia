@@ -42,7 +42,11 @@ window.location.search
 );
 
 const idLocal =
-parametrosURL.get("id");
+(parametrosURL.get("id") ||
+parametrosURL.get("local_id") ||
+parametrosURL.get("comercio_id") ||
+"").trim() ||
+null;
 
 let localAtual = null;
 
@@ -2118,9 +2122,39 @@ modal.style.display =
 SALVAR EDIÇÃO
 ========================================================= */
 
+function mostrarMensagemEdicao(mensagem, tipo = "erro") {
+
+const elemento =
+document.getElementById(
+"mensagemEditarComercio"
+);
+
+if (!elemento) {
+return;
+}
+
+elemento.textContent =
+mensagem;
+
+elemento.dataset.tipo =
+tipo;
+
+elemento.style.display =
+"block";
+
+elemento.style.color =
+tipo === "sucesso"
+? "#1f6b45"
+: "#a32626";
+
+}
+
 async function salvarEdicaoComercio() {
 
 if (!localAtual) {
+mostrarMensagemEdicao(
+"Não foi possível identificar o comércio atual. Abra novamente o detalhe pelo catálogo."
+);
 return;
 }
 
@@ -2128,6 +2162,9 @@ const cadastro =
 localAtual._cadastroSupabase;
 
 if (!cadastro) {
+mostrarMensagemEdicao(
+"Não foi possível identificar o cadastro do seu comércio. Atualize a página e tente novamente."
+);
 return;
 }
 
@@ -2135,6 +2172,9 @@ const token =
 await obterTokenSupabase();
 
 if (!token) {
+mostrarMensagemEdicao(
+"Sua sessão expirou. Faça login novamente antes de salvar."
+);
 return;
 }
 
@@ -2201,6 +2241,7 @@ obterValor(
 
 imagem:
 localAtual.imagem ||
+localAtual.capa ||
 null,
 
 imagens:
@@ -2208,6 +2249,10 @@ Array.isArray(
 localAtual.imagens
 )
 ? localAtual.imagens
+: Array.isArray(localAtual.galeria)
+? localAtual.galeria
+: localAtual.capa
+? [localAtual.capa]
 : []
 
 };
@@ -2227,7 +2272,10 @@ headers: {
 "application/json",
 
 "Authorization":
-`Bearer ${token}`
+`Bearer ${token}`,
+
+"apikey":
+SUPABASE_ANON_KEY
 
 },
 
@@ -2248,23 +2296,44 @@ dadosComercio
 }
 );
 
-const resultado =
-await resposta.json();
+let resultado = null;
 
-if (!resposta.ok) {
+try {
+resultado = await resposta.json();
+} catch (erroResposta) {
+resultado = {
+erro:
+`Resposta inválida da API (HTTP ${resposta.status}).`
+};
+}
+
+if (
+!resposta.ok ||
+resultado?.sucesso === false
+) {
 
 console.error(
 "Erro ao editar comércio:",
 resultado
 );
 
-return;
+mostrarMensagemEdicao(
+resultado?.erro ||
+resultado?.mensagem ||
+`Não foi possível salvar as alterações (HTTP ${resposta.status}).`
+);
 
+return;
 }
 
 console.log(
 "Comércio atualizado:",
 resultado
+);
+
+mostrarMensagemEdicao(
+"Alterações salvas com sucesso.",
+"sucesso"
 );
 
 fecharEditorComercio();
@@ -2276,6 +2345,11 @@ window.location.reload();
 console.error(
 "Erro ao editar comércio:",
 erro
+);
+
+mostrarMensagemEdicao(
+erro?.message ||
+"Não foi possível conectar ao servidor para salvar as alterações."
 );
 
 }
@@ -3146,7 +3220,7 @@ fecharEditorComercio;
 
 const cancelarEdicao =
 document.getElementById(
-"botaoCancelarEdicao"
+"cancelarEdicaoComercio"
 );
 
 if (cancelarEdicao) {
