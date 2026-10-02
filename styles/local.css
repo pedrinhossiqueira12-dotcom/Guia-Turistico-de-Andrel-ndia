@@ -1664,3 +1664,98 @@ margin: 5px 0 10px;
 grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 }
+
+/* =========================================================
+VISUAL DO EDITOR — PADRÃO ADMIN-CADASTROS
+========================================================= */
+
+.modal-editar-comercio,
+.modal-editar-perfil {
+position: fixed;
+inset: 0;
+z-index: 1000;
+display: flex;
+align-items: flex-start;
+justify-content: center;
+overflow-y: auto;
+padding: 28px 16px;
+background: rgba(9, 29, 28, 0.62);
+}
+
+.modal-editar-comercio-content,
+.editor-perfil-admin {
+position: relative;
+width: min(900px, 100%);
+margin: auto;
+overflow: hidden;
+border: 1px solid #d8d5cf;
+border-radius: 14px;
+background: #fff;
+box-shadow: 0 12px 40px rgba(0, 0, 0, 0.22);
+}
+
+.modal-editar-fechar { display: none; }
+
+.modal-editar-header,
+.editor-comercio-topo {
+display: flex;
+align-items: center;
+justify-content: space-between;
+gap: 15px;
+padding: 18px 20px;
+background: #091d1c;
+color: #fff;
+}
+
+.modal-editar-header { display: block; }
+.modal-editar-kicker,
+.editor-comercio-topo span {
+display: block;
+margin-bottom: 4px;
+color: rgba(255,255,255,.65);
+font-size: 10px;
+font-weight: 700;
+letter-spacing: .1em;
+}
+
+.modal-editar-header h2,
+.editor-comercio-topo h2 { margin: 0; color: #fff; font-size: 18px; }
+.modal-editar-header p { margin: 6px 0 0; color: rgba(255,255,255,.7); font-size: 13px; }
+
+#formEditarComercio { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px; padding: 20px; }
+.campo-editar { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.campo-editar label, .editor-imagens-cabecalho label { color: #555; font-size: 12px; font-weight: 700; }
+.campo-editar input, .campo-editar textarea { width: 100%; border: 1px solid #d5d5d5; border-radius: 8px; background: #fff; color: #292929; padding: 11px 12px; font: inherit; font-size: 14px; outline: none; }
+.campo-editar textarea { resize: vertical; min-height: 80px; }
+.campo-editar input:focus, .campo-editar textarea:focus { border-color: #194138; box-shadow: 0 0 0 3px rgba(25,65,56,.1); }
+
+#formEditarComercio > .campo-editar:nth-of-type(7),
+#formEditarComercio > .campo-editar:nth-of-type(8),
+#formEditarComercio > .campo-editar:nth-of-type(9),
+#formEditarComercio > #editarImagensAtuais,
+#formEditarComercio > #mensagemEditarComercio,
+#formEditarComercio > .editar-comercio-acoes { grid-column: 1 / -1; }
+
+#formEditarComercio > .campo-editar:nth-of-type(9) { order: 10; }
+#formEditarComercio > #editarImagensAtuais { order: 11; }
+#formEditarComercio > #mensagemEditarComercio { order: 12; }
+#formEditarComercio > .editar-comercio-acoes { order: 13; }
+
+.editar-comercio-acoes { display: flex; justify-content: flex-end; gap: 10px; padding-top: 5px; }
+.botao-cancelar-edicao, .botao-salvar-edicao { min-height: 40px; padding: 9px 14px; border: 0; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; }
+.botao-cancelar-edicao { background: #f1f1f1; color: #555; }
+.botao-salvar-edicao { background: #194138; color: #fff; }
+.mensagem-editar-comercio { display: none; padding: 10px 12px; border-radius: 8px; background: #f5f5f5; font-size: 13px; }
+
+.editor-botao-fechar { min-height: 36px; padding: 8px 13px; border: 1px solid rgba(255,255,255,.25); border-radius: 8px; background: rgba(255,255,255,.08); color: #fff; cursor: pointer; font-size: 12px; font-weight: 600; }
+
+@media (max-width: 650px) {
+#formEditarComercio { grid-template-columns: 1fr; }
+#formEditarComercio > .campo-editar,
+#formEditarComercio > #editarImagensAtuais,
+#formEditarComercio > #mensagemEditarComercio,
+#formEditarComercio > .editar-comercio-acoes { grid-column: 1; }
+.editar-comercio-acoes { flex-direction: column-reverse; }
+.botao-cancelar-edicao, .botao-salvar-edicao { width: 100%; }
+}
+#formEditarComercio > .editar-fotos-campo { grid-column: 1 / -1; }
