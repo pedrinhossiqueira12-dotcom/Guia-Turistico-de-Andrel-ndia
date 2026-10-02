@@ -1,1 +1,17 @@
-[]
+[
+  {
+    "id": "pedro-henrique-criador-do-site",
+    "nome": "Pedro Henrique (criador do site)",
+    "categoria": "Artesão",
+    "descricao": "Criador do site",
+    "sobre": "Nanananana",
+    "instagram": "@pedro_henriqueeei",
+    "imagem": "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/mural-imagens/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790954863635-0-si36dt9-1000436769.png",
+    "imagens": [
+      "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/mural-imagens/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790954863635-0-si36dt9-1000436769.png",
+      "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/mural-imagens/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790954865598-1-on0pf4f-1000436697.jpg",
+      "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/mural-imagens/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790954866651-2-dekptim-1000436700.jpg",
+      "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/mural-imagens/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790954867365-3-vnxeg1m-1000436683.jpg"
+    ]
+  }
+]
