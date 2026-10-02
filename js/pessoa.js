@@ -44,9 +44,19 @@ CLIENTE SUPABASE
 
 function obterClienteSupabasePessoa() {
 
+/*
+Primeiro tenta utilizar o cliente já criado pelo
+login.js para evitar criar múltiplas instâncias.
+*/
+
 if (window.supabaseClient) {
 return window.supabaseClient;
 }
+
+/*
+Caso o login.js não tenha criado o cliente,
+tenta criar utilizando a biblioteca Supabase disponível.
+*/
 
 if (
 window.supabase &&
@@ -100,25 +110,30 @@ if (!id) {
   return;
 }
 
+
 const resposta =
   await fetch(
     `../DATA/pessoas.json?t=${Date.now()}`
   );
 
 if (!resposta.ok) {
+
   throw new Error(
     "Não foi possível carregar os perfis."
   );
 }
 
+
 const pessoas =
   await resposta.json();
+
 
 pessoaAtual =
   pessoas.find(
     pessoa =>
       String(pessoa.id) === String(id)
   );
+
 
 if (!pessoaAtual) {
 
@@ -129,9 +144,16 @@ if (!pessoaAtual) {
   return;
 }
 
+
 preencherPagina(
   pessoaAtual
 );
+
+
+/*
+   A verificação do proprietário acontece
+   depois que o perfil público foi carregado.
+*/
 
 await verificarProprietarioPerfil(
   pessoaAtual.id
@@ -149,6 +171,7 @@ mostrarErro(
 );
 
 }
+
 }
 
 /* =========================================================
@@ -177,6 +200,11 @@ document.getElementById(
 "categoriaPessoa"
 );
 
+const categoriaTexto =
+document.getElementById(
+"categoriaPessoaTexto"
+);
+
 const descricao =
 document.getElementById(
 "descricaoPessoa"
@@ -193,13 +221,17 @@ document.getElementById(
 );
 
 if (titulo) {
+
 titulo.textContent =
-pessoa.nome || "Perfil";
+  pessoa.nome || "Perfil";
+
 }
 
 if (nome) {
+
 nome.textContent =
-pessoa.nome || "";
+  pessoa.nome || "";
+
 }
 
 if (categoria) {
@@ -208,6 +240,18 @@ categoria.textContent =
   pessoa.categoria || "";
 
 categoria.style.display =
+  pessoa.categoria
+    ? ""
+    : "none";
+
+}
+
+if (categoriaTexto) {
+
+categoriaTexto.textContent =
+  pessoa.categoria || "";
+
+categoriaTexto.style.display =
   pessoa.categoria
     ? ""
     : "none";
@@ -254,7 +298,9 @@ foto.onerror =
   function () {
 
     this.onerror = null;
-    this.src = FALLBACK_IMAGE;
+
+    this.src =
+      FALLBACK_IMAGE;
 
   };
 
@@ -267,6 +313,7 @@ pessoa
 montarGaleria(
 pessoa
 );
+
 }
 
 /* =========================================================
@@ -334,7 +381,9 @@ CAMINHO SUPABASE STORAGE
 ----------------------------------------- */
 
 if (
-caminho.includes("/storage/v1/object/")
+caminho.includes(
+"/storage/v1/object/"
+)
 ) {
 
 if (
@@ -344,12 +393,15 @@ if (
 ) {
 
   return caminho;
+
 }
+
 
 const indice =
   caminho.indexOf(
     "/storage/v1/object/"
   );
+
 
 if (indice !== -1) {
 
@@ -358,6 +410,7 @@ if (indice !== -1) {
       indice
     );
 
+
   return (
     SUPABASE_URL +
     parte.replace(
@@ -365,6 +418,7 @@ if (indice !== -1) {
       "/storage/v1/object/public/"
     )
   );
+
 }
 
 }
@@ -375,8 +429,8 @@ REMOVER BARRAS INICIAIS
 
 caminho =
 caminho.replace(
-/^\/+/
-,""
+/^\/+/,
+""
 );
 
 /* -----------------------------------------
@@ -408,6 +462,7 @@ const arquivo =
     `${SUPABASE_MURAL_BUCKET}/`.length
   );
 
+
 return (
   `${SUPABASE_URL}/storage/v1/object/public/` +
   `${SUPABASE_MURAL_BUCKET}/${arquivo}`
@@ -423,6 +478,7 @@ return (
 `${SUPABASE_URL}/storage/v1/object/public/` +
 `${SUPABASE_MURAL_BUCKET}/${caminho}`
 );
+
 }
 
 /* =========================================================
@@ -446,6 +502,7 @@ pessoa.avatar;
 return corrigirCaminhoImagem(
 imagem
 );
+
 }
 
 /* =========================================================
@@ -478,6 +535,7 @@ return galeria
 .map(
 corrigirCaminhoImagem
 );
+
 }
 
 /* =========================================================
@@ -501,7 +559,9 @@ let instagram =
 pessoa.instagram || "";
 
 instagram =
-String(instagram).trim();
+String(
+instagram
+).trim();
 
 if (!instagram) {
 
@@ -523,6 +583,7 @@ instagram =
     ""
   );
 
+
 instagram =
   `https://instagram.com/${instagram}`;
 
@@ -539,6 +600,7 @@ botao.rel =
 
 botao.style.display =
 "";
+
 }
 
 /* =========================================================
@@ -561,7 +623,7 @@ return;
 galeriaElemento.innerHTML =
 "";
 
-const imagens =
+const galeria =
 obterGaleriaPessoa(
 pessoa
 );
@@ -573,36 +635,47 @@ pessoa
 
 const todasImagens = [
 imagemPrincipal,
-...imagens
+...galeria
 ];
 
 const imagensUnicas =
-[...new Set(
+[
+...new Set(
 todasImagens.filter(Boolean)
-)];
+)
+];
 
 imagensUnicas.forEach(
-(imagem, indice) => {
+(
+imagem,
+indice
+) => {
 
   const item =
     document.createElement(
       "img"
     );
 
+
   item.src =
     imagem;
+
 
   item.alt =
     `${pessoa.nome || "Perfil"} — foto ${indice + 1}`;
 
+
   item.loading =
     "lazy";
+
 
   item.onerror =
     function () {
 
       this.onerror = null;
-      this.src = FALLBACK_IMAGE;
+
+      this.src =
+        FALLBACK_IMAGE;
 
     };
 
@@ -626,6 +699,7 @@ imagensUnicas.forEach(
 }
 
 );
+
 }
 
 /* =========================================================
@@ -641,77 +715,108 @@ document.getElementById(
 "botaoExcluirPerfil"
 );
 
-if (!botao) {
-return;
-}
+/*
+Por segurança, o botão começa sempre escondido.
+*/
+
+if (botao) {
 
 botao.style.display =
-"none";
+  "none";
+
+}
+
+cadastroMuralAtual =
+null;
 
 try {
-
-let usuario = null;
-
-
-/* -----------------------------------------
-   TENTAR SISTEMA DE LOGIN EXISTENTE
-   ----------------------------------------- */
-
-if (
-  typeof obterUsuarioLogin ===
-  "function"
-) {
-
-  usuario =
-    await obterUsuarioLogin();
-}
-
-
-/* -----------------------------------------
-   FALLBACK PARA SUPABASE
-   ----------------------------------------- */
-
-if (!usuario) {
-
-  const supabase =
-    obterClienteSupabasePessoa();
-
-  if (!supabase) {
-    return;
-  }
-
-
-  const resultado =
-    await supabase.auth.getUser();
-
-
-  usuario =
-    resultado.data?.user || null;
-}
-
-
-if (!usuario) {
-  return;
-}
-
 
 const supabase =
   obterClienteSupabasePessoa();
 
 
 if (!supabase) {
+
+  console.warn(
+    "Cliente Supabase não disponível."
+  );
+
+  return;
+
+}
+
+
+/* -----------------------------------------
+   OBTER USUÁRIO AUTENTICADO
+----------------------------------------- */
+
+let usuario =
+  null;
+
+
+/*
+   Primeiro utiliza o sistema de login
+   existente, se disponível.
+*/
+
+if (
+  typeof obterUsuarioLogin ===
+  "function"
+) {
+
+  try {
+
+    usuario =
+      await obterUsuarioLogin();
+
+  } catch (erroLogin) {
+
+    console.warn(
+      "Não foi possível obter usuário pelo login.js:",
+      erroLogin
+    );
+
+  }
+
+}
+
+
+/*
+   Fallback direto para Supabase Auth.
+*/
+
+if (!usuario) {
+
+  const resultadoAuth =
+    await supabase.auth.getUser();
+
+
+  usuario =
+    resultadoAuth.data?.user ||
+    null;
+
+}
+
+
+/*
+   Visitante não pode visualizar o botão.
+*/
+
+if (!usuario) {
   return;
 }
 
 
 /* -----------------------------------------
-   LOCALIZAR CADASTRO DO PERFIL
-   ----------------------------------------- */
+   LOCALIZAR CADASTRO
+----------------------------------------- */
 
 const resposta =
   await supabase
     .from("mural_cadastros")
-    .select("*")
+    .select(
+      "id, usuario_id, status"
+    )
     .eq(
       "id",
       pessoaId
@@ -722,29 +827,28 @@ const resposta =
 if (resposta.error) {
 
   console.error(
-    "Erro ao verificar proprietário:",
+    "Erro ao localizar cadastro do mural:",
     resposta.error
   );
 
   return;
+
 }
 
 
 cadastroMuralAtual =
-  resposta.data;
+  resposta.data ||
+  null;
 
 
-if (
-  !cadastroMuralAtual
-) {
-
+if (!cadastroMuralAtual) {
   return;
 }
 
 
 /* -----------------------------------------
    CONFIRMAR PROPRIETÁRIO
-   ----------------------------------------- */
+----------------------------------------- */
 
 const ehProprietario =
   String(
@@ -755,18 +859,23 @@ const ehProprietario =
   );
 
 
+/*
+   Perfis públicos existentes no
+   pessoas.json devem estar aprovados.
+
+   O status pendente é mantido fora do
+   controle público.
+*/
+
 const statusPermitido =
-  [
-    "pendente",
-    "aprovado"
-  ].includes(
-    cadastroMuralAtual.status
-  );
+  cadastroMuralAtual.status ===
+  "aprovado";
 
 
 if (
   ehProprietario &&
-  statusPermitido
+  statusPermitido &&
+  botao
 ) {
 
   botao.style.display =
@@ -783,7 +892,19 @@ console.error(
   erro
 );
 
+/*
+   Em qualquer erro, o botão permanece oculto.
+*/
+
+if (botao) {
+
+  botao.style.display =
+    "none";
+
 }
+
+}
+
 }
 
 /* =========================================================
@@ -842,6 +963,7 @@ botao.style.cursor =
 
 botao.style.boxSizing =
 "border-box";
+
 }
 
 /* =========================================================
@@ -859,6 +981,10 @@ alert(
 return;
 
 }
+
+/*
+Confirmação antes de iniciar a exclusão.
+*/
 
 const confirmou =
 confirm(
@@ -884,8 +1010,15 @@ if (botao) {
   botao.disabled =
     true;
 
-  botao.textContent =
+  botao.style.opacity =
+    "0.6";
+
+  botao.style.cursor =
+    "wait";
+
+  botao.innerHTML =
     "Excluindo...";
+
 }
 
 
@@ -898,12 +1031,13 @@ if (!supabase) {
   throw new Error(
     "Não foi possível conectar ao Supabase."
   );
+
 }
 
 
 /* -----------------------------------------
-   OBTER SESSÃO
-   ----------------------------------------- */
+   OBTER SESSÃO ATUAL
+----------------------------------------- */
 
 const sessao =
   await supabase.auth.getSession();
@@ -918,12 +1052,13 @@ if (!accessToken) {
   throw new Error(
     "Sua sessão expirou. Faça login novamente."
   );
+
 }
 
 
 /* -----------------------------------------
    CHAMAR EDGE FUNCTION
-   ----------------------------------------- */
+----------------------------------------- */
 
 const resposta =
   await fetch(
@@ -939,15 +1074,20 @@ const resposta =
           `Bearer ${accessToken}`
       },
 
-      body: JSON.stringify({
-        acao: "excluir_mural",
-        pessoa_id: pessoaAtual.id
-      })
+      body:
+        JSON.stringify({
+          acao:
+            "excluir_mural",
+
+          pessoa_id:
+            pessoaAtual.id
+        })
     }
   );
 
 
-let resultado = null;
+let resultado =
+  null;
 
 
 try {
@@ -957,13 +1097,15 @@ try {
 
 } catch {
 
-  resultado = {};
+  resultado =
+    {};
+
 }
 
 
 /* -----------------------------------------
    ERRO HTTP
-   ----------------------------------------- */
+----------------------------------------- */
 
 if (!resposta.ok) {
 
@@ -973,12 +1115,13 @@ if (!resposta.ok) {
     resultado.message ||
     "Não foi possível excluir o perfil."
   );
+
 }
 
 
 /* -----------------------------------------
    ERRO RETORNADO PELA EDGE FUNCTION
-   ----------------------------------------- */
+----------------------------------------- */
 
 if (
   resultado.sucesso === false
@@ -990,18 +1133,25 @@ if (
     resultado.message ||
     "A exclusão não foi concluída."
   );
+
 }
 
 
 /* -----------------------------------------
    SUCESSO
-   ----------------------------------------- */
+----------------------------------------- */
 
 alert(
   resultado.mensagem ||
   "Seu perfil foi excluído com sucesso."
 );
 
+
+/*
+   Volta para a página inicial.
+   O pessoas.json já foi atualizado
+   pela Edge Function.
+*/
 
 window.location.href =
   "../index.html";
@@ -1025,13 +1175,29 @@ if (botao) {
   botao.disabled =
     false;
 
-  botao.textContent =
-    "Excluir meu perfil";
+  botao.innerHTML =
+    `
+      <span class="botao-excluir-perfil-icone">
+        ×
+      </span>
+
+      <span>
+        Excluir meu perfil
+      </span>
+    `;
+
+  botao.style.opacity =
+    "1";
+
+  botao.style.cursor =
+    "pointer";
 
   configurarEstiloBotaoExcluir();
+
 }
 
 }
+
 }
 
 /* =========================================================
@@ -1056,7 +1222,9 @@ if (
 !viewer ||
 !viewerImage
 ) {
+
 return;
+
 }
 
 viewerImage.src =
@@ -1072,6 +1240,7 @@ viewer.style.display =
 
 document.body.style.overflow =
 "hidden";
+
 }
 
 /* =========================================================
@@ -1094,6 +1263,7 @@ viewer.style.display =
 
 document.body.style.overflow =
 "";
+
 }
 
 /* =========================================================
@@ -1109,6 +1279,7 @@ if (
 ) {
 
   fecharVisualizador();
+
 }
 
 }
@@ -1127,6 +1298,7 @@ const viewer =
     "photoViewer"
   );
 
+
 if (!viewer) {
   return;
 }
@@ -1137,6 +1309,7 @@ if (
 ) {
 
   fecharVisualizador();
+
 }
 
 }
@@ -1160,6 +1333,7 @@ window.location.href =
   "../index.html";
 
 }
+
 }
 
 /* =========================================================
@@ -1220,4 +1394,5 @@ botaoExcluir.style.display =
   "none";
 
 }
+
 }
