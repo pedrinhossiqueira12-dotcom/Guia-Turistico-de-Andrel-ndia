@@ -616,7 +616,270 @@ Sugerir alteração →
 
 </main>
 
+<!-- ======================================================= MODAL — EDITAR MEU COMÉRCIO ======================================================== -->
 
+<div id="modalEditarComercio" class="modal-editar-comercio" style="display: none;" aria-hidden="true" >
+
+<div class="modal-editar-comercio-content">
+
+<button
+  type="button"
+  id="fecharModalEditarComercio"
+  class="modal-editar-fechar"
+  aria-label="Fechar"
+>
+  ×
+</button>
+
+
+<div class="modal-editar-header">
+
+  <span class="modal-editar-kicker">
+    MEU COMÉRCIO
+  </span>
+
+  <h2>
+    Editar comércio
+  </h2>
+
+  <p>
+    Atualize as informações do seu comércio.
+  </p>
+
+</div>
+
+
+<form id="formEditarComercio">
+
+
+  <!-- NOME -->
+
+  <div class="campo-editar">
+
+    <label for="editarNome">
+      Nome do comércio
+    </label>
+
+    <input
+      type="text"
+      id="editarNome"
+      maxlength="100"
+      required
+    >
+
+  </div>
+
+
+  <!-- CATEGORIA -->
+
+  <div class="campo-editar">
+
+    <label for="editarCategoria">
+      Categoria
+    </label>
+
+    <input
+      type="text"
+      id="editarCategoria"
+      maxlength="60"
+      required
+    >
+
+  </div>
+
+
+  <!-- WHATSAPP -->
+
+  <div class="campo-editar">
+
+    <label for="editarWhatsapp">
+      WhatsApp
+    </label>
+
+    <input
+      type="text"
+      id="editarWhatsapp"
+      maxlength="30"
+      placeholder="(35) 99999-9999"
+    >
+
+  </div>
+
+
+  <!-- INSTAGRAM -->
+
+  <div class="campo-editar">
+
+    <label for="editarInstagram">
+      Instagram
+    </label>
+
+    <input
+      type="text"
+      id="editarInstagram"
+      maxlength="100"
+      placeholder="@seuinstagram"
+    >
+
+  </div>
+
+
+  <!-- ENDEREÇO -->
+
+  <div class="campo-editar">
+
+    <label for="editarEndereco">
+      Endereço
+    </label>
+
+    <input
+      type="text"
+      id="editarEndereco"
+      maxlength="200"
+    >
+
+  </div>
+
+
+  <!-- HORÁRIO -->
+
+  <div class="campo-editar">
+
+    <label for="editarHorario">
+      Horário de funcionamento
+    </label>
+
+    <input
+      type="text"
+      id="editarHorario"
+      maxlength="200"
+      placeholder="Ex.: Segunda a sábado, 08h às 18h"
+    >
+
+  </div>
+
+
+  <!-- DESCRIÇÃO -->
+
+  <div class="campo-editar">
+
+    <label for="editarDescricao">
+      Descrição
+    </label>
+
+    <textarea
+      id="editarDescricao"
+      maxlength="1000"
+      rows="5"
+      placeholder="Descreva seu comércio..."
+    ></textarea>
+
+  </div>
+
+
+  <!-- LATITUDE -->
+
+  <div class="campo-editar">
+
+    <label for="editarLatitude">
+      Latitude
+    </label>
+
+    <input
+      type="number"
+      id="editarLatitude"
+      step="any"
+      placeholder="-21.740150"
+    >
+
+  </div>
+
+
+  <!-- LONGITUDE -->
+
+  <div class="campo-editar">
+
+    <label for="editarLongitude">
+      Longitude
+    </label>
+
+    <input
+      type="number"
+      id="editarLongitude"
+      step="any"
+      placeholder="-44.309058"
+    >
+
+  </div>
+
+
+  <!-- IMAGENS -->
+
+  <div class="campo-editar">
+
+    <label for="editarImagens">
+      Fotos do comércio
+    </label>
+
+    <input
+      type="file"
+      id="editarImagens"
+      accept="image/*"
+      multiple
+    >
+
+    <small>
+      Selecione até 4 novas imagens. Se não selecionar nenhuma,
+      as fotos atuais serão mantidas.
+    </small>
+
+  </div>
+
+
+  <!-- FOTOS ATUAIS -->
+
+  <div
+    id="editarImagensAtuais"
+    class="editar-imagens-atuais"
+  ></div>
+
+
+  <!-- MENSAGEM -->
+
+  <div
+    id="mensagemEditarComercio"
+    class="mensagem-editar-comercio"
+  ></div>
+
+
+  <!-- BOTÕES -->
+
+  <div class="editar-comercio-acoes">
+
+    <button
+      type="button"
+      id="cancelarEdicaoComercio"
+      class="botao-cancelar-edicao"
+    >
+      Cancelar
+    </button>
+
+    <button
+      type="submit"
+      id="salvarEdicaoComercio"
+      class="botao-salvar-edicao"
+    >
+      Salvar alterações
+    </button>
+
+  </div>
+
+
+</form>
+
+</div>
+
+</div> <!-- ======================================================= FIM DO MODAL — EDITAR MEU COMÉRCIO ======================================================== -->
 <!-- =======================================================
      MODAL DE LOGIN / CADASTRO
 
@@ -860,5 +1123,4 @@ Sugerir alteração →
 </body>
 
 </html>
-
 
