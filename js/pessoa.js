@@ -1,4 +1,5 @@
 let pessoaAtual = null;
+let cadastroMuralAtual = null;
 
 /* =========================================================
 CONFIGURAÇÃO
@@ -7,11 +8,62 @@ CONFIGURAÇÃO
 const SUPABASE_URL =
 "https://xdmbkflufsfqziixzpxc.supabase.co";
 
+const SUPABASE_ANON_KEY =
+"sb_publishable_dvwNkLDf3oZrCqvZ5uAaRA_VsfiuZFy";
+
 const SUPABASE_MURAL_BUCKET =
-"mural";
+"mural-imagens";
+
+const EDGE_FUNCTION_URL =
+`${SUPABASE_URL}/functions/v1/whatsapp-bot`;
 
 const FALLBACK_IMAGE =
 "../img/sem-foto.png";
+
+/* =========================================================
+CLIENTE SUPABASE
+========================================================= */
+
+let pessoaSupabase = null;
+
+function obterClienteSupabasePessoa() {
+
+/*
+
+Se o login.js já criou um cliente global,
+tentamos reutilizá-lo.
+*/
+
+if (
+typeof window.supabaseClient !== "undefined" &&
+window.supabaseClient
+) {
+
+return window.supabaseClient;
+
+}
+
+if (
+typeof window.supabase !== "undefined" &&
+typeof window.supabase.createClient === "function"
+) {
+
+if (!pessoaSupabase) {
+
+  pessoaSupabase =
+    window.supabase.createClient(
+      SUPABASE_URL,
+      SUPABASE_ANON_KEY
+    );
+
+}
+
+return pessoaSupabase;
+
+}
+
+return null;
+}
 
 /* =========================================================
 INICIALIZAÇÃO
@@ -25,48 +77,6 @@ carregarPessoa
 /* =========================================================
 NORMALIZAR IMAGEM
 ========================================================= */
-
-/*
-
-Aceita:
-
-
-
-
-URL completa:
-https://...
-
-
-
-
-URL do Supabase Storage:
-https://.../storage/v1/object/public/mural/...
-
-
-
-
-Caminho do bucket:
-usuario/arquivo.webp
-
-
-
-
-Caminho antigo:
-./img/pessoas/arquivo.jpeg
-
-
-
-
-Caminho relativo:
-img/pessoas/arquivo.jpeg
-
-
-
-
-Objeto:
-{ url: "..." }
-{ path: "..." }
-*/
 
 function corrigirCaminhoImagem(valor) {
 
@@ -108,8 +118,7 @@ if (typeof valor !== "string") {
 return "";
 }
 
-let caminho =
-valor.trim();
+let caminho = valor.trim();
 
 if (!caminho) {
 return "";
@@ -129,7 +138,7 @@ return caminho;
 }
 
 /* =======================================================
-URL DO SUPABASE SEM O DOMÍNIO
+URL DO SUPABASE SEM DOMÍNIO
 ======================================================= */
 
 if (
@@ -163,42 +172,50 @@ return `${SUPABASE_URL}/storage/v1/${caminho}`;
 }
 
 /* =======================================================
-CAMINHO DO BUCKET MURAL
+CAMINHO DO STORAGE COM BUCKET
 ======================================================= */
 
-caminho =
-caminho.replace(/^\/+/, "");
+caminho = caminho.replace(/^\/+/, "");
 
 if (
-caminho.startsWith("mural/")
+caminho.startsWith(
+`${SUPABASE_MURAL_BUCKET}/`
+)
 ) {
 
 caminho =
-  caminho.substring(6);
+  caminho.substring(
+    SUPABASE_MURAL_BUCKET.length + 1
+  );
+
+return (
+  `${SUPABASE_URL}` +
+  `/storage/v1/object/public/` +
+  `${SUPABASE_MURAL_BUCKET}/` +
+  caminho
+);
 
 }
 
 /*
 
-Se não parece ser um caminho antigo
-do site, tratamos como arquivo do bucket mural.
+Caso venha no formato:
 
 
-Exemplos:
-
-
-usuario-id/foto.webp
-123456/foto.jpg
+public/mural-imagens/arquivo.webp
 */
 
+const prefixoPublico =
+`public/${SUPABASE_MURAL_BUCKET}/`;
+
 if (
-!caminho.startsWith("./") &&
-!caminho.startsWith("../") &&
-!caminho.startsWith("img/") &&
-!caminho.startsWith("IMG/") &&
-!caminho.startsWith("images/") &&
-!caminho.startsWith("assets/")
+caminho.startsWith(prefixoPublico)
 ) {
+
+caminho =
+  caminho.substring(
+    prefixoPublico.length
+  );
 
 return (
   `${SUPABASE_URL}` +
@@ -210,7 +227,7 @@ return (
 }
 
 /* =======================================================
-CAMINHO ANTIGO DO SITE
+CAMINHOS LOCAIS DO SITE
 ======================================================= */
 
 if (
@@ -232,8 +249,54 @@ return caminho;
 
 }
 
+if (
+caminho.startsWith("img/") ||
+caminho.startsWith("IMG/") ||
+caminho.startsWith("images/") ||
+caminho.startsWith("assets/")
+) {
+
 return "../" + caminho;
 
+}
+
+/*
+
+Caminho absoluto do próprio site.
+*/
+
+if (
+caminho.startsWith("/")
+) {
+
+return caminho;
+
+}
+
+/* =======================================================
+CAMINHO DE IMAGEM DO MURAL
+======================================================= */
+
+/*
+
+Se não parece ser um caminho local,
+tratamos como arquivo do bucket mural-imagens.
+
+
+Exemplos:
+
+
+usuario-id/foto.webp
+123456/foto.jpg
+perfil/foto.png
+*/
+
+return (
+`${SUPABASE_URL}` +
+`/storage/v1/object/public/` +
+`${SUPABASE_MURAL_BUCKET}/` +
+caminho
+);
 }
 
 /* =========================================================
@@ -246,19 +309,26 @@ if (!pessoa) {
 return "";
 }
 
-/*
-
-Novo formato
-*/
+/* =======================================================
+CAMPOS PRINCIPAIS
+======================================================= */
 
 const camposPrincipais = [
+
 pessoa.imagem,
+
 pessoa.imagem_url,
+
 pessoa.foto,
+
 pessoa.foto_url,
+
 pessoa.avatar,
+
 pessoa.avatar_url,
+
 pessoa.capa
+
 ];
 
 for (
@@ -267,7 +337,6 @@ const imagem of camposPrincipais
 
 const caminho =
   corrigirCaminhoImagem(imagem);
-
 
 if (caminho) {
   return caminho;
@@ -280,21 +349,22 @@ ARRAYS DE IMAGENS
 ======================================================= */
 
 const colecoes = [
+
 pessoa.imagens,
+
 pessoa.galeria,
+
 pessoa.fotos
+
 ];
 
 for (
 const colecao of colecoes
 ) {
 
-if (
-  !Array.isArray(colecao)
-) {
+if (!Array.isArray(colecao)) {
   continue;
 }
-
 
 for (
   const imagem of colecao
@@ -302,7 +372,6 @@ for (
 
   const caminho =
     corrigirCaminhoImagem(imagem);
-
 
   if (caminho) {
     return caminho;
@@ -313,7 +382,6 @@ for (
 }
 
 return "";
-
 }
 
 /* =========================================================
@@ -328,16 +396,10 @@ return [];
 
 const imagens = [];
 
-/*
-
-Adiciona uma imagem evitando duplicadas.
-*/
-
 function adicionarImagem(valor) {
 
 const caminho =
   corrigirCaminhoImagem(valor);
-
 
 if (
   caminho &&
@@ -351,7 +413,7 @@ if (
 }
 
 /* =======================================================
-NOVO FORMATO
+CAMPOS PRINCIPAIS
 ======================================================= */
 
 adicionarImagem(
@@ -371,6 +433,14 @@ pessoa.foto_url
 );
 
 adicionarImagem(
+pessoa.avatar
+);
+
+adicionarImagem(
+pessoa.avatar_url
+);
+
+adicionarImagem(
 pessoa.capa
 );
 
@@ -379,21 +449,22 @@ ARRAYS
 ======================================================= */
 
 const colecoes = [
+
 pessoa.imagens,
+
 pessoa.galeria,
+
 pessoa.fotos
+
 ];
 
 for (
 const colecao of colecoes
 ) {
 
-if (
-  !Array.isArray(colecao)
-) {
+if (!Array.isArray(colecao)) {
   continue;
 }
-
 
 colecao.forEach(
   adicionarImagem
@@ -402,7 +473,6 @@ colecao.forEach(
 }
 
 return imagens;
-
 }
 
 /* =========================================================
@@ -437,7 +507,6 @@ const resposta =
     Date.now()
   );
 
-
 if (!resposta.ok) {
 
   throw new Error(
@@ -446,14 +515,10 @@ if (!resposta.ok) {
 
 }
 
-
 const pessoas =
   await resposta.json();
 
-
-if (
-  !Array.isArray(pessoas)
-) {
+if (!Array.isArray(pessoas)) {
 
   throw new Error(
     "pessoas.json não possui um array válido."
@@ -461,14 +526,12 @@ if (
 
 }
 
-
 pessoaAtual =
   pessoas.find(
     pessoa =>
       String(pessoa.id) ===
       String(id)
   );
-
 
 if (!pessoaAtual) {
 
@@ -480,9 +543,18 @@ if (!pessoaAtual) {
 
 }
 
-
 preencherPagina(
   pessoaAtual
+);
+
+/*
+ * Depois de preencher a página,
+ * verificamos se o usuário atual
+ * é dono deste perfil.
+ */
+
+await verificarProprietarioPerfil(
+  pessoaAtual.id
 );
 
 }
@@ -493,7 +565,6 @@ console.error(
   "Erro ao carregar pessoa:",
   erro
 );
-
 
 mostrarErro(
   "Não foi possível carregar as informações."
@@ -627,10 +698,8 @@ foto.src =
   imagemPrincipal ||
   FALLBACK_IMAGE;
 
-
 foto.alt =
   nome;
-
 
 foto.onerror =
   function () {
@@ -639,13 +708,13 @@ foto.onerror =
       this.dataset.fallback ===
       "true"
     ) {
-      return;
-    }
 
+      return;
+
+    }
 
     this.dataset.fallback =
       "true";
-
 
     this.src =
       FALLBACK_IMAGE;
@@ -704,9 +773,7 @@ String(
 pessoa.instagram
 ).trim();
 
-if (
-!instagram
-) {
+if (!instagram) {
 
 botao.style.display =
   "none";
@@ -793,12 +860,6 @@ obterGaleriaPessoa(
 pessoa
 );
 
-/*
-
-Se não houver imagens,
-não deixa a galeria quebrada.
-*/
-
 if (
 fotos.length === 0
 ) {
@@ -814,70 +875,56 @@ fotos.forEach(
     return;
   }
 
-
   const item =
     document.createElement(
       "button"
     );
 
-
   item.type =
     "button";
 
-
   item.className =
     "galeria-item";
-
 
   item.setAttribute(
     "aria-label",
     `Abrir foto ${index + 1}`
   );
 
-
   const img =
     document.createElement(
       "img"
     );
 
-
   img.src =
     caminho;
 
-
   img.alt =
     `${pessoa.nome || "Pessoa"} — foto ${index + 1}`;
-
 
   img.loading =
     index === 0
       ? "eager"
       : "lazy";
 
-
   img.onerror =
     function () {
-
-      /*
-       * Remove somente a miniatura
-       * que não conseguiu carregar.
-       */
 
       item.remove();
 
     };
 
-
   item.appendChild(
     img
   );
 
-
   item.addEventListener(
     "click",
-    () => abrirFoto(caminho)
+    () =>
+      abrirFoto(
+        caminho
+      )
   );
-
 
   galeria.appendChild(
     item
@@ -886,6 +933,493 @@ fotos.forEach(
 }
 
 );
+
+}
+
+/* =========================================================
+VERIFICAR PROPRIETÁRIO
+========================================================= */
+
+async function verificarProprietarioPerfil(
+pessoaId
+) {
+
+const botao =
+document.getElementById(
+"botaoExcluirPerfil"
+);
+
+if (!botao) {
+return;
+}
+
+/*
+
+Por segurança, começa sempre oculto.
+*/
+
+botao.style.display =
+"none";
+
+cadastroMuralAtual =
+null;
+
+try {
+
+/*
+ * Primeiro tentamos usar a função
+ * existente do sistema de login.
+ */
+
+let usuario = null;
+
+if (
+  typeof obterUsuarioLogin ===
+  "function"
+) {
+
+  try {
+
+    usuario =
+      await obterUsuarioLogin();
+
+  }
+
+  catch (erro) {
+
+    console.warn(
+      "Não foi possível obter usuário pelo login.js.",
+      erro
+    );
+
+  }
+
+}
+
+/*
+ * Se não conseguimos pelo login.js,
+ * tentamos diretamente no Supabase.
+ */
+
+const cliente =
+  obterClienteSupabasePessoa();
+
+if (
+  !usuario &&
+  cliente
+) {
+
+  const resultado =
+    await cliente.auth.getUser();
+
+  usuario =
+    resultado?.data?.user ||
+    null;
+
+}
+
+if (!usuario) {
+
+  return;
+
+}
+
+if (!cliente) {
+
+  console.warn(
+    "Cliente Supabase não disponível para verificar proprietário."
+  );
+
+  return;
+
+}
+
+/*
+ * Procuramos o cadastro correspondente
+ * ao ID público da pessoa.
+ */
+
+const resultado =
+  await cliente
+    .from("mural_cadastros")
+    .select(
+      "id, usuario_id, status, nome"
+    )
+    .eq(
+      "id",
+      pessoaId
+    )
+    .maybeSingle();
+
+if (
+  resultado.error
+) {
+
+  console.error(
+    "Erro ao consultar proprietário do perfil:",
+    resultado.error
+  );
+
+  return;
+
+}
+
+const cadastro =
+  resultado.data;
+
+if (!cadastro) {
+
+  /*
+   * Perfil antigo/manual no JSON.
+   * Não existe vínculo com usuário.
+   */
+
+  return;
+
+}
+
+cadastroMuralAtual =
+  cadastro;
+
+/*
+ * Só o próprio usuário pode
+ * visualizar o botão.
+ */
+
+const ehProprietario =
+  String(
+    cadastro.usuario_id
+  ) ===
+  String(
+    usuario.id
+  );
+
+/*
+ * Perfis deletados não podem
+ * ser excluídos novamente.
+ */
+
+const perfilAtivo =
+  cadastro.status ===
+    "aprovado" ||
+  cadastro.status ===
+    "pendente";
+
+if (
+  ehProprietario &&
+  perfilAtivo
+) {
+
+  botao.style.display =
+    "flex";
+
+  configurarEstiloBotaoExcluir();
+
+}
+
+}
+
+catch (erro) {
+
+console.error(
+  "Erro ao verificar proprietário:",
+  erro
+);
+
+botao.style.display =
+  "none";
+
+}
+
+}
+
+/* =========================================================
+ESTILO DO BOTÃO DE EXCLUSÃO
+========================================================= */
+
+function configurarEstiloBotaoExcluir() {
+
+const botao =
+document.getElementById(
+"botaoExcluirPerfil"
+);
+
+if (!botao) {
+return;
+}
+
+/*
+
+O botão recebe somente os estilos necessários
+caso eles ainda não existam no pessoa.css.
+*/
+
+botao.style.display =
+"flex";
+
+botao.style.alignItems =
+"center";
+
+botao.style.justifyContent =
+"center";
+
+botao.style.gap =
+"8px";
+
+botao.style.width =
+"100%";
+
+botao.style.marginTop =
+"12px";
+
+botao.style.padding =
+"12px 16px";
+
+botao.style.border =
+"1px solid #d6d6d6";
+
+botao.style.borderRadius =
+"8px";
+
+botao.style.background =
+"#ffffff";
+
+botao.style.color =
+"#555555";
+
+botao.style.fontFamily =
+"Roboto, sans-serif";
+
+botao.style.fontSize =
+"14px";
+
+botao.style.fontWeight =
+"600";
+
+botao.style.cursor =
+"pointer";
+
+botao.style.transition =
+"all 0.2s ease";
+
+botao.onmouseenter =
+function () {
+
+  this.style.background =
+    "#f5f5f5";
+
+  this.style.borderColor =
+    "#bdbdbd";
+
+};
+
+botao.onmouseleave =
+function () {
+
+  this.style.background =
+    "#ffffff";
+
+  this.style.borderColor =
+    "#d6d6d6";
+
+};
+
+}
+
+/* =========================================================
+EXCLUIR MEU PERFIL
+========================================================= */
+
+async function excluirMeuPerfil() {
+
+const botao =
+document.getElementById(
+"botaoExcluirPerfil"
+);
+
+if (!botao) {
+return;
+}
+
+if (!cadastroMuralAtual) {
+
+alert(
+  "Não foi possível identificar o cadastro deste perfil."
+);
+
+return;
+
+}
+
+const confirmacao =
+window.confirm(
+"Tem certeza que deseja excluir seu perfil do Mural?\n\n" +
+"O perfil será removido da página pública e ficará marcado como deletado. " +
+"Você poderá cadastrar outro perfil depois."
+);
+
+if (!confirmacao) {
+return;
+}
+
+const confirmacaoFinal =
+window.confirm(
+"Esta ação removerá seu perfil do Mural.\n\n" +
+"Deseja realmente continuar?"
+);
+
+if (!confirmacaoFinal) {
+return;
+}
+
+const cliente =
+obterClienteSupabasePessoa();
+
+if (!cliente) {
+
+alert(
+  "Não foi possível conectar ao sistema de autenticação."
+);
+
+return;
+
+}
+
+try {
+
+botao.disabled =
+  true;
+
+const textoOriginal =
+  botao.innerHTML;
+
+botao.dataset.textoOriginal =
+  textoOriginal;
+
+botao.innerHTML =
+  "<span>Excluindo...</span>";
+
+/*
+ * Obtém a sessão atual para enviar
+ * o JWT à Edge Function.
+ */
+
+const sessao =
+  await cliente.auth.getSession();
+
+const accessToken =
+  sessao?.data?.session?.access_token;
+
+if (!accessToken) {
+
+  throw new Error(
+    "Sessão de usuário não encontrada."
+  );
+
+}
+
+/*
+ * A Edge Function faz a verificação
+ * definitiva de propriedade.
+ *
+ * Nunca confiamos apenas no JavaScript
+ * do navegador para autorização.
+ */
+
+const resposta =
+  await fetch(
+    EDGE_FUNCTION_URL,
+    {
+      method: "POST",
+
+      headers: {
+        "Content-Type":
+          "application/json",
+
+        "Authorization":
+          `Bearer ${accessToken}`
+      },
+
+      body: JSON.stringify({
+        action:
+          "excluir_mural",
+
+        pessoa_id:
+          pessoaAtual.id
+      })
+    }
+  );
+
+const resultado =
+  await resposta.json()
+  .catch(
+    () => ({})
+  );
+
+if (!resposta.ok) {
+
+  throw new Error(
+    resultado.error ||
+    resultado.message ||
+    "Não foi possível excluir o perfil."
+  );
+
+}
+
+if (
+  resultado.success === false
+) {
+
+  throw new Error(
+    resultado.error ||
+    "A exclusão não foi concluída."
+  );
+
+}
+
+alert(
+  "Seu perfil foi excluído com sucesso."
+);
+
+/*
+ * O perfil já foi removido do JSON
+ * pela Edge Function.
+ *
+ * Voltamos para a página inicial.
+ */
+
+window.location.href =
+  "../index.html";
+
+}
+
+catch (erro) {
+
+console.error(
+  "Erro ao excluir perfil:",
+  erro
+);
+
+alert(
+  erro.message ||
+  "Não foi possível excluir seu perfil."
+);
+
+botao.disabled =
+  false;
+
+if (
+  botao.dataset.textoOriginal
+) {
+
+  botao.innerHTML =
+    botao.dataset.textoOriginal;
+
+}
+
+configurarEstiloBotaoExcluir();
+
+}
 
 }
 
@@ -1000,7 +1534,8 @@ document.addEventListener(
 event => {
 
 if (
-  event.key === "Escape"
+  event.key ===
+  "Escape"
 ) {
 
   fecharFotoTelaCheia();
@@ -1065,7 +1600,9 @@ window.location.href =
 ERRO
 ========================================================= */
 
-function mostrarErro(mensagem) {
+function mostrarErro(
+mensagem
+) {
 
 const categoria =
 document.getElementById(
