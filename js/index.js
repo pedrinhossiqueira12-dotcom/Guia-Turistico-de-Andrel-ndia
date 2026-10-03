@@ -4357,7 +4357,7 @@ adicionarEstiloMarcadorGenerico();
 
 inicializarMapa();
 
-descobrirSlidesHero();
+// O Hero editorial é controlado por js/editorial-hero.js, com deslocamento lateral sem fade.
 
 configurarPesquisaComer();
 

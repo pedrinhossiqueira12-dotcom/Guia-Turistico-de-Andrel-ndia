@@ -1,0 +1,26 @@
+# Notícias e Eventos — como colocar no ar
+
+**Estado em 03/10/2026:** o banco/RLS/bucket `noticias-eventos` já foram criados no projeto Supabase `xdmbkflufsfqziixzpxc`; a Edge Function `noticias-admin` v2 está ativa com JWT obrigatório. A interface está **somente em prévia local**; o envio ao GitHub retornou 403, por isso **não há PR desta atualização ainda**. Um patch verificável é entregue separadamente. Nenhuma cobrança real ou Pix sandbox foi efetuado. Nenhuma imagem foi apagada.
+
+## 1. O que o proprietário faz agora
+
+1. Revise o patch entregue separadamente e a [prévia temporária](https://8766-i31rwgqz2ndb6ytcslwte-452585f1.us4.manus.computer/pages/noticias.html). O banco está vazio: aparecerá uma mensagem de que ainda não há publicações. Não criei notícia ou evento fictício no site real.
+2. Aplique o patch em uma branch nova do seu clone (siga as instruções entregues com o arquivo), faça commit e abra um PR. **Não mescle sem revisar.** Após aprovar e mesclar, se o projeto Cloudflare Pages publica os commits da `main`, as páginas HTML/JS irão para o domínio principal; **isso ainda não gera as páginas individuais estáticas por si só**.
+3. No projeto Cloudflare Pages do Guia, em **Settings → Builds & deployments → Build configurations** (ou opção equivalente), configure **Build command:** `node scripts/build-publicacoes.mjs` e **Build output directory:** `dist`. O repositório continua sendo a origem dos arquivos de código; o script copia só arquivos públicos, consulta as linhas publicadas do Supabase e gera HTML para cada slug, Hero, listagem, `sitemap.xml` e `robots.txt`.
+4. Faça um deploy do site e abra `https://guia-turistico-de-andrelandia.pages.dev/pages/noticias.html`. Confirme que a home, as páginas antigas e `https://guia-turistico-de-andrelandia.pages.dev/manus-routes.json` continuam acessíveis. Ao publicar uma notícia, confirme que `.../pages/noticia/<slug>/` devolve HTML 200 com título, descrição e imagem no código-fonte; um slug desconhecido deve devolver 404.
+5. Para que **publicar, editar, arquivar ou excluir logicamente** também atualize automaticamente o HTML/SEO, crie um **Deploy Hook** no Cloudflare Pages para a branch principal (Settings → Builds & deployments → Deploy hooks). Copie a URL do hook diretamente para **Supabase → Edge Functions → Secrets** como `CLOUDFLARE_PAGES_DEPLOY_HOOK`. Não publique a URL em GitHub/HTML nem a envie nesta conversa. A função só aceita URL HTTPS de `api.cloudflare.com/client/v4/pages/webhooks/deploy_hooks/...`. Sem esse hook, Hero e lista tentam atualizar dados do Supabase ao abrir, mas o HTML pré-gerado, sitemap e prévias sociais só se atualizam no próximo deploy manual — não prometa atualização instantânea para buscadores.
+6. Entre na página `https://guia-turistico-de-andrelandia.pages.dev/pages/admin-noticias.html` com a conta administradora já autorizada do Guia. Crie primeiro um **rascunho**; revise título, corpo, link, imagens e, se for evento, data/hora e local. Para exibir no Hero, envie uma capa JPEG/PNG/WebP de até 5 MiB, marque “Exibir no Hero” e defina a ordem. A publicação exige confirmação. Apenas **publicado** aparece aos visitantes. Alterar/excluir uma publicação remove referências de imagem, mas **não apaga arquivos físicos**.
+
+## 2. Acesso e imagens
+
+- O painel usa a identidade da conta administradora validada no servidor; outras contas/visitantes não têm CRUD. O bucket editorial permite apenas upload dessa conta, aceita JPEG/PNG/WebP de até 5 MiB e serve publicamente **somente os arquivos de conteúdo publicado cujas URLs forem divulgadas**. Os arquivos de rascunho enviados ao bucket público também são acessíveis por quem conhece suas URLs; evite subir imagens confidenciais ou privadas. Nenhuma deleção física ou rotina de purga foi ativada.
+- O JSON antigo `DATA/eventos.json` contém “Festival de Inverno”, mas a capa apontada (`img/eventos/festival-inverno/capa.jpg`) **não existe** no repositório. Por isso o evento **não foi importado**. Com uma imagem correta e dados de data/local confirmados, cadastre-o pelo painel; o JSON fica apenas como arquivo legado, não é consultado pelo site.
+- Não informe senha, Access Token, webhook URL ou QR real por mensagem. As chaves privadas ficam somente no Supabase.
+
+## 3. Pagamento e Catálogo permanecem separados
+
+- Os preços do Catálogo são **R$ 59,90 por 30 dias** e **R$ 599,90 por 365 dias**; o pagamento de assinatura será Pix com renovação manual. Pedidos de produtos continuam indo por WhatsApp ao comércio.
+- A tabela privada `catalogo_pagamentos` foi criada **sem abrir acesso ao navegador**. Isso é apenas a base de auditoria para o futuro; **não existe cobrança real ativa**, nem chaves reais cadastradas, nem webhook produtivo.
+- O código sandbox `catalogo-pix-sandbox` ainda não está implantado. Antes de testar, configure **somente credenciais de conta de teste** conforme o guia de pagamentos entregue junto a esta atualização. A conta de teste nunca ativa a vitrine. A produção exigirá teste completo e aprovação separada.
+
+**Referências oficiais:** [Cloudflare Pages: Deploy Hooks](https://developers.cloudflare.com/pages/configuration/deploy-hooks/), [Mercado Pago: credenciais](https://www.mercadopago.com.br/developers/pt/docs/your-integrations/credentials).

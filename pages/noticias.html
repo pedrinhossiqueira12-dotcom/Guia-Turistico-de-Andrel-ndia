@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#091d1c">
+  <meta name="description" content="Notícias, agenda e histórias de Andrelândia — Guia Turístico.">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Notícias e Eventos — Andrelândia">
+  <meta property="og:description" content="Acompanhe as notícias, eventos e histórias de Andrelândia.">
+  <meta property="og:site_name" content="Andrelândia — Guia Turístico">
+  <meta property="og:image" content="https://guia-turistico-de-andrelandia.pages.dev/img/hero/editorial-fallback.webp">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Notícias e Eventos — Andrelândia">
+  <meta name="twitter:description" content="Acompanhe as notícias, eventos e histórias de Andrelândia.">
+  <meta name="twitter:image" content="https://guia-turistico-de-andrelandia.pages.dev/img/hero/editorial-fallback.webp">
+  <link rel="canonical" href="https://guia-turistico-de-andrelandia.pages.dev/pages/noticias.html">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../style.css">
+  <link rel="stylesheet" href="../styles/editorial.css">
+  <title>Notícias e Eventos — Andrelândia</title>
+</head>
+<body class="editorial-page" data-editorial-static="false">
+  <header class="editorial-header">
+    <a class="editorial-brand" href="../index.html" aria-label="Voltar à página inicial do Guia Turístico">
+      <span><strong>ANDRELÂNDIA</strong><small>AGENDA &amp; NOTÍCIAS</small></span>
+    </a>
+    <nav aria-label="Navegação principal" class="editorial-nav">
+      <a href="../index.html">Início</a>
+      <a href="../index.html#mapa">Mapa Turístico</a>
+      <a href="noticias.html" aria-current="page">Notícias e Eventos</a>
+    </nav>
+  </header>
+
+  <main class="editorial-shell" id="paginaPublicacoes">
+    <section class="editorial-intro">
+      <span class="editorial-kicker">O QUE ACONTECE POR AQUI</span>
+      <h1>Notícias e Eventos</h1>
+      <p>Novidades, agenda e histórias de Andrelândia, reunidas pelo Guia Turístico.</p>
+      <span class="editorial-rule" aria-hidden="true"></span>
+    </section>
+
+    <nav class="editorial-filters" aria-label="Filtrar publicações">
+      <button type="button" data-filter="todas" aria-pressed="true">Todas</button>
+      <button type="button" data-filter="noticia" aria-pressed="false">Notícias</button>
+      <button type="button" data-filter="evento" aria-pressed="false">Eventos</button>
+    </nav>
+
+    <section id="listaPublicacoes" class="editorial-list" aria-live="polite" aria-busy="false">
+      <!-- PUBLICATIONS:START -->
+      <p class="editorial-loading">Carregando as publicações do Guia…</p>
+      <!-- PUBLICATIONS:END -->
+    </section>
+    <p id="estadoPublicacoes" class="editorial-empty" hidden></p>
+
+    <a class="editorial-back-link" href="../index.html">← Voltar ao Guia Turístico</a>
+  </main>
+
+  <footer class="editorial-footer">
+    <span>© 2026 Andrelândia — Guia Turístico</span>
+    <a href="politica-privacidade.html">Privacidade</a>
+    <a href="termos.html">Termos</a>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../js/editorial-utils.js"></script>
+  <script src="../js/publicacoes.js"></script>
+</body>
+</html>

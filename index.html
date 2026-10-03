@@ -73,6 +73,8 @@
     href="styles/login.css"
   >
 
+  <link rel="stylesheet" href="styles/editorial.css">
+
 </head>
 
 
@@ -87,41 +89,44 @@
 
 
     <!-- ==================================================
-         HERO / CARROSSEL
+         HERO EDITORIAL — conteúdo preenchido por publicação
     ================================================== -->
-
-  <section 
-  class="hero" 
-  id="inicio"
->
-
-  <div 
-    class="hero-carousel" 
-    id="heroCarousel"
-  >
-
-<!--
-  As imagens do carrossel são carregadas
-  automaticamente pelo index.js.
--->
-
-
-  </div>
-
-  <div class="hero-content">
-
-<img 
-  src="img/logo.png" 
-  class="hero-logo" 
-  alt="Andrelândia"
->
-<p 
-  class="hero-text" 
-  id="heroText"
-></p>
-
-  </div>
-</section>
+    <section class="hero" id="inicio" aria-label="Destaques de Notícias e Eventos">
+      <div class="hero-carousel" id="heroCarousel" role="region" aria-roledescription="carrossel" aria-label="Destaques do Guia">
+        <div class="hero-track" id="heroTrack">
+          <!-- HERO_PUBLICATIONS:START -->
+          <article class="hero-slide" role="group" aria-roledescription="slide" aria-label="1 de 1">
+            <img class="hero-slide-image" src="img/hero/editorial-fallback.webp" alt="Igreja histórica de Andrelândia" fetchpriority="high">
+            <div class="hero-slide-copy">
+              <span class="hero-slide-label">AGENDA &amp; NOTÍCIAS</span>
+              <h1>Andrelândia tem história para contar</h1>
+              <p>Acompanhe as notícias, eventos e histórias da cidade pelo Guia Turístico.</p>
+              <a class="hero-editorial-cta" href="pages/noticias.html">Ver notícias e eventos</a>
+            </div>
+          </article>
+          <!-- HERO_PUBLICATIONS:END -->
+        </div>
+      </div>
+      <template id="heroFallback">
+        <article class="hero-slide" role="group" aria-roledescription="slide" aria-label="Destaque institucional">
+          <img class="hero-slide-image" src="img/hero/editorial-fallback.webp" alt="Igreja histórica de Andrelândia" fetchpriority="high" decoding="async">
+          <div class="hero-slide-copy">
+            <span class="hero-slide-label">AGENDA &amp; NOTÍCIAS</span>
+            <h1>Andrelândia tem história para contar</h1>
+            <p>Acompanhe as notícias, eventos e histórias da cidade pelo Guia Turístico.</p>
+            <a class="hero-editorial-cta" href="pages/noticias.html">Ver notícias e eventos</a>
+          </div>
+        </article>
+      </template>
+      <div class="hero-brand" aria-label="Andrelândia — Guia Turístico">
+        <span class="hero-brand-copy"><strong>ANDRELÂNDIA</strong><small>GUIA TURÍSTICO · AGENDA &amp; NOTÍCIAS</small></span>
+      </div>
+      <div class="hero-controls" aria-label="Controles dos destaques">
+        <button class="hero-control" id="heroAnterior" type="button" aria-label="Destaque anterior" hidden>‹</button>
+        <div class="hero-dots" id="heroDots" role="group" aria-label="Selecionar destaque" hidden></div>
+        <button class="hero-control" id="heroProximo" type="button" aria-label="Próximo destaque" hidden>›</button>
+      </div>
+    </section>
 
 
 
@@ -1448,6 +1453,12 @@ aria-label="Pesquisar comércio ou categoria"
         Contato
       </a>
 
+      <span>•</span>
+
+      <a href="pages/noticias.html">
+        Notícias e Eventos
+      </a>
+
     </div>
 
 
@@ -1481,10 +1492,13 @@ aria-label="Pesquisar comércio ou categoria"
   ================================================== -->
 
   <script src="js/comercio-utils.js"></script>
+  <script src="js/editorial-utils.js"></script>
 
   <script
     src="js/index.js"
   ></script>
+
+  <script src="js/editorial-hero.js"></script>
 
 
   <!-- ==================================================
