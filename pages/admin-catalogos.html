@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#091d1c">
+  <title>Catálogos — Administração do Guia</title>
+  <link rel="stylesheet" href="../styles/admin-catalogos.css">
+</head>
+<body>
+  <header class="admin-topbar">
+    <a href="admin-cadastros.html">‹ Voltar à administração</a>
+    <span>ACESSO ADMINISTRATIVO</span>
+  </header>
+  <main class="admin-shell">
+    <section class="admin-heading">
+      <span class="eyebrow">CATÁLOGO DIGITAL</span>
+      <h1>Administração de catálogos</h1>
+      <p>Consulte o estado da assinatura e bloqueie ou libere a vitrine. O estado de pagamento não pode ser alterado por esta tela.</p>
+    </section>
+
+    <section id="adminNotice" class="notice" role="status" aria-live="polite">
+      <strong id="noticeTitle">Verificando sessão…</strong>
+      <p id="noticeText">Acesso restrito à conta administrativa do Guia.</p>
+    </section>
+
+    <section id="loginCard" class="card login-card" hidden>
+      <span class="eyebrow">ENTRAR</span>
+      <h2>Acesse a conta administrativa</h2>
+      <div id="formLogin" class="login-fields">
+        <label>E-mail <input id="loginEmail" type="email" autocomplete="username" required></label>
+        <label>Senha <input id="loginSenha" type="password" autocomplete="current-password" required></label>
+        <button id="botaoLogin" class="button button-primary" type="button">Entrar</button>
+        <p id="erroLogin" class="form-error" role="alert"></p>
+      </div>
+      <a id="linkCriarConta" href="admin-cadastros.html">Voltar à administração</a>
+    </section>
+
+    <section id="adminPanel" class="card" hidden>
+      <div class="list-heading">
+        <div><span class="eyebrow">CONTROLE</span><h2>Catálogos configurados</h2></div>
+        <button id="atualizarCatalogos" class="button button-secondary" type="button">Atualizar lista</button>
+      </div>
+      <p id="contadorCatalogos" class="count-label"></p>
+      <div id="listaCatalogos" class="catalog-list"></div>
+      <p id="catalogosVazios" class="empty-state" hidden>Nenhum proprietário iniciou a configuração de um catálogo.</p>
+      <p id="feedbackCatalogos" class="feedback" role="status" aria-live="polite"></p>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../js/login.js"></script>
+  <script src="../js/admin-catalogos.js"></script>
+</body>
+</html>

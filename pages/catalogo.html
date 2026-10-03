@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#194138">
+  <meta name="description" content="Confira produtos e faça seu pedido diretamente pelo WhatsApp do comércio em Andrelândia.">
+  <title>Catálogo digital — Guia Turístico de Andrelândia</title>
+  <link rel="stylesheet" href="../styles/catalogo.css">
+</head>
+<body class="catalog-page">
+  <header class="catalog-topbar">
+    <a id="voltarPerfil" class="back-link" href="../index.html">‹ <span>Voltar ao comércio</span></a>
+    <span class="topbar-brand">GUIA TURÍSTICO DE ANDRELÂNDIA</span>
+  </header>
+
+  <main class="catalog-shell">
+    <section id="catalogoAviso" class="status-panel" role="status" aria-live="polite">
+      <span class="eyebrow">VITRINE DIGITAL</span>
+      <h1 id="statusTitulo">Carregando catálogo…</h1>
+      <p id="statusTexto">Estamos conferindo as informações deste comércio.</p>
+    </section>
+
+    <div id="catalogoConteudo" hidden>
+      <section class="store-hero" aria-labelledby="nomeComercio">
+        <img id="fotoComercio" class="store-photo" src="../img/sem-foto.png" alt="" width="112" height="112">
+        <div class="store-copy">
+          <span class="eyebrow">CATÁLOGO DIGITAL</span>
+          <h1 id="nomeComercio"></h1>
+          <p id="descricaoComercio"></p>
+          <div class="store-meta">
+            <span id="enderecoComercio"></span>
+            <a id="whatsappComercio" href="#" target="_blank" rel="noopener noreferrer" hidden>Falar com o comércio</a>
+          </div>
+        </div>
+      </section>
+
+      <p id="whatsappInvalido" class="payment-notice" role="status" hidden>Este comércio ainda não cadastrou um WhatsApp válido para receber pedidos. Você pode consultar os produtos, mas a sacola estará indisponível até que o contato seja atualizado.</p>
+
+      <section class="catalog-intro">
+        <div>
+          <span class="eyebrow">ESCOLHA COM CALMA</span>
+          <h2>O que vai na sacola?</h2>
+        </div>
+        <p>Seu pedido segue diretamente para o WhatsApp do comércio.</p>
+      </section>
+
+      <nav id="categoriasNav" class="category-nav" aria-label="Categorias do catálogo"></nav>
+      <section id="produtosGrid" class="product-grid" aria-live="polite"></section>
+      <p id="catalogoErro" class="inline-message" role="status" hidden></p>
+    </div>
+  </main>
+
+  <button id="abrirCarrinho" class="cart-fab" type="button" aria-controls="cartPanel" aria-expanded="false" hidden>
+    <span class="cart-fab-icon" aria-hidden="true">▣</span>
+    <span>Ver sacola</span>
+    <span id="cartFabCount" class="cart-count">0</span>
+    <strong id="cartFabTotal">R$ 0,00</strong>
+  </button>
+
+  <div id="cartBackdrop" class="cart-backdrop" hidden></div>
+  <aside id="cartPanel" class="cart-panel" aria-labelledby="cartTitle" aria-hidden="true" hidden>
+    <div class="panel-heading">
+      <div>
+        <span class="eyebrow">SEU PEDIDO</span>
+        <h2 id="cartTitle">Minha sacola</h2>
+      </div>
+      <button id="fecharCarrinho" class="icon-button" type="button" aria-label="Fechar sacola">×</button>
+    </div>
+    <div id="cartItems" class="cart-items"></div>
+    <div id="cartEmpty" class="empty-state">Sua sacola ainda está vazia. Escolha um produto para começar.</div>
+    <div class="cart-footer">
+      <button id="limparCarrinho" class="text-button" type="button" hidden>Limpar sacola</button>
+      <div class="total-line"><span>Total dos produtos</span><strong id="cartTotal">R$ 0,00</strong></div>
+      <button id="irCheckout" class="primary-button" type="button" disabled>Finalizar pedido</button>
+      <p class="fine-print">Nenhum pagamento é feito pelo site.</p>
+    </div>
+  </aside>
+
+  <dialog id="checkoutDialog" class="checkout-dialog" aria-labelledby="checkoutTitle">
+    <form id="checkoutForm" novalidate>
+      <div class="panel-heading">
+        <div><span class="eyebrow">QUASE LÁ</span><h2 id="checkoutTitle">Seus dados</h2></div>
+        <button class="icon-button" type="button" data-close-dialog="checkoutDialog" aria-label="Fechar">×</button>
+      </div>
+      <div class="form-grid">
+        <label>Seu nome <input name="nome" type="text" maxlength="100" autocomplete="name" required></label>
+        <label>Telefone para contato <input name="telefone" type="tel" inputmode="tel" maxlength="24" autocomplete="tel" placeholder="(32) 99999-9999" required></label>
+        <fieldset class="full-field"><legend>Como deseja receber?</legend><div id="modalidadeOptions" class="choice-list"></div></fieldset>
+        <div id="enderecoEntrega" class="address-fields full-field" hidden>
+          <label>Endereço <input name="endereco" type="text" maxlength="160" autocomplete="street-address"></label>
+          <div class="two-fields">
+            <label>Número <input name="numero" type="text" maxlength="20"></label>
+            <label>Bairro <input name="bairro" type="text" maxlength="80" autocomplete="address-level3"></label>
+          </div>
+          <label>Complemento <input name="complemento" type="text" maxlength="100"></label>
+          <label>Ponto de referência <input name="referencia" type="text" maxlength="140"></label>
+        </div>
+        <label class="full-field">Forma de pagamento <select name="pagamento" id="pagamentoSelect" required></select></label>
+        <label class="full-field">Observações <textarea name="observacoes" rows="3" maxlength="500" placeholder="Alguma preferência ou detalhe?"></textarea></label>
+      </div>
+      <p class="payment-notice">A forma escolhida será informada ao comércio. O pagamento será combinado diretamente com ele e não é processado pelo site.</p>
+      <p id="checkoutErro" class="inline-message error-message" role="alert" hidden></p>
+      <button class="primary-button" type="submit">Revisar pedido</button>
+    </form>
+  </dialog>
+
+  <dialog id="confirmarPedidoDialog" class="checkout-dialog" aria-labelledby="confirmarPedidoTitle">
+    <div class="panel-heading">
+      <div><span class="eyebrow">CONFIRA ANTES DE ENVIAR</span><h2 id="confirmarPedidoTitle">Resumo do pedido</h2></div>
+      <button class="icon-button" type="button" data-close-dialog="confirmarPedidoDialog" aria-label="Fechar">×</button>
+    </div>
+    <div id="resumoPedido" class="order-review"></div>
+    <p class="payment-notice">Ao continuar, o WhatsApp do comércio será aberto com a mensagem pronta. O pedido só será enviado quando você tocar em enviar no WhatsApp.</p>
+    <div class="dialog-actions">
+      <button id="voltarCheckout" class="secondary-button" type="button">Voltar</button>
+      <button id="enviarWhatsApp" class="primary-button" type="button">Enviar pedido pelo WhatsApp</button>
+    </div>
+  </dialog>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../js/login.js"></script>
+  <script src="../js/catalogo-utils.js"></script>
+  <script src="../js/catalogo.js"></script>
+</body>
+</html>
