@@ -17,6 +17,7 @@ const MP_PROD_ACCESS_TOKEN = Deno.env.get("MP_PROD_ACCESS_TOKEN") ?? "";
 const MP_PROD_SELLER_ID = Deno.env.get("MP_PROD_SELLER_ID") ?? "";
 const MP_PROD_WEBHOOK_SECRET = Deno.env.get("MP_PROD_WEBHOOK_SECRET") ?? "";
 const MP_API = "https://api.mercadopago.com";
+const MP_USER_PROFILE_API = "https://api.mercadolibre.com";
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info",
@@ -171,14 +172,14 @@ async function ensureCatalog(owner: Owner) {
   }
 }
 
-async function mpRequest(path: string, method: "GET" | "POST", body?: JsonRecord, idempotencyKey?: string) {
+async function mpRequest(path: string, method: "GET" | "POST", body?: JsonRecord, idempotencyKey?: string, apiBase = MP_API) {
   requireProductionConfiguration();
   const headers: Record<string, string> = { Authorization: `Bearer ${MP_PROD_ACCESS_TOKEN}` };
   if (body) headers["Content-Type"] = "application/json";
   if (idempotencyKey) headers["X-Idempotency-Key"] = idempotencyKey;
   let response: Response;
   try {
-    response = await fetch(`${MP_API}${path}`, {
+    response = await fetch(`${apiBase}${path}`, {
       method,
       headers,
       ...(body ? { body: JSON.stringify(body) } : {}),
@@ -197,7 +198,7 @@ async function mpRequest(path: string, method: "GET" | "POST", body?: JsonRecord
 }
 
 async function assertProductionSeller() {
-  const user = await mpRequest("/users/me", "GET");
+  const user = await mpRequest("/users/me", "GET", undefined, undefined, MP_USER_PROFILE_API);
   if (safeString(user.id) !== MP_PROD_SELLER_ID || safeString(user.site_id) !== "MLB") {
     throw new HttpError("A credencial não corresponde à conta recebedora de produção configurada. Operação bloqueada.", 503);
   }

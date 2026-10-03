@@ -56,6 +56,11 @@ test("visitantes não recebem botões premium e a tela real só aparece quando h
   assert.match(productionPage, /name="robots" content="noindex,nofollow,noarchive"/);
 });
 
+test("validação do vendedor usa o host oficial de perfil do Mercado Pago", () => {
+  assert.match(productionFunction, /const MP_USER_PROFILE_API = "https:\/\/api\.mercadolibre\.com"/);
+  assert.match(productionFunction, /mpRequest\("\/users\/me", "GET", undefined, undefined, MP_USER_PROFILE_API\)/);
+});
+
 test("reserva concorrente do catálogo relê e valida proprietário e bloqueio antes de cobrar", () => {
   assert.match(productionFunction, /insertError\.code !== "23505"/);
   assert.match(productionFunction, /confirmed\.proprietario_id !== owner\.userId \|\| confirmed\.bloqueado/);
