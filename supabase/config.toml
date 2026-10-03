@@ -1,0 +1,7 @@
+project_id = "xdmbkflufsfqziixzpxc"
+
+[functions.catalogo-pix-sandbox]
+verify_jwt = false
+
+[functions.catalogo-pix-producao]
+verify_jwt = false
