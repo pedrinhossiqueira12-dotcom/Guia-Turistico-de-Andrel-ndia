@@ -27,11 +27,13 @@
     $("voltarPerfilVenda").href = hrefPerfil;
     $("linkCriarContaVenda").href = hrefPerfil;
     $("linkTestePix").href = `catalogo-pix-teste.html?id=${encodeURIComponent(comercioId)}`;
+    $("linkPixProducao").href = `catalogo-pix-producao.html?id=${encodeURIComponent(comercioId)}`;
     $("linkGerenciar").href = `catalogo-admin.html?id=${encodeURIComponent(comercioId)}`;
   }
 
   function ocultarAcoes() {
     $("linkTestePix").hidden = true;
+    $("linkPixProducao").hidden = true;
     $("linkGerenciar").hidden = true;
   }
 
@@ -94,11 +96,27 @@
         return;
       }
 
-      $("activationTitle").textContent = data.assinatura_status === "pendente"
-        ? "Teste de pagamento pendente"
-        : "Teste Pix em ambiente isolado";
-      $("activationText").textContent = "Abra o teste privado do Mercado Pago. Mesmo uma ordem de teste aprovada não movimenta dinheiro real nem libera a vitrine pública.";
-      $("linkTestePix").hidden = false;
+      let checkoutProducaoAtivo = false;
+      try {
+        const checkout = await supabase.functions.invoke("catalogo-pix-producao", {
+          body: { acao: "verificar_checkout", comercio_id: comercioId },
+        });
+        checkoutProducaoAtivo = !checkout.error && checkout.data?.proprietario === true && checkout.data?.checkout_enabled === true;
+      } catch (erro) {
+        console.warn("Checkout de produção indisponível; mantendo somente a opção sandbox.", erro);
+      }
+
+      if (checkoutProducaoAtivo) {
+        $("activationTitle").textContent = "Contratação Pix disponível";
+        $("activationText").textContent = "Acesse a área privada para revisar o comércio, o valor e o período antes de gerar um Pix real. A renovação é manual.";
+        $("linkPixProducao").hidden = false;
+      } else {
+        $("activationTitle").textContent = data.assinatura_status === "pendente"
+          ? "Solicitação pendente"
+          : "Checkout real ainda desligado";
+        $("activationText").textContent = "Nenhuma cobrança real pode ser criada nesta etapa. A opção sandbox permanece isolada e não libera a vitrine pública.";
+        $("linkTestePix").hidden = false;
+      }
       feedback("");
     } catch (erro) {
       $("activationTitle").textContent = "Acesso do proprietário não confirmado";

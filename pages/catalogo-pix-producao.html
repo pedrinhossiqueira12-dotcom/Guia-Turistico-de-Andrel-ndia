@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#194138">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <meta name="description" content="Área autenticada de assinatura do Catálogo Digital.">
+  <title>Assinatura do Catálogo — Guia Turístico de Andrelândia</title>
+  <link rel="stylesheet" href="../styles/catalogo-venda.css">
+  <link rel="stylesheet" href="../styles/catalogo-pix-teste.css">
+</head>
+<body class="sales-page pix-test-page pix-production-page">
+  <header class="sales-topbar">
+    <a id="linkVoltarCheckout" href="catalogo-venda.html">‹ <span>Voltar ao Catálogo</span></a>
+    <span>ÁREA DO PROPRIETÁRIO</span>
+  </header>
+
+  <main class="sales-shell">
+    <section class="test-hero">
+      <div>
+        <span class="eyebrow">ASSINATURA DO CATÁLOGO DIGITAL</span>
+        <h1>Ative a vitrine do seu comércio.</h1>
+        <p id="introCheckout">A contratação é restrita ao proprietário autenticado do comércio.</p>
+      </div>
+      <div class="test-stamp" aria-hidden="true">PIX</div>
+    </section>
+
+    <section class="test-warning" role="note">
+      <strong>Leia antes de gerar o Pix</strong>
+      <p>A cobrança é da assinatura do Catálogo Digital do Guia, recebida pela conta Mercado Pago que administra o Guia. O Pix é pagamento manual por período: não há débito automático. A vitrine só será liberada após confirmação do pagamento pela API do Mercado Pago. Estorno ou contestação confirmados cancelam a assinatura e bloqueiam a vitrine; o sistema não solicita reembolsos.</p>
+    </section>
+
+    <section id="checkoutStatus" class="test-status" role="status" aria-live="polite">
+      Verificando sessão, propriedade e disponibilidade do checkout…
+    </section>
+
+    <section id="ownerCheckout" class="test-card" hidden>
+      <div class="test-heading">
+        <div><span class="eyebrow">PLANOS</span><h2>Escolha o período</h2></div>
+        <span class="test-lock">PIX MANUAL</span>
+      </div>
+      <p class="test-subtitle">Os valores abaixo são exibidos somente após autenticação e validação da propriedade pelo servidor.</p>
+      <div id="planList" class="test-plans"></div>
+      <p id="planFeedback" class="plan-feedback" role="status" aria-live="polite"></p>
+    </section>
+
+    <section id="paymentBox" class="test-card payment-test-card" hidden>
+      <div class="test-heading">
+        <div><span class="eyebrow">PIX DO MERCADO PAGO</span><h2 id="paymentTitle">Pagamento</h2></div>
+        <span id="paymentBadge" class="test-lock">PENDENTE</span>
+      </div>
+      <p id="paymentMessage" class="test-subtitle"></p>
+      <div class="pix-layout">
+        <div class="pix-image-wrap"><img id="pixImage" alt="QR Code Pix do Mercado Pago" hidden><span id="pixImageFallback">O QR Code aparecerá após a criação do Pix.</span></div>
+        <div class="pix-code-column">
+          <label for="pixCode">Pix Copia e Cola</label>
+          <textarea id="pixCode" rows="5" readonly placeholder="O código aparecerá após gerar o Pix."></textarea>
+          <button id="copyPixCode" class="activation-button" type="button" disabled>Copiar código</button>
+          <a id="pixTicketLink" class="manage-link" href="#" target="_blank" rel="noopener noreferrer" hidden>Abrir instruções do Mercado Pago</a>
+        </div>
+      </div>
+      <p id="paymentFeedback" class="plan-feedback" role="status" aria-live="polite"></p>
+      <button id="refreshPayment" class="secondary-test-button" type="button" hidden>Consultar pagamento</button>
+      <p class="test-no-activate">Não faça outro Pix se a tela indicar que uma order já existe. A confirmação é consultada no servidor.</p>
+    </section>
+
+    <footer class="test-footer">
+      <p>Produtos dos comércios continuam com pedido direto pelo WhatsApp; este Pix é somente para a assinatura do Catálogo Digital.</p>
+      <a id="linkPerfilCheckout" href="../index.html">Voltar ao perfil do comércio</a>
+    </footer>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../js/login.js"></script>
+  <script src="../js/catalogo-pix-producao.js"></script>
+</body>
+</html>

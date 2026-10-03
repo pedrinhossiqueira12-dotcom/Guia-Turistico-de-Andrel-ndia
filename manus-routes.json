@@ -9,6 +9,7 @@
     { "path": "/pages/cadastros.html", "title": "Cadastro" },
     { "path": "/pages/catalogo-admin.html", "title": "Gerenciar Catálogo" },
     { "path": "/pages/catalogo-pix-teste.html", "title": "Teste Pix sandbox" },
+    { "path": "/pages/catalogo-pix-producao.html", "title": "Assinatura do Catálogo (área privada)" },
     { "path": "/pages/catalogo-venda.html", "title": "Catálogo Digital" },
     { "path": "/pages/catalogo.html", "title": "Vitrine Digital" },
     { "path": "/pages/contato.html", "title": "Contato" },

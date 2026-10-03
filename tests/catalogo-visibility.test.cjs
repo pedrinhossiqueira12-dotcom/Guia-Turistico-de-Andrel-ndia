@@ -12,6 +12,10 @@ const salesPage = read("pages/catalogo-venda.html");
 const adminScript = read("js/catalogo-admin.js");
 const adminFunction = read("supabase/functions/catalogo-admin/index.ts");
 const sandboxFunction = read("supabase/functions/catalogo-pix-sandbox/index.ts");
+const productionFunction = read("supabase/functions/catalogo-pix-producao/index.ts");
+const productionPage = read("pages/catalogo-pix-producao.html");
+const productionCheckoutScript = read("js/catalogo-pix-producao.js");
+const productionMigration = read("supabase/migrations/20261003140000_catalogo_pagamento_producao.sql");
 
 test("cartões do catálogo respeitam hidden mesmo com display:flex", () => {
   assert.match(
@@ -39,12 +43,36 @@ test("backend confirma propriedade do admin antes de tratá-lo como proprietári
   assert.doesNotMatch(adminFunction, /A conta administrativa não pode solicitar cobrança/);
 });
 
-test("visitantes não recebem botões premium e o proprietário usa exclusivamente a tela sandbox", () => {
+test("visitantes não recebem botões premium e a tela real só aparece quando habilitada pelo servidor", () => {
   assert.match(salesPage, /id="linkTestePix"[^>]*hidden/);
+  assert.match(salesPage, /id="linkPixProducao"[^>]*hidden/);
   assert.match(salesPage, /id="linkGerenciar"[^>]*hidden/);
   assert.doesNotMatch(salesPage, /id="ativarCatalogo"/);
   assert.match(salesScript, /if \(!data\?\.proprietario\) throw/);
   assert.match(salesScript, /catalogo-pix-teste\.html\?id=/);
+  assert.match(salesScript, /checkout_enabled === true/);
+  assert.match(productionFunction, /MP_PRODUCTION_ENABLED = Deno\.env\.get\("MP_PRODUCTION_ENABLED"\) === "true"/);
+  assert.match(productionFunction, /if \(!MP_PRODUCTION_ENABLED\)/);
+  assert.match(productionPage, /name="robots" content="noindex,nofollow,noarchive"/);
+});
+
+test("reserva concorrente do catálogo relê e valida proprietário e bloqueio antes de cobrar", () => {
+  assert.match(productionFunction, /insertError\.code !== "23505"/);
+  assert.match(productionFunction, /confirmed\.proprietario_id !== owner\.userId \|\| confirmed\.bloqueado/);
+  assert.match(productionFunction, /existingCatalog\.proprietario_id !== owner\.userId \|\| existingCatalog\.bloqueado/);
+});
+
+test("tela de Pix apaga o QR e interrompe polling quando a sessão termina ou muda", () => {
+  assert.match(productionCheckoutScript, /function clearPaymentDisplay\(\)/);
+  assert.match(productionCheckoutScript, /event === "SIGNED_OUT"/);
+  assert.match(productionCheckoutScript, /removeAttribute\("src"\)/);
+  assert.match(productionCheckoutScript, /viewGeneration/);
+});
+
+test("migração bloqueia mais de um Pix por assinatura e permite renovar após expiração", () => {
+  assert.match(productionMigration, /catalogo_pagamentos_assinatura_unica/);
+  assert.match(productionMigration, /old\.status = 'ativa'[\s\S]*old\.expira_em <= pg_catalog\.now\(\)/);
+  assert.match(productionMigration, /SET status = 'expirada'/);
 });
 
 test("proprietário admin sem assinatura continua bloqueado no painel premium", () => {

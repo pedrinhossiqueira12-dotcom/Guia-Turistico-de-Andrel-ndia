@@ -60,3 +60,10 @@
   .test-footer { align-items: flex-start; flex-direction: column; }
 }
 @media (prefers-reduced-motion: reduce) { .test-plan { transition: none; } }
+
+/* A tela de produção permanece sem indexação e só mostra os planos após autorização server-side. */
+.pix-production-page .test-hero { background: linear-gradient(125deg, #194138, #0e2a25 74%, #4f7254); }
+.pix-production-page .test-stamp { background: rgba(255,255,255,.08); }
+.pix-production-page .test-warning { border-color: #d8c8b1; background: #f7f4ee; color: #3d4a42; }
+.pix-production-page .plan-action-label { margin-top: auto; color: #194138; font-size: .9rem; font-weight: 900; }
+.pix-production-page .test-plan[aria-busy="true"] { opacity: .7; cursor: progress; }
