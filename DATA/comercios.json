@@ -2680,5 +2680,31 @@
     ],
     "status": "pendente",
     "destaque": false
+  },
+  {
+    "id": "pedrox-do-grauuuuuuuuyhilgfhuyk-ygu",
+    "nome": "pedrox do grauuuuuuuuyhilgfhuyk,ygu",
+    "categoria": "Restaurante",
+    "descricao": "",
+    "historia": "",
+    "curiosidades": "",
+    "endereco": "xrtyjyxrnjt6",
+    "horario": "hrxtdfhnbg",
+    "entrada": "",
+    "telefone": "35999638094",
+    "whatsapp": "35999638094",
+    "instagram": "",
+    "site": "",
+    "latitude": null,
+    "longitude": null,
+    "imagem": "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1791029781528-0-dzxg2v6-whatsapp-image-2025-04-18-at-17-33-15.jpeg",
+    "imagens": [
+      "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1791029781528-0-dzxg2v6-whatsapp-image-2025-04-18-at-17-33-15.jpeg",
+      "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1791029781844-1-ikweu9g-whatsapp-image-2025-04-18-at-17-33-19.jpeg",
+      "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1791029782067-2-asysqgc-image_20250422_0001--1-.png",
+      "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1791029784278-3-ba8bi60-image_20250422_0001.png"
+    ],
+    "status": "ativo",
+    "destaque": false
   }
 ]
