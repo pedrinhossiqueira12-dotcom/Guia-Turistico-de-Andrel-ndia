@@ -43,7 +43,7 @@
       "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/admin/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790862243472-38oi5y5-1000453048.png"
     ],
     "status": "ativo",
-    "destaque": false
+    "destaque": true
   },
   {
     "id": "restaurante-andrelandia",
