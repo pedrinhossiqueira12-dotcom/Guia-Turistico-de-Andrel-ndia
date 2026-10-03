@@ -103,12 +103,14 @@
     "entrada": "",
     "telefone": "(35) 99936-1151",
     "site": "",
-    "instagram": "",
-    "latitude": null,
-    "longitude": null,
+    "instagram": "https://www.instagram.com/uaiso_gastronomia/",
+    "latitude": -21.737203165025857,
+    "longitude": -44.306227298384506,
     "whatsapp": "",
-    "imagem": "",
-    "imagens": [],
+    "imagem": "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/admin/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790991487971-929fcnn-images.jpeg",
+    "imagens": [
+      "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/admin/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790991487971-929fcnn-images.jpeg"
+    ],
     "status": "ativo",
     "destaque": false
   },
