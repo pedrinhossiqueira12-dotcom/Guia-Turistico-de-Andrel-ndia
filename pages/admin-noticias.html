@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="theme-color" content="#091d1c">
+  <link rel="stylesheet" href="../styles/admin.css">
+  <link rel="stylesheet" href="../styles/admin-noticias.css">
+  <title>Administração de Notícias e Eventos — Guia Turístico</title>
+</head>
+<body>
+  <header class="admin-header">
+    <div class="admin-header-inner">
+      <div>
+        <h1 class="admin-titulo">Andrelândia — Administração</h1>
+        <p class="admin-subtitulo">Notícias e Eventos</p>
+      </div>
+      <button id="botaoSairEditorial" class="botao-sair" type="button" hidden>Sair</button>
+    </div>
+  </header>
+
+  <main class="admin-container editorial-admin">
+    <section id="acessoEditorial" class="editorial-login-card">
+      <h2>Acesso do administrador</h2>
+      <p>Entre com a conta autorizada do Guia para gerenciar publicações.</p>
+      <form id="formLoginEditorial" autocomplete="on">
+        <label for="emailEditorial">E-mail</label>
+        <input id="emailEditorial" type="email" autocomplete="username" required>
+        <label for="senhaEditorial">Senha</label>
+        <input id="senhaEditorial" type="password" autocomplete="current-password" required>
+        <button class="editorial-admin-primary" type="submit">Entrar</button>
+      </form>
+      <p id="mensagemAcessoEditorial" class="editorial-admin-message" role="status" aria-live="polite"></p>
+    </section>
+
+    <section id="painelEditorial" hidden>
+      <div class="admin-intro">
+        <h2>Gerenciar Notícias e Eventos</h2>
+        <p>Crie, edite, publique, destaque no Hero ou arquive conteúdos. Excluir é lógico; imagens não são apagadas.</p>
+      </div>
+      <p class="editorial-admin-note">A lista e o Hero consultam o Supabase ao vivo. Configure o secret <code>CLOUDFLARE_PAGES_DEPLOY_HOOK</code> no Supabase e o build do Cloudflare Pages para atualizar/remover também páginas estáticas, sitemap e metadados SEO depois de publicar, editar, arquivar ou excluir.</p>
+      <div id="mensagemEditorial" class="editorial-admin-message" role="status" aria-live="polite"></div>
+
+      <div class="editorial-admin-layout">
+        <section class="editorial-editor-card" aria-labelledby="tituloFormularioEditorial">
+          <h3 id="tituloFormularioEditorial">Nova publicação</h3>
+          <form id="formPublicacaoEditorial">
+            <input id="idPublicacao" type="hidden">
+            <div class="editorial-form-grid">
+              <label>Tipo
+                <select id="tipoPublicacao" required>
+                  <option value="noticia">Notícia</option>
+                  <option value="evento">Evento</option>
+                </select>
+              </label>
+              <label>Status
+                <select id="statusPublicacao">
+                  <option value="rascunho">Rascunho</option>
+                  <option value="publicado">Publicado</option>
+                  <option value="arquivado">Arquivado (fora do site público)</option>
+                </select>
+              </label>
+              <label class="editorial-field-full">Título
+                <input id="tituloPublicacao" maxlength="140" required>
+              </label>
+              <label class="editorial-field-full">Endereço (slug)
+                <input id="slugPublicacao" maxlength="100" required>
+                <small>Use letras minúsculas, números e hífens. O endereço fica preservado ao editar.</small>
+              </label>
+              <label class="editorial-field-full">Resumo
+                <textarea id="resumoPublicacao" maxlength="400" rows="3"></textarea>
+              </label>
+              <label class="editorial-field-full">Conteúdo completo
+                <textarea id="corpoPublicacao" maxlength="30000" rows="9" required></textarea>
+                <small>Texto simples; use uma linha em branco para separar parágrafos.</small>
+              </label>
+              <div class="editorial-field-full editorial-event-fields" id="camposEventoEditorial">
+                <label>Local do evento
+                  <input id="localEventoPublicacao" maxlength="240">
+                </label>
+                <label>Data e hora de início (Brasília)
+                  <input id="inicioEventoPublicacao" type="datetime-local">
+                </label>
+                <label>Data e hora de fim (Brasília)
+                  <input id="fimEventoPublicacao" type="datetime-local">
+                </label>
+              </div>
+              <label class="editorial-field-full">Imagem de capa (JPG, PNG ou WebP · máximo 5 MiB)
+                <input id="capaPublicacao" type="file" accept="image/jpeg,image/png,image/webp">
+                <small id="capaAtualEditorial"></small>
+              </label>
+              <label class="editorial-checkbox editorial-field-full"><input id="removerCapaEditorial" type="checkbox"> Remover a capa atual desta publicação (o arquivo será preservado)</label>
+              <label class="editorial-field-full">Imagens adicionais (até 8 · máximo 5 MiB por arquivo)
+                <input id="galeriaPublicacao" type="file" accept="image/jpeg,image/png,image/webp" multiple>
+                <small id="galeriaAtualEditorial"></small>
+              </label>
+              <div class="editorial-field-full" id="imagensGaleriaEditorial" aria-label="Imagens atuais da galeria"></div>
+              <label>Texto do botão do Hero
+                <input id="textoCtaPublicacao" maxlength="60" placeholder="Saiba mais">
+              </label>
+              <label>Destino do botão
+                <input id="urlCtaPublicacao" maxlength="2048" placeholder="Em branco abre o detalhe">
+              </label>
+              <label class="editorial-checkbox editorial-field-full">
+                <input id="destaqueHeroPublicacao" type="checkbox">
+                Exibir no Hero da página inicial
+              </label>
+              <label>Ordem no Hero
+                <input id="ordemHeroPublicacao" type="number" min="0" max="9999" value="0">
+              </label>
+            </div>
+            <div class="editorial-form-actions">
+              <button class="editorial-admin-primary" type="submit" id="salvarPublicacaoEditorial">Salvar publicação</button>
+              <button class="editorial-admin-secondary" type="button" id="limparFormularioEditorial">Limpar</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="editorial-list-card" aria-labelledby="tituloListaAdminEditorial">
+          <div class="editorial-admin-list-header">
+            <div><h3 id="tituloListaAdminEditorial">Publicações</h3><p>Rascunhos não aparecem ao público.</p></div>
+            <button class="editorial-admin-secondary" id="atualizarListaEditorial" type="button">Atualizar</button>
+          </div>
+          <div id="listaAdminEditorial" class="editorial-admin-list" aria-live="polite"></div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../js/editorial-utils.js"></script>
+  <script src="../js/admin-noticias.js"></script>
+</body>
+</html>

@@ -1,0 +1,24 @@
+{
+  "routes": [
+    { "path": "/", "title": "Andrelândia — Guia Turístico" },
+    { "path": "/index.html", "title": "Andrelândia — Guia Turístico" },
+    { "path": "/pages/admin-cadastros.html", "title": "Administração de cadastros" },
+    { "path": "/pages/admin-catalogos.html", "title": "Administração de Catálogos" },
+    { "path": "/pages/admin-mural.html", "title": "Administração do Mural" },
+    { "path": "/pages/admin-noticias.html", "title": "Administração de Notícias e Eventos" },
+    { "path": "/pages/cadastros.html", "title": "Cadastro" },
+    { "path": "/pages/catalogo-admin.html", "title": "Gerenciar Catálogo" },
+    { "path": "/pages/catalogo-pix-teste.html", "title": "Teste Pix sandbox" },
+    { "path": "/pages/catalogo-venda.html", "title": "Catálogo Digital" },
+    { "path": "/pages/catalogo.html", "title": "Vitrine Digital" },
+    { "path": "/pages/contato.html", "title": "Contato" },
+    { "path": "/pages/local.html", "title": "Perfil do comércio" },
+    { "path": "/pages/mural.html", "title": "Mural de Andrelândia" },
+    { "path": "/pages/noticias.html", "title": "Notícias e Eventos" },
+    { "path": "/pages/noticia/:slug/", "title": "Notícia ou evento" },
+    { "path": "/pages/noticia.html", "title": "Notícia ou evento (fallback)" },
+    { "path": "/pages/pessoa.html", "title": "Perfil do Mural" },
+    { "path": "/pages/politica-privacidade.html", "title": "Política de Privacidade" },
+    { "path": "/pages/termos.html", "title": "Termos de Uso" }
+  ]
+}

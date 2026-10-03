@@ -1,6 +1,6 @@
 # TODO — Catálogo Digital
 
-> **Estado em 03/10/2026:** migração `catalogo_digital_20261003000000` aplicada no Supabase `xdmbkflufsfqziixzpxc`; Edge Functions `catalogo-admin` v1 (`verify_jwt=true`) e `storage-cleanup` v2 (`verify_jwt=false`, token próprio validado no banco) estão ativas. RLS, bucket, view e fila foram conferidos. A branch local agora reúne a integração Mercado Pago sandbox e o hotfix para conta que é simultaneamente administradora e proprietária: 29/29 testes e sintaxe JavaScript aprovados. **Nenhum secret foi configurado, nenhuma chamada à API ocorreu, nenhuma função sandbox foi implantada e nada foi publicado**; a verificação Deno/TypeScript da Edge Function não foi executada porque Deno não está instalado no Sandbox. Nenhum Pix/cobrança foi criado. Nenhum objeto do Storage foi apagado.
+> **Estado em 03/10/2026:** PR #4 está mesclado em `main` (`0a069f4`); `catalogo-admin` v2 e `storage-cleanup` v2 continuam ativas. A migração aprovada de Notícias/Eventos e auditoria privada de pagamentos **foi aplicada**: `conteudos_editoriais`, `catalogo_pagamentos`, RLS e bucket `noticias-eventos` foram verificados. `noticias-admin` v2 foi implantada com `verify_jwt=true` e teste anônimo retornou 403. O site editorial segue somente em branch local/prévia, **não publicado na main**. `catalogo-pix-sandbox` e qualquer função produtiva **não foram implantadas**; nenhum secret do Mercado Pago foi configurado, nenhuma chamada à API de pagamento foi feita, nenhuma assinatura foi ativada e nenhum arquivo do Storage foi apagado. Deno 2.9.7 está disponível para checagem.
 
 ## 1. Vitrine dinâmica pública e integração ao perfil
 
@@ -46,10 +46,10 @@
 ## 6. Publicação e verificações restantes
 
 - [x] Migração, RLS, bucket, view e fila aplicados e verificados no projeto Supabase.
-- [x] Edge Functions `catalogo-admin` v1 e `storage-cleanup` v2 implantadas; função de limpeza não foi invocada manualmente.
-- [x] Testes automatizados 31/31 e sintaxe dos scripts JavaScript alterados verificados sobre o `main` pós-PR #3; patch aplicável ao commit `8d59a4c`.
-- [ ] Verificar as Edge Functions com Deno/TypeScript quando o runtime estiver disponível; o Deno não está instalado neste Sandbox.
-- [ ] Enviar o patch para o GitHub e publicar o frontend no Cloudflare Pages; essa publicação pública não foi autorizada nesta etapa.
+- [x] Edge Functions `catalogo-admin` v2 e `storage-cleanup` v2 implantadas; função de limpeza não foi invocada manualmente.
+- [x] A suíte anterior 31/31 passou sobre `main` pós-PR #4; a suíte ampliada 48/48 passou na branch editorial. Deno check/lint de `noticias-admin` e `catalogo-pix-sandbox` foram executados localmente; sem chamadas à API de pagamentos.
+- [x] Preparar frontend editorial em branch própria e prévia HTTP; confirmar resposta 200 no preview público, 404 em slug inexistente e 403 na função editorial sem autenticação.
+- [ ] Enviar PR após revisão final: `git push` da branch aprovada recebeu HTTP 403 (permissão negada ao repositório), portanto o PR **não foi criado**. Entregar patch para aplicação manual ou aguardar que o usuário reautorize o acesso do GitHub a esse repositório; não contornar 403. O merge/publicação do frontend não foi feito; build/destino `dist` e Deploy Hook do Cloudflare Pages ainda precisam de configuração pelo proprietário.
 - [ ] Após publicação, testar login/ownership, catálogo ativo, pedidos WhatsApp e retenção com dados reais de teste, sem cobrança.
 - [x] Definir preços e Mercado Pago para o sandbox; preços não são exibidos na página pública.
 - [ ] Definir e revisar separadamente credenciais, fluxo de produção, política de renovação/estorno e autorização antes de qualquer pagamento real.
@@ -67,3 +67,29 @@
 - [ ] Publicar uma PR isolada após teste estático e revisão; não mesclar/publicar sem autorização específica.
 - [ ] Com credenciais de teste, validar QR, polling e webhook; confirmar que a assinatura continua pendente e a vitrine fechada.
 - [ ] Implementar cobrança de produção somente após autorização própria. Não reutilizar esta função sandbox para liberar catálogos reais.
+
+## 8. Requisitos aprovados — novos recursos
+
+- [ ] **Proprietário do comércio:** mostrar os controles de gerenciamento quando o usuário estiver vendo a página de um comércio que ele mesmo criou; validar corretamente se a conta conectada é proprietária; não mostrar os controles a não proprietários; aplicar a regra a comércios existentes e novos, usando a mesma lógica dos botões **Editar meu comércio** e **Excluir meu comércio**. A correção `catalogo-admin` v2 foi implantada; aguardar confirmação de Ctrl+F5 no perfil.
+- [ ] **Pagamento definitivo Mercado Pago:** implementar cobrança futura dos recursos pagos (assinaturas e serviços dos estabelecimentos); produzir guia passo a passo de conta vendedora, credenciais/chaves de acesso, ambiente de produção, URLs, webhooks, Supabase, estados aprovado/pendente/recusado, vínculo ao comércio/usuário, testes antes do lançamento e separação entre frontend e Edge Functions. Nunca expor credenciais privadas no código público; manter produção desligada até teste e aprovação final.
+- [ ] **Hero Notícias/Eventos:** transformar o Hero atual em sequência de notícias/eventos; a imagem atual deve deslizar para um lado e a próxima entrar pelo oposto, de forma suave e contínua, em desktop e celular, sem simplesmente usar fade.
+- [ ] **CTA dinâmico do Hero:** cada publicação poderá configurar imagem, título, texto, link e texto próprio do botão; ao trocar o destaque, o botão também muda automaticamente o texto e o destino para a publicação exibida.
+- [ ] **Página pública de Notícias/Eventos:** criar página própria, separada de `index.html`, para listar todos os itens publicados; permitir abrir cada notícia/evento, visualizar imagens, título e conteúdo completo, consultar dados adicionais de evento quando existirem e navegar de volta às outras áreas; seguir a identidade visual existente do Guia.
+- [ ] **Painel administrativo editorial:** permitir ao administrador criar, editar e excluir uma notícia/evento; alterar título, descrição/conteúdo, imagem principal e imagens adicionais; definir link e texto do botão do Hero; escolher exibição no Hero, ordem e estado de publicação.
+- [ ] **Fonte única e atualização automática:** usar uma única fonte de dados; salvar edição no banco; a publicação aparece na página de Notícias/Eventos e, quando marcada para destaque, no Hero; o texto/destino do botão vêm da própria publicação; alterações refletem no site público sem recadastrar o conteúdo.
+- [ ] **Design e responsividade:** manter cores, tipografia, cards, bordas/sombras, espaçamento, botões, navegação e estilo geral atuais; a área não deve parecer um sistema separado e deve funcionar em celular, tablet e desktop.
+
+## 9. Aprovação e limites vigentes
+
+- [x] Em 03/10/2026 o usuário aprovou exatamente o plano de criar `public.conteudos_editoriais` (leitura pública apenas do publicado), `public.catalogo_pagamentos` (RLS privada) e bucket `noticias-eventos` (leitura pública, upload admin, até 5 MiB), com exclusão lógica e retenção em dry-run.
+- [x] Aplicar a migração aprovada após testes locais: RLS de leitura apenas de publicações, tabela privada de auditoria e bucket de imagens com upload admin foram verificados. Nenhum RLS anterior do Catálogo foi alterado, nenhuma purga foi executada e nenhuma cobrança real foi ativada.
+- [ ] Para o sandbox, o usuário configura somente secrets `MP_TEST_*` no dashboard Supabase; segredos não devem ser enviados por mensagem. Depois, implantar/testar somente `catalogo-pix-sandbox` e confirmar que uma order aprovada no sandbox mantém assinatura pendente e vitrine fechada.
+
+## 10. Evidência da implementação editorial nesta branch
+
+- [x] Home com Hero editorial horizontal sem fade, CTA por publicação, pausa/foco/touch e movimento reduzido; páginas pública e administrativa com identidade visual do Guia.
+- [x] Fonte canônica `conteudos_editoriais`, Edge Function admin com verificação JWT/UID, upload controlado, exclusão lógica, URL/HTML escapados; fonte anônima só lê publicado.
+- [x] Build estático consulta apenas publicados, gera HTML por slug com canonical/OG/Twitter, sitemap sem slugs retirados, `robots.txt` e fallback de foto otimizado.
+- [x] 48 testes de unidade/regressão, checagem Deno e build com tabela vazia; prévia em 8766, sem notícia fictícia cadastrada no Supabase.
+- [ ] Configurar Cloudflare Pages para executar build e secret de Deploy Hook; o conector Cloudflare foi oferecido nesta sessão e permaneceu desabilitado, então esses passos ficam manuais. A integração real com login admin no navegador e criação de uma publicação legítima ainda dependem da conta do proprietário.
+- [ ] O evento legado Festival de Inverno ainda não foi importado: a capa referida em `DATA/eventos.json` não existe no repositório e faltam data/local confirmados.
