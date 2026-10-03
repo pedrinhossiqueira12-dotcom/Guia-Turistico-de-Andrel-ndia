@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#194138">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <meta name="description" content="Área restrita para teste técnico do Catálogo Digital.">
+  <title>Teste Pix sandbox — Guia Turístico de Andrelândia</title>
+  <link rel="stylesheet" href="../styles/catalogo-venda.css">
+  <link rel="stylesheet" href="../styles/catalogo-pix-teste.css">
+</head>
+<body class="sales-page pix-test-page">
+  <header class="sales-topbar">
+    <a id="linkPerfilTeste" href="../index.html">‹ <span>Voltar ao comércio</span></a>
+    <span>ÁREA RESTRITA — TESTE</span>
+  </header>
+
+  <main class="sales-shell">
+    <section class="test-hero">
+      <div>
+        <span class="eyebrow">AMBIENTE DE TESTES</span>
+        <h1>Simulação Pix do Catálogo Digital</h1>
+        <p id="introTeste">Esta página só pode ser usada pelo proprietário autenticado do comércio.</p>
+      </div>
+      <div class="test-stamp" aria-hidden="true">SANDBOX</div>
+    </section>
+
+    <section class="test-warning" role="note">
+      <strong>Teste isolado — sem dinheiro real e sem liberar a vitrine.</strong>
+      <p>Usa somente conta de vendedor de teste do Mercado Pago. Mesmo se a ordem aparecer como aprovada, o status da assinatura continua pendente e o catálogo não fica público. A página de contratação pública não mostra os preços.</p>
+    </section>
+
+    <section id="testStatus" class="test-status" role="status" aria-live="polite">
+      Verificando conta e vínculo com o comércio…
+    </section>
+
+    <section id="loginCard" class="login-card test-card" hidden>
+      <span class="eyebrow">ENTRAR</span>
+      <h2>Acesse a conta do proprietário</h2>
+      <p>Use o mesmo e-mail e senha cadastrados para este comércio.</p>
+      <div id="formLogin" class="login-fields">
+        <label>E-mail <input id="loginEmail" type="email" autocomplete="email" required></label>
+        <label>Senha <input id="loginSenha" type="password" autocomplete="current-password" required></label>
+        <button id="botaoLogin" class="activation-button" type="button">Entrar</button>
+        <p id="erroLogin" class="form-error" role="alert"></p>
+      </div>
+      <a id="linkCriarConta" class="manage-link" href="#">Abrir perfil do comércio</a>
+    </section>
+
+    <section id="ownerPanel" class="test-card" hidden>
+      <div class="test-heading">
+        <div><span class="eyebrow">PLANO DE TESTE</span><h2>Escolha um ciclo</h2></div>
+        <span class="test-lock">Somente sandbox</span>
+      </div>
+      <p class="test-subtitle">Os valores abaixo são mostrados somente depois da confirmação server-side de que você é o proprietário. Cada opção cria uma order de teste; não é uma cobrança comercial.</p>
+      <div id="planList" class="test-plans" aria-live="polite"></div>
+      <p id="planFeedback" class="sales-feedback" role="status" aria-live="polite"></p>
+    </section>
+
+    <section id="paymentBox" class="test-card payment-test-card" hidden>
+      <div class="test-heading">
+        <div><span class="eyebrow">PIX DE TESTE</span><h2 id="paymentTitle">Order de sandbox</h2></div>
+        <span id="paymentBadge" class="test-lock">PENDENTE</span>
+      </div>
+      <p id="paymentMessage" class="test-subtitle"></p>
+      <div class="pix-layout">
+        <div class="pix-image-wrap"><img id="pixImage" alt="QR Code Pix de teste do Mercado Pago" hidden><span id="pixImageFallback">QR sandbox será exibido após a criação da order.</span></div>
+        <div class="pix-code-column">
+          <label for="pixCode">Pix Copia e Cola (teste)</label>
+          <textarea id="pixCode" rows="5" readonly placeholder="O código de teste aparecerá aqui."></textarea>
+          <button id="copyPixCode" class="activation-button" type="button" disabled>Copiar código</button>
+          <a id="pixTicketLink" class="manage-link" href="#" target="_blank" rel="noopener noreferrer" hidden>Abrir comprovante sandbox</a>
+        </div>
+      </div>
+      <p id="paymentFeedback" class="sales-feedback" role="status" aria-live="polite"></p>
+      <button id="refreshPayment" class="secondary-test-button" type="button" hidden>Consultar novamente</button>
+      <p class="test-no-activate">Mesmo quando o Mercado Pago confirmar o teste, a assinatura real não será ativada.</p>
+    </section>
+
+    <section class="test-footer">
+      <p>O sandbox consulta a order diretamente no Mercado Pago e, quando configurado, valida webhooks HMAC. O resultado é gravado apenas nos metadados de teste da assinatura pendente. Nenhum pedido de cliente é armazenado.</p>
+      <a id="salesPageLink" href="catalogo-venda.html">Voltar à página do Catálogo Digital</a>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../js/login.js"></script>
+  <script src="../js/catalogo-pix-teste.js"></script>
+</body>
+</html>

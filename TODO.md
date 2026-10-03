@@ -1,6 +1,6 @@
 # TODO — Catálogo Digital
 
-> **Estado em 02/10/2026:** migração `catalogo_digital_20261003000000` aplicada no Supabase `xdmbkflufsfqziixzpxc`; Edge Functions `catalogo-admin` v1 (`verify_jwt=true`) e `storage-cleanup` v2 (`verify_jwt=false`, token próprio validado no banco) estão ativas. RLS, bucket, view e fila foram conferidos. Código de frontend preparado localmente e testes passaram (10/10); **ainda não foi enviado ao GitHub nem publicado no Cloudflare Pages**. Não há linhas de catálogo/assinatura/produtos, nenhum Pix/cobrança foi criado e nenhuma rotina de limpeza foi executada nesta implantação. Nenhum objeto do Storage foi apagado.
+> **Estado em 03/10/2026:** migração `catalogo_digital_20261003000000` aplicada no Supabase `xdmbkflufsfqziixzpxc`; Edge Functions `catalogo-admin` v1 (`verify_jwt=true`) e `storage-cleanup` v2 (`verify_jwt=false`, token próprio validado no banco) estão ativas. RLS, bucket, view e fila foram conferidos. A branch local agora reúne a integração Mercado Pago sandbox e o hotfix para conta que é simultaneamente administradora e proprietária: 29/29 testes e sintaxe JavaScript aprovados. **Nenhum secret foi configurado, nenhuma chamada à API ocorreu, nenhuma função sandbox foi implantada e nada foi publicado**; a verificação Deno/TypeScript da Edge Function não foi executada porque Deno não está instalado no Sandbox. Nenhum Pix/cobrança foi criado. Nenhum objeto do Storage foi apagado.
 
 ## 1. Vitrine dinâmica pública e integração ao perfil
 
@@ -14,8 +14,9 @@
 
 - [x] Tabela `catalogo_assinaturas` criada com estados `pendente`, `ativa`, `cancelada` e `expirada`, metadados de cobrança e datas.
 - [x] Apenas assinatura ativa, dentro da validade, e comércio publicado ativo liberam a vitrine. A confirmação de pagamento não é gravável pelo navegador.
-- [x] Página de venda explica o recurso e oferece ação demonstrativa, sem gerar cobrança nem ativar o catálogo.
-- [ ] Definir preço, período e provedor Pix; integrar cobrança/webhook autenticado, idempotência e ativação server-side em etapa futura.
+- [x] A página comercial não mostra ações premium a visitantes; após confirmação server-side da propriedade, oferece somente o checkout privado sandbox, que não ativa a vitrine.
+- [x] Definir os preços (mensal R$ 59,90; anual R$ 599,90) e escolher Mercado Pago para teste sandbox; manter os valores fora da página pública.
+- [ ] Implementar, em etapa separada, cobrança de produção, webhooks de produção, renovação manual e ativação server-side após autorização própria.
 - [ ] Nenhum catálogo está ativo ainda; após publicar o frontend, testar o fluxo com um comércio e assinatura de teste autorizada.
 
 ## 3. Administração de categorias e produtos
@@ -46,7 +47,23 @@
 
 - [x] Migração, RLS, bucket, view e fila aplicados e verificados no projeto Supabase.
 - [x] Edge Functions `catalogo-admin` v1 e `storage-cleanup` v2 implantadas; função de limpeza não foi invocada manualmente.
-- [x] Testes automatizados 10/10, compilação TypeScript estrita, sintaxe JavaScript, parser SQL, IDs/links HTML e patch aplicável ao `main` verificados.
+- [x] Testes automatizados 31/31 e sintaxe dos scripts JavaScript alterados verificados sobre o `main` pós-PR #3; patch aplicável ao commit `8d59a4c`.
+- [ ] Verificar as Edge Functions com Deno/TypeScript quando o runtime estiver disponível; o Deno não está instalado neste Sandbox.
 - [ ] Enviar o patch para o GitHub e publicar o frontend no Cloudflare Pages; essa publicação pública não foi autorizada nesta etapa.
 - [ ] Após publicação, testar login/ownership, catálogo ativo, pedidos WhatsApp e retenção com dados reais de teste, sem cobrança.
-- [ ] Definir preço/provedor Pix e só então ativar pagamentos reais mediante revisão própria.
+- [x] Definir preços e Mercado Pago para o sandbox; preços não são exibidos na página pública.
+- [ ] Definir e revisar separadamente credenciais, fluxo de produção, política de renovação/estorno e autorização antes de qualquer pagamento real.
+
+
+## 7. Integração Mercado Pago — sandbox (03/10/2026)
+
+- [x] Registrar os preços definidos: mensal R$ 59,90 e anual R$ 599,90; manter ambos fora da página pública de contratação.
+- [x] Confirmar que Pix Mercado Pago é um pagamento manual por período, não débito automático recorrente.
+- [x] Criar rota privada e não indexada para testar os dois ciclos; o link aparece somente após confirmação server-side do proprietário.
+- [x] Criar utilitários/testes de HMAC, valores em centavos, validação da order e bloqueio de `live_mode`.
+- [x] Projetar a função para confirmar proprietário por `local_id`, checar `/users/me` contra o vendedor de teste, exigir `MP_MODE=sandbox` e enviar `X-Idempotency-Key`.
+- [x] Manter confirmação sandbox somente em `metadata.sandbox`; não atualizar `status`, `pago_em` nem `expira_em`.
+- [ ] Configurar no Supabase apenas token/ID/chave de webhook de conta de teste; segredos não devem ser enviados por mensagem.
+- [ ] Publicar uma PR isolada após teste estático e revisão; não mesclar/publicar sem autorização específica.
+- [ ] Com credenciais de teste, validar QR, polling e webhook; confirmar que a assinatura continua pendente e a vitrine fechada.
+- [ ] Implementar cobrança de produção somente após autorização própria. Não reutilizar esta função sandbox para liberar catálogos reais.

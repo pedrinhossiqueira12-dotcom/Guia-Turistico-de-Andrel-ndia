@@ -65,7 +65,7 @@
       body: { acao: "verificar_proprietario", comercio_id: comercioId },
     });
     if (error) throw new Error(error.message || "Não foi possível validar o proprietário.");
-    if (!data?.proprietario) throw new Error(data?.mensagem || "Esta conta não está vinculada ao comércio.");
+    if (!data?.proprietario && !data?.admin) throw new Error(data?.mensagem || "Esta conta não está vinculada ao comércio.");
     return data;
   }
 
@@ -95,7 +95,7 @@
       comercio = await carregarComercio();
       $("nomeComercioAdmin").textContent = comercio?.nome || comercioId;
 
-      if (!resultado.ativo && !resultado.admin) {
+      if (!resultado.ativo && (!resultado.admin || resultado.proprietario)) {
         $("painelCatalogo").hidden = true;
         $("catalogoBloqueado").hidden = false;
         if (resultado.bloqueado) {
