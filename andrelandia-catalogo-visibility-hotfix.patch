@@ -1,0 +1,47 @@
+diff --git a/styles/local.css b/styles/local.css
+index 771a1b7..db18c1f 100644
+--- a/styles/local.css
++++ b/styles/local.css
+@@ -1745,3 +1745,9 @@ letter-spacing: .1em;
+   .catalogo-local-owner { align-items: flex-start; flex-direction: column; margin: 14px; }
+   .catalogo-local-button { width: 100%; }
+ }
++
++/* Mantém o atributo hidden mesmo com display:flex nos cartões acima. */
++.catalogo-local-publico[hidden],
++.catalogo-local-owner[hidden] {
++  display: none !important;
++}
+diff --git a/tests/catalogo-visibility.test.cjs b/tests/catalogo-visibility.test.cjs
+new file mode 100644
+index 0000000..f69dcbe
+--- /dev/null
++++ b/tests/catalogo-visibility.test.cjs
+@@ -0,0 +1,27 @@
++const test = require("node:test");
++const assert = require("node:assert/strict");
++const fs = require("node:fs");
++const path = require("node:path");
++
++const root = path.resolve(__dirname, "..");
++const css = fs.readFileSync(path.join(root, "styles/local.css"), "utf8");
++const script = fs.readFileSync(path.join(root, "js/catalogo-local.js"), "utf8");
++
++test("cartões do catálogo respeitam hidden mesmo com display:flex", () => {
++  assert.match(
++    css,
++    /\.catalogo-local-publico\[hidden\]\s*,\s*\.catalogo-local-owner\[hidden\]\s*\{\s*display:\s*none\s*!important\s*;/s,
++  );
++});
++
++test("vitrine pública começa oculta e só aparece com comércio e catálogo ativos", () => {
++  assert.match(script, /area\.hidden\s*=\s*true/);
++  assert.match(script, /String\(comercio\.status\s*\|\|\s*""\)\.toLowerCase\(\)\s*!==\s*"ativo"/);
++  assert.match(script, /from\("catalogo_publicado"\)/);
++  assert.match(script, /if\s*\(error\s*\|\|\s*!data\)\s*return/);
++});
++
++test("área do proprietário começa oculta e depende da validação server-side", () => {
++  assert.match(script, /if\s*\(!estado\?\.proprietario\s*\|\|\s*estado\.admin\)\s*\{\s*area\.hidden\s*=\s*true/);
++  assert.match(script, /functions\.invoke\("catalogo-admin"/);
++});
