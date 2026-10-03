@@ -289,17 +289,31 @@ Deno.serve(async (request: Request) => {
 
     if (authenticated.user.id === ADMIN_USER_ID && action === "verificar_proprietario") {
       if (!/^[a-z0-9-]{1,180}$/.test(commerceId)) return json({ proprietario: false, mensagem: "Identificador do comércio inválido." }, 400);
+      const ownership = await verifyCommerceOwner(authenticated.user.id, commerceId);
+      if (ownership.valid) {
+        const catalog = await ensureCatalog(authenticated.user.id, commerceId, false);
+        if (!catalog.allowed) return json({ proprietario: false, admin: true, mensagem: catalog.reason }, 403);
+        const state = await subscriptionState(commerceId);
+        return json({
+          proprietario: true,
+          admin: true,
+          ativo: state.ativo && !catalog.blocked,
+          bloqueado: catalog.blocked,
+          motivo_bloqueio: catalog.reason,
+          assinatura_status: state.assinatura_status,
+          catalogo_configurado: catalog.exists,
+          modo_demonstracao: true,
+        });
+      }
+
       const { data: config, error: configError } = await admin.from("catalogos")
         .select("comercio_id,bloqueado,motivo_bloqueio")
         .eq("comercio_id", commerceId)
         .maybeSingle();
       if (configError) throw new Error(`Falha ao validar acesso administrativo: ${configError.message}`);
-      if (!config) return json({ proprietario: false, admin: true, mensagem: "Este comércio ainda não possui configuração de catálogo." }, 404);
+      if (!config) return json({ proprietario: false, admin: true, admin_catalog_access: false, mensagem: "Este comércio ainda não possui configuração de catálogo." }, 404);
       const state = await subscriptionState(commerceId);
-      return json({ proprietario: true, admin: true, ativo: state.ativo && !config.bloqueado, bloqueado: config.bloqueado, motivo_bloqueio: config.motivo_bloqueio, assinatura_status: state.assinatura_status });
-    }
-    if (authenticated.user.id === ADMIN_USER_ID && action === "solicitar_ativacao") {
-      return json({ solicitacao_registrada: false, mensagem: "A conta administrativa não pode solicitar cobrança por este fluxo." }, 403);
+      return json({ proprietario: false, admin: true, admin_catalog_access: true, ativo: state.ativo && !config.bloqueado, bloqueado: config.bloqueado, motivo_bloqueio: config.motivo_bloqueio, assinatura_status: state.assinatura_status });
     }
 
     const ownership = await verifyCommerceOwner(authenticated.user.id, commerceId);

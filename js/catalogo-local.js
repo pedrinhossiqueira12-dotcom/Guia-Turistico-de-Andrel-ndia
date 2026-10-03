@@ -39,7 +39,7 @@
     const texto = document.getElementById("estadoCatalogoOwner");
     if (!area || !link || !texto) return;
 
-    if (!estado?.proprietario || estado.admin) {
+    if (!estado?.proprietario) {
       area.hidden = true;
       return;
     }
@@ -56,8 +56,8 @@
       link.href = `catalogo-admin.html?id=${encodeURIComponent(comercioId)}`;
     } else {
       texto.textContent = estado.assinatura_status === "pendente"
-        ? "Há uma solicitação demonstrativa pendente; ainda não houve cobrança ou liberação."
-        : "Conheça o recurso premium; preço e Pix ainda serão definidos.";
+        ? "Existe um pedido de teste pendente; nenhuma cobrança real ocorreu e a vitrine continua fechada."
+        : "Planos definidos: R$ 59,90 por mês ou R$ 599,90 por ano. O link abre somente o teste sandbox; não ativa a vitrine.";
       link.textContent = "Criar catálogo digital";
       link.href = `catalogo-venda.html?id=${encodeURIComponent(comercioId)}`;
     }
