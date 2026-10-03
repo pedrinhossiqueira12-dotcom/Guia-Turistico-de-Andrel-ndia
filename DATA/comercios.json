@@ -126,12 +126,16 @@
     "entrada": "",
     "telefone": "(35) 99868-5094",
     "site": "",
-    "instagram": "",
-    "latitude": null,
-    "longitude": null,
+    "instagram": "https://www.instagram.com/paradexdosamigos/",
+    "latitude": -21.74191215437649,
+    "longitude": -44.297359651436956,
     "whatsapp": "",
     "status": "ativo",
-    "destaque": false
+    "destaque": false,
+    "imagem": "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/admin/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790993328689-bpcrgvy-683777624_17970023964023561_4576971442451141389_n.jpg",
+    "imagens": [
+      "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/admin/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790993328689-bpcrgvy-683777624_17970023964023561_4576971442451141389_n.jpg"
+    ]
   },
   {
     "id": "pizzaria-paulistana",
