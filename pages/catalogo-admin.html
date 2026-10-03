@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#194138">
+  <title>Gerenciar catálogo — Guia Turístico de Andrelândia</title>
+  <link rel="stylesheet" href="../styles/catalogo-admin.css">
+</head>
+<body class="admin-page">
+  <header class="admin-topbar">
+    <a id="linkPerfil" href="../index.html">‹ <span>Voltar ao comércio</span></a>
+    <span>ÁREA DO PROPRIETÁRIO</span>
+  </header>
+
+  <main class="admin-shell">
+    <section class="admin-heading">
+      <span class="eyebrow">CATÁLOGO DIGITAL</span>
+      <h1>Gerenciar meu catálogo</h1>
+      <p id="nomeComercioAdmin">Acesse com a conta vinculada ao comércio.</p>
+    </section>
+
+    <section id="adminNotice" class="admin-notice" role="status" aria-live="polite">
+      <strong id="noticeTitle">Verificando acesso…</strong>
+      <p id="noticeText">A administração é exclusiva do proprietário e depende de assinatura ativa.</p>
+    </section>
+
+    <section id="loginCard" class="admin-card login-card" hidden>
+      <span class="eyebrow">ENTRAR</span>
+      <h2>Acesse sua conta</h2>
+      <p>Use o mesmo e-mail e senha da conta proprietária do comércio.</p>
+      <div id="formLogin" class="login-fields">
+        <label>E-mail <input id="loginEmail" type="email" autocomplete="email" required></label>
+        <label>Senha <input id="loginSenha" type="password" autocomplete="current-password" required></label>
+        <button id="botaoLogin" class="button button-primary" type="button">Entrar</button>
+        <p id="erroLogin" class="form-error" role="alert"></p>
+      </div>
+      <a id="linkCriarConta" class="text-link" href="#">Ainda não tem conta? Abra o perfil do comércio para se cadastrar.</a>
+    </section>
+
+    <section id="catalogoBloqueado" class="admin-card locked-card" hidden>
+      <span class="lock-mark" aria-hidden="true">▣</span>
+      <h2 id="lockedTitle">Catálogo não liberado</h2>
+      <p id="lockedText">Para gerenciar produtos, o catálogo precisa estar com assinatura ativa.</p>
+      <a id="linkContratacao" class="button button-primary" href="#">Conhecer o catálogo digital</a>
+    </section>
+
+    <div id="painelCatalogo" hidden>
+      <section class="admin-card settings-card">
+        <div class="section-title"><div><span class="eyebrow">CONFIGURAÇÃO</span><h2>Como o comércio recebe pedidos</h2></div></div>
+        <form id="settingsForm">
+          <fieldset><legend>Modalidades disponíveis</legend><div id="modalidadesSettings" class="checks-grid"></div></fieldset>
+          <fieldset><legend>Formas de pagamento aceitas</legend><div id="pagamentosSettings" class="checks-grid"></div></fieldset>
+          <button class="button button-secondary" type="submit">Salvar configurações</button>
+          <p id="settingsFeedback" class="form-feedback" role="status"></p>
+        </form>
+      </section>
+
+      <section class="admin-card">
+        <div class="section-title"><div><span class="eyebrow">ORGANIZAÇÃO</span><h2>Categorias</h2></div></div>
+        <form id="categoriaForm" class="inline-form">
+          <input id="categoriaId" type="hidden">
+          <label>Nome da categoria <input id="categoriaNome" type="text" maxlength="60" placeholder="Ex.: Lanches" required></label>
+          <button id="salvarCategoria" class="button button-primary" type="submit">Adicionar categoria</button>
+          <button id="cancelarCategoria" class="button button-secondary" type="button" hidden>Cancelar edição</button>
+        </form>
+        <p id="categoriaFeedback" class="form-feedback" role="status"></p>
+        <div id="listaCategorias" class="manager-list"></div>
+      </section>
+
+      <section class="admin-card">
+        <div class="section-title"><div><span class="eyebrow">VITRINE</span><h2>Produtos</h2></div><span id="contadorProdutos" class="count-pill">0</span></div>
+        <form id="produtoForm" class="product-form">
+          <input id="produtoId" type="hidden">
+          <label>Nome do produto <input id="produtoNome" type="text" maxlength="120" required></label>
+          <label>Categoria <select id="produtoCategoria" required></select></label>
+          <label>Preço (R$) <input id="produtoPreco" type="number" min="0" step="0.01" inputmode="decimal" required></label>
+          <label class="wide-field">Descrição <textarea id="produtoDescricao" rows="3" maxlength="600"></textarea></label>
+          <label class="wide-field">Foto do produto <input id="produtoImagem" type="file" accept="image/jpeg,image/png,image/webp"><small>Imagem será otimizada no navegador; até 5 MiB após otimização.</small></label>
+          <label class="checkbox-line"><input id="produtoDisponivel" type="checkbox" checked> Disponível para pedidos</label>
+          <div class="form-actions wide-field">
+            <button id="salvarProduto" class="button button-primary" type="submit">Adicionar produto</button>
+            <button id="cancelarProduto" class="button button-secondary" type="button" hidden>Cancelar edição</button>
+          </div>
+          <p id="produtoFeedback" class="form-feedback wide-field" role="status"></p>
+        </form>
+        <div id="listaProdutos" class="manager-list product-list"></div>
+      </section>
+
+      <section class="admin-footer-note">
+        <p>Fotos removidas da vitrine entram na rotina de retenção de sete dias. Nenhuma imagem é apagada imediatamente.</p>
+        <p>O pedido será enviado pelo WhatsApp; esta página não processa pagamentos nem armazena pedidos.</p>
+      </section>
+    </div>
+  </main>
+
+  <dialog id="reassignCategoryDialog" class="admin-dialog">
+    <form id="reassignCategoryForm">
+      <h2>Produtos vinculados à categoria</h2>
+      <p>Escolha para qual categoria os produtos disponíveis serão movidos antes de arquivar esta categoria.</p>
+      <label>Nova categoria <select id="reassignCategorySelect" required></select></label>
+      <div class="dialog-actions"><button id="cancelarReassign" class="button button-secondary" type="button">Cancelar</button><button class="button button-primary" type="submit">Mover e arquivar</button></div>
+    </form>
+  </dialog>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../js/login.js"></script>
+  <script src="../js/catalogo-utils.js"></script>
+  <script src="../js/catalogo-admin.js"></script>
+</body>
+</html>

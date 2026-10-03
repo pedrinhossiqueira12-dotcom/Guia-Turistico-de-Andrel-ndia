@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#194138">
+  <meta name="description" content="Conheça o Catálogo Digital premium do Guia Turístico de Andrelândia.">
+  <title>Catálogo Digital — Guia Turístico de Andrelândia</title>
+  <link rel="stylesheet" href="../styles/catalogo-venda.css">
+</head>
+<body class="sales-page">
+  <header class="sales-topbar">
+    <a id="voltarPerfilVenda" href="../index.html">‹ <span>Voltar ao comércio</span></a>
+    <span>GUIA TURÍSTICO DE ANDRELÂNDIA</span>
+  </header>
+
+  <main class="sales-shell">
+    <section class="sales-hero">
+      <div class="hero-copy">
+        <span class="eyebrow">CATÁLOGO DIGITAL</span>
+        <h1>Uma vitrine digital, com pedidos direto no WhatsApp.</h1>
+        <p id="introComercio">Apresente seus produtos para moradores e visitantes de Andrelândia, sem depender de um site por produto.</p>
+      </div>
+      <div class="hero-mark" aria-hidden="true"><span>▣</span><i>✦</i></div>
+    </section>
+
+    <section class="benefits-grid" aria-label="Recursos do catálogo">
+      <article class="benefit-card"><span class="benefit-icon">01</span><h2>Vitrine do seu comércio</h2><p>Produtos com foto, descrição, preço, disponibilidade e categorias organizadas.</p></article>
+      <article class="benefit-card"><span class="benefit-icon">02</span><h2>Sacola simples</h2><p>O cliente escolhe, ajusta quantidades e confere o total antes de enviar.</p></article>
+      <article class="benefit-card"><span class="benefit-icon">03</span><h2>Pedido direto no WhatsApp</h2><p>O resumo do pedido abre no WhatsApp cadastrado do próprio comércio.</p></article>
+      <article class="benefit-card"><span class="benefit-icon">04</span><h2>Gestão pelo proprietário</h2><p>Atualize produtos, categorias, fotos e opções de recebimento em um painel próprio.</p></article>
+    </section>
+
+    <section class="sales-how">
+      <div><span class="eyebrow">COMO FUNCIONA</span><h2>Do catálogo ao pedido, sem complicação.</h2></div>
+      <ol><li><span>1</span><p>Cadastre as categorias e os produtos do seu comércio.</p></li><li><span>2</span><p>Compartilhe sua vitrine no perfil do Guia.</p></li><li><span>3</span><p>Receba o pedido organizado pelo WhatsApp e combine o pagamento diretamente com o cliente.</p></li></ol>
+    </section>
+
+    <section class="activation-card">
+      <div><span class="eyebrow">ASSINATURA PREMIUM</span><h2 id="activationTitle">Ativação em preparação</h2><p id="activationText">O Catálogo Digital será liberado após definirmos o preço e o provedor Pix. Nenhuma cobrança real está habilitada nesta etapa.</p></div>
+      <div class="activation-actions">
+        <p class="price-note"><strong>Preço em definição</strong><br>Sem cobrança nesta demonstração.</p>
+        <button id="ativarCatalogo" class="activation-button" type="button">Ativar catálogo</button>
+        <a id="linkGerenciar" class="manage-link" href="#" hidden>Gerenciar catálogo</a>
+      </div>
+    </section>
+
+    <section id="loginCardVenda" class="login-card" hidden>
+      <span class="eyebrow">ÁREA DO PROPRIETÁRIO</span><h2>Entre para continuar</h2>
+      <p>Use a conta vinculada ao comércio. Se ainda não tem conta, abra o perfil para se cadastrar primeiro.</p>
+      <div id="formLogin" class="login-fields">
+        <label>E-mail <input id="loginEmail" type="email" autocomplete="email" required></label>
+        <label>Senha <input id="loginSenha" type="password" autocomplete="current-password" required></label>
+        <button id="botaoLogin" class="activation-button" type="button">Entrar</button>
+        <p id="erroLogin" class="form-error" role="alert"></p>
+      </div>
+      <a id="linkCriarContaVenda" class="manage-link" href="#">Criar conta / abrir perfil</a>
+    </section>
+
+    <p class="demo-warning"><strong>Importante:</strong> a versão atual é demonstrativa. O botão não gera QR Code ou cobrança Pix, não confirma pagamento e não desbloqueia o catálogo. O pedido de interesse ficará somente como pendente; nenhuma assinatura será ativada sem pagamento confirmado por uma integração futura.</p>
+    <p id="salesFeedback" class="sales-feedback" role="status" aria-live="polite"></p>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../js/login.js"></script>
+  <script src="../js/catalogo-venda.js"></script>
+</body>
+</html>

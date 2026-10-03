@@ -2,6 +2,8 @@
 
 **Status:** proposta para revisão; **nenhuma mutação foi executada**. A inspeção abaixo foi somente leitura em 2 de outubro de 2026. Não foram aplicados SQL/DDL, alterações de RLS, deploy de Edge Function, gravações em Storage, agendamento ou exclusões.
 
+> **Atualização posterior — Catálogo Digital (02/10/2026):** a frase de status acima descreve somente o plano de manutenção anterior deste documento. Em execução separada e autorizada, foi aplicada a migração `catalogo_digital_20261003000000` e implantadas `catalogo-admin` v1 e `storage-cleanup` v2. O restante do plano histórico abaixo (metadados de publicação, fluxo de arquivamento anterior, etc.) não foi aplicado por esta atualização. O frontend do catálogo ainda não foi publicado; não houve Pix, execução manual da reconciliação nem exclusão física de objetos.
+
 ## 1. Projeto e fontes inspecionadas
 
 - Repositório indicado: [Guia-Turistico-de-Andrelândia](https://github.com/pedrinhossiqueira12-dotcom/Guia-Turistico-de-Andrel-ndia).
