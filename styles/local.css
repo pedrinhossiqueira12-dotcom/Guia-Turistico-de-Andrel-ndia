@@ -1745,3 +1745,9 @@ letter-spacing: .1em;
   .catalogo-local-owner { align-items: flex-start; flex-direction: column; margin: 14px; }
   .catalogo-local-button { width: 100%; }
 }
+
+/* Mantém o atributo hidden mesmo com display:flex nos cartões acima. */
+.catalogo-local-publico[hidden],
+.catalogo-local-owner[hidden] {
+  display: none !important;
+}
