@@ -274,7 +274,7 @@ body {
     left: auto;
     z-index: 1250;
     display: block;
-    width: min(250px, calc(100vw - 24px));
+    width: min(200px, calc(100vw - 24px));
     height: 100dvh;
     max-height: none;
     padding: 18px 14px 20px;
