@@ -4346,7 +4346,7 @@ NAVBAR: DESTACAR A SEÇÃO VISÍVEL SEM ALTERAR OS DADOS
 ========================================================= */
 function configurarNavegacaoSecoes() {
 const itens = Array.from(document.querySelectorAll(".bottom-nav .nav-item"));
-const itensComDestino = itens.filter(item => item.getAttribute("href"));
+const itensComDestino = itens.filter(item => (item.getAttribute("href") || "").startsWith("#"));
 const secoes = itensComDestino
   .map(item => document.querySelector(item.getAttribute("href")))
   .filter(Boolean);
