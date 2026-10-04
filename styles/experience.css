@@ -231,3 +231,105 @@ body[data-mobile-nav-open="true"] .bottom-nav { opacity: 1; visibility: visible;
   }
   .nav-profile-panel .nav-back-button { display: block; }
 }
+
+/* Sidebar mobile inspirada na referência: compacta, escura e vertical. */
+@media (max-width: 700px) {
+  .mobile-nav-toggle {
+    top: 18px;
+    right: 18px;
+    width: 42px;
+    height: 42px;
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 10px;
+    background: #292929;
+    color: #d9ccff;
+    box-shadow: 0 8px 22px rgba(0,0,0,.24);
+    font-size: 20px;
+  }
+  .mobile-nav-backdrop {
+    background: rgba(22, 20, 27, .48);
+    backdrop-filter: blur(2px);
+  }
+  .bottom-nav {
+    top: 8px;
+    right: auto;
+    bottom: 8px;
+    left: 8px;
+    width: min(300px, calc(100vw - 16px));
+    max-height: calc(100dvh - 16px);
+    padding: 18px 12px 14px;
+    border: 1px solid rgba(255,255,255,.06);
+    border-radius: 13px;
+    background: #262626;
+    box-shadow: 12px 0 36px rgba(0,0,0,.28);
+    transform: translateX(-108%);
+    transform-origin: left center;
+  }
+  body[data-mobile-nav-open="true"] .bottom-nav {
+    transform: translateX(0);
+  }
+  .drawer-header {
+    min-height: 36px;
+    margin: 0 4px 24px;
+    color: #f4f1f8;
+  }
+  .drawer-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    letter-spacing: .01em;
+  }
+  .drawer-brand strong { font-size: .98rem; font-weight: 700; }
+  .drawer-brand-mark {
+    display: grid;
+    width: 27px;
+    height: 27px;
+    place-items: center;
+    border-radius: 8px;
+    background: #bca7ff;
+    color: #292333;
+    font-size: 16px;
+    font-weight: 900;
+  }
+  .drawer-close {
+    width: 30px;
+    height: 30px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: #989898;
+    font-size: 22px;
+  }
+  .drawer-close:hover, .drawer-close:focus-visible { background: #333; color: #fff; }
+  .nav-drawer-links { display: grid; gap: 5px; }
+  .bottom-nav .nav-item {
+    min-height: 42px;
+    padding: 9px 10px;
+    border-radius: 8px;
+    color: #bdbdbd;
+    font-size: .78rem;
+    font-weight: 500;
+    letter-spacing: .01em;
+    transition: background-color .16s ease, color .16s ease, transform .16s ease;
+  }
+  .bottom-nav .nav-item:hover,
+  .bottom-nav .nav-item:focus-visible,
+  .bottom-nav .nav-item.active {
+    background: #303030;
+    color: #fff;
+  }
+  .bottom-nav .nav-item.active { box-shadow: inset 3px 0 #bca7ff; }
+  .bottom-nav .nav-icon {
+    width: 22px;
+    height: 22px;
+    flex-basis: 22px;
+    opacity: .82;
+  }
+  .bottom-nav .nav-item.active .nav-icon { opacity: 1; }
+  .nav-profile-panel { margin-top: 8px; }
+  .nav-profile-panel .nav-back-button {
+    border-color: rgba(255,255,255,.09);
+    background: #303030;
+    color: #d0d0d0;
+  }
+}
