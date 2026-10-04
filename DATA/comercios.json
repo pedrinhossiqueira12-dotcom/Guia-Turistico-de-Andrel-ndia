@@ -2642,13 +2642,9 @@
     "site": "",
     "latitude": null,
     "longitude": null,
-    "imagem": "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/admin/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790961582758-n1xirey-adesivo.png",
-    "imagens": [
-      "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/admin/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790961582758-n1xirey-adesivo.png",
-      "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/admin/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790961583086-6job3r8-ile_cebaadcd.png",
-      "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/admin/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1790961583589-ovat3sd-__.png"
-    ],
-    "status": "ativo",
+    "imagem": "",
+    "imagens": [],
+    "status": "deletado",
     "destaque": false
   },
   {
