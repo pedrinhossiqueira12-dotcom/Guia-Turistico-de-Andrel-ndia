@@ -4375,23 +4375,33 @@ function configurarMenuMovel() {
   toggle.dataset.configurado = "true";
 
   const mostrarPrincipal = () => {
-    if (mainPanel) mainPanel.hidden = false;
-    if (profilePanel) profilePanel.hidden = true;
-    panel.setAttribute("aria-label", "Navegação principal");
-  };
-  const mostrarPerfil = () => {
-    if (mainPanel) mainPanel.hidden = true;
-    if (profilePanel) profilePanel.hidden = false;
-    panel.setAttribute("aria-label", "Perfil do usuário");
-  };
-  const fechar = () => {
-    document.body.dataset.mobileNavOpen = "false";
-    toggle.setAttribute("aria-expanded", "false");
-    toggle.setAttribute("aria-label", "Abrir menu de navegação");
-    panel.setAttribute("aria-hidden", "true");
-    if (backdrop) backdrop.hidden = true;
-    mostrarPrincipal();
-  };
+  if (mainPanel) mainPanel.hidden = false;
+  if (profilePanel) profilePanel.hidden = true;
+
+  document.body.dataset.mobileProfileOpen = "false";
+  panel.setAttribute("aria-label", "Navegação principal");
+};
+
+const mostrarPerfil = () => {
+  if (mainPanel) mainPanel.hidden = true;
+  if (profilePanel) profilePanel.hidden = false;
+
+  document.body.dataset.mobileProfileOpen = "true";
+  panel.setAttribute("aria-label", "Perfil do usuário");
+};
+const fechar = () => {
+  document.body.dataset.mobileNavOpen = "false";
+  document.body.dataset.mobileProfileOpen = "false";
+
+  toggle.setAttribute("aria-expanded", "false");
+  toggle.setAttribute("aria-label", "Abrir menu de navegação");
+  panel.setAttribute("aria-hidden", "true");
+
+  if (backdrop) backdrop.hidden = true;
+
+  mostrarPrincipal();
+};
+
   const abrir = () => {
     document.body.dataset.mobileNavOpen = "true";
     toggle.setAttribute("aria-expanded", "true");
