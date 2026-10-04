@@ -333,3 +333,58 @@ body[data-mobile-nav-open="true"] .bottom-nav { opacity: 1; visibility: visible;
     color: #d0d0d0;
   }
 }
+
+/* Sidebar mobile final: painel lateral fixo, compacto e sem rolagem. */
+@media (max-width: 700px) {
+  .bottom-nav {
+    top: 8px;
+    right: 8px;
+    bottom: 8px;
+    left: auto;
+    width: min(258px, calc(100vw - 16px));
+    height: calc(100dvh - 16px);
+    max-height: none;
+    padding: 16px 10px 12px;
+    overflow: hidden;
+    overscroll-behavior: none;
+    border-radius: 12px;
+    transform: translateX(108%);
+    transform-origin: right center;
+  }
+  body[data-mobile-nav-open="true"] .bottom-nav {
+    transform: translateX(0);
+  }
+  .drawer-header {
+    min-height: 32px;
+    margin: 0 4px 17px;
+  }
+  .drawer-brand strong { font-size: .9rem; }
+  .drawer-brand-mark { width: 24px; height: 24px; font-size: 14px; }
+  .drawer-close { width: 28px; height: 28px; font-size: 20px; }
+  #navMainPanel { height: calc(100% - 49px); }
+  .nav-drawer-links {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    height: 100%;
+    overflow: hidden;
+  }
+  .bottom-nav .nav-item {
+    flex: 0 0 34px;
+    min-height: 34px;
+    height: 34px;
+    padding: 6px 8px;
+    gap: 9px;
+    border-radius: 7px;
+    font-size: .74rem;
+    line-height: 1;
+  }
+  .bottom-nav .nav-icon {
+    width: 19px;
+    height: 19px;
+    flex-basis: 19px;
+  }
+  /* Espaço visual entre os grupos, como na referência, sem criar conteúdo rolável. */
+  .bottom-nav .nav-item:nth-child(6) { margin-top: auto; }
+  .nav-profile-panel { max-height: 100%; overflow: hidden; }
+}
