@@ -77,6 +77,7 @@
       const button = document.createElement("button");
       button.type = "button";
       button.className = "test-plan";
+      if (plan.id === "anual") button.classList.add("recommended");
       button.dataset.plan = plan.id;
       const title = document.createElement("strong");
       title.textContent = plan.id === "mensal" ? "Mensal" : "Anual";

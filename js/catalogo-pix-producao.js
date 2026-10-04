@@ -264,6 +264,7 @@
       const button = document.createElement("button");
       button.type = "button";
       button.className = "test-plan";
+      if (plan.id === "anual") button.classList.add("recommended");
       const name = document.createElement("strong");
       name.textContent = plan.id === "anual" ? "Anual" : "Mensal";
       const price = document.createElement("span");

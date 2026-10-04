@@ -205,6 +205,117 @@ function obterNomeUsuario(
 }
 
 
+const PERFIL_FOTOS_BUCKET = "perfil-fotos";
+const CONTA_EDGE_FUNCTION_URL = `${LOGIN_SUPABASE_URL}/functions/v1/conta-usuario`;
+const AVATAR_FALLBACK = "img/icones/pessoa.png";
+
+function avatarPathFromUrl(value) {
+  if (typeof value !== "string" || !value) return "";
+  try {
+    const pathname = new URL(value).pathname;
+    const marker = `/storage/v1/object/public/${PERFIL_FOTOS_BUCKET}/`;
+    return pathname.includes(marker) ? decodeURIComponent(pathname.split(marker)[1]) : "";
+  } catch { return ""; }
+}
+
+function renderizarAvatarUsuario(user) {
+  const image = document.getElementById("avatarUsuario");
+  const button = document.getElementById("botaoRemoverFotoPerfil");
+  if (!image) return;
+  const avatar = user?.user_metadata?.avatar_url;
+  image.src = typeof avatar === "string" && avatar ? avatar : AVATAR_FALLBACK;
+  image.alt = user ? `Foto de ${obterNomeUsuario(user)}` : "Foto de perfil";
+  image.onerror = () => { image.onerror = null; image.src = AVATAR_FALLBACK; };
+  if (button) button.disabled = !(typeof avatar === "string" && avatar);
+}
+
+function setFeedbackFotoPerfil(message, error = false) {
+  const target = document.getElementById("feedbackFotoPerfil");
+  if (!target) return;
+  target.textContent = message || "";
+  target.dataset.kind = error ? "error" : "success";
+}
+
+async function uploadAvatarUsuario(file) {
+  if (!file || !["image/jpeg", "image/png", "image/webp"].includes(file.type)) throw new Error("Use uma imagem JPG, PNG ou WEBP.");
+  if (file.size > 2 * 1024 * 1024) throw new Error("A foto deve ter no máximo 2 MB.");
+  const client = obterSupabaseLogin();
+  const { data: sessionData } = await client.auth.getSession();
+  const user = sessionData?.session?.user;
+  if (!user) throw new Error("Sua sessão expirou. Entre novamente.");
+  const extension = file.type === "image/jpeg" ? "jpg" : file.type.split("/")[1];
+  const path = `${user.id}/avatar-${Date.now()}.${extension}`;
+  const { error: uploadError } = await client.storage.from(PERFIL_FOTOS_BUCKET).upload(path, file, { upsert: false, contentType: file.type, cacheControl: "3600" });
+  if (uploadError) throw new Error(uploadError.message || "Não foi possível enviar a foto.");
+  const { data: publicData } = client.storage.from(PERFIL_FOTOS_BUCKET).getPublicUrl(path);
+  const oldPath = user.user_metadata?.avatar_path || avatarPathFromUrl(user.user_metadata?.avatar_url);
+  const { error: metadataError } = await client.auth.updateUser({ data: { avatar_url: publicData.publicUrl, avatar_path: path } });
+  if (metadataError) {
+    await client.storage.from(PERFIL_FOTOS_BUCKET).remove([path]);
+    throw new Error(metadataError.message || "Não foi possível salvar a foto.");
+  }
+  if (oldPath && oldPath !== path) await client.storage.from(PERFIL_FOTOS_BUCKET).remove([oldPath]);
+  const { data: refreshed } = await client.auth.getUser();
+  renderizarAvatarUsuario(refreshed?.user || { ...user, user_metadata: { ...user.user_metadata, avatar_url: publicData.publicUrl, avatar_path: path } });
+}
+
+async function removerAvatarUsuario() {
+  const client = obterSupabaseLogin();
+  const { data: sessionData } = await client.auth.getSession();
+  const user = sessionData?.session?.user;
+  if (!user) throw new Error("Sua sessão expirou. Entre novamente.");
+  const oldPath = user.user_metadata?.avatar_path || avatarPathFromUrl(user.user_metadata?.avatar_url);
+  if (oldPath) {
+    const { error } = await client.storage.from(PERFIL_FOTOS_BUCKET).remove([oldPath]);
+    if (error) throw new Error(error.message || "Não foi possível remover a foto.");
+  }
+  const { error } = await client.auth.updateUser({ data: { avatar_url: null, avatar_path: null } });
+  if (error) throw new Error(error.message || "Não foi possível atualizar o perfil.");
+  const { data: refreshed } = await client.auth.getUser();
+  renderizarAvatarUsuario(refreshed?.user || null);
+}
+
+async function excluirContaUsuario() {
+  const confirmou = window.confirm("Apagar a conta é permanente. Seu login, foto de perfil e perfil público serão removidos/arquivados e não poderão ser recuperados. Deseja continuar?");
+  if (!confirmou) return;
+  const button = document.getElementById("botaoExcluirConta");
+  try {
+    if (button) { button.disabled = true; button.textContent = "Apagando..."; }
+    const client = obterSupabaseLogin();
+    const { data: sessionData } = await client.auth.getSession();
+    const token = sessionData?.session?.access_token;
+    if (!token) throw new Error("Sua sessão expirou. Entre novamente.");
+    const response = await fetch(CONTA_EDGE_FUNCTION_URL, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, apikey: LOGIN_SUPABASE_KEY }, body: JSON.stringify({ acao: "excluir_conta" }) });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || result.sucesso !== true) throw new Error(result.erro || "Não foi possível apagar a conta.");
+    await client.auth.signOut({ scope: "local" });
+    window.location.href = "index.html?conta=excluida";
+  } catch (error) {
+    setFeedbackFotoPerfil(error.message || "Não foi possível apagar a conta.", true);
+    if (button) { button.disabled = false; button.textContent = "Apagar minha conta"; }
+  }
+}
+
+function configurarControlesPerfil() {
+  const input = document.getElementById("inputFotoPerfil");
+  const avatarButton = document.getElementById("avatarUsuarioButton");
+  const removeButton = document.getElementById("botaoRemoverFotoPerfil");
+  const deleteButton = document.getElementById("botaoExcluirConta");
+  if (input && !input.dataset.configurado) {
+    input.dataset.configurado = "true";
+    input.addEventListener("change", async () => {
+      const file = input.files?.[0];
+      input.value = "";
+      if (!file) return;
+      try { setFeedbackFotoPerfil("Enviando foto…"); await uploadAvatarUsuario(file); setFeedbackFotoPerfil("Foto de perfil atualizada."); }
+      catch (error) { setFeedbackFotoPerfil(error.message || "Não foi possível enviar a foto.", true); }
+    });
+  }
+  if (avatarButton && !avatarButton.dataset.configurado) { avatarButton.dataset.configurado = "true"; avatarButton.addEventListener("click", () => input?.click()); }
+  if (removeButton && !removeButton.dataset.configurado) { removeButton.dataset.configurado = "true"; removeButton.addEventListener("click", async () => { if (!window.confirm("Remover sua foto de perfil?")) return; try { removeButton.disabled = true; await removerAvatarUsuario(); setFeedbackFotoPerfil("Foto removida."); } catch (error) { setFeedbackFotoPerfil(error.message || "Não foi possível remover a foto.", true); } }); }
+  if (deleteButton && !deleteButton.dataset.configurado) { deleteButton.dataset.configurado = "true"; deleteButton.addEventListener("click", excluirContaUsuario); }
+}
+
 /* =========================================================
    USUÁRIO LOGADO
 ========================================================= */
@@ -222,6 +333,9 @@ async function mostrarUsuarioLogado(
   atualizarUsuarioAtual(
     user
   );
+
+  configurarControlesPerfil();
+  renderizarAvatarUsuario(user);
 
 
   const areaAuth =
@@ -318,6 +432,8 @@ function mostrarUsuarioDeslogado() {
   atualizarUsuarioAtual(
     null
   );
+
+  renderizarAvatarUsuario(null);
 
 
   const areaAuth =

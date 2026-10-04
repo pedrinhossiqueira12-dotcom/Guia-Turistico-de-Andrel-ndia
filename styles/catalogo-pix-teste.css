@@ -52,7 +52,7 @@
 [hidden] { display: none !important; }
 @media (max-width: 640px) {
   .test-hero { align-items: flex-start; }
-  .test-stamp { font-size: .62rem; padding: 9px 10px; }
+  .test-stamp { display: inline-flex; margin-top: 18px; font-size: .62rem; padding: 9px 10px; }
   .test-plans { grid-template-columns: 1fr; }
   .test-plan { min-height: 140px; }
   .pix-layout { grid-template-columns: 1fr; }
@@ -67,3 +67,33 @@
 .pix-production-page .test-warning { border-color: #d8c8b1; background: #f7f4ee; color: #3d4a42; }
 .pix-production-page .plan-action-label { margin-top: auto; color: #194138; font-size: .9rem; font-weight: 900; }
 .pix-production-page .test-plan[aria-busy="true"] { opacity: .7; cursor: progress; }
+
+/* Acabamento da contratação: planos e pagamento em um fluxo visual único. */
+.test-plans { align-items: stretch; }
+.test-plan { position: relative; min-height: 205px; justify-content: flex-start; }
+.test-plan.recommended { border: 2px solid #bd6b4d; background: linear-gradient(160deg, #fffdf8, #f5eee5); box-shadow: 0 12px 28px rgba(189,107,77,.14); }
+.test-plan.recommended::before { content: "MELHOR CUSTO-BENEFÍCIO"; position: absolute; top: -11px; right: 14px; padding: 5px 8px; border-radius: 999px; background: #bd6b4d; color: #fff; font-size: .62rem; font-weight: 900; letter-spacing: .08em; }
+.test-plan .test-price { letter-spacing: -.03em; }
+.payment-test-card { border-color: #cbded3; background: linear-gradient(180deg, #fff, #f8fbf8); }
+.payment-test-card .test-heading { padding-bottom: 14px; border-bottom: 1px solid #e5ebe6; }
+.payment-test-card .pix-layout { grid-template-columns: minmax(210px, 280px) minmax(0, 1fr); align-items: stretch; }
+.payment-test-card .pix-image-wrap { min-height: 280px; border-style: solid; border-color: #cbded3; background: #fff; box-shadow: inset 0 0 0 8px #f5faf6; }
+.payment-test-card .pix-code-column { align-content: center; padding: 4px 0; }
+.payment-test-card .pix-code-column textarea { min-height: 142px; border-color: #b9cfc2; background: #fff; }
+.payment-test-card #copyPixCode { min-height: 48px; }
+.payment-test-card .test-no-activate { padding: 12px 14px; border-radius: 10px; background: #fff4ef; }
+@media (max-width: 640px) {
+  .test-hero { display: block; gap: 16px; padding: 24px 18px; }
+  .test-heading { gap: 10px; }
+  .test-lock { font-size: .62rem; }
+  .payment-test-card .pix-layout { grid-template-columns: 1fr; }
+  .payment-test-card .pix-image-wrap { min-height: min(78vw, 280px); }
+  .payment-test-card .pix-code-column { padding: 0; }
+}
+@media (max-width: 380px) {
+  .test-warning, .test-status, .test-card, .test-footer { padding: 16px; border-radius: 14px; }
+  .test-hero h1 { font-size: 1.85rem; }
+  .test-heading { display: block; }
+  .test-lock { margin-top: 8px; }
+  .test-plan.recommended::before { position: static; align-self: flex-start; order: -1; }
+}
