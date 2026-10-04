@@ -61,6 +61,13 @@ test("validação do vendedor usa o host oficial de perfil do Mercado Pago", () 
   assert.match(productionFunction, /mpRequest\("\/users\/me", "GET", undefined, undefined, MP_USER_PROFILE_API\)/);
 });
 
+test("checkout aceita o mesmo vínculo aprovado por local_id ou slug do nome que o painel", () => {
+  assert.match(adminFunction, /function recordMatchesCommerce[\s\S]*?slug\(record\.nome\)/);
+  assert.match(productionFunction, /function recordMatchesCommerce[\s\S]*?slug\(record\.nome\)/);
+  assert.match(productionFunction, /recordMatchesCommerce\(item, commerceId\)/);
+  assert.doesNotMatch(productionFunction, /\.eq\("local_id", commerceId\)\s*\.limit\(1\)/);
+});
+
 test("reserva concorrente do catálogo relê e valida proprietário e bloqueio antes de cobrar", () => {
   assert.match(productionFunction, /insertError\.code !== "23505"/);
   assert.match(productionFunction, /confirmed\.proprietario_id !== owner\.userId \|\| confirmed\.bloqueado/);

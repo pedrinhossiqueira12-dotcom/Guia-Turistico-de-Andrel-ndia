@@ -88,6 +88,27 @@ function safeString(value: unknown): string {
   return typeof value === "string" || typeof value === "number" ? String(value) : "";
 }
 
+function slug(value: unknown): string {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "perfil";
+}
+
+function recordMatchesCommerce(record: JsonRecord, commerceId: string): boolean {
+  const candidates = [
+    record.local_id,
+    record.id_publico,
+    record.slug,
+    record.comercio_id,
+    slug(record.nome),
+  ].map((value) => String(value ?? "").trim().toLowerCase()).filter(Boolean);
+  return candidates.includes(commerceId.toLowerCase());
+}
+
 function requireProductionConfiguration(requireWebhook = false) {
   if (!MP_PROD_ACCESS_TOKEN || !/^\d{1,24}$/.test(MP_PROD_SELLER_ID)) {
     throw new HttpError("O checkout de produção ainda não está configurado.", 503);
@@ -125,15 +146,14 @@ async function verifyCommerceOwner(userId: string, commerceId: string): Promise<
   if (publishedError) throw new Error("Falha ao consultar o estado do comércio publicado.");
   if (!published || published.status !== "ativo") throw new HttpError("Este comércio não está publicado e ativo.", 403);
 
-  const { data: registration, error: registrationError } = await admin
+  const { data: registrations, error: registrationError } = await admin
     .from("cadastros_comercios")
-    .select("id,local_id,status")
+    .select("id,usuario_id,nome,status,local_id")
     .eq("usuario_id", userId)
     .eq("status", "aprovado")
-    .eq("local_id", commerceId)
-    .limit(1)
-    .maybeSingle();
+    .limit(100);
   if (registrationError) throw new Error("Falha ao consultar o vínculo aprovado do proprietário.");
+  const registration = (registrations || []).find((item: JsonRecord) => recordMatchesCommerce(item, commerceId));
   if (!registration) throw new HttpError("A conta não está vinculada a este comércio aprovado.", 403);
 
   const { data: catalog, error: catalogError } = await admin
