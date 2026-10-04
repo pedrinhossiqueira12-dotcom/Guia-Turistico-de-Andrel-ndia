@@ -4364,19 +4364,50 @@ secoes.forEach(secao => observer.observe(secao));
 }
 function configurarMenuMovel() {
   const toggle = document.getElementById("mobileNavToggle");
+  const closeButton = document.getElementById("mobileNavClose");
   const panel = document.getElementById("mobileNavPanel");
+  const backdrop = document.getElementById("mobileNavBackdrop");
+  const mainPanel = document.getElementById("navMainPanel");
+  const profilePanel = document.getElementById("perfilUsuario");
+  const backButton = document.getElementById("navBackToMain");
   if (!toggle || !panel || toggle.dataset.configurado) return;
   toggle.dataset.configurado = "true";
-  const fechar = () => { document.body.dataset.mobileNavOpen = "false"; toggle.setAttribute("aria-expanded", "false"); toggle.setAttribute("aria-label", "Abrir menu de navegação"); };
-  toggle.addEventListener("click", () => {
-    const aberto = document.body.dataset.mobileNavOpen === "true";
-    document.body.dataset.mobileNavOpen = String(!aberto);
-    toggle.setAttribute("aria-expanded", String(!aberto));
-    toggle.setAttribute("aria-label", aberto ? "Abrir menu de navegação" : "Fechar menu de navegação");
-  });
-  panel.querySelectorAll(".nav-item").forEach(item => item.addEventListener("click", fechar));
+
+  const mostrarPrincipal = () => {
+    if (mainPanel) mainPanel.hidden = false;
+    if (profilePanel) profilePanel.hidden = true;
+    panel.setAttribute("aria-label", "Navegação principal");
+  };
+  const mostrarPerfil = () => {
+    if (mainPanel) mainPanel.hidden = true;
+    if (profilePanel) profilePanel.hidden = false;
+    panel.setAttribute("aria-label", "Perfil do usuário");
+  };
+  const fechar = () => {
+    document.body.dataset.mobileNavOpen = "false";
+    toggle.setAttribute("aria-expanded", "false");
+    toggle.setAttribute("aria-label", "Abrir menu de navegação");
+    panel.setAttribute("aria-hidden", "true");
+    if (backdrop) backdrop.hidden = true;
+    mostrarPrincipal();
+  };
+  const abrir = () => {
+    document.body.dataset.mobileNavOpen = "true";
+    toggle.setAttribute("aria-expanded", "true");
+    toggle.setAttribute("aria-label", "Fechar menu de navegação");
+    panel.setAttribute("aria-hidden", "false");
+    if (backdrop) backdrop.hidden = false;
+  };
+  toggle.addEventListener("click", () => document.body.dataset.mobileNavOpen === "true" ? fechar() : abrir());
+  closeButton?.addEventListener("click", fechar);
+  backdrop?.addEventListener("click", fechar);
+  backButton?.addEventListener("click", mostrarPrincipal);
+  panel.querySelector('[data-nav-profile="true"]')?.addEventListener("click", mostrarPerfil);
+  panel.querySelectorAll('a.nav-item').forEach(item => item.addEventListener("click", fechar));
   document.addEventListener("keydown", event => { if (event.key === "Escape") fechar(); });
-  document.addEventListener("click", event => { if (document.body.dataset.mobileNavOpen === "true" && !panel.contains(event.target) && event.target !== toggle && !toggle.contains(event.target)) fechar(); });
+  document.addEventListener("click", event => {
+    if (document.body.dataset.mobileNavOpen === "true" && !panel.contains(event.target) && !toggle.contains(event.target)) fechar();
+  });
 }
 
 /* =========================================================

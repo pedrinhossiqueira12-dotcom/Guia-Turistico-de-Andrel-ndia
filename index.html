@@ -1003,121 +1003,58 @@ aria-label="Pesquisar comércio ou categoria"
 
 </section>
   <!-- ==================================================
-       NAVBAR FIXA
+       NAVEGAÇÃO LATERAL E PERFIL
   ================================================== -->
-
   <button id="mobileNavToggle" class="mobile-nav-toggle" type="button" aria-controls="mobileNavPanel" aria-expanded="false" aria-label="Abrir menu de navegação">
     <span aria-hidden="true">☰</span>
   </button>
-  <nav id="mobileNavPanel" class="bottom-nav">
-
-    <a class="nav-item active" href="#inicio">
-      <span class="nav-icon"><img src="img/icones/home.png" alt=""></span>
-      <span>Início</span>
-    </a>
-    <a class="nav-item" href="#mapa">
-      <span class="nav-icon"><img src="img/icones/mapa2.png" alt=""></span>
-      <span>Mapa Turístico</span>
-    </a>
-    <a class="nav-item" href="#visitar">
-      <span class="nav-icon"><img src="img/icones/igreja.png" alt=""></span>
-      <span>O que Visitar</span>
-    </a>
-    <a class="nav-item" href="#comer">
-      <span class="nav-icon"><img src="img/icones/alimentacao.png" alt=""></span>
-      <span>Onde Comer</span>
-    </a>
-    <a class="nav-item" href="#ficar">
-      <span class="nav-icon"><img src="img/icones/hotel.png" alt=""></span>
-      <span>Onde Ficar</span>
-    </a>
-    <a class="nav-item" href="#comercio">
-      <span class="nav-icon"><img src="img/icones/comercio.png" alt=""></span>
-      <span>Comércio Local</span>
-    </a>
-    <a class="nav-item" href="#pessoas">
-      <span class="nav-icon"><img src="img/icones/pessoa.png" alt=""></span>
-      <span>Mural</span>
-    </a>
-    <a class="nav-item" href="#perfilUsuario">
-      <span class="nav-icon"><img src="img/icones/pessoa.png" alt=""></span>
-      <span>Perfil</span>
-    </a>
-
-  </nav>
-
-  <div id="perfilUsuario" class="perfil-navegacao">
-  <!-- ==================================================
-       ÁREA DE AUTENTICAÇÃO
-  ================================================== -->
-
-  <section
-    id="areaAutenticacao"
-    class="auth-area"
-    aria-label="Área de autenticação"
-  >
-
-    <p>
-      Entre na sua conta para participar do Guia.
-    </p>
-
-    <div class="auth-buttons">
-
-      <button
-        type="button"
-        id="abrirLogin"
-        class="auth-button primary"
-      >
-        Entrar
-      </button>
-
-      <button
-        type="button"
-        id="abrirCadastro"
-        class="auth-button secondary"
-      >
-        Criar conta
-      </button>
-
+  <div id="mobileNavBackdrop" class="mobile-nav-backdrop" hidden></div>
+  <aside id="mobileNavPanel" class="bottom-nav" aria-label="Navegação principal" aria-hidden="true">
+    <div class="drawer-header">
+      <strong>Guia Turístico</strong>
+      <button id="mobileNavClose" class="drawer-close" type="button" aria-label="Fechar menu">×</button>
     </div>
-
-  </section>
-
-
-  <!-- ==================================================
-       ÁREA DO USUÁRIO LOGADO
-  ================================================== -->
-
-  <section
-    id="areaUsuario"
-    class="auth-area"
-    style="display: none;"
-    aria-label="Usuário logado"
-  >
-
-    <div class="user-profile-summary">
-      <button id="avatarUsuarioButton" class="avatar-usuario-button" type="button" aria-label="Alterar foto de perfil">
-        <img id="avatarUsuario" src="img/icones/pessoa.png" alt="Foto de perfil" width="64" height="64">
-      </button>
-      <div class="user-rating-header">
-        <div>
-          <span class="form-label">Usuário</span>
-          <strong id="nomeUsuarioLogado">Usuário</strong>
+    <div id="navMainPanel" class="nav-drawer-panel">
+      <nav class="nav-drawer-links" aria-label="Menu principal">
+        <button class="nav-item" type="button" data-nav-target="#perfilUsuario" data-nav-profile="true"><span class="nav-icon"><img src="img/icones/pessoa.png" alt=""></span><span>Perfil</span></button>
+        <a class="nav-item active" href="#inicio"><span class="nav-icon"><img src="img/icones/home.png" alt=""></span><span>Início</span></a>
+        <a class="nav-item" href="pages/noticias.html"><span class="nav-icon"><img src="img/icones/historico.png" alt=""></span><span>Notícias</span></a>
+        <a class="nav-item" href="#mapa"><span class="nav-icon"><img src="img/icones/mapa2.png" alt=""></span><span>Mapa Turístico</span></a>
+        <a class="nav-item" href="#visitar"><span class="nav-icon"><img src="img/icones/igreja.png" alt=""></span><span>O que Visitar</span></a>
+        <a class="nav-item" href="#comer"><span class="nav-icon"><img src="img/icones/alimentacao.png" alt=""></span><span>Onde Comer</span></a>
+        <a class="nav-item" href="#ficar"><span class="nav-icon"><img src="img/icones/hotel.png" alt=""></span><span>Onde Ficar</span></a>
+        <a class="nav-item" href="#comercio"><span class="nav-icon"><img src="img/icones/comercio.png" alt=""></span><span>Comércio Local</span></a>
+        <a class="nav-item" href="#pessoas"><span class="nav-icon"><img src="img/icones/pessoa.png" alt=""></span><span>Mural</span></a>
+      </nav>
+    </div>
+    <div id="perfilUsuario" class="perfil-navegacao nav-drawer-panel nav-profile-panel" hidden>
+      <button id="navBackToMain" class="nav-back-button" type="button">← Voltar ao menu</button>
+      <section id="areaAutenticacao" class="auth-area" aria-label="Área de autenticação">
+        <p>Entre na sua conta para participar do Guia.</p>
+        <div class="auth-buttons">
+          <button type="button" id="abrirLogin" class="auth-button primary">Entrar</button>
+          <button type="button" id="abrirCadastro" class="auth-button secondary">Criar conta</button>
         </div>
-        <button type="button" id="botaoSair" class="logout-button">Sair</button>
-      </div>
+      </section>
+      <section id="areaUsuario" class="auth-area" style="display: none;" aria-label="Usuário logado">
+        <div class="user-profile-summary">
+          <button id="avatarUsuarioButton" class="avatar-usuario-button" type="button" aria-label="Alterar foto de perfil">
+            <img id="avatarUsuario" src="img/icones/pessoa.png" alt="Foto de perfil" width="64" height="64">
+          </button>
+          <div class="user-rating-header"><div><span class="form-label">Usuário</span><strong id="nomeUsuarioLogado">Usuário</strong></div></div>
+        </div>
+        <div class="profile-menu-actions">
+          <button id="botaoEditarPerfil" class="profile-upload-button" type="button">Editar perfil</button>
+          <label class="profile-upload-button" for="inputFotoPerfil">Editar foto</label>
+          <input id="inputFotoPerfil" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+          <button id="botaoRemoverFotoPerfil" class="profile-remove-button" type="button">Remover foto</button>
+          <button id="botaoExcluirConta" class="profile-delete-button" type="button">Apagar conta</button>
+          <button id="botaoSair" class="logout-button profile-logout-button" type="button">Sair da conta</button>
+        </div>
+        <p id="feedbackFotoPerfil" class="profile-feedback" role="status" aria-live="polite"></p>
+      </section>
     </div>
-    <div class="profile-menu-actions">
-      <label class="profile-upload-button" for="inputFotoPerfil">Trocar foto</label>
-      <input id="inputFotoPerfil" type="file" accept="image/jpeg,image/png,image/webp" hidden>
-      <button id="botaoRemoverFotoPerfil" class="profile-remove-button" type="button">Remover foto</button>
-      <button id="botaoExcluirConta" class="profile-delete-button" type="button">Apagar minha conta</button>
-    </div>
-    <p id="feedbackFotoPerfil" class="profile-feedback" role="status" aria-live="polite"></p>
-  </section>
-
-
-  </div>
+  </aside>
 
   <!-- ==================================================
        ÁREA DE AVALIAÇÃO

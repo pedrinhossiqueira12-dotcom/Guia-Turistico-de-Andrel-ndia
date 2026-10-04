@@ -135,3 +135,37 @@
   .profile-upload-button, .profile-remove-button, .profile-delete-button { width: 100%; text-align: center; }
 }
 @media (prefers-reduced-motion: reduce) { .bottom-nav { transition: none; } }
+
+/* Drawer de navegação: substitui a antiga barra fixa, preservando os destinos existentes. */
+.mobile-nav-toggle { position: fixed; top: 18px; right: 18px; z-index: 1300; display: grid; width: 48px; height: 48px; place-items: center; border: 1px solid rgba(255,255,255,.35); border-radius: 14px; background: #194138; color: #fff; box-shadow: 0 10px 28px rgba(9,29,28,.22); font-size: 23px; cursor: pointer; }
+.mobile-nav-backdrop { position: fixed; inset: 0; z-index: 1240; background: rgba(9,29,28,.34); backdrop-filter: blur(2px); }
+.bottom-nav { position: fixed; top: 0; right: 0; bottom: 0; left: auto; z-index: 1250; display: block; width: min(360px, calc(100vw - 22px)); max-height: 100dvh; padding: 22px 16px 24px; overflow-y: auto; border: 0; border-left: 1px solid rgba(255,255,255,.15); border-radius: 22px 0 0 22px; background: linear-gradient(180deg, #12342f, #091d1c); box-shadow: -18px 0 48px rgba(9,29,28,.24); opacity: 0; visibility: hidden; pointer-events: none; transform: translateX(105%); transition: opacity .2s ease, transform .2s ease, visibility .2s ease; }
+body[data-mobile-nav-open="true"] .bottom-nav { opacity: 1; visibility: visible; pointer-events: auto; transform: translateX(0); }
+.drawer-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; color: #fff; font-size: 1.05rem; }
+.drawer-close { display: grid; width: 38px; height: 38px; place-items: center; border: 1px solid rgba(255,255,255,.25); border-radius: 11px; background: rgba(255,255,255,.08); color: #fff; font-size: 25px; line-height: 1; cursor: pointer; }
+.nav-drawer-links { display: grid; gap: 4px; }
+.bottom-nav .nav-item { display: flex; align-items: center; justify-content: flex-start; width: 100%; min-width: 0; min-height: 46px; gap: 12px; padding: 9px 12px; border: 0; border-radius: 12px; background: transparent; color: #fff; font: inherit; text-align: left; text-decoration: none; cursor: pointer; }
+.bottom-nav .nav-item:hover, .bottom-nav .nav-item:focus-visible, .bottom-nav .nav-item.active { background: rgba(255,255,255,.11); outline: none; }
+.bottom-nav .nav-item::after { display: none; }
+.bottom-nav .nav-icon { display: grid; width: 28px; height: 28px; place-items: center; flex: 0 0 28px; }
+.bottom-nav .nav-icon img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.nav-profile-panel { padding-top: 2px; }
+.nav-back-button { width: 100%; margin-bottom: 16px; padding: 10px 12px; border: 1px solid rgba(255,255,255,.25); border-radius: 11px; background: rgba(255,255,255,.08); color: #fff; font: inherit; text-align: left; cursor: pointer; }
+.nav-profile-panel .auth-area { margin: 0; padding: 18px 0 0; border: 0; background: transparent; color: #fff; }
+.nav-profile-panel .auth-area p, .nav-profile-panel .form-label { color: rgba(255,255,255,.72); }
+.nav-profile-panel .user-rating-header strong { color: #fff; }
+.nav-profile-panel .profile-menu-actions { display: grid; grid-template-columns: 1fr 1fr; }
+.nav-profile-panel .profile-upload-button, .nav-profile-panel .profile-remove-button, .nav-profile-panel .profile-delete-button, .nav-profile-panel .profile-logout-button { width: 100%; margin: 0; text-align: center; }
+.nav-profile-panel .profile-delete-button { grid-column: 1 / -1; }
+.nav-profile-panel .profile-logout-button { grid-column: 1 / -1; border-color: rgba(255,255,255,.35); background: transparent; color: #fff; }
+.nav-profile-panel .auth-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.nav-profile-panel .auth-button { min-height: 42px; }
+@media (max-width: 430px) {
+  .mobile-nav-toggle { top: 12px; right: 12px; }
+  .bottom-nav { width: min(340px, calc(100vw - 10px)); padding: 16px 12px 22px; }
+  .nav-profile-panel .profile-menu-actions, .nav-profile-panel .auth-buttons { grid-template-columns: 1fr; }
+  .nav-profile-panel .profile-delete-button, .nav-profile-panel .profile-logout-button { grid-column: auto; }
+}
+@media (prefers-reduced-motion: reduce) { .bottom-nav { transition: none; } }
+.bottom-nav[aria-hidden="true"] { visibility: hidden; }
+.nav-drawer-panel[hidden], .mobile-nav-backdrop[hidden] { display: none !important; }
