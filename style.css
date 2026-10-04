@@ -357,7 +357,7 @@ button {
     var(--branco);
 
   border:
-    1px solid
+    2px solid
     var(--cinza-borda);
 
   border-radius:
@@ -646,7 +646,7 @@ button {
   display: grid;
 
   grid-template-columns:
-    repeat(4, 1fr);
+    repeat(9, 1fr);
 
   align-items: center;
 
@@ -662,7 +662,7 @@ button {
     rgba(0, 0, 0, 0.12);
 }
 
-.nav-item {
+.bottom-nav .nav-item {
 
   height: 100%;
 
@@ -694,13 +694,13 @@ button {
     opacity .15s ease;
 }
 
-.nav-item:hover,
-.nav-item.active {
+.bottom-nav .nav-item:hover,
+.bottom-nav .nav-item.active {
 
   opacity: 1;
 }
 
-.nav-icon img {
+.bottom-nav .nav-icon img {
 
   width:
     clamp(
@@ -719,7 +719,7 @@ button {
   display: block;
 }
 
-.nav-item > span:last-child {
+.bottom-nav .nav-item > span:last-child {
 
   color:
     var(--branco);
@@ -2740,7 +2740,7 @@ footer .footer-copy {
    CELULAR
 ========================================================= */
 
-@media (max-width: 699px) {
+@media (max-width: 700px) {
 
 
   /* =======================================================
@@ -3256,7 +3256,7 @@ footer .footer-copy {
    TELAS GRANDES DE CELULAR
 ========================================================= */
 
-@media (min-width: 500px) and (max-width: 699px) {
+@media (min-width: 500px) and (max-width: 700px) {
 
   .quick-grid {
 
@@ -3305,7 +3305,7 @@ footer .footer-copy {
    TABLET
 ========================================================= */
 
-@media (min-width: 700px) {
+@media (min-width: 701px) {
 
   body {
 
@@ -3667,3 +3667,19 @@ footer .footer-copy {
 .comer-status-linha { flex-wrap: wrap; justify-content: flex-start; }
 .comer-destaque { display: inline-flex; align-items: center; min-height: 25px; margin-top: 7px; padding: 0 8px; border-radius: 2px; background: #111; color: #fff; font-size: 10px; font-weight: 700; line-height: 1; white-space: nowrap; }
 .comer-horario.horario-indefinido { min-width: 0; height: auto; min-height: 25px; padding: 5px 9px; background: #e7e9e7; color: #535a56; line-height: 1.2; white-space: normal; }
+
+/* =========================================================
+   CAMPOS DE PESQUISA — FOCO SEM BORDA VERMELHA
+   Aplica-se a campos de texto e pesquisa para manter o foco verde.
+   ========================================================= */
+
+input[type="search"]:focus,
+input[type="text"]:focus,
+input[type="search"]:focus-visible,
+input[type="text"]:focus-visible,
+textarea:focus,
+select:focus {
+  border-color: #194138 !important;
+  outline: 3px solid rgba(25, 65, 56, .18) !important;
+  box-shadow: 0 0 0 1px #194138 !important;
+}
