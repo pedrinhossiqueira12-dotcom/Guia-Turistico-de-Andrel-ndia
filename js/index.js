@@ -4342,6 +4342,27 @@ window.addEventListener(
 }
 
 /* =========================================================
+NAVBAR: DESTACAR A SEÇÃO VISÍVEL SEM ALTERAR OS DADOS
+========================================================= */
+function configurarNavegacaoSecoes() {
+const itens = Array.from(document.querySelectorAll(".bottom-nav .nav-item"));
+const secoes = itens
+  .map(item => document.querySelector(item.getAttribute("href")))
+  .filter(Boolean);
+if (!itens.length || !secoes.length || !("IntersectionObserver" in window)) return;
+const observer = new IntersectionObserver(
+  entradas => {
+    const visiveis = entradas
+      .filter(entrada => entrada.isIntersecting)
+      .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
+    if (!visiveis[0]) return;
+    itens.forEach(item => item.classList.toggle("active", item.getAttribute("href") === `#${visiveis[0].target.id}`));
+  },
+  { rootMargin: "-20% 0px -55% 0px", threshold: [0.1, 0.35, 0.6] }
+);
+secoes.forEach(secao => observer.observe(secao));
+}
+/* =========================================================
 INICIALIZAÇÃO
 ========================================================= */
 
@@ -4372,6 +4393,8 @@ configurarComercioLocal();
 configurarPaginacao();
 
 configurarResizeMapa();
+
+configurarNavegacaoSecoes();
 
 adicionarBotaoLoginMural();
 

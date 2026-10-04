@@ -1,0 +1,108 @@
+/* Camada de experiência: melhorias perceptíveis sem alterar regras de negócio. */
+
+/* Hero: carrossel continua automático/dotável, mas sem setas laterais. */
+.hero-slide::after {
+  background:
+    linear-gradient(90deg, rgba(5, 19, 18, .76), rgba(5, 19, 18, .22) 58%, rgba(5, 19, 18, 0) 100%),
+    linear-gradient(0deg, rgba(5, 19, 18, .9), rgba(5, 19, 18, .14) 68%, rgba(5, 19, 18, 0) 100%);
+}
+.hero-control { display: none !important; }
+.hero-controls { right: clamp(18px, 5vw, 64px); }
+.hero-dots { padding: 7px 10px; border: 1px solid rgba(255,255,255,.32); border-radius: 999px; background: rgba(9,29,28,.36); backdrop-filter: blur(7px); }
+.hero-dot { transition: width .2s ease, background-color .2s ease, transform .2s ease; }
+.hero-dot:hover { transform: scale(1.2); }
+
+/* Navegação: oito destinos, rolagem horizontal no celular e foco claro. */
+.bottom-nav {
+  grid-template-columns: repeat(8, minmax(82px, 1fr));
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  background: linear-gradient(180deg, #12342f, #091d1c);
+}
+.bottom-nav::-webkit-scrollbar { display: none; }
+.nav-item { position: relative; min-width: 82px; padding: 7px 5px; }
+.nav-item::after {
+  content: "";
+  position: absolute;
+  left: 22%;
+  right: 22%;
+  bottom: 5px;
+  height: 3px;
+  border-radius: 99px;
+  background: #d28b64;
+  transform: scaleX(0);
+  transition: transform .2s ease;
+}
+.nav-item:hover::after, .nav-item.active::after { transform: scaleX(1); }
+.nav-item.active .nav-icon img { filter: drop-shadow(0 0 6px rgba(210,139,100,.45)); }
+
+/* Avaliações: estrela real do projeto, sem filtro que altere a imagem. */
+.rating-selector .star-button { transform: none; border-radius: 10px; transition: transform .18s ease, background-color .18s ease; }
+.rating-selector .star-button:hover,
+.rating-selector .star-button:focus-visible { transform: translateY(-2px) scale(1.08); background: rgba(189,107,77,.1); }
+.rating-selector .star-button.selecionada { transform: translateY(-1px) scale(1.05); background: rgba(189,107,77,.12); }
+.rating-selector .star-button img { transition: transform .18s ease; }
+
+/* Comentários em cards, mantendo o conteúdo e a consulta atuais. */
+.comentario-item {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 18px;
+  border: 1px solid rgba(25,65,56,.13);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 6px 18px rgba(9,29,28,.06);
+  transition: transform .18s ease, box-shadow .18s ease;
+}
+.comentario-item:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(9,29,28,.1); }
+.comentario-cabecalho { display: flex; align-items: center; gap: 11px; min-width: 0; }
+.comentario-avatar { width: 42px; height: 42px; flex: 0 0 42px; border-radius: 50%; object-fit: cover; background: #e8f0eb; }
+.comentario-identidade { display: grid; gap: 3px; min-width: 0; }
+.comentario-identidade strong { overflow: hidden; color: #194138; text-overflow: ellipsis; white-space: nowrap; }
+.comentario-data { color: #79827d; font-size: 12px; }
+.comentario-nota { margin-left: auto; white-space: nowrap; }
+.comentario-item p { margin: 0; color: #36403b; line-height: 1.6; }
+
+/* Feedback de carregamento e estados vazios com a mesma linguagem. */
+.loading-state, .empty-state, #listaComentarios > p {
+  padding: 22px;
+  border: 1px dashed rgba(25,65,56,.24);
+  border-radius: 14px;
+  background: rgba(232,240,235,.5);
+  color: #53615a;
+  text-align: center;
+}
+
+@media (max-width: 720px) {
+  .hero { min-height: 520px; height: 78svh; }
+  .hero-slide-copy { bottom: 84px; }
+  .bottom-nav { justify-content: start; }
+  .comentario-item { padding: 15px; }
+  .comentario-nota { align-self: start; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .comentario-item, .nav-item::after, .hero-dot, .rating-selector .star-button { transition: none; }
+}
+
+#listaComentarios {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.botao-editar-perfil, .botao-excluir-perfil {
+  min-height: 44px;
+  border-radius: 12px;
+  transition: transform .18s ease, box-shadow .18s ease, background-color .18s ease;
+}
+.botao-editar-perfil:hover, .botao-excluir-perfil:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(9,29,28,.1); }
+.modal-editar-perfil { backdrop-filter: blur(6px); }
+.editor-perfil-admin { border: 1px solid rgba(25,65,56,.16); border-radius: 18px; box-shadow: 0 18px 50px rgba(9,29,28,.18); }
+.editor-botao-imagem { border-radius: 10px; transition: background-color .18s ease, border-color .18s ease; }
+
+@media (max-width: 760px) {
+  #listaComentarios { grid-template-columns: 1fr; }
+}
