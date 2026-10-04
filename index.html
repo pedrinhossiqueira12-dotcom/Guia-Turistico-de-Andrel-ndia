@@ -1006,7 +1006,10 @@ aria-label="Pesquisar comércio ou categoria"
        NAVBAR FIXA
   ================================================== -->
 
-  <nav class="bottom-nav">
+  <button id="mobileNavToggle" class="mobile-nav-toggle" type="button" aria-controls="mobileNavPanel" aria-expanded="false" aria-label="Abrir menu de navegação">
+    <span aria-hidden="true">☰</span>
+  </button>
+  <nav id="mobileNavPanel" class="bottom-nav">
 
     <a class="nav-item active" href="#inicio">
       <span class="nav-icon"><img src="img/icones/home.png" alt=""></span>
@@ -1092,30 +1095,25 @@ aria-label="Pesquisar comércio ou categoria"
     aria-label="Usuário logado"
   >
 
-    <div class="user-rating-header">
-
-      <div>
-
-        <span class="form-label">
-          Usuário
-        </span>
-
-        <strong id="nomeUsuarioLogado">
-          Usuário
-        </strong>
-
-      </div>
-
-      <button
-        type="button"
-        id="botaoSair"
-        class="logout-button"
-      >
-        Sair
+    <div class="user-profile-summary">
+      <button id="avatarUsuarioButton" class="avatar-usuario-button" type="button" aria-label="Alterar foto de perfil">
+        <img id="avatarUsuario" src="img/icones/pessoa.png" alt="Foto de perfil" width="64" height="64">
       </button>
-
+      <div class="user-rating-header">
+        <div>
+          <span class="form-label">Usuário</span>
+          <strong id="nomeUsuarioLogado">Usuário</strong>
+        </div>
+        <button type="button" id="botaoSair" class="logout-button">Sair</button>
+      </div>
     </div>
-
+    <div class="profile-menu-actions">
+      <label class="profile-upload-button" for="inputFotoPerfil">Trocar foto</label>
+      <input id="inputFotoPerfil" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+      <button id="botaoRemoverFotoPerfil" class="profile-remove-button" type="button">Remover foto</button>
+      <button id="botaoExcluirConta" class="profile-delete-button" type="button">Apagar minha conta</button>
+    </div>
+    <p id="feedbackFotoPerfil" class="profile-feedback" role="status" aria-live="polite"></p>
   </section>
 
 

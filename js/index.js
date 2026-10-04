@@ -4362,6 +4362,23 @@ const observer = new IntersectionObserver(
 );
 secoes.forEach(secao => observer.observe(secao));
 }
+function configurarMenuMovel() {
+  const toggle = document.getElementById("mobileNavToggle");
+  const panel = document.getElementById("mobileNavPanel");
+  if (!toggle || !panel || toggle.dataset.configurado) return;
+  toggle.dataset.configurado = "true";
+  const fechar = () => { document.body.dataset.mobileNavOpen = "false"; toggle.setAttribute("aria-expanded", "false"); toggle.setAttribute("aria-label", "Abrir menu de navegação"); };
+  toggle.addEventListener("click", () => {
+    const aberto = document.body.dataset.mobileNavOpen === "true";
+    document.body.dataset.mobileNavOpen = String(!aberto);
+    toggle.setAttribute("aria-expanded", String(!aberto));
+    toggle.setAttribute("aria-label", aberto ? "Abrir menu de navegação" : "Fechar menu de navegação");
+  });
+  panel.querySelectorAll(".nav-item").forEach(item => item.addEventListener("click", fechar));
+  document.addEventListener("keydown", event => { if (event.key === "Escape") fechar(); });
+  document.addEventListener("click", event => { if (document.body.dataset.mobileNavOpen === "true" && !panel.contains(event.target) && event.target !== toggle && !toggle.contains(event.target)) fechar(); });
+}
+
 /* =========================================================
 INICIALIZAÇÃO
 ========================================================= */
@@ -4395,6 +4412,7 @@ configurarPaginacao();
 configurarResizeMapa();
 
 configurarNavegacaoSecoes();
+configurarMenuMovel();
 
 adicionarBotaoLoginMural();
 
