@@ -1,0 +1,161 @@
+/*
+ * Design system compartilhado — Guia Turístico de Andrelândia
+ * Camada de acabamento: preserva layouts e identidade existentes.
+ */
+
+:root {
+  --ds-brand: #194138;
+  --ds-brand-deep: #091d1c;
+  --ds-brand-soft: #e8f0eb;
+  --ds-paper: #f5f3ef;
+  --ds-surface: #ffffff;
+  --ds-ink: #202522;
+  --ds-muted: #6b716e;
+  --ds-line: #deded7;
+  --ds-line-strong: #c8c8c8;
+  --ds-accent: #bd6b4d;
+  --ds-success: #2e7d32;
+  --ds-danger: #a4332a;
+  --ds-radius-sm: 9px;
+  --ds-radius-md: 13px;
+  --ds-radius-lg: 18px;
+  --ds-shadow-sm: 0 3px 12px rgba(9, 29, 28, .06);
+  --ds-shadow-md: 0 8px 24px rgba(9, 29, 28, .08);
+  --ds-focus: 0 0 0 3px rgba(189, 107, 77, .28);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  font-family: "Roboto", Arial, Helvetica, sans-serif;
+  color: var(--ds-ink);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+button, input, select, textarea { font: inherit; }
+
+button, a, input, select, textarea, summary {
+  transition: border-color .18s ease, background-color .18s ease,
+    color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+
+button:focus-visible, a:focus-visible, input:focus-visible,
+select:focus-visible, textarea:focus-visible, summary:focus-visible {
+  outline: none;
+  box-shadow: var(--ds-focus);
+}
+
+/* Componentes de ação compartilhados — aliases preservam classes existentes. */
+.button, .primary-button, .secondary-button,
+.botao-atualizar, .botao-sair, .activation-button,
+.editorial-admin-primary, .editorial-admin-secondary,
+.catalogo-local-button, .directions-button, .instagram-button,
+.auth-button, .salvar, .cancelar {
+  min-height: 44px;
+  padding: 10px 16px;
+  border-radius: var(--ds-radius-md);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.button-primary, .primary-button, .activation-button,
+.editorial-admin-primary, .salvar {
+  background: var(--ds-brand);
+  color: var(--ds-surface);
+  border-color: var(--ds-brand);
+}
+
+.button-primary:hover:not(:disabled), .primary-button:hover:not(:disabled),
+.activation-button:hover:not(:disabled), .editorial-admin-primary:hover:not(:disabled),
+.salvar:hover:not(:disabled) {
+  background: var(--ds-brand-deep);
+  border-color: var(--ds-brand-deep);
+  transform: translateY(-1px);
+}
+
+.button-secondary, .secondary-button, .botao-atualizar,
+.editorial-admin-secondary, .cancelar {
+  background: var(--ds-surface);
+  color: var(--ds-brand);
+  border: 1px solid var(--ds-line);
+}
+
+.button-secondary:hover:not(:disabled), .secondary-button:hover:not(:disabled),
+.botao-atualizar:hover:not(:disabled), .editorial-admin-secondary:hover:not(:disabled),
+.cancelar:hover:not(:disabled) {
+  background: var(--ds-brand-soft);
+  border-color: var(--ds-brand);
+}
+
+.button-danger, .text-button, .editor-botao-rejeitar {
+  color: var(--ds-danger);
+}
+
+.button:disabled, button:disabled { opacity: .58; cursor: not-allowed; }
+
+/* Campos: mesma altura, borda e estado de foco nas telas públicas e administrativas. */
+input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+select, textarea {
+  border-color: var(--ds-line);
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-surface);
+  color: var(--ds-ink);
+}
+
+input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):focus,
+select:focus, textarea:focus {
+  border-color: var(--ds-accent);
+  box-shadow: var(--ds-focus);
+}
+
+/* Cards administrativos: um mesmo acabamento em todos os painéis. */
+.admin-card, .admin-cadastro-card, .admin-comercio-card,
+.admin-mural-card, .card, .notice, .editorial-editor-card,
+.editorial-list-card, .settings-card, .activation-card,
+.payment-test-card, .test-card {
+  border-color: var(--ds-line);
+  border-radius: var(--ds-radius-lg);
+  box-shadow: var(--ds-shadow-sm);
+}
+
+.admin-card, .card, .notice {
+  background: var(--ds-surface);
+}
+
+.admin-card h2, .admin-heading h1, .admin-intro h1,
+.editorial-admin h1, .editorial-editor-card h2 {
+  color: var(--ds-brand);
+}
+
+.admin-topbar, .admin-header, .sales-topbar, .test-heading {
+  background: var(--ds-brand-deep);
+}
+
+.admin-topbar a:hover, .admin-header a:hover,
+.text-link:hover, .manage-link:hover { color: var(--ds-accent); }
+
+.eyebrow, .admin-comercio-categoria, .admin-cadastro-status {
+  letter-spacing: .08em;
+}
+
+/* Compatibilidade para a tela de catálogos, que usa nomes genéricos no HTML. */
+.notice { margin: 16px 0; padding: 16px 18px; }
+.card { padding: clamp(18px, 4vw, 28px); }
+
+@media (max-width: 700px) {
+  .admin-header-inner, .admin-topbar, .list-heading,
+  .section-title, .admin-controles { align-items: flex-start; }
+  .admin-header-inner, .admin-topbar { gap: 12px; }
+  .admin-titulo, .admin-heading h1, .admin-intro h1 { line-height: 1.15; }
+  .button, .primary-button, .secondary-button,
+  .botao-atualizar, .activation-button { min-height: 42px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    transition-duration: .01ms !important;
+    animation-duration: .01ms !important;
+  }
+}
