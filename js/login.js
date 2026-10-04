@@ -296,10 +296,30 @@ async function excluirContaUsuario() {
   }
 }
 
+async function editarPerfilUsuario() {
+  const client = obterSupabaseLogin();
+  const { data: sessionData } = await client.auth.getSession();
+  const user = sessionData?.session?.user;
+  if (!user) throw new Error("Sua sessão expirou. Entre novamente.");
+  const atual = obterNomeUsuario(user);
+  const nome = window.prompt("Como deseja ser chamado no site?", atual);
+  if (nome === null) return;
+  const nomeLimpo = nome.trim().slice(0, 80);
+  if (!nomeLimpo) throw new Error("Informe um nome válido.");
+  const { data, error } = await client.auth.updateUser({ data: { nome: nomeLimpo } });
+  if (error) throw new Error(error.message || "Não foi possível atualizar o perfil.");
+  atualizarUsuarioAtual(data.user);
+  const nomeElemento = document.getElementById("nomeUsuarioLogado");
+  if (nomeElemento) nomeElemento.textContent = nomeLimpo;
+  renderizarAvatarUsuario(data.user);
+  setFeedbackFotoPerfil("Perfil atualizado.");
+}
+
 function configurarControlesPerfil() {
   const input = document.getElementById("inputFotoPerfil");
   const avatarButton = document.getElementById("avatarUsuarioButton");
   const removeButton = document.getElementById("botaoRemoverFotoPerfil");
+  const editButton = document.getElementById("botaoEditarPerfil");
   const deleteButton = document.getElementById("botaoExcluirConta");
   if (input && !input.dataset.configurado) {
     input.dataset.configurado = "true";
@@ -313,6 +333,12 @@ function configurarControlesPerfil() {
   }
   if (avatarButton && !avatarButton.dataset.configurado) { avatarButton.dataset.configurado = "true"; avatarButton.addEventListener("click", () => input?.click()); }
   if (removeButton && !removeButton.dataset.configurado) { removeButton.dataset.configurado = "true"; removeButton.addEventListener("click", async () => { if (!window.confirm("Remover sua foto de perfil?")) return; try { removeButton.disabled = true; await removerAvatarUsuario(); setFeedbackFotoPerfil("Foto removida."); } catch (error) { setFeedbackFotoPerfil(error.message || "Não foi possível remover a foto.", true); } }); }
+  if (editButton && !editButton.dataset.configurado) {
+    editButton.dataset.configurado = "true";
+    editButton.addEventListener("click", async () => {
+      try { await editarPerfilUsuario(); } catch (error) { setFeedbackFotoPerfil(error.message || "Não foi possível atualizar o perfil.", true); }
+    });
+  }
   if (deleteButton && !deleteButton.dataset.configurado) { deleteButton.dataset.configurado = "true"; deleteButton.addEventListener("click", excluirContaUsuario); }
 }
 

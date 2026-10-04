@@ -3291,6 +3291,10 @@ usuario.user_metadata?.nome ||
 usuario.email ||
 "Usuário",
 
+avatar_url:
+usuario.user_metadata?.avatar_url ||
+null,
+
 nota:
 notaSelecionada,
 
