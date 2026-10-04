@@ -2909,17 +2909,43 @@ const comentario =
 avaliacao.comentario ||
 "";
 
+const avatar =
+avaliacao.avatar_url ||
+avaliacao.foto_perfil ||
+avaliacao.avatar ||
+"../img/icones/pessoa.png";
+
+const dataAvaliacao =
+avaliacao.created_at ||
+avaliacao.data_avaliacao ||
+avaliacao.updated_at;
+
+let dataTexto = "Avaliação publicada";
+if (dataAvaliacao) {
+const data = new Date(dataAvaliacao);
+if (!Number.isNaN(data.getTime())) {
+dataTexto = new Intl.DateTimeFormat("pt-BR", {
+dateStyle: "medium"
+}).format(data);
+}
+}
+
 item.innerHTML = `
 
 <div class="comentario-cabecalho">
 
-<strong> ${escaparHTML(nome)} </strong>
+<img class="comentario-avatar" src="${escaparHTML(avatar)}" alt="" loading="lazy" onerror="this.onerror=null;this.src='../img/icones/pessoa.png';">
 
-<span> ${gerarEstrelas(nota)} </span>
+<div class="comentario-identidade">
+<strong>${escaparHTML(nome)}</strong>
+<span class="comentario-data">${escaparHTML(dataTexto)}</span>
+</div>
+
+<span class="comentario-nota" aria-label="Nota ${nota} de 5">${gerarEstrelas(nota)}</span>
 
 </div>
 
-<p> ${escaparHTML(comentario)} </p>
+<p>${escaparHTML(comentario)}</p>
 
 `;
 
@@ -3124,11 +3150,25 @@ indice
 const valor =
 indice + 1;
 
+const imagem =
+botao.querySelector("img");
+
+const selecionada =
+valor <= notaSelecionada;
+
 botao.classList.toggle(
 "selecionada",
-valor <=
-notaSelecionada
+selecionada
 );
+
+if (imagem) {
+imagem.src = selecionada
+? "../img/icones/estrela.png"
+: "../img/icones/estrela2.png";
+imagem.alt = selecionada
+? "Estrela selecionada"
+: "Estrela não selecionada";
+}
 
 });
 
