@@ -8,3 +8,9 @@ verify_jwt = false
 
 [functions.mercadopago-oauth-callback]
 verify_jwt = false
+
+[functions.catalogo-pedido-pix]
+verify_jwt = false
+
+[functions.mercadopago-marketplace-webhook]
+verify_jwt = false

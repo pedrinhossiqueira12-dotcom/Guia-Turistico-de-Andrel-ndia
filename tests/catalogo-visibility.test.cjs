@@ -16,6 +16,8 @@ const productionFunction = read("supabase/functions/catalogo-pix-producao/index.
 const productionPage = read("pages/catalogo-pix-producao.html");
 const productionCheckoutScript = read("js/catalogo-pix-producao.js");
 const productionMigration = read("supabase/migrations/20261003140000_catalogo_pagamento_producao.sql");
+const orderPixFunction = read("supabase/functions/catalogo-pedido-pix/index.ts");
+const orderWebhookFunction = read("supabase/functions/mercadopago-marketplace-webhook/index.ts");
 
 test("cartões do catálogo respeitam hidden mesmo com display:flex", () => {
   assert.match(
@@ -82,6 +84,23 @@ test("área de recebimentos mostra status e não cria cobrança sem OAuth public
   assert.match(productionFunction, /code_challenge_method: "S256"/);
   assert.match(productionFunction, /catalogo_oauth_estados/);
   assert.match(productionPage, /Conecte o Mercado Pago/);
+});
+
+test("checkout Pix público valida recebedor, congela preços do banco e aplica marketplace_fee", () => {
+  assert.match(orderPixFunction, /MARKETPLACE_CHECKOUT_ENABLED/);
+  assert.match(orderPixFunction, /status !== "ativo"/);
+  assert.match(orderPixFunction, /catalogo_produtos/);
+  assert.match(orderPixFunction, /marketplace_fee: money\(fee\)/);
+  assert.match(orderPixFunction, /X-Idempotency-Key/);
+  assert.match(orderPixFunction, /catalogo_pedido_itens/);
+});
+
+test("webhook do marketplace valida assinatura e só confirma order conferida no Mercado Pago", () => {
+  assert.match(orderWebhookFunction, /MP_MARKETPLACE_WEBHOOK_SECRET/);
+  assert.match(orderWebhookFunction, /x-signature/);
+  assert.match(orderWebhookFunction, /\/v1\/orders\/\$\{encodeURIComponent\(orderId\)\}/);
+  assert.match(orderWebhookFunction, /external_reference/);
+  assert.match(orderWebhookFunction, /status_pagamento: "aprovado"/);
 });
 
 test("migração bloqueia mais de um Pix por assinatura e permite renovar após expiração", () => {
