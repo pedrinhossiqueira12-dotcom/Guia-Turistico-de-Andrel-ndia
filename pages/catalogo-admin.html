@@ -57,6 +57,18 @@
         </form>
       </section>
 
+      <section class="admin-card offline-orders-card" id="pedidosOfflineCard">
+        <div class="section-title"><div><span class="eyebrow">PEDIDOS PRESENCIAIS</span><h2>Pedidos e comissões</h2></div><button id="atualizarPedidosOffline" class="small-button" type="button">Atualizar</button></div>
+        <p>Pedidos em dinheiro ou cartão são concluídos pelo código do cliente na entrega. O comércio não vê o código e não pode marcar o pedido como pago por conta própria.</p>
+        <div class="offline-summary" id="offlineSummary" hidden></div>
+        <div id="listaPedidosOffline" class="manager-list"><p class="form-feedback">Carregando pedidos…</p></div>
+        <div class="offline-statement">
+          <div class="section-title"><div><span class="eyebrow">EXTRATO</span><h3>Competência mensal</h3></div></div>
+          <div class="statement-controls"><label>Mês <input id="competenciaOffline" type="month"></label><button id="consultarExtratoOffline" class="button button-secondary" type="button">Consultar extrato</button></div>
+          <div id="extratoOffline" class="offline-statement-result"><p class="form-feedback">Escolha um mês para consultar o extrato.</p></div>
+        </div>
+      </section>
+
       <section class="admin-card">
         <div class="section-title"><div><span class="eyebrow">ORGANIZAÇÃO</span><h2>Categorias</h2></div></div>
         <form id="categoriaForm" class="inline-form">
@@ -90,7 +102,7 @@
 
       <section class="admin-footer-note">
         <p>Fotos removidas da vitrine entram na rotina de retenção de sete dias. Nenhuma imagem é apagada imediatamente.</p>
-        <p>O pedido será enviado pelo WhatsApp; esta página não processa pagamentos nem armazena pedidos.</p>
+        <p>Pedidos presenciais só geram comissão quando o código do cliente é confirmado. O checkout offline permanece sujeito à habilitação do administrador.</p>
       </section>
     </div>
   </main>
