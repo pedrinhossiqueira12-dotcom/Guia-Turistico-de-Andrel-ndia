@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.catalogo-pix-producao]
 verify_jwt = false
+
+[functions.mercadopago-oauth-callback]
+verify_jwt = false
