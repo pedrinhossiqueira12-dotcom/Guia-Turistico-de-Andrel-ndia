@@ -17,7 +17,7 @@ async function decrypt(value: string) { const [ivEncoded, cipherEncoded] = value
 async function validSignature(signature: string, requestId: string, dataId: string) {
   if (!MP_MARKETPLACE_WEBHOOK_SECRET) return false;
   const fields = Object.fromEntries(signature.split(",").map((part) => part.trim().split("=", 2)).filter(([key, value]) => key && value)); const ts = fields.ts || ""; const v1 = fields.v1 || ""; if (!/^\d+$/.test(ts) || !v1) return false;
-  if (Math.abs(Date.now() - Number(ts) * 1000) > 5 * 60 * 1000) return false;
+  if (Math.abs(Date.now() - Number(ts)) > 5 * 60 * 1000) return false;
   const manifest = `id:${dataId};request-id:${requestId};ts:${ts};`;
   const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(MP_MARKETPLACE_WEBHOOK_SECRET), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   const digest = new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(manifest)));
