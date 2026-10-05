@@ -8,7 +8,13 @@ const MP_OAUTH_CLIENT_SECRET = Deno.env.get("MP_OAUTH_CLIENT_SECRET") ?? "";
 const MP_OAUTH_REDIRECT_URI = Deno.env.get("MP_OAUTH_REDIRECT_URI") ?? "";
 const MP_OAUTH_ENCRYPTION_KEY = Deno.env.get("MP_OAUTH_ENCRYPTION_KEY") ?? "";
 const SITE_URL = (Deno.env.get("SITE_URL") || "https://guia-turistico-de-andrelandia.pages.dev").replace(/\/$/, "");
-const CORS_HEADERS = { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" };
+const CORS_HEADERS = {
+  "Content-Type": "text/html; charset=UTF-8",
+  "Cache-Control": "no-store, no-cache, must-revalidate",
+  "Referrer-Policy": "no-referrer",
+  "X-Content-Type-Options": "nosniff",
+  "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'; form-action 'none'",
+};
 let serviceKey = "";
 try {
   const parsed = SUPABASE_SECRET_KEYS ? JSON.parse(SUPABASE_SECRET_KEYS) : null;
@@ -18,8 +24,12 @@ if (!serviceKey) serviceKey = LEGACY_SERVICE_ROLE_KEY;
 const admin = createClient(SUPABASE_URL, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
 function html(message: string, redirect: string | null = null) {
   const safe = message.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] || c));
-  const script = redirect ? `<meta http-equiv="refresh" content="2;url=${redirect}"><script>setTimeout(()=>location.replace(${JSON.stringify(redirect)}),1800)</script>` : "";
-  return new Response(`<!doctype html><meta charset="utf-8"><title>Mercado Pago</title>${script}<main style="font:16px system-ui;max-width:620px;margin:12vh auto;padding:24px"><h1>Conexão Mercado Pago</h1><p>${safe}</p></main>`, { headers: CORS_HEADERS });
+  const safeRedirect = redirect?.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] || c));
+  const script = redirect
+    ? `<meta http-equiv="refresh" content="2;url=${safeRedirect}"><script>window.setTimeout(function(){window.location.replace(${JSON.stringify(redirect)});},1800);</script>`
+    : "";
+  const body = `<!doctype html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Mercado Pago — Guia Turístico</title>${script}<style>body{margin:0;background:#f4f7f5;color:#17352e;font:16px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.card{box-sizing:border-box;max-width:620px;margin:12vh auto;padding:32px;background:#fff;border:1px solid #d8e3dd;border-radius:18px;box-shadow:0 10px 30px #17352e12}h1{margin:0 0 12px;font-size:clamp(24px,4vw,34px)}p{margin:0;color:#48645b}.brand{margin-bottom:18px;color:#2d765f;font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}.redirect{margin-top:20px;font-size:14px;color:#668078}</style></head><body><main class="card"><div class="brand">Guia Turístico de Andrelândia</div><h1>Conexão Mercado Pago</h1><p>${safe}</p>${redirect ? '<p class="redirect">Você será redirecionado automaticamente.</p>' : ""}</main></body></html>`;
+  return new Response(new TextEncoder().encode(body), { status: redirect ? 200 : 400, headers: CORS_HEADERS });
 }
 function base64Url(bytes: Uint8Array) { let binary = ""; for (const byte of bytes) binary += String.fromCharCode(byte); return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, ""); }
 async function sha256(value: string) { return base64Url(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)))); }
