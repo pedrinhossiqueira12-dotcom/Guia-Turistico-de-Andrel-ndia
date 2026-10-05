@@ -117,7 +117,14 @@
     <div class="dialog-actions">
       <button id="voltarCheckout" class="secondary-button" type="button">Voltar</button>
       <button id="pagarPix" class="primary-button" type="button">Gerar Pix e pagar</button>
+      <button id="criarPedidoOffline" class="primary-button" type="button" hidden>Enviar pedido e receber código</button>
       <button id="enviarWhatsApp" class="secondary-button" type="button">Continuar pelo WhatsApp</button>
+    </div>
+    <div id="offlinePedidoBox" class="payment-notice" hidden>
+      <strong>Pedido registrado</strong>
+      <p id="offlinePedidoStatus">Mostre este código ao entregador somente no momento da entrega.</p>
+      <p class="delivery-code" id="offlinePedidoCodigo"></p>
+      <small>Guarde também o link de confirmação. O código expira em 48 horas e só pode ser usado uma vez.</small><br><a id="offlineConfirmLink" href="#" target="_blank" rel="noopener noreferrer" hidden>Abrir confirmação da entrega</a>
     </div>
     <div id="pixPedidoBox" class="payment-notice" hidden>
       <strong>Pix do pedido</strong>

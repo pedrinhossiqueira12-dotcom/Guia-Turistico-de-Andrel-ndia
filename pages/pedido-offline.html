@@ -1,0 +1,5 @@
+<!doctype html>
+<html lang="pt-BR">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Confirmar entrega — Guia Turístico</title><link rel="stylesheet" href="../styles/catalogo-admin.css"></head>
+<body class="admin-page"><main class="admin-shell"><section class="admin-card" style="max-width:560px;margin:10vh auto"><span class="eyebrow">ENTREGA</span><h1>Confirmar pedido</h1><p>O cliente deve informar o código de seis dígitos. Confirme somente depois de entregar e receber o pagamento presencial.</p><form id="confirmarEntregaForm"><label>Código do cliente <input id="codigoEntrega" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required></label><label style="margin-top:12px">Nome do entregador <input id="entregador" maxlength="120" autocomplete="name"></label><button class="button button-primary" type="submit" style="margin-top:16px">Confirmar entrega</button></form><p id="confirmacaoStatus" role="status" style="margin-top:16px"></p><a href="../index.html">Voltar ao Guia</a></section></main><script src="../js/pedido-offline.js"></script></body>
+</html>

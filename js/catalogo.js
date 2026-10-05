@@ -173,7 +173,7 @@
 
   function preencherCheckout() {
     const modalidadesAtivas = (catalogo.modalidades || []).filter((chave) => window.CatalogoUtils.MODALIDADES[chave]);
-    const pagamentosAtivos = ["pix"];
+    const pagamentosAtivos = (catalogo.metodos_pagamento || []).filter((chave) => window.CatalogoUtils.FORMAS_PAGAMENTO[chave]);
     const modalidadeInicial = modalidadesAtivas[0] || "retirada";
 
     $("modalidadeOptions").innerHTML = modalidadesAtivas.map((chave, indice) => `
@@ -181,7 +181,7 @@
         <span>${escapar(window.CatalogoUtils.MODALIDADES[chave])}</span></label>
     `).join("");
     $("pagamentoSelect").innerHTML = pagamentosAtivos.map((chave) => `
-      <option value="${escapar(chave)}">Pix online (QR Code e copia e cola)</option>
+      <option value="${escapar(chave)}">${escapar(chave === "pix" ? "Pix online (QR Code e copia e cola)" : window.CatalogoUtils.FORMAS_PAGAMENTO[chave])}</option>
     `).join("");
 
     if (!pagamentosAtivos.length) {
@@ -239,6 +239,28 @@
       <p><strong>Pagamento:</strong> ${escapar(pagamento)}</p>
       ${pedido.observacoes ? `<p><strong>Observações:</strong> ${escapar(pedido.observacoes)}</p>` : ""}
     `;
+  }
+
+  async function criarPedidoOffline() {
+    if (!pedidoEmRevisao || !comercioId || !clienteSupabase()) return;
+    const botao = $("criarPedidoOffline");
+    botao.disabled = true;
+    $("offlinePedidoStatus").textContent = "Validando produtos e registrando o pedido…";
+    $("offlinePedidoBox").hidden = false;
+    try {
+      const { data, error } = await clienteSupabase().functions.invoke("catalogo-pedido-offline", { body: {
+        acao: "criar_pedido_offline", comercio_id: comercioId, forma_pagamento: pedidoEmRevisao.pagamento,
+        itens: pedidoEmRevisao.itens.map((item) => ({ id: String(item.id), quantidade: Number(item.quantidade) })),
+        cliente: pedidoEmRevisao.cliente, modalidade: pedidoEmRevisao.modalidade, observacoes: pedidoEmRevisao.observacoes,
+      } });
+      if (error || !data?.success) throw new Error(data?.mensagem || "Não foi possível registrar o pedido.");
+      $("offlinePedidoStatus").textContent = "Pedido registrado. Informe o código ao entregador no momento da entrega.";
+      $("offlinePedidoCodigo").textContent = data.codigo_entrega || "Código indisponível";
+      if (data.cliente_token) { $("offlineConfirmLink").href = `pedido-offline.html?token=${encodeURIComponent(data.cliente_token)}`; $("offlineConfirmLink").hidden = false; }
+      botao.hidden = true;
+      $("enviarWhatsApp").hidden = true;
+      carrinho = {}; salvarCarrinho(); renderizarSacola();
+    } catch (error) { $("offlinePedidoStatus").textContent = error.message || "Não foi possível registrar o pedido."; botao.disabled = false; }
   }
 
   async function gerarPixPedido() {
@@ -426,6 +448,12 @@
       renderizarResumo(pedidoEmRevisao);
       $("checkoutDialog").close();
       $("confirmarPedidoDialog").showModal();
+      const offline = cliente.pagamento !== "pix";
+      $("pagarPix").hidden = offline;
+      $("criarPedidoOffline").hidden = !offline;
+      $("pixPedidoBox").hidden = true;
+      $("offlinePedidoBox").hidden = true;
+      $("enviarWhatsApp").hidden = false;
     });
 
     $("voltarCheckout").addEventListener("click", () => {
@@ -434,6 +462,7 @@
     });
 
     $("pagarPix").addEventListener("click", gerarPixPedido);
+    $("criarPedidoOffline").addEventListener("click", criarPedidoOffline);
     $("copiarPixPedido").addEventListener("click", async () => {
       const codigo = $("pixPedidoCodigo").value;
       if (!codigo) return;
