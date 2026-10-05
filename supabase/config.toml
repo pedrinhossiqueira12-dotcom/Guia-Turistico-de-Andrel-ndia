@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.catalogo-pedido-offline]
 verify_jwt = false
+
+[functions.catalogo-pedidos-offline-admin]
+verify_jwt = false
