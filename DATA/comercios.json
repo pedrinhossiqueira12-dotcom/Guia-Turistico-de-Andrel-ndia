@@ -2702,6 +2702,6 @@
       "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1791216229037-0-xkfs98v-whatsapp-image-2026-10-03-at-21-09-06.jpeg"
     ],
     "status": "ativo",
-    "destaque": false
+    "destaque": true
   }
 ]
