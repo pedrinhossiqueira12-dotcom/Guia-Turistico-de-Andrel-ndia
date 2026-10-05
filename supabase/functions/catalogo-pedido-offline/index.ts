@@ -35,6 +35,16 @@ async function enforceRateLimit(rawKey: string) {
   if (error) throw new Error("Não foi possível validar o limite de requisições.");
   if (data !== true) throw new HttpError("Muitas tentativas. Aguarde um minuto e tente novamente.", 429);
 }
+async function assertOfflineCommerceAuthorized(comercioId: string) {
+  const { data, error } = await admin
+    .from("catalogo_marketplace_testes")
+    .select("comercio_id")
+    .eq("comercio_id", comercioId)
+    .eq("ativo", true)
+    .maybeSingle();
+  if (error) throw new Error("Falha ao validar autorização do comércio.");
+  if (!data) throw new HttpError("Este comércio não está autorizado para o checkout offline.", 403);
+}
 function randomDigits() { const bytes = new Uint32Array(1); crypto.getRandomValues(bytes); return String(100000 + (bytes[0] % 900000)); }
 function cents(value: unknown, label: string) { const amount = Number(value); if (!Number.isInteger(amount) || amount < 0 || amount > 999999999) throw new HttpError(`${label} inválido.`); return amount; }
 function money(value: number) { return Math.round(value * 100); }
@@ -46,6 +56,7 @@ async function createOfflineOrder(body: Record<string, unknown>, rateKey: string
   const comercioId = text(body.comercio_id, 180);
   const method = text(body.forma_pagamento, 40);
   if (!/^[a-z0-9-]{1,180}$/.test(comercioId) || !OFFLINE_METHODS.has(method)) throw new HttpError("Comércio ou forma de pagamento inválidos.");
+  await assertOfflineCommerceAuthorized(comercioId);
   const client = record(body.cliente);
   const nome = text(client.nome, 140); const email = text(client.email, 180).toLowerCase(); const telefone = text(client.telefone, 40);
   const modalidade = text(body.modalidade, 30);

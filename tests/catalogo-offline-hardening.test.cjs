@@ -10,6 +10,13 @@ test('checkout offline exige catálogo publicado e ativo no servidor', () => {
   assert.match(fn, /if \(!published\)/);
 });
 
+test('checkout offline exige autorização server-side da allowlist ativa', () => {
+  assert.match(fn, /catalogo_marketplace_testes/);
+  assert.match(fn, /\.eq\("ativo", true\)/);
+  assert.match(fn, /Este comércio não está autorizado para o checkout offline/);
+  assert.match(fn, /await assertOfflineCommerceAuthorized\(comercioId\)/);
+});
+
 test('checkout offline usa rate limit persistente por chave com hash', () => {
   assert.match(fn, /catalogo_offline_consumir_limite/);
   assert.match(fn, /cf-connecting-ip/);
