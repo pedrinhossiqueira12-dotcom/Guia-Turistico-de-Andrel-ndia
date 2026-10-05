@@ -97,3 +97,14 @@
   .test-lock { margin-top: 8px; }
   .test-plan.recommended::before { position: static; align-self: flex-start; order: -1; }
 }
+
+.receiver-checklist { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin:20px 0; }
+.receiver-checklist > div { display:grid; gap:6px; padding:16px; border:1px solid #dfe8e1; border-radius:14px; background:#f8fbf8; }
+.receiver-checklist strong { color:#194138; font-size:.9rem; }
+.receiver-checklist span { color:#68716c; font-size:.85rem; line-height:1.4; }
+.receiver-status-panel { display:grid; gap:7px; margin-top:18px; padding:18px; border:1px solid #cbded3; border-radius:14px; background:#f3f9f4; color:#194138; }
+.receiver-status-panel span { color:#5d625e; line-height:1.5; }
+#receiverBadge[data-kind="success"] { background:#dff2e3; color:#23613a; }
+#receiverBadge[data-kind="error"] { background:#fff0ed; color:#9b3d31; }
+#connectMercadoPago { margin-top:16px; }
+@media (max-width:640px) { .receiver-checklist { grid-template-columns:1fr; } }

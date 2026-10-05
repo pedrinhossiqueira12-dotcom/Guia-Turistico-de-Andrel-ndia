@@ -43,14 +43,16 @@ test("backend confirma propriedade do admin antes de tratá-lo como proprietári
   assert.doesNotMatch(adminFunction, /A conta administrativa não pode solicitar cobrança/);
 });
 
-test("visitantes não recebem botões premium e a tela real só aparece quando habilitada pelo servidor", () => {
+test("visitantes não recebem ações privadas e a área de recebimentos exige servidor", () => {
   assert.match(salesPage, /id="linkTestePix"[^>]*hidden/);
   assert.match(salesPage, /id="linkPixProducao"[^>]*hidden/);
   assert.match(salesPage, /id="linkGerenciar"[^>]*hidden/);
   assert.doesNotMatch(salesPage, /id="ativarCatalogo"/);
   assert.match(salesScript, /if \(!data\?\.proprietario\) throw/);
   assert.match(salesScript, /catalogo-pix-teste\.html\?id=/);
-  assert.match(salesScript, /checkout_enabled === true/);
+  assert.match(salesScript, /\$\("linkPixProducao"\)\.hidden = false/);
+  assert.match(productionCheckoutScript, /verificar_recebedor/);
+  assert.match(productionFunction, /action === "verificar_recebedor"/);
   assert.match(productionFunction, /MP_PRODUCTION_ENABLED = Deno\.env\.get\("MP_PRODUCTION_ENABLED"\) === "true"/);
   assert.match(productionFunction, /if \(!MP_PRODUCTION_ENABLED\)/);
   assert.match(productionPage, /name="robots" content="noindex,nofollow,noarchive"/);
@@ -74,11 +76,11 @@ test("reserva concorrente do catálogo relê e valida proprietário e bloqueio a
   assert.match(productionFunction, /existingCatalog\.proprietario_id !== owner\.userId \|\| existingCatalog\.bloqueado/);
 });
 
-test("tela de Pix apaga o QR e interrompe polling quando a sessão termina ou muda", () => {
-  assert.match(productionCheckoutScript, /function clearPaymentDisplay\(\)/);
-  assert.match(productionCheckoutScript, /event === "SIGNED_OUT"/);
-  assert.match(productionCheckoutScript, /removeAttribute\("src"\)/);
-  assert.match(productionCheckoutScript, /viewGeneration/);
+test("área de recebimentos mostra status e não cria cobrança sem OAuth publicado", () => {
+  assert.match(productionCheckoutScript, /receiverStatusTitle/);
+  assert.match(productionCheckoutScript, /iniciar_conexao/);
+  assert.match(productionFunction, /callback OAuth ainda não foi publicado/);
+  assert.match(productionPage, /Conecte o Mercado Pago/);
 });
 
 test("migração bloqueia mais de um Pix por assinatura e permite renovar após expiração", () => {

@@ -16,6 +16,8 @@ const MP_PRODUCTION_ENABLED = Deno.env.get("MP_PRODUCTION_ENABLED") === "true";
 const MP_PROD_ACCESS_TOKEN = Deno.env.get("MP_PROD_ACCESS_TOKEN") ?? "";
 const MP_PROD_SELLER_ID = Deno.env.get("MP_PROD_SELLER_ID") ?? "";
 const MP_PROD_WEBHOOK_SECRET = Deno.env.get("MP_PROD_WEBHOOK_SECRET") ?? "";
+const MP_OAUTH_CLIENT_ID = Deno.env.get("MP_OAUTH_CLIENT_ID") ?? "";
+const MP_OAUTH_REDIRECT_URI = Deno.env.get("MP_OAUTH_REDIRECT_URI") ?? "";
 const MP_API = "https://api.mercadopago.com";
 const MP_USER_PROFILE_API = "https://api.mercadolibre.com";
 const CORS_HEADERS = {
@@ -583,6 +585,43 @@ Deno.serve(async (request: Request) => {
     if (!commerceId) throw new HttpError("Informe o comércio.", 400);
     const verified = await verifyCommerceOwner(authenticated.user.id, commerceId);
     const owner = { ...verified, email: authenticated.email };
+
+    if (action === "verificar_recebedor") {
+      const { data: receiver, error: receiverError } = await admin
+        .from("catalogo_recebedores")
+        .select("comercio_id,provedor,conta_externa_id,status,percentual_plataforma,conectado_em,atualizado_em")
+        .eq("comercio_id", commerceId)
+        .maybeSingle();
+      if (receiverError) throw new Error("Falha ao consultar a conta recebedora do comércio.");
+      const receiverStatus = safeString(receiver?.status) || "pendente";
+      return json({
+        success: true,
+        proprietario: true,
+        receiver_status: receiverStatus,
+        receiver_connected: Boolean(receiver?.conta_externa_id),
+        recebedor_status: receiverStatus,
+        recebedor_conectado: Boolean(receiver?.conta_externa_id),
+        percentual_plataforma: Number(receiver?.percentual_plataforma ?? 5),
+        checkout_enabled: false,
+        production: false,
+        mensagem: receiver
+          ? "Configuração do recebedor consultada. O checkout de pedidos ainda não foi ativado."
+          : "Nenhuma conta Mercado Pago foi conectada para este comércio.",
+      });
+    }
+
+    if (action === "iniciar_conexao") {
+      if (!MP_OAUTH_CLIENT_ID || !MP_OAUTH_REDIRECT_URI) {
+        return json({
+          success: false,
+          mensagem: "A conexão Mercado Pago ainda aguarda a configuração OAuth pelo administrador. Nenhuma cobrança foi criada.",
+        }, 503);
+      }
+      return json({
+        success: false,
+        mensagem: "O callback OAuth ainda não foi publicado. Nenhuma conta foi alterada e nenhuma cobrança foi criada.",
+      }, 503);
+    }
 
     if (action === "verificar_checkout") {
       let checkoutReady = MP_PRODUCTION_ENABLED
