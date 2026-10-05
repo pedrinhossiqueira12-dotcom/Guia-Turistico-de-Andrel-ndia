@@ -2630,11 +2630,11 @@
     "id": "pedrox-do-grau",
     "nome": "pedrox do grau",
     "categoria": "Restaurante",
-    "descricao": "aaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "descricao": "",
     "historia": "",
     "curiosidades": "",
-    "endereco": "ydaaaaaaaa",
-    "horario": "Segunda a sábado das 8 as 18",
+    "endereco": "Rua Arthur Bernardes",
+    "horario": "",
     "entrada": "",
     "telefone": "35999638094",
     "whatsapp": "35999638094",
@@ -2642,9 +2642,11 @@
     "site": "",
     "latitude": null,
     "longitude": null,
-    "imagem": "",
-    "imagens": [],
-    "status": "deletado",
+    "imagem": "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1791204317767-0-z7natvc-hamburguer-mexicano.jpg",
+    "imagens": [
+      "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/4b9a0233-6b72-4573-aebd-d596c5b15e1b/1791204317767-0-z7natvc-hamburguer-mexicano.jpg"
+    ],
+    "status": "ativo",
     "destaque": false
   },
   {
