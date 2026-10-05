@@ -87,6 +87,7 @@
       <div class="form-grid">
         <label>Seu nome <input name="nome" type="text" maxlength="100" autocomplete="name" required></label>
         <label>Telefone para contato <input name="telefone" type="tel" inputmode="tel" maxlength="24" autocomplete="tel" placeholder="(32) 99999-9999" required></label>
+        <label class="full-field">E-mail para receber o comprovante <input name="email" type="email" maxlength="180" autocomplete="email" required></label>
         <fieldset class="full-field"><legend>Como deseja receber?</legend><div id="modalidadeOptions" class="choice-list"></div></fieldset>
         <div id="enderecoEntrega" class="address-fields full-field" hidden>
           <label>Endereço <input name="endereco" type="text" maxlength="160" autocomplete="street-address"></label>
@@ -100,7 +101,7 @@
         <label class="full-field">Forma de pagamento <select name="pagamento" id="pagamentoSelect" required></select></label>
         <label class="full-field">Observações <textarea name="observacoes" rows="3" maxlength="500" placeholder="Alguma preferência ou detalhe?"></textarea></label>
       </div>
-      <p class="payment-notice">A forma escolhida será informada ao comércio. O pagamento será combinado diretamente com ele e não é processado pelo site.</p>
+      <p class="payment-notice">O pagamento online será feito exclusivamente por Pix depois da confirmação do pedido. O site não armazena dados bancários ou de cartão.</p>
       <p id="checkoutErro" class="inline-message error-message" role="alert" hidden></p>
       <button class="primary-button" type="submit">Revisar pedido</button>
     </form>
@@ -112,10 +113,20 @@
       <button class="icon-button" type="button" data-close-dialog="confirmarPedidoDialog" aria-label="Fechar">×</button>
     </div>
     <div id="resumoPedido" class="order-review"></div>
-    <p class="payment-notice">Ao continuar, o WhatsApp do comércio será aberto com a mensagem pronta. O pedido só será enviado quando você tocar em enviar no WhatsApp.</p>
+    <p class="payment-notice">Você poderá gerar o Pix no próximo passo. O pedido só será preparado para o comércio depois da confirmação do pagamento.</p>
     <div class="dialog-actions">
       <button id="voltarCheckout" class="secondary-button" type="button">Voltar</button>
-      <button id="enviarWhatsApp" class="primary-button" type="button">Enviar pedido pelo WhatsApp</button>
+      <button id="pagarPix" class="primary-button" type="button">Gerar Pix e pagar</button>
+      <button id="enviarWhatsApp" class="secondary-button" type="button">Continuar pelo WhatsApp</button>
+    </div>
+    <div id="pixPedidoBox" class="payment-notice" hidden>
+      <strong>Pix do pedido</strong>
+      <p id="pixPedidoStatus">Preparando o código…</p>
+      <img id="pixPedidoQr" alt="QR Code Pix do pedido" hidden style="max-width:260px">
+      <label for="pixPedidoCodigo">Pix copia e cola</label>
+      <textarea id="pixPedidoCodigo" rows="4" readonly></textarea>
+      <button id="copiarPixPedido" class="secondary-button" type="button" disabled>Copiar Pix</button>
+      <a id="abrirTicketPix" href="#" target="_blank" rel="noopener noreferrer" hidden>Abrir instruções do Mercado Pago</a>
     </div>
   </dialog>
 

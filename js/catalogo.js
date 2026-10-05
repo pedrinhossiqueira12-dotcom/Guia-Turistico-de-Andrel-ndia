@@ -173,7 +173,7 @@
 
   function preencherCheckout() {
     const modalidadesAtivas = (catalogo.modalidades || []).filter((chave) => window.CatalogoUtils.MODALIDADES[chave]);
-    const pagamentosAtivos = (catalogo.metodos_pagamento || []).filter((chave) => window.CatalogoUtils.FORMAS_PAGAMENTO[chave]);
+    const pagamentosAtivos = ["pix"];
     const modalidadeInicial = modalidadesAtivas[0] || "retirada";
 
     $("modalidadeOptions").innerHTML = modalidadesAtivas.map((chave, indice) => `
@@ -181,7 +181,7 @@
         <span>${escapar(window.CatalogoUtils.MODALIDADES[chave])}</span></label>
     `).join("");
     $("pagamentoSelect").innerHTML = pagamentosAtivos.map((chave) => `
-      <option value="${escapar(chave)}">${escapar(window.CatalogoUtils.FORMAS_PAGAMENTO[chave])}</option>
+      <option value="${escapar(chave)}">Pix online (QR Code e copia e cola)</option>
     `).join("");
 
     if (!pagamentosAtivos.length) {
@@ -208,6 +208,7 @@
     return {
       nome: String(dados.get("nome") || "").trim(),
       telefone: String(dados.get("telefone") || "").trim(),
+      email: String(dados.get("email") || "").trim().toLowerCase(),
       modalidade: String(dados.get("modalidade") || ""),
       pagamento: String(dados.get("pagamento") || ""),
       endereco: String(dados.get("endereco") || "").trim(),
@@ -233,11 +234,49 @@
     $("resumoPedido").innerHTML = `
       <h3>Itens</h3><ul class="review-items">${items}</ul>
       <div class="review-total"><span>Total dos produtos</span><strong>${window.CatalogoUtils.formatarMoeda(window.CatalogoUtils.calcularTotal(pedido.itens))}</strong></div>
-      <p><strong>Cliente:</strong> ${escapar(pedido.cliente.nome)}<br><strong>Telefone:</strong> ${escapar(pedido.cliente.telefone)}</p>
+      <p><strong>Cliente:</strong> ${escapar(pedido.cliente.nome)}<br><strong>Telefone:</strong> ${escapar(pedido.cliente.telefone)}<br><strong>E-mail:</strong> ${escapar(pedido.cliente.email)}</p>
       <p><strong>Modalidade:</strong> ${escapar(modalidade)}</p>${endereco}
       <p><strong>Pagamento:</strong> ${escapar(pagamento)}</p>
       ${pedido.observacoes ? `<p><strong>Observações:</strong> ${escapar(pedido.observacoes)}</p>` : ""}
     `;
+  }
+
+  async function gerarPixPedido() {
+    if (!pedidoEmRevisao || !comercioId || !clienteSupabase()) return;
+    const botao = $("pagarPix");
+    const box = $("pixPedidoBox");
+    botao.disabled = true;
+    $("pixPedidoStatus").textContent = "Validando produtos e preparando o Pix…";
+    box.hidden = false;
+    try {
+      const { data, error } = await clienteSupabase().functions.invoke("catalogo-pedido-pix", {
+        body: {
+          comercio_id: comercioId,
+          request_id: crypto.randomUUID(),
+          itens: pedidoEmRevisao.itens.map((item) => ({ id: String(item.id), quantidade: Number(item.quantidade) })),
+          cliente: pedidoEmRevisao.cliente,
+          modalidade: pedidoEmRevisao.modalidade,
+          observacoes: pedidoEmRevisao.observacoes,
+        },
+      });
+      if (error || !data?.success) throw new Error(data?.mensagem || "Não foi possível gerar o Pix.");
+      $("pixPedidoStatus").textContent = "Pix gerado. Conclua o pagamento pelo seu banco.";
+      $("pixPedidoCodigo").value = data.pix_codigo || "";
+      $("copiarPixPedido").disabled = !data.pix_codigo;
+      if (data.pix_qr_code_base64) {
+        $("pixPedidoQr").src = `data:image/png;base64,${data.pix_qr_code_base64}`;
+        $("pixPedidoQr").hidden = false;
+      }
+      if (data.ticket_url) {
+        $("abrirTicketPix").href = data.ticket_url;
+        $("abrirTicketPix").hidden = false;
+      }
+      botao.hidden = true;
+    } catch (error) {
+      box.hidden = false;
+      $("pixPedidoStatus").textContent = error.message || "Não foi possível gerar o Pix.";
+      botao.disabled = false;
+    }
   }
 
   async function carregarCatalogo() {
@@ -373,6 +412,11 @@
         $("checkoutErro").hidden = false;
         return;
       }
+      if (!cliente.email || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(cliente.email)) {
+        $("checkoutErro").textContent = "Informe um e-mail válido para gerar o Pix.";
+        $("checkoutErro").hidden = false;
+        return;
+      }
       if (!cliente.pagamento) {
         $("checkoutErro").textContent = "Este comércio ainda não configurou uma forma de pagamento; entre em contato pelo WhatsApp.";
         $("checkoutErro").hidden = false;
@@ -387,6 +431,14 @@
     $("voltarCheckout").addEventListener("click", () => {
       $("confirmarPedidoDialog").close();
       $("checkoutDialog").showModal();
+    });
+
+    $("pagarPix").addEventListener("click", gerarPixPedido);
+    $("copiarPixPedido").addEventListener("click", async () => {
+      const codigo = $("pixPedidoCodigo").value;
+      if (!codigo) return;
+      await navigator.clipboard?.writeText(codigo);
+      $("pixPedidoStatus").textContent = "Pix copiado. Conclua o pagamento pelo seu banco.";
     });
 
     $("enviarWhatsApp").addEventListener("click", () => {
