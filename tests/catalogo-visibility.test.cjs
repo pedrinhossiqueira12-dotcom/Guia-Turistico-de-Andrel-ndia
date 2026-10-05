@@ -104,10 +104,10 @@ test("webhook do marketplace valida assinatura e só confirma order conferida no
   assert.match(orderWebhookFunction, /status_pagamento: "aprovado"/);
 });
 
-test("callback OAuth responde em UTF-8, protege redirect e a tela trata o retorno", () => {
-  assert.match(oauthCallback, /Content-Type.*text\/html; charset=UTF-8/);
-  assert.match(oauthCallback, /new TextEncoder\(\)\.encode\(body\)/);
-  assert.match(oauthCallback, /safeRedirect/);
+test("callback OAuth redireciona para a tela visual e a página trata o retorno", () => {
+  assert.match(oauthCallback, /function redirectToSite\(commerceId: string, result: "success" \| "error"\)/);
+  assert.match(oauthCallback, /Response\.redirect\(target\.toString\(\), 302\)/);
+  assert.match(oauthCallback, /target\.searchParams\.set\("oauth", result\)/);
   assert.match(productionCheckoutScript, /oauthResult === "success"/);
   assert.match(productionCheckoutScript, /replaceState/);
 });

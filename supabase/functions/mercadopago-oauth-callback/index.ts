@@ -8,13 +8,7 @@ const MP_OAUTH_CLIENT_SECRET = Deno.env.get("MP_OAUTH_CLIENT_SECRET") ?? "";
 const MP_OAUTH_REDIRECT_URI = Deno.env.get("MP_OAUTH_REDIRECT_URI") ?? "";
 const MP_OAUTH_ENCRYPTION_KEY = Deno.env.get("MP_OAUTH_ENCRYPTION_KEY") ?? "";
 const SITE_URL = (Deno.env.get("SITE_URL") || "https://guia-turistico-de-andrelandia.pages.dev").replace(/\/$/, "");
-const CORS_HEADERS = {
-  "Content-Type": "text/html; charset=UTF-8",
-  "Cache-Control": "no-store, no-cache, must-revalidate",
-  "Referrer-Policy": "no-referrer",
-  "X-Content-Type-Options": "nosniff",
-  "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'; form-action 'none'",
-};
+const CORS_HEADERS = { "Cache-Control": "no-store, no-cache, must-revalidate", "Referrer-Policy": "no-referrer" };
 let serviceKey = "";
 try {
   const parsed = SUPABASE_SECRET_KEYS ? JSON.parse(SUPABASE_SECRET_KEYS) : null;
@@ -22,16 +16,19 @@ try {
 } catch { /* fallback abaixo */ }
 if (!serviceKey) serviceKey = LEGACY_SERVICE_ROLE_KEY;
 const admin = createClient(SUPABASE_URL, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
-function html(message: string, redirect: string | null = null) {
-  const safe = message.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] || c));
-  const safeRedirect = redirect?.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] || c));
-  const script = redirect
-    ? `<meta http-equiv="refresh" content="2;url=${safeRedirect}"><script>window.setTimeout(function(){window.location.replace(${JSON.stringify(redirect)});},1800);</script>`
-    : "";
-  const body = `<!doctype html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Mercado Pago — Guia Turístico</title>${script}<style>body{margin:0;background:#f4f7f5;color:#17352e;font:16px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.card{box-sizing:border-box;max-width:620px;margin:12vh auto;padding:32px;background:#fff;border:1px solid #d8e3dd;border-radius:18px;box-shadow:0 10px 30px #17352e12}h1{margin:0 0 12px;font-size:clamp(24px,4vw,34px)}p{margin:0;color:#48645b}.brand{margin-bottom:18px;color:#2d765f;font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}.redirect{margin-top:20px;font-size:14px;color:#668078}</style></head><body><main class="card"><div class="brand">Guia Turístico de Andrelândia</div><h1>Conexão Mercado Pago</h1><p>${safe}</p>${redirect ? '<p class="redirect">Você será redirecionado automaticamente.</p>' : ""}</main></body></html>`;
-  // O gateway do Supabase pode substituir Content-Type por text/plain em respostas 4xx.
-  // Como esta é uma tela humana de retorno, mantenha status 200 para que o HTML seja renderizado.
-  return new Response(new TextEncoder().encode(body), { status: 200, headers: CORS_HEADERS });
+
+function redirectToSite(commerceId: string, result: "success" | "error") {
+  const target = new URL(`${SITE_URL}/pages/catalogo-pix-producao.html`);
+  if (commerceId) target.searchParams.set("id", commerceId);
+  target.searchParams.set("oauth", result);
+  return Response.redirect(target.toString(), 302);
+}
+
+function methodNotAllowed() {
+  return new Response("Use o endereço de callback enviado pelo Mercado Pago.", {
+    status: 405,
+    headers: { ...CORS_HEADERS, "Content-Type": "text/plain; charset=utf-8" },
+  });
 }
 function base64Url(bytes: Uint8Array) { let binary = ""; for (const byte of bytes) binary += String.fromCharCode(byte); return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, ""); }
 async function sha256(value: string) { return base64Url(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)))); }
@@ -51,20 +48,26 @@ async function exchangeCode(code: string, verifier: string) {
   return data;
 }
 Deno.serve(async (request: Request) => {
-  if (request.method !== "GET") return html("Use o endereço de callback enviado pelo Mercado Pago.");
-  const url = new URL(request.url); const code = url.searchParams.get("code") || ""; const state = url.searchParams.get("state") || ""; const error = url.searchParams.get("error") || "";
-  if (error || !code || !state) return html("A autorização foi cancelada ou retornou dados incompletos.");
-  if (!MP_OAUTH_CLIENT_ID || !MP_OAUTH_CLIENT_SECRET || !MP_OAUTH_REDIRECT_URI || !MP_OAUTH_ENCRYPTION_KEY) return html("O OAuth ainda não foi configurado pelo administrador.");
+  if (request.method !== "GET") return methodNotAllowed();
+  const url = new URL(request.url);
+  const code = url.searchParams.get("code") || "";
+  const state = url.searchParams.get("state") || "";
+  const error = url.searchParams.get("error") || "";
+  if (error || !code || !state) return redirectToSite("", "error");
+  if (!MP_OAUTH_CLIENT_ID || !MP_OAUTH_CLIENT_SECRET || !MP_OAUTH_REDIRECT_URI || !MP_OAUTH_ENCRYPTION_KEY) return redirectToSite("", "error");
   try {
     const stateHash = await sha256(state);
     const { data: oauthState, error: stateError } = await admin.from("catalogo_oauth_estados").select("id,comercio_id,proprietario_id,code_verifier,expira_em,usado_em").eq("estado_hash", stateHash).maybeSingle();
-    if (stateError || !oauthState || oauthState.usado_em || new Date(oauthState.expira_em).getTime() < Date.now()) return html("A autorização expirou. Volte ao catálogo e tente novamente.");
-    const credentials = await exchangeCode(code, oauthState.code_verifier); const now = new Date().toISOString();
+    if (stateError || !oauthState || oauthState.usado_em || new Date(oauthState.expira_em).getTime() < Date.now()) return redirectToSite("", "error");
+    const credentials = await exchangeCode(code, oauthState.code_verifier);
+    const now = new Date().toISOString();
     const { error: updateStateError } = await admin.from("catalogo_oauth_estados").update({ usado_em: now }).eq("id", oauthState.id).is("usado_em", null);
     if (updateStateError) throw new Error("Não foi possível finalizar o estado OAuth.");
     const { error: receiverError } = await admin.from("catalogo_recebedores").upsert({ comercio_id: oauthState.comercio_id, provedor: "mercadopago", conta_externa_id: String(credentials.user_id), oauth_user_id: String(credentials.user_id), oauth_access_token_enc: await encrypt(String(credentials.access_token)), oauth_refresh_token_enc: await encrypt(String(credentials.refresh_token)), oauth_expires_at: new Date(Date.now() + Number(credentials.expires_in || 15552000) * 1000).toISOString(), oauth_scope: String(credentials.scope || ""), oauth_public_key: String(credentials.public_key || ""), oauth_live_mode: Boolean(credentials.live_mode), oauth_conectado_em: now, conectado_em: now, status: "ativo", atualizado_em: now }, { onConflict: "comercio_id" });
     if (receiverError) throw new Error("Autorização recebida, mas não foi possível salvar o recebedor.");
-    const redirect = `${SITE_URL}/pages/catalogo-pix-producao.html?id=${encodeURIComponent(oauthState.comercio_id)}&oauth=success`;
-    return html("Conta Mercado Pago conectada com sucesso. Você será redirecionado.", redirect);
-  } catch (error) { console.error("Mercado Pago OAuth callback failed:", (error as Error).message); return html("Não foi possível concluir a conexão. Nenhum pagamento foi criado. Volte ao catálogo e tente novamente."); }
+    return redirectToSite(oauthState.comercio_id, "success");
+  } catch (error) {
+    console.error("Mercado Pago OAuth callback failed:", (error as Error).message);
+    return redirectToSite("", "error");
+  }
 });
