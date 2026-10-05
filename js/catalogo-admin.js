@@ -142,6 +142,58 @@
     return Array.from($(containerId).querySelectorAll("input:checked")).map((input) => input.value);
   }
 
+  function reais(centavos) {
+    return window.CatalogoUtils.formatarMoeda(Number(centavos || 0) / 100);
+  }
+
+  function statusOffline(status) {
+    return ({ aguardando_pagamento: "Aguardando confirmação", em_preparo: "Em preparo", pronto: "Pronto para entrega", entregue: "Concluído", cancelado: "Cancelado" })[status] || status;
+  }
+
+  async function chamarPedidosOffline(body) {
+    const { data, error } = await getClient().functions.invoke("catalogo-pedidos-offline-admin", { body: { ...body, comercio_id: comercioId } });
+    if (error || !data?.success) throw new Error(data?.mensagem || error?.message || "Não foi possível consultar os pedidos offline.");
+    return data;
+  }
+
+  function renderizarPedidosOffline(pedidos) {
+    const lista = $("listaPedidosOffline");
+    const ativos = pedidos.filter((pedido) => ["aguardando_pagamento", "em_preparo", "pronto"].includes(pedido.status)).length;
+    $("offlineSummary").innerHTML = `<span>${pedidos.length} pedido(s) no histórico</span><span>${ativos} em andamento</span>`;
+    $("offlineSummary").hidden = false;
+    if (!pedidos.length) { lista.innerHTML = '<p class="form-feedback">Nenhum pedido presencial registrado.</p>'; return; }
+    lista.innerHTML = pedidos.map((pedido) => {
+      const proxima = pedido.status === "aguardando_pagamento" ? "Aceitar e preparar" : pedido.status === "em_preparo" ? "Marcar como pronto" : "";
+      const podeCancelar = ["aguardando_pagamento", "em_preparo", "pronto"].includes(pedido.status);
+      const endereco = pedido.modalidade === "entrega" && pedido.cliente_endereco ? ` · ${escapar(pedido.cliente_endereco)}${pedido.cliente_numero ? `, ${escapar(pedido.cliente_numero)}` : ""}` : "";
+      return `<article class="manager-row offline-order-row"><div class="offline-order-copy"><strong>${escapar(pedido.cliente_nome)} · ${reais(pedido.total_centavos)}</strong><small>${escapar(pedido.forma_pagamento)} · ${escapar(pedido.modalidade)}${endereco}</small><small>Produtos: ${reais(pedido.subtotal_produtos_centavos)} · Comissão: ${reais(pedido.taxa_plataforma_centavos)}</small><span class="offline-status" data-status="${escapar(pedido.status)}">${escapar(statusOffline(pedido.status))}</span></div><div class="manager-actions offline-order-actions">${proxima ? `<button class="small-button" type="button" data-offline-next="${escapar(pedido.id)}" data-offline-status="${escapar(pedido.status === "aguardando_pagamento" ? "em_preparo" : "pronto")}">${proxima}</button>` : ""}${podeCancelar ? `<button class="small-button danger" type="button" data-offline-cancel="${escapar(pedido.id)}">Cancelar</button>` : ""}</div></article>`;
+    }).join("");
+  }
+
+  async function carregarPedidosOffline() {
+    $("listaPedidosOffline").innerHTML = '<p class="form-feedback">Atualizando pedidos…</p>';
+    try { renderizarPedidosOffline((await chamarPedidosOffline({ acao: "listar_pedidos" })).pedidos || []); }
+    catch (error) { $("listaPedidosOffline").innerHTML = `<p class="form-feedback">${escapar(error.message || "Não foi possível carregar os pedidos.")}</p>`; }
+  }
+
+  async function alterarStatusOffline(pedidoId, status, motivo = "") {
+    await chamarPedidosOffline({ acao: "atualizar_status", pedido_id: pedidoId, status, motivo });
+    await carregarPedidosOffline();
+  }
+
+  async function consultarExtratoOffline() {
+    const competencia = $("competenciaOffline").value;
+    if (!competencia) { $("extratoOffline").innerHTML = '<p class="form-feedback">Escolha um mês para consultar o extrato.</p>'; return; }
+    $("extratoOffline").innerHTML = '<p class="form-feedback">Consultando extrato…</p>';
+    try {
+      const data = await chamarPedidosOffline({ acao: "consultar_fechamento", competencia });
+      const fechamento = data.fechamento; const comissoes = data.comissoes || [];
+      if (!fechamento && !comissoes.length) { $("extratoOffline").innerHTML = '<p class="form-feedback">Nenhuma comissão registrada nesta competência.</p>'; return; }
+      const total = fechamento?.total_comissao_centavos ?? comissoes.reduce((sum, item) => sum + Number(item.valor_comissao_centavos || 0), 0);
+      $("extratoOffline").innerHTML = `<p><strong>Total de pedidos:</strong> ${fechamento?.total_pedidos ?? comissoes.length}</p><p><strong>Comissão devida:</strong> ${reais(total)}</p><p><strong>Status:</strong> ${escapar(fechamento?.status || "em aberto")}${fechamento?.vencimento_em ? ` · vencimento ${escapar(fechamento.vencimento_em)}` : ""}</p>`;
+    } catch (error) { $("extratoOffline").innerHTML = `<p class="form-feedback">${escapar(error.message || "Não foi possível consultar o extrato.")}</p>`; }
+  }
+
   async function carregarDadosPainel() {
     const supabase = getClient();
     const [{ data: cfg, error: erroCfg }, { data: cats, error: erroCats }, { data: prods, error: erroProds }] = await Promise.all([
@@ -159,6 +211,9 @@
     renderizarCategorias();
     renderizarProdutos();
     preencherCategoriasProduto();
+    const month = new Date().toISOString().slice(0, 7);
+    if (!$("competenciaOffline").value) $("competenciaOffline").value = month;
+    await carregarPedidosOffline();
   }
 
   function renderizarCategorias() {
@@ -474,6 +529,17 @@
       else if (button.dataset.productToggle) alternarProduto(button.dataset.productToggle);
       else if (button.dataset.productDelete) excluirProduto(button.dataset.productDelete);
     });
+    $("listaPedidosOffline").addEventListener("click", async (event) => {
+      const button = event.target.closest("button");
+      if (!button) return;
+      button.disabled = true;
+      try {
+        if (button.dataset.offlineNext) await alterarStatusOffline(button.dataset.offlineNext, button.dataset.offlineStatus);
+        if (button.dataset.offlineCancel) await alterarStatusOffline(button.dataset.offlineCancel, "cancelado", "Cancelado pelo comércio.");
+      } catch (error) { setFeedback("settingsFeedback", error.message || "Não foi possível atualizar o pedido.", true); button.disabled = false; }
+    });
+    $("atualizarPedidosOffline").addEventListener("click", carregarPedidosOffline);
+    $("consultarExtratoOffline").addEventListener("click", consultarExtratoOffline);
     $("reassignCategoryForm").addEventListener("submit", async (event) => {
       event.preventDefault();
       if (!removendoCategoriaId) return;
