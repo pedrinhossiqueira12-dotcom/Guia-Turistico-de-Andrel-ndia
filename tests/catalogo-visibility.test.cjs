@@ -79,7 +79,8 @@ test("reserva concorrente do catálogo relê e valida proprietário e bloqueio a
 test("área de recebimentos mostra status e não cria cobrança sem OAuth publicado", () => {
   assert.match(productionCheckoutScript, /receiverStatusTitle/);
   assert.match(productionCheckoutScript, /iniciar_conexao/);
-  assert.match(productionFunction, /callback OAuth ainda não foi publicado/);
+  assert.match(productionFunction, /code_challenge_method: "S256"/);
+  assert.match(productionFunction, /catalogo_oauth_estados/);
   assert.match(productionPage, /Conecte o Mercado Pago/);
 });
 
