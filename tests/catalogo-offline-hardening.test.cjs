@@ -6,7 +6,8 @@ const fn = fs.readFileSync('supabase/functions/catalogo-pedido-offline/index.ts'
 const sql = fs.readFileSync('supabase/migrations/20261005130000_catalogo_offline_rate_limit.sql', 'utf8');
 
 test('checkout offline exige catálogo publicado e ativo no servidor', () => {
-  assert.match(fn, /from\("catalogo_publicado"\)/);
+  assert.match(fn, /from\("comercios_publicados"\)/);
+  assert.match(fn, /\.eq\("status", "ativo"\)/);
   assert.match(fn, /if \(!published\)/);
 });
 

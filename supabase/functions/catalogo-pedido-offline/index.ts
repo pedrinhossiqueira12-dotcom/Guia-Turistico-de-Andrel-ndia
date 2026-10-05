@@ -73,17 +73,10 @@ async function createOfflineOrder(body: Record<string, unknown>, rateKey: string
   const ids = [...requested.keys()];
   const [{ data: catalog, error: catalogError }, { data: published, error: publishedError }, { data: products, error: productsError }] = await Promise.all([
     admin.from("catalogos").select("comercio_id,modalidades,metodos_pagamento,bloqueado").eq("comercio_id", comercioId).maybeSingle(),
-    admin.from("catalogo_publicado").select("comercio_id").eq("comercio_id", comercioId).maybeSingle(),
+    admin.from("comercios_publicados").select("local_id,status").eq("local_id", comercioId).eq("status", "ativo").maybeSingle(),
     admin.from("catalogo_produtos").select("id,comercio_id,categoria_id,nome,descricao,preco,disponivel,deletado_em,catalogo_categorias!inner(ativa,deletado_em)").eq("comercio_id", comercioId).in("id", ids).eq("disponivel", true).is("deletado_em", null).eq("catalogo_categorias.ativa", true).is("catalogo_categorias.deletado_em", null),
   ]);
-  if (catalogError || publishedError || productsError) {
-    console.error("catalogo-pedido-offline validation failed:", {
-      catalog: catalogError?.message || null,
-      published: publishedError?.message || null,
-      products: productsError?.message || null,
-    });
-    throw new Error("Falha ao validar catálogo e produtos.");
-  }
+  if (catalogError || publishedError || productsError) throw new Error("Falha ao validar catálogo e produtos.");
   if (!published) throw new HttpError("Este catálogo não está publicado ou ativo.", 404);
   if (!catalog || catalog.bloqueado || !Array.isArray(catalog.modalidades) || !catalog.modalidades.includes(modalidade)) throw new HttpError("Este catálogo não aceita esta modalidade.", 409);
   if (!Array.isArray(catalog.metodos_pagamento) || !catalog.metodos_pagamento.includes(method)) throw new HttpError("Este comércio não aceita esta forma de pagamento.", 409);
