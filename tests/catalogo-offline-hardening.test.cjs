@@ -17,6 +17,10 @@ test('checkout offline exige autorização server-side da allowlist ativa', () =
   assert.match(fn, /await assertOfflineCommerceAuthorized\(comercioId\)/);
 });
 
+test('preflight CORS aceita o cabeçalho Authorization do cliente Supabase', () => {
+  assert.match(fn, /Access-Control-Allow-Headers.*apikey, authorization, content-type, x-client-info/);
+});
+
 test('checkout offline usa rate limit persistente por chave com hash', () => {
   assert.match(fn, /catalogo_offline_consumir_limite/);
   assert.match(fn, /cf-connecting-ip/);

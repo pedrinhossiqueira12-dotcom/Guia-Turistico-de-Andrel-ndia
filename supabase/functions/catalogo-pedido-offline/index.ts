@@ -6,7 +6,7 @@ const LEGACY_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const OFFLINE_CHECKOUT_ENABLED = Deno.env.get("OFFLINE_CHECKOUT_ENABLED") === "true";
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "apikey, content-type, x-client-info",
+  "Access-Control-Allow-Headers": "apikey, authorization, content-type, x-client-info",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Content-Type": "application/json; charset=utf-8",
   "Cache-Control": "no-store",
