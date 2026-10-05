@@ -44,7 +44,7 @@ DECLARE v_id uuid;
 BEGIN
   INSERT INTO public.catalogo_pedido_eventos (pedido_id, comercio_id, de_status, para_status, ator_tipo, ator_id, motivo, metadata)
   SELECT p.id, p.comercio_id, p.status, p_para_status, p_ator_tipo, p_ator_id, left(p_motivo, 500), coalesce(p_metadata, '{}'::jsonb)
-    FROM public.catalogo_pedidos p WHERE p.id = p_pedido_id;
+    FROM public.catalogo_pedidos p WHERE p.id = p_pedido_id
   RETURNING id INTO v_id;
   RETURN v_id;
 END;
