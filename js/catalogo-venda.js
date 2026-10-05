@@ -88,35 +88,13 @@
         return;
       }
 
-      if (data.ativo) {
-        $("activationTitle").textContent = "Seu catálogo está ativo";
-        $("activationText").textContent = "A assinatura está ativa. Você pode atualizar produtos, categorias e opções de pedido.";
-        $("linkGerenciar").hidden = false;
-        feedback("");
-        return;
-      }
-
-      let checkoutProducaoAtivo = false;
-      try {
-        const checkout = await supabase.functions.invoke("catalogo-pix-producao", {
-          body: { acao: "verificar_checkout", comercio_id: comercioId },
-        });
-        checkoutProducaoAtivo = !checkout.error && checkout.data?.proprietario === true && checkout.data?.checkout_enabled === true;
-      } catch (erro) {
-        console.warn("Checkout de produção indisponível; mantendo somente a opção sandbox.", erro);
-      }
-
-      if (checkoutProducaoAtivo) {
-        $("activationTitle").textContent = "Contratação Pix disponível";
-        $("activationText").textContent = "Acesse a área privada para revisar o comércio, o valor e o período antes de gerar um Pix real. A renovação é manual.";
-        $("linkPixProducao").hidden = false;
-      } else {
-        $("activationTitle").textContent = data.assinatura_status === "pendente"
-          ? "Solicitação pendente"
-          : "Checkout real ainda desligado";
-        $("activationText").textContent = "Nenhuma cobrança real pode ser criada nesta etapa. A opção sandbox permanece isolada e não libera a vitrine pública.";
-        $("linkTestePix").hidden = false;
-      }
+      $("activationTitle").textContent = data.ativo ? "Seu catálogo está ativo" : "Configure os recebimentos do catálogo";
+      $("activationText").textContent = data.ativo
+        ? "A assinatura antiga continua preservada no histórico. Agora os novos pedidos usarão comissão por transação."
+        : "Conecte sua conta Mercado Pago para receber pedidos com Pix no próprio site. Não há mensalidade ou anuidade no novo modelo.";
+      $("linkGerenciar").hidden = !data.ativo;
+      $("linkPixProducao").hidden = false;
+      $("linkTestePix").hidden = true;
       feedback("");
     } catch (erro) {
       $("activationTitle").textContent = "Acesso do proprietário não confirmado";
