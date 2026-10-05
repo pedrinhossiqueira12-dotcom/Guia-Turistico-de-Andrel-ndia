@@ -16,6 +16,10 @@ test('cliente recebe código e link privado, sem persistir o código no banco pe
   assert.match(js, /data\.codigo_entrega/);
   assert.match(js, /data\.cliente_token/);
   assert.match(js, /offlineConfirmLink/);
+  assert.match(js, /localStorage\.setItem\(chavePedidoOfflineSalvo\(\)/);
+  assert.match(js, /localStorage\.getItem\(chavePedidoOfflineSalvo\(\)/);
+  assert.match(html, /id="abrirPedidoOfflineSalvo"/);
+  assert.match(html, /id="copiarCodigoOffline"/);
   assert.match(confirm, /cliente_token: token/);
   assert.match(confirm, /codigo_entrega: code/);
 });

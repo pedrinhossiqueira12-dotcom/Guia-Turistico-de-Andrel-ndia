@@ -241,6 +241,39 @@
     `;
   }
 
+  function chavePedidoOfflineSalvo() { return `guia-offline-order:${comercioId}`; }
+  function lerPedidoOfflineSalvo() {
+    try {
+      const salvo = JSON.parse(localStorage.getItem(chavePedidoOfflineSalvo()) || "null");
+      if (!salvo?.codigo_entrega || !salvo?.cliente_token || Date.parse(salvo.codigo_expira_em) <= Date.now()) {
+        localStorage.removeItem(chavePedidoOfflineSalvo());
+        return null;
+      }
+      return salvo;
+    } catch { return null; }
+  }
+  function mostrarComprovanteOffline(salvo) {
+    $("offlinePedidoStatus").textContent = "Mostre este código ao entregador somente no momento da entrega.";
+    $("offlinePedidoCodigo").textContent = salvo.codigo_entrega;
+    $("offlineConfirmLink").href = `pedido-offline.html?token=${encodeURIComponent(salvo.cliente_token)}`;
+    $("offlineConfirmLink").hidden = false;
+    $("offlinePedidoBox").hidden = false;
+  }
+  function atualizarPedidoOfflineRecente() {
+    const salvo = lerPedidoOfflineSalvo();
+    const aviso = $("offlinePedidoRecente");
+    if (!salvo) { aviso.hidden = true; return; }
+    aviso.hidden = false;
+    $("abrirPedidoOfflineSalvo").onclick = () => {
+      mostrarComprovanteOffline(salvo);
+      if (!$("confirmarPedidoDialog").open) $("confirmarPedidoDialog").showModal();
+    };
+    $("limparPedidoOfflineSalvo").onclick = () => {
+      localStorage.removeItem(chavePedidoOfflineSalvo());
+      aviso.hidden = true;
+    };
+  }
+
   async function criarPedidoOffline() {
     if (!pedidoEmRevisao || !comercioId || !clienteSupabase()) return;
     const botao = $("criarPedidoOffline");
@@ -254,9 +287,10 @@
         cliente: pedidoEmRevisao.cliente, modalidade: pedidoEmRevisao.modalidade, observacoes: pedidoEmRevisao.observacoes,
       } });
       if (error || !data?.success) throw new Error(data?.mensagem || "Não foi possível registrar o pedido.");
-      $("offlinePedidoStatus").textContent = "Pedido registrado. Informe o código ao entregador no momento da entrega.";
-      $("offlinePedidoCodigo").textContent = data.codigo_entrega || "Código indisponível";
-      if (data.cliente_token) { $("offlineConfirmLink").href = `pedido-offline.html?token=${encodeURIComponent(data.cliente_token)}`; $("offlineConfirmLink").hidden = false; }
+      const comprovante = { pedido_id: data.pedido_id, codigo_entrega: data.codigo_entrega, cliente_token: data.cliente_token, codigo_expira_em: data.codigo_expira_em };
+      try { localStorage.setItem(chavePedidoOfflineSalvo(), JSON.stringify(comprovante)); } catch { /* O comprovante continua disponível nesta tela. */ }
+      mostrarComprovanteOffline(comprovante);
+      atualizarPedidoOfflineRecente();
       botao.hidden = true;
       $("enviarWhatsApp").hidden = true;
       carrinho = {}; salvarCarrinho(); renderizarSacola();
@@ -373,6 +407,7 @@
       renderizarProdutos();
       renderizarSacola();
       preencherCheckout();
+      atualizarPedidoOfflineRecente();
       $("catalogoAviso").hidden = true;
       $("catalogoConteudo").hidden = false;
     } catch (erro) {
@@ -454,6 +489,7 @@
       $("pixPedidoBox").hidden = true;
       $("offlinePedidoBox").hidden = true;
       $("enviarWhatsApp").hidden = false;
+      atualizarPedidoOfflineRecente();
     });
 
     $("voltarCheckout").addEventListener("click", () => {
@@ -468,6 +504,12 @@
       if (!codigo) return;
       await navigator.clipboard?.writeText(codigo);
       $("pixPedidoStatus").textContent = "Pix copiado. Conclua o pagamento pelo seu banco.";
+    });
+    $("copiarCodigoOffline").addEventListener("click", async () => {
+      const codigo = $("offlinePedidoCodigo").textContent.trim();
+      if (!codigo) return;
+      await navigator.clipboard?.writeText(codigo);
+      $("offlinePedidoStatus").textContent = "Código copiado. Mostre-o ao entregador somente no momento da entrega.";
     });
 
     $("enviarWhatsApp").addEventListener("click", () => {
