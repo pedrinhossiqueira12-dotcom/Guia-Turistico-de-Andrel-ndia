@@ -30,13 +30,19 @@ function json(data: unknown, status = 200) { return new Response(JSON.stringify(
 function record(value: unknown): Record<string, unknown> { return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {}; }
 function text(value: unknown, max: number) { const result = typeof value === "string" ? value.trim() : ""; if (result.length > max) throw new HttpError("Um dos campos excede o limite permitido."); return result; }
 function hash(value: string) { return crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)).then((bytes) => [...new Uint8Array(bytes)].map((byte) => byte.toString(16).padStart(2, "0")).join("")); }
+async function enforceRateLimit(rawKey: string) {
+  const { data, error } = await admin.rpc("catalogo_offline_consumir_limite", { p_chave_hash: await hash(rawKey), p_limite: 10, p_janela_segundos: 60 });
+  if (error) throw new Error("Não foi possível validar o limite de requisições.");
+  if (data !== true) throw new HttpError("Muitas tentativas. Aguarde um minuto e tente novamente.", 429);
+}
 function randomDigits() { const bytes = new Uint32Array(1); crypto.getRandomValues(bytes); return String(100000 + (bytes[0] % 900000)); }
 function cents(value: unknown, label: string) { const amount = Number(value); if (!Number.isInteger(amount) || amount < 0 || amount > 999999999) throw new HttpError(`${label} inválido.`); return amount; }
 function money(value: number) { return Math.round(value * 100); }
 function validEmail(value: string) { return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(value) && value.length <= 180; }
 const OFFLINE_METHODS = new Set(["dinheiro", "cartao_credito", "cartao_debito", "pagamento_entrega", "pagamento_local"]);
 
-async function createOfflineOrder(body: Record<string, unknown>) {
+async function createOfflineOrder(body: Record<string, unknown>, rateKey: string) {
+  await enforceRateLimit(rateKey);
   const comercioId = text(body.comercio_id, 180);
   const method = text(body.forma_pagamento, 40);
   if (!/^[a-z0-9-]{1,180}$/.test(comercioId) || !OFFLINE_METHODS.has(method)) throw new HttpError("Comércio ou forma de pagamento inválidos.");
@@ -54,11 +60,13 @@ async function createOfflineOrder(body: Record<string, unknown>) {
     requested.set(id, (requested.get(id) || 0) + quantity);
   }
   const ids = [...requested.keys()];
-  const [{ data: catalog, error: catalogError }, { data: products, error: productsError }] = await Promise.all([
+  const [{ data: catalog, error: catalogError }, { data: published, error: publishedError }, { data: products, error: productsError }] = await Promise.all([
     admin.from("catalogos").select("comercio_id,modalidades,metodos_pagamento,bloqueado").eq("comercio_id", comercioId).maybeSingle(),
+    admin.from("catalogo_publicado").select("comercio_id").eq("comercio_id", comercioId).maybeSingle(),
     admin.from("catalogo_produtos").select("id,comercio_id,categoria_id,nome,descricao,preco,disponivel,deletado_em,catalogo_categorias!inner(ativa,deletado_em)").eq("comercio_id", comercioId).in("id", ids).eq("disponivel", true).is("deletado_em", null).eq("catalogo_categorias.ativa", true).is("catalogo_categorias.deletado_em", null),
   ]);
-  if (catalogError || productsError) throw new Error("Falha ao validar catálogo e produtos.");
+  if (catalogError || publishedError || productsError) throw new Error("Falha ao validar catálogo e produtos.");
+  if (!published) throw new HttpError("Este catálogo não está publicado ou ativo.", 404);
   if (!catalog || catalog.bloqueado || !Array.isArray(catalog.modalidades) || !catalog.modalidades.includes(modalidade)) throw new HttpError("Este catálogo não aceita esta modalidade.", 409);
   if (!Array.isArray(catalog.metodos_pagamento) || !catalog.metodos_pagamento.includes(method)) throw new HttpError("Este comércio não aceita esta forma de pagamento.", 409);
   const byId = new Map((products || []).map((product: Record<string, unknown>) => [String(product.id), product]));
@@ -97,7 +105,8 @@ async function createOfflineOrder(body: Record<string, unknown>) {
   return json({ success: true, pedido_id: order.id, cliente_token: clienteToken, codigo_entrega: code, status: order.status, forma_pagamento: method, subtotal_centavos: subtotal, entrega_centavos: delivery, total_centavos: total, taxa_plataforma_centavos: fee, codigo_expira_em: expiration });
 }
 
-async function confirmDelivery(body: Record<string, unknown>) {
+async function confirmDelivery(body: Record<string, unknown>, rateKey: string) {
+  await enforceRateLimit(rateKey);
   const token = text(body.cliente_token, 100); const code = text(body.codigo_entrega, 20); const entregador = text(body.entregador, 120) || "não informado";
   if (!token || !/^\d{6}$/.test(code)) throw new HttpError("Código de entrega inválido.");
   const [tokenHash, codeHash] = await Promise.all([hash(token), hash(code)]);
@@ -119,8 +128,10 @@ Deno.serve(async (request: Request) => {
   try {
     const body = record(await request.json().catch(() => ({})));
     const action = text(body.acao, 40);
-    if (action === "criar_pedido_offline") return await createOfflineOrder(body);
-    if (action === "confirmar_entrega") return await confirmDelivery(body);
+    const comercio = text(body.comercio_id, 180);
+    const ip = (request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || "unknown").split(",")[0].trim().slice(0, 120);
+    if (action === "criar_pedido_offline") return await createOfflineOrder(body, `${ip}|${comercio}|create`);
+    if (action === "confirmar_entrega") return await confirmDelivery(body, `${ip}|${text(body.cliente_token, 100)}|confirm`);
     return json({ success: false, mensagem: "Ação não reconhecida." }, 400);
   } catch (error) {
     if (error instanceof HttpError) return json({ success: false, mensagem: error.message }, error.status);
