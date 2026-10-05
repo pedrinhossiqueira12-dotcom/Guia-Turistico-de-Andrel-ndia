@@ -18,6 +18,7 @@ const productionCheckoutScript = read("js/catalogo-pix-producao.js");
 const productionMigration = read("supabase/migrations/20261003140000_catalogo_pagamento_producao.sql");
 const orderPixFunction = read("supabase/functions/catalogo-pedido-pix/index.ts");
 const orderWebhookFunction = read("supabase/functions/mercadopago-marketplace-webhook/index.ts");
+const oauthCallback = read("supabase/functions/mercadopago-oauth-callback/index.ts");
 
 test("cartões do catálogo respeitam hidden mesmo com display:flex", () => {
   assert.match(
@@ -101,6 +102,14 @@ test("webhook do marketplace valida assinatura e só confirma order conferida no
   assert.match(orderWebhookFunction, /\/v1\/orders\/\$\{encodeURIComponent\(orderId\)\}/);
   assert.match(orderWebhookFunction, /external_reference/);
   assert.match(orderWebhookFunction, /status_pagamento: "aprovado"/);
+});
+
+test("callback OAuth responde em UTF-8, protege redirect e a tela trata o retorno", () => {
+  assert.match(oauthCallback, /Content-Type.*text\/html; charset=UTF-8/);
+  assert.match(oauthCallback, /new TextEncoder\(\)\.encode\(body\)/);
+  assert.match(oauthCallback, /safeRedirect/);
+  assert.match(productionCheckoutScript, /oauthResult === "success"/);
+  assert.match(productionCheckoutScript, /replaceState/);
 });
 
 test("migração bloqueia mais de um Pix por assinatura e permite renovar após expiração", () => {

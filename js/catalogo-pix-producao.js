@@ -110,6 +110,14 @@
   }
   async function init() {
     setLinks();
+    const oauthResult = params.get("oauth");
+    if (oauthResult === "success") {
+      feedback("Conta Mercado Pago conectada com sucesso. Atualizando o status…");
+      window.history.replaceState({}, document.title, `${window.location.pathname}?id=${encodeURIComponent(commerceId)}`);
+    } else if (oauthResult === "error") {
+      feedback("Não foi possível concluir a conexão. Tente novamente.", true);
+      window.history.replaceState({}, document.title, `${window.location.pathname}?id=${encodeURIComponent(commerceId)}`);
+    }
     if (!commerceId) {
       status("O identificador do comércio não foi informado.", "error");
       return;
