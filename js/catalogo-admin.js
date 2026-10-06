@@ -18,10 +18,10 @@
 
   const modalidades = { entrega: "Entrega", retirada: "Retirada", consumo_local: "Consumo no local" };
   const pagamentos = {
-    pix: "Pix (combinar com o comércio)",
+    pix: "Pix (combinar com o comÃ©rcio)",
     dinheiro: "Dinheiro",
-    cartao_credito: "Cartão de crédito",
-    cartao_debito: "Cartão de débito",
+    cartao_credito: "CartÃ£o de crÃ©dito",
+    cartao_debito: "CartÃ£o de dÃ©bito",
     pagamento_entrega: "Pagamento na entrega",
     pagamento_local: "Pagamento no estabelecimento",
   };
@@ -64,8 +64,8 @@
     const { data, error } = await supabase.functions.invoke("catalogo-admin", {
       body: { acao: "verificar_proprietario", comercio_id: comercioId },
     });
-    if (error) throw new Error(error.message || "Não foi possível validar o proprietário.");
-    if (!data?.proprietario && !data?.admin) throw new Error(data?.mensagem || "Esta conta não está vinculada ao comércio.");
+    if (error) throw new Error(error.message || "NÃ£o foi possÃ­vel validar o proprietÃ¡rio.");
+    if (!data?.proprietario && !data?.admin) throw new Error(data?.mensagem || "Esta conta nÃ£o estÃ¡ vinculada ao comÃ©rcio.");
     return data;
   }
 
@@ -86,7 +86,7 @@
         $("loginCard").hidden = false;
         $("catalogoBloqueado").hidden = true;
         $("painelCatalogo").hidden = true;
-        setNotice("Entre para continuar", "Somente o proprietário autenticado pode gerenciar o catálogo.");
+        setNotice("Entre para continuar", "Somente o proprietÃ¡rio autenticado pode gerenciar o catÃ¡logo.");
         return;
       }
 
@@ -99,32 +99,32 @@
         $("painelCatalogo").hidden = true;
         $("catalogoBloqueado").hidden = false;
         if (resultado.bloqueado) {
-          $("lockedTitle").textContent = "Catálogo temporariamente bloqueado";
-          $("lockedText").textContent = "O administrador do Guia bloqueou este catálogo. Entre em contato pelo perfil do comércio para obter orientação.";
+          $("lockedTitle").textContent = "CatÃ¡logo temporariamente bloqueado";
+          $("lockedText").textContent = "O administrador do Guia bloqueou este catÃ¡logo. Entre em contato pelo perfil do comÃ©rcio para obter orientaÃ§Ã£o.";
           $("linkContratacao").hidden = true;
         } else {
-          $("lockedTitle").textContent = "Catálogo não liberado";
-          $("lockedText").textContent = "Conecte a conta Mercado Pago do comércio para liberar gratuitamente a gestão do catálogo.";
+          $("lockedTitle").textContent = "CatÃ¡logo nÃ£o liberado";
+          $("lockedText").textContent = "Conecte a conta Mercado Pago do comÃ©rcio para liberar gratuitamente a gestÃ£o do catÃ¡logo.";
           $("linkContratacao").hidden = false;
         }
-        setNotice("Acesso à gestão bloqueado", "A gestão e a vitrine são liberadas após a conexão ativa do Mercado Pago.");
+        setNotice("Acesso Ã  gestÃ£o bloqueado", "A gestÃ£o e a vitrine sÃ£o liberadas apÃ³s a conexÃ£o ativa do Mercado Pago.");
         return;
       }
 
       $("catalogoBloqueado").hidden = true;
       $("painelCatalogo").hidden = false;
       setNotice(resultado.admin ? "Acesso administrativo confirmado" : "Acesso confirmado", resultado.admin
-        ? "Você está corrigindo o catálogo como administrador do Guia."
-        : "Você está gerenciando o catálogo deste comércio.");
+        ? "VocÃª estÃ¡ corrigindo o catÃ¡logo como administrador do Guia."
+        : "VocÃª estÃ¡ gerenciando o catÃ¡logo deste comÃ©rcio.");
       await carregarDadosPainel();
     } catch (erro) {
-      console.error("Erro no painel de catálogo:", erro);
+      console.error("Erro no painel de catÃ¡logo:", erro);
       $("loginCard").hidden = true;
       $("catalogoBloqueado").hidden = false;
-      $("lockedTitle").textContent = "Não foi possível confirmar o acesso";
-      $("lockedText").textContent = erro.message || "Tente novamente ou retorne ao perfil do comércio.";
+      $("lockedTitle").textContent = "NÃ£o foi possÃ­vel confirmar o acesso";
+      $("lockedText").textContent = erro.message || "Tente novamente ou retorne ao perfil do comÃ©rcio.";
       $("linkContratacao").hidden = true;
-      setNotice("Acesso não confirmado", erro.message || "A verificação de proprietário falhou.", true);
+      setNotice("Acesso nÃ£o confirmado", erro.message || "A verificaÃ§Ã£o de proprietÃ¡rio falhou.", true);
     } finally {
       carregando = false;
     }
@@ -145,33 +145,33 @@
   }
 
   function statusOffline(status) {
-    return ({ aguardando_pagamento: "Aguardando confirmação", em_preparo: "Em preparo", pronto: "Pronto para entrega", entregue: "Concluído", cancelado: "Cancelado" })[status] || status;
+    return ({ aguardando_pagamento: "Aguardando confirmaÃ§Ã£o", em_preparo: "Em preparo", pronto: "Pronto para entrega", entregue: "ConcluÃ­do", cancelado: "Cancelado" })[status] || status;
   }
 
   async function chamarPedidosOffline(body) {
     const { data, error } = await getClient().functions.invoke("catalogo-pedidos-offline-admin", { body: { ...body, comercio_id: comercioId } });
-    if (error || !data?.success) throw new Error(data?.mensagem || error?.message || "Não foi possível consultar os pedidos offline.");
+    if (error || !data?.success) throw new Error(data?.mensagem || error?.message || "NÃ£o foi possÃ­vel consultar os pedidos offline.");
     return data;
   }
 
   function renderizarPedidosOffline(pedidos) {
     const lista = $("listaPedidosOffline");
     const ativos = pedidos.filter((pedido) => ["aguardando_pagamento", "em_preparo", "pronto"].includes(pedido.status)).length;
-    $("offlineSummary").innerHTML = `<span>${pedidos.length} pedido(s) no histórico</span><span>${ativos} em andamento</span>`;
+    $("offlineSummary").innerHTML = `<span>${pedidos.length} pedido(s) no histÃ³rico</span><span>${ativos} em andamento</span>`;
     $("offlineSummary").hidden = false;
     if (!pedidos.length) { lista.innerHTML = '<p class="form-feedback">Nenhum pedido presencial registrado.</p>'; return; }
     lista.innerHTML = pedidos.map((pedido) => {
       const proxima = pedido.status === "aguardando_pagamento" ? "Aceitar e preparar" : pedido.status === "em_preparo" ? "Marcar como pronto" : "";
       const podeCancelar = ["aguardando_pagamento", "em_preparo", "pronto"].includes(pedido.status);
-      const endereco = pedido.modalidade === "entrega" && pedido.cliente_endereco ? ` · ${escapar(pedido.cliente_endereco)}${pedido.cliente_numero ? `, ${escapar(pedido.cliente_numero)}` : ""}` : "";
-      return `<article class="manager-row offline-order-row"><div class="offline-order-copy"><strong>${escapar(pedido.cliente_nome)} · ${reais(pedido.total_centavos)}</strong><small>${escapar(pedido.forma_pagamento)} · ${escapar(pedido.modalidade)}${endereco}</small><small>Produtos: ${reais(pedido.subtotal_produtos_centavos)} · Comissão: ${reais(pedido.taxa_plataforma_centavos)}</small><span class="offline-status" data-status="${escapar(pedido.status)}">${escapar(statusOffline(pedido.status))}</span></div><div class="manager-actions offline-order-actions">${proxima ? `<button class="small-button" type="button" data-offline-next="${escapar(pedido.id)}" data-offline-status="${escapar(pedido.status === "aguardando_pagamento" ? "em_preparo" : "pronto")}">${proxima}</button>` : ""}${podeCancelar ? `<button class="small-button danger" type="button" data-offline-cancel="${escapar(pedido.id)}">Cancelar</button>` : ""}</div></article>`;
+      const endereco = pedido.modalidade === "entrega" && pedido.cliente_endereco ? ` Â· ${escapar(pedido.cliente_endereco)}${pedido.cliente_numero ? `, ${escapar(pedido.cliente_numero)}` : ""}` : "";
+      return `<article class="manager-row offline-order-row"><div class="offline-order-copy"><strong>${escapar(pedido.cliente_nome)} Â· ${reais(pedido.total_centavos)}</strong><small>${escapar(pedido.forma_pagamento)} Â· ${escapar(pedido.modalidade)}${endereco}</small><small>Produtos: ${reais(pedido.subtotal_produtos_centavos)} Â· ComissÃ£o: ${reais(pedido.taxa_plataforma_centavos)}</small><span class="offline-status" data-status="${escapar(pedido.status)}">${escapar(statusOffline(pedido.status))}</span></div><div class="manager-actions offline-order-actions">${proxima ? `<button class="small-button" type="button" data-offline-next="${escapar(pedido.id)}" data-offline-status="${escapar(pedido.status === "aguardando_pagamento" ? "em_preparo" : "pronto")}">${proxima}</button>` : ""}${podeCancelar ? `<button class="small-button danger" type="button" data-offline-cancel="${escapar(pedido.id)}">Cancelar</button>` : ""}</div></article>`;
     }).join("");
   }
 
   async function carregarPedidosOffline() {
-    $("listaPedidosOffline").innerHTML = '<p class="form-feedback">Atualizando pedidos…</p>';
+    $("listaPedidosOffline").innerHTML = '<p class="form-feedback">Atualizando pedidosâ€¦</p>';
     try { renderizarPedidosOffline((await chamarPedidosOffline({ acao: "listar_pedidos" })).pedidos || []); }
-    catch (error) { $("listaPedidosOffline").innerHTML = `<p class="form-feedback">${escapar(error.message || "Não foi possível carregar os pedidos.")}</p>`; }
+    catch (error) { $("listaPedidosOffline").innerHTML = `<p class="form-feedback">${escapar(error.message || "NÃ£o foi possÃ­vel carregar os pedidos.")}</p>`; }
   }
 
   async function alterarStatusOffline(pedidoId, status, motivo = "") {
@@ -181,15 +181,15 @@
 
   async function consultarExtratoOffline() {
     const competencia = $("competenciaOffline").value;
-    if (!competencia) { $("extratoOffline").innerHTML = '<p class="form-feedback">Escolha um mês para consultar o extrato.</p>'; return; }
-    $("extratoOffline").innerHTML = '<p class="form-feedback">Consultando extrato…</p>';
+    if (!competencia) { $("extratoOffline").innerHTML = '<p class="form-feedback">Escolha um mÃªs para consultar o extrato.</p>'; return; }
+    $("extratoOffline").innerHTML = '<p class="form-feedback">Consultando extratoâ€¦</p>';
     try {
       const data = await chamarPedidosOffline({ acao: "consultar_fechamento", competencia });
       const fechamento = data.fechamento; const comissoes = data.comissoes || [];
-      if (!fechamento && !comissoes.length) { $("extratoOffline").innerHTML = '<p class="form-feedback">Nenhuma comissão registrada nesta competência.</p>'; return; }
+      if (!fechamento && !comissoes.length) { $("extratoOffline").innerHTML = '<p class="form-feedback">Nenhuma comissÃ£o registrada nesta competÃªncia.</p>'; return; }
       const total = fechamento?.total_comissao_centavos ?? comissoes.reduce((sum, item) => sum + Number(item.valor_comissao_centavos || 0), 0);
-      $("extratoOffline").innerHTML = `<p><strong>Total de pedidos:</strong> ${fechamento?.total_pedidos ?? comissoes.length}</p><p><strong>Comissão devida:</strong> ${reais(total)}</p><p><strong>Status:</strong> ${escapar(fechamento?.status || "em aberto")}${fechamento?.vencimento_em ? ` · vencimento ${escapar(fechamento.vencimento_em)}` : ""}</p>`;
-    } catch (error) { $("extratoOffline").innerHTML = `<p class="form-feedback">${escapar(error.message || "Não foi possível consultar o extrato.")}</p>`; }
+      $("extratoOffline").innerHTML = `<p><strong>Total de pedidos:</strong> ${fechamento?.total_pedidos ?? comissoes.length}</p><p><strong>ComissÃ£o devida:</strong> ${reais(total)}</p><p><strong>Status:</strong> ${escapar(fechamento?.status || "em aberto")}${fechamento?.vencimento_em ? ` Â· vencimento ${escapar(fechamento.vencimento_em)}` : ""}</p>`;
+    } catch (error) { $("extratoOffline").innerHTML = `<p class="form-feedback">${escapar(error.message || "NÃ£o foi possÃ­vel consultar o extrato.")}</p>`; }
   }
 
   function traducaoCobranca(status) {
@@ -199,24 +199,24 @@
       pendente: "Pix pendente",
       pago: "Paga",
       vencido: "Vencida",
-      bloqueado: "Bloqueada por inadimplência",
+      bloqueado: "Bloqueada por inadimplÃªncia",
       expirado: "Pix expirado",
       cancelado: "Cancelada",
-      estornado: "Estornada (crédito revogado)",
+      estornado: "Estornada (crÃ©dito revogado)",
       contestado: "Contestada (chargeback)",
-      divergente: "Divergência de valor — conferência manual",
-    })[status] || status || "sem cobrança";
+      divergente: "DivergÃªncia de valor â€” conferÃªncia manual",
+    })[status] || status || "sem cobranÃ§a";
   }
 
   async function chamarFaturaPix(body) {
     const { data, error } = await getClient().functions.invoke("catalogo-fatura-pix", { body: { ...body, comercio_id: comercioId } });
-    if (error || !data?.success) throw new Error(data?.mensagem || error?.message || "Não foi possível processar a cobrança da fatura.");
+    if (error || !data?.success) throw new Error(data?.mensagem || error?.message || "NÃ£o foi possÃ­vel processar a cobranÃ§a da fatura.");
     return data;
   }
 
   function competenciaDaFatura() {
     const competencia = $("competenciaOffline").value;
-    if (!competencia) throw new Error("Escolha o mês da fatura antes de gerar o Pix.");
+    if (!competencia) throw new Error("Escolha o mÃªs da fatura antes de gerar o Pix.");
     return competencia;
   }
 
@@ -226,34 +226,34 @@
     const total = Number(data.valor_centavos ?? fatura.total_comissao_centavos ?? 0);
     const situacao = data.cobranca_status || fatura.status || "";
     const partes = [
-      `<p><strong>Comissão da competência:</strong> ${reais(total)}</p>`,
-      `<p><strong>Situação:</strong> ${escapar(traducaoCobranca(situacao))}${fatura.vencimento_em ? ` · vencimento ${escapar(fatura.vencimento_em)}` : ""}</p>`,
+      `<p><strong>ComissÃ£o da competÃªncia:</strong> ${reais(total)}</p>`,
+      `<p><strong>SituaÃ§Ã£o:</strong> ${escapar(traducaoCobranca(situacao))}${fatura.vencimento_em ? ` Â· vencimento ${escapar(fatura.vencimento_em)}` : ""}</p>`,
     ];
     if (data.mensagem) partes.push(`<p class="form-feedback">${escapar(data.mensagem)}</p>`);
     if (pix.code) {
       if (pix.imageBase64) partes.push(`<img class="pix-qr" alt="QR Code Pix da fatura" src="data:image/png;base64,${pix.imageBase64}">`);
       partes.push(`<label class="pix-copy">Pix copia e cola<textarea readonly rows="3">${escapar(pix.code)}</textarea></label>`);
-      partes.push('<button id="copiarPixFatura" class="small-button" type="button">Copiar código Pix</button>');
+      partes.push('<button id="copiarPixFatura" class="small-button" type="button">Copiar cÃ³digo Pix</button>');
       if (/^https:\/\//.test(pix.ticketUrl || "")) partes.push(`<p><a class="button button-secondary" href="${escapar(pix.ticketUrl)}" target="_blank" rel="noopener">Abrir no Mercado Pago</a></p>`);
     }
     $("faturaPixResultado").innerHTML = partes.join("");
     const copiar = $("copiarPixFatura");
     if (copiar) copiar.addEventListener("click", async () => {
-      try { await navigator.clipboard.writeText(pix.code); copiar.textContent = "Código copiado"; }
-      catch { copiar.textContent = "Copie o código manualmente"; }
+      try { await navigator.clipboard.writeText(pix.code); copiar.textContent = "CÃ³digo copiado"; }
+      catch { copiar.textContent = "Copie o cÃ³digo manualmente"; }
     });
   }
 
   async function gerarPixFatura() {
-    $("faturaPixResultado").innerHTML = '<p class="form-feedback">Solicitando o Pix da fatura…</p>';
+    $("faturaPixResultado").innerHTML = '<p class="form-feedback">Solicitando o Pix da faturaâ€¦</p>';
     try { renderizarPixFatura(await chamarFaturaPix({ acao: "criar_cobranca", competencia: competenciaDaFatura() })); }
-    catch (error) { $("faturaPixResultado").innerHTML = `<p class="form-feedback">${escapar(error.message || "Não foi possível gerar o Pix da fatura.")}</p>`; }
+    catch (error) { $("faturaPixResultado").innerHTML = `<p class="form-feedback">${escapar(error.message || "NÃ£o foi possÃ­vel gerar o Pix da fatura.")}</p>`; }
   }
 
   async function consultarPixFatura() {
-    $("faturaPixResultado").innerHTML = '<p class="form-feedback">Verificando o pagamento da fatura…</p>';
+    $("faturaPixResultado").innerHTML = '<p class="form-feedback">Verificando o pagamento da faturaâ€¦</p>';
     try { renderizarPixFatura(await chamarFaturaPix({ acao: "consultar_cobranca", competencia: competenciaDaFatura() })); }
-    catch (error) { $("faturaPixResultado").innerHTML = `<p class="form-feedback">${escapar(error.message || "Não foi possível verificar o pagamento da fatura.")}</p>`; }
+    catch (error) { $("faturaPixResultado").innerHTML = `<p class="form-feedback">${escapar(error.message || "NÃ£o foi possÃ­vel verificar o pagamento da fatura.")}</p>`; }
   }
 
   async function carregarDadosPainel() {
@@ -281,15 +281,15 @@
   function renderizarCategorias() {
     const lista = $("listaCategorias");
     if (!categorias.length) {
-      lista.innerHTML = '<p class="form-feedback">Ainda não há categorias. Crie uma para começar a cadastrar produtos.</p>';
+      lista.innerHTML = '<p class="form-feedback">Ainda nÃ£o hÃ¡ categorias. Crie uma para comeÃ§ar a cadastrar produtos.</p>';
       return;
     }
     lista.innerHTML = categorias.map((categoria, indice) => `
       <article class="manager-row">
-        <div class="manager-copy"><strong>${escapar(categoria.nome)}</strong><small>Ordem ${indice + 1}${categoria.ativa ? " · visível" : " · oculta"}</small></div>
+        <div class="manager-copy"><strong>${escapar(categoria.nome)}</strong><small>Ordem ${indice + 1}${categoria.ativa ? " Â· visÃ­vel" : " Â· oculta"}</small></div>
         <div class="manager-actions">
-          <button class="small-button" type="button" data-cat-move="up" data-id="${escapar(categoria.id)}" aria-label="Mover categoria para cima" ${indice === 0 ? "disabled" : ""}>↑</button>
-          <button class="small-button" type="button" data-cat-move="down" data-id="${escapar(categoria.id)}" aria-label="Mover categoria para baixo" ${indice === categorias.length - 1 ? "disabled" : ""}>↓</button>
+          <button class="small-button" type="button" data-cat-move="up" data-id="${escapar(categoria.id)}" aria-label="Mover categoria para cima" ${indice === 0 ? "disabled" : ""}>â†‘</button>
+          <button class="small-button" type="button" data-cat-move="down" data-id="${escapar(categoria.id)}" aria-label="Mover categoria para baixo" ${indice === categorias.length - 1 ? "disabled" : ""}>â†“</button>
           <button class="small-button" type="button" data-cat-edit="${escapar(categoria.id)}">Editar</button>
           <button class="small-button danger" type="button" data-cat-delete="${escapar(categoria.id)}">Arquivar</button>
         </div>
@@ -315,7 +315,7 @@
     $("contadorProdutos").textContent = String(produtos.length);
     const lista = $("listaProdutos");
     if (!produtos.length) {
-      lista.innerHTML = '<p class="form-feedback">Ainda não há produtos cadastrados.</p>';
+      lista.innerHTML = '<p class="form-feedback">Ainda nÃ£o hÃ¡ produtos cadastrados.</p>';
       return;
     }
     const porCategoria = new Map(categorias.map((categoria) => [String(categoria.id), categoria.nome]));
@@ -323,7 +323,7 @@
       <article class="manager-row product-row">
         <div class="product-row-main">
           <img class="product-row-image" src="${escapar(publicUrl(produto.imagem))}" alt="" loading="lazy" data-admin-image>
-          <div class="manager-copy"><strong>${escapar(produto.nome)} · ${window.CatalogoUtils.formatarMoeda(produto.preco)}</strong><small>${escapar(porCategoria.get(String(produto.categoria_id)) || "Sem categoria")}${produto.descricao ? ` · ${escapar(produto.descricao)}` : ""}</small><small class="${produto.disponivel ? "available-label" : "unavailable-label"}">${produto.disponivel ? "Disponível" : "Indisponível"}</small></div>
+          <div class="manager-copy"><strong>${escapar(produto.nome)} Â· ${window.CatalogoUtils.formatarMoeda(produto.preco)}</strong><small>${escapar(porCategoria.get(String(produto.categoria_id)) || "Sem categoria")}${produto.descricao ? ` Â· ${escapar(produto.descricao)}` : ""}</small><small class="${produto.disponivel ? "available-label" : "unavailable-label"}">${produto.disponivel ? "DisponÃ­vel" : "IndisponÃ­vel"}</small></div>
         </div>
         <div class="manager-actions">
           <button class="small-button" type="button" data-product-edit="${escapar(produto.id)}">Editar</button>
@@ -346,7 +346,7 @@
   async function otimizarImagem(file) {
     const tiposAceitos = ["image/jpeg", "image/png", "image/webp"];
     if (!file || !tiposAceitos.includes(file.type)) throw new Error("Escolha uma foto JPG, PNG ou WebP.");
-    if (file.size > 15 * 1024 * 1024) throw new Error("A foto original deve ter até 15 MiB.");
+    if (file.size > 15 * 1024 * 1024) throw new Error("A foto original deve ter atÃ© 15 MiB.");
 
     const bitmap = await createImageBitmap(file);
     const escala = Math.min(1, 1440 / bitmap.width, 1440 / bitmap.height);
@@ -354,7 +354,7 @@
     canvas.width = Math.max(1, Math.round(bitmap.width * escala));
     canvas.height = Math.max(1, Math.round(bitmap.height * escala));
     const contexto = canvas.getContext("2d", { alpha: false });
-    if (!contexto) throw new Error("Não foi possível preparar a foto neste navegador.");
+    if (!contexto) throw new Error("NÃ£o foi possÃ­vel preparar a foto neste navegador.");
     contexto.fillStyle = "#fff";
     contexto.fillRect(0, 0, canvas.width, canvas.height);
     contexto.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
@@ -399,7 +399,7 @@
     $("produtoCategoria").value = produto.categoria_id;
     $("produtoDisponivel").checked = Boolean(produto.disponivel);
     $("produtoImagem").value = "";
-    $("salvarProduto").textContent = "Salvar alterações";
+    $("salvarProduto").textContent = "Salvar alteraÃ§Ãµes";
     $("cancelarProduto").hidden = false;
     $("produtoForm").scrollIntoView({ behavior: "smooth", block: "center" });
     $("produtoNome").focus();
@@ -410,7 +410,7 @@
     const supabase = getClient();
     const botao = $("salvarProduto");
     botao.disabled = true;
-    setFeedback("produtoFeedback", "Salvando produto…");
+    setFeedback("produtoFeedback", "Salvando produtoâ€¦");
 
     try {
       const produtoId = $("produtoId").value || uuid();
@@ -427,7 +427,7 @@
         ordem: existente?.ordem ?? produtos.length,
         imagem: existente?.imagem || null,
       };
-      if (!payload.nome || !payload.categoria_id || !Number.isFinite(payload.preco) || payload.preco < 0) throw new Error("Preencha nome, categoria e preço válido.");
+      if (!payload.nome || !payload.categoria_id || !Number.isFinite(payload.preco) || payload.preco < 0) throw new Error("Preencha nome, categoria e preÃ§o vÃ¡lido.");
       if (file) payload.imagem = await enviarImagem(file, produtoId);
 
       const resposta = existente
@@ -436,10 +436,10 @@
       if (resposta.error) throw resposta.error;
       await carregarDadosPainel();
       limparFormularioProduto();
-      setFeedback("produtoFeedback", "Produto salvo. Se uma foto foi substituída, a anterior ficará sujeita à retenção de sete dias.");
+      setFeedback("produtoFeedback", "Produto salvo. Se uma foto foi substituÃ­da, a anterior ficarÃ¡ sujeita Ã  retenÃ§Ã£o de sete dias.");
     } catch (erro) {
       console.error("Erro ao salvar produto:", erro);
-      setFeedback("produtoFeedback", erro.message || "Não foi possível salvar o produto.", true);
+      setFeedback("produtoFeedback", erro.message || "NÃ£o foi possÃ­vel salvar o produto.", true);
     } finally {
       botao.disabled = false;
     }
@@ -452,7 +452,7 @@
     if (!nome) return;
     const botao = $("salvarCategoria");
     botao.disabled = true;
-    setFeedback("categoriaFeedback", "Salvando categoria…");
+    setFeedback("categoriaFeedback", "Salvando categoriaâ€¦");
     try {
       const resposta = id
         ? await getClient().from("catalogo_categorias").update({ nome }).eq("id", id).eq("comercio_id", comercioId)
@@ -465,7 +465,7 @@
       await carregarDadosPainel();
       setFeedback("categoriaFeedback", "Categoria salva.");
     } catch (erro) {
-      setFeedback("categoriaFeedback", erro.message || "Não foi possível salvar a categoria.", true);
+      setFeedback("categoriaFeedback", erro.message || "NÃ£o foi possÃ­vel salvar a categoria.", true);
     } finally {
       botao.disabled = false;
     }
@@ -478,7 +478,7 @@
     if (associadas.length) {
       const destino = categorias.filter((item) => String(item.id) !== String(id) && item.ativa && !item.deletado_em);
       if (!destino.length) {
-        setFeedback("categoriaFeedback", "Crie outra categoria antes de arquivar esta: há produtos vinculados.", true);
+        setFeedback("categoriaFeedback", "Crie outra categoria antes de arquivar esta: hÃ¡ produtos vinculados.", true);
         return;
       }
       removendoCategoriaId = id;
@@ -486,7 +486,7 @@
       $("reassignCategoryDialog").showModal();
       return;
     }
-    if (!window.confirm(`Arquivar a categoria “${categoria.nome}”?`)) return;
+    if (!window.confirm(`Arquivar a categoria â€œ${categoria.nome}â€?`)) return;
     await aplicarExclusaoCategoria(id, null);
   }
 
@@ -502,7 +502,7 @@
       await carregarDadosPainel();
       setFeedback("categoriaFeedback", "Categoria arquivada.");
     } catch (erro) {
-      setFeedback("categoriaFeedback", erro.message || "Não foi possível arquivar a categoria.", true);
+      setFeedback("categoriaFeedback", erro.message || "NÃ£o foi possÃ­vel arquivar a categoria.", true);
     }
   }
 
@@ -519,20 +519,20 @@
       }
       await carregarDadosPainel();
     } catch (erro) {
-      setFeedback("categoriaFeedback", erro.message || "Não foi possível reordenar as categorias.", true);
+      setFeedback("categoriaFeedback", erro.message || "NÃ£o foi possÃ­vel reordenar as categorias.", true);
     }
   }
 
   async function excluirProduto(id) {
     const produto = produtos.find((item) => String(item.id) === String(id));
-    if (!produto || !window.confirm(`Excluir “${produto.nome}” da vitrine? A foto respeitará a retenção de sete dias.`)) return;
+    if (!produto || !window.confirm(`Excluir â€œ${produto.nome}â€ da vitrine? A foto respeitarÃ¡ a retenÃ§Ã£o de sete dias.`)) return;
     const { error } = await getClient().from("catalogo_produtos").update({ disponivel: false, imagem: null, deletado_em: new Date().toISOString() }).eq("id", id).eq("comercio_id", comercioId);
     if (error) {
-      setFeedback("produtoFeedback", error.message || "Não foi possível excluir o produto.", true);
+      setFeedback("produtoFeedback", error.message || "NÃ£o foi possÃ­vel excluir o produto.", true);
       return;
     }
     await carregarDadosPainel();
-    setFeedback("produtoFeedback", "Produto retirado da vitrine; a foto não foi apagada imediatamente.");
+    setFeedback("produtoFeedback", "Produto retirado da vitrine; a foto nÃ£o foi apagada imediatamente.");
   }
 
   async function alternarProduto(id) {
@@ -540,7 +540,7 @@
     if (!produto) return;
     const { error } = await getClient().from("catalogo_produtos").update({ disponivel: !produto.disponivel }).eq("id", id).eq("comercio_id", comercioId);
     if (error) {
-      setFeedback("produtoFeedback", error.message || "Não foi possível atualizar a disponibilidade.", true);
+      setFeedback("produtoFeedback", error.message || "NÃ£o foi possÃ­vel atualizar a disponibilidade.", true);
       return;
     }
     await carregarDadosPainel();
@@ -555,8 +555,8 @@
       return;
     }
     const { error } = await getClient().from("catalogos").update({ modalidades: modos, metodos_pagamento: formas }).eq("comercio_id", comercioId);
-    if (error) setFeedback("settingsFeedback", error.message || "Não foi possível salvar as configurações.", true);
-    else setFeedback("settingsFeedback", "Configurações salvas.");
+    if (error) setFeedback("settingsFeedback", error.message || "NÃ£o foi possÃ­vel salvar as configuraÃ§Ãµes.", true);
+    else setFeedback("settingsFeedback", "ConfiguraÃ§Ãµes salvas.");
   }
 
   function configurarEventos() {
@@ -597,11 +597,13 @@
       button.disabled = true;
       try {
         if (button.dataset.offlineNext) await alterarStatusOffline(button.dataset.offlineNext, button.dataset.offlineStatus);
-        if (button.dataset.offlineCancel) await alterarStatusOffline(button.dataset.offlineCancel, "cancelado", "Cancelado pelo comércio.");
-      } catch (error) { setFeedback("settingsFeedback", error.message || "Não foi possível atualizar o pedido.", true); button.disabled = false; }
+        if (button.dataset.offlineCancel) await alterarStatusOffline(button.dataset.offlineCancel, "cancelado", "Cancelado pelo comÃ©rcio.");
+      } catch (error) { setFeedback("settingsFeedback", error.message || "NÃ£o foi possÃ­vel atualizar o pedido.", true); button.disabled = false; }
     });
     $("atualizarPedidosOffline").addEventListener("click", carregarPedidosOffline);
     $("consultarExtratoOffline").addEventListener("click", consultarExtratoOffline);
+    $("gerarPixFatura").addEventListener("click", gerarPixFatura);
+    $("consultarPixFatura").addEventListener("click", consultarPixFatura);
     $("reassignCategoryForm").addEventListener("submit", async (event) => {
       event.preventDefault();
       if (!removendoCategoriaId) return;
@@ -617,14 +619,14 @@
   async function iniciar() {
     linkPerfil();
     if (!comercioId) {
-      setNotice("Comércio não informado", "Volte ao perfil e abra a gestão do catálogo por lá.", true);
+      setNotice("ComÃ©rcio nÃ£o informado", "Volte ao perfil e abra a gestÃ£o do catÃ¡logo por lÃ¡.", true);
       $("loginCard").hidden = true;
       $("catalogoBloqueado").hidden = true;
       return;
     }
     const supabase = getClient();
     if (!supabase) {
-      setNotice("Serviço de autenticação indisponível", "Tente novamente mais tarde.", true);
+      setNotice("ServiÃ§o de autenticaÃ§Ã£o indisponÃ­vel", "Tente novamente mais tarde.", true);
       return;
     }
     supabase.auth.onAuthStateChange((evento) => {

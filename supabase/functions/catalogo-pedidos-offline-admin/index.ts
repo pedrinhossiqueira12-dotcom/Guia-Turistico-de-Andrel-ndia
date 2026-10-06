@@ -4,27 +4,27 @@ const URL = Deno.env.get("SUPABASE_URL") ?? "";
 const BUNDLE = Deno.env.get("SUPABASE_SECRET_KEYS") ?? "";
 const LEGACY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const ADMIN_USER_ID = "4b9a0233-6b72-4573-aebd-d596c5b15e1b";
-const HEADERS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, apikey, content-type", "Access-Control-Allow-Methods": "POST, OPTIONS", "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" };
+const HEADERS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info", "Access-Control-Allow-Methods": "POST, OPTIONS", "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" };
 let key = LEGACY;
 try { const parsed = BUNDLE ? JSON.parse(BUNDLE) : null; key = parsed?.default || parsed?.service_role || LEGACY; } catch { /* fallback */ }
 const db = createClient(URL, key, { auth: { persistSession: false, autoRefreshToken: false } });
 class HttpError extends Error { status: number; constructor(message: string, status = 400) { super(message); this.status = status; } }
 const json = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: HEADERS });
-const text = (value: unknown, max: number) => { const v = typeof value === "string" ? value.trim() : ""; if (v.length > max) throw new HttpError("Campo inválido."); return v; };
+const text = (value: unknown, max: number) => { const v = typeof value === "string" ? value.trim() : ""; if (v.length > max) throw new HttpError("Campo invÃ¡lido."); return v; };
 
 async function auth(request: Request) {
   const token = request.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1];
-  if (!token) throw new HttpError("Sessão ausente.", 401);
+  if (!token) throw new HttpError("SessÃ£o ausente.", 401);
   const { data, error } = await db.auth.getUser(token);
-  if (error || !data.user) throw new HttpError("Sessão inválida.", 401);
+  if (error || !data.user) throw new HttpError("SessÃ£o invÃ¡lida.", 401);
   return data.user;
 }
 async function owner(userId: string, comercioId: string) {
-  if (!/^[a-z0-9-]{1,180}$/.test(comercioId)) throw new HttpError("Comércio inválido.");
+  if (!/^[a-z0-9-]{1,180}$/.test(comercioId)) throw new HttpError("ComÃ©rcio invÃ¡lido.");
   if (userId === ADMIN_USER_ID) return { admin: true };
   const { data, error } = await db.from("catalogos").select("comercio_id,proprietario_id,bloqueado").eq("comercio_id", comercioId).maybeSingle();
   if (error) throw new Error("Falha ao verificar propriedade.");
-  if (!data || data.proprietario_id !== userId) throw new HttpError("Acesso não autorizado.", 403);
+  if (!data || data.proprietario_id !== userId) throw new HttpError("Acesso nÃ£o autorizado.", 403);
   return { admin: false, bloqueado: data.bloqueado };
 }
 const transitions: Record<string, string[]> = {
@@ -39,23 +39,23 @@ async function listOrders(comercioId: string) {
 }
 async function updateStatus(userId: string, body: Record<string, unknown>) {
   const comercioId = text(body.comercio_id, 180); const pedidoId = text(body.pedido_id, 60); const next = text(body.status, 30); const motivo = text(body.motivo, 500);
-  const access = await owner(userId, comercioId); if (access.bloqueado && next !== "cancelado") throw new HttpError("Catálogo bloqueado por inadimplência.", 423);
-  if (!transitions[next] && !Object.keys(transitions).some((from) => transitions[from].includes(next))) throw new HttpError("Transição inválida.");
+  const access = await owner(userId, comercioId); if (access.bloqueado && next !== "cancelado") throw new HttpError("CatÃ¡logo bloqueado por inadimplÃªncia.", 423);
+  if (!transitions[next] && !Object.keys(transitions).some((from) => transitions[from].includes(next))) throw new HttpError("TransiÃ§Ã£o invÃ¡lida.");
   const { data: current, error: readError } = await db.from("catalogo_pedidos").select("id,status,status_pagamento").eq("id", pedidoId).eq("comercio_id", comercioId).eq("provedor", "offline").maybeSingle();
-  if (readError || !current) throw new HttpError("Pedido não encontrado.", 404);
-  if (!transitions[current.status]?.includes(next)) throw new HttpError("Esta transição não é permitida.", 409);
-  const { data, error } = await db.from("catalogo_pedidos").update({ status: next, cancelado_em: next === "cancelado" ? new Date().toISOString() : null, motivo_cancelamento: next === "cancelado" ? motivo || "Cancelado pelo comércio." : null }).eq("id", pedidoId).eq("status", current.status).select("id,status,status_pagamento,atualizado_em").maybeSingle();
-  if (error || !data) throw new HttpError("O pedido foi alterado por outra sessão; atualize a lista.", 409);
+  if (readError || !current) throw new HttpError("Pedido nÃ£o encontrado.", 404);
+  if (!transitions[current.status]?.includes(next)) throw new HttpError("Esta transiÃ§Ã£o nÃ£o Ã© permitida.", 409);
+  const { data, error } = await db.from("catalogo_pedidos").update({ status: next, cancelado_em: next === "cancelado" ? new Date().toISOString() : null, motivo_cancelamento: next === "cancelado" ? motivo || "Cancelado pelo comÃ©rcio." : null }).eq("id", pedidoId).eq("status", current.status).select("id,status,status_pagamento,atualizado_em").maybeSingle();
+  if (error || !data) throw new HttpError("O pedido foi alterado por outra sessÃ£o; atualize a lista.", 409);
   return data;
 }
 async function statement(userId: string, comercioId: string, competencia: string) {
   await owner(userId, comercioId);
-  if (!/^\d{4}-\d{2}(-\d{2})?$/.test(competencia)) throw new HttpError("Competência inválida.");
+  if (!/^\d{4}-\d{2}(-\d{2})?$/.test(competencia)) throw new HttpError("CompetÃªncia invÃ¡lida.");
   const date = `${competencia.slice(0, 7)}-01`;
   const { data: closing, error } = await db.from("catalogo_fechamentos_offline").select("id,comercio_id,competencia,total_pedidos,total_comissao_centavos,status,vencimento_em,pago_em,referencia_pagamento").eq("comercio_id", comercioId).eq("competencia", date).maybeSingle();
   if (error) throw new Error("Falha ao consultar fechamento.");
   const { data: fees, error: feeError } = await db.from("catalogo_comissoes_offline").select("pedido_id,competencia,subtotal_produtos_centavos,valor_comissao_centavos,status,criado_em").eq("comercio_id", comercioId).eq("competencia", date).order("criado_em", { ascending: false });
-  if (feeError) throw new Error("Falha ao consultar comissões.");
+  if (feeError) throw new Error("Falha ao consultar comissÃµes.");
   return { fechamento: closing, comissoes: fees || [] };
 }
 async function run(userId: string, body: Record<string, unknown>) {
@@ -72,19 +72,19 @@ async function run(userId: string, body: Record<string, unknown>) {
   }
   if (action === "registrar_pagamento") {
     if (!access.admin) throw new HttpError("Somente o administrador pode conferir pagamentos.", 403);
-    const referencia = text(body.referencia_pagamento, 120); if (!referencia) throw new HttpError("Informe a referência do pagamento.");
+    const referencia = text(body.referencia_pagamento, 120); if (!referencia) throw new HttpError("Informe a referÃªncia do pagamento.");
     const competencia = `${text(body.competencia, 10).slice(0, 7)}-01`;
     const { data, error } = await db.from("catalogo_fechamentos_offline").update({ status: "pago", pago_em: new Date().toISOString(), referencia_pagamento: referencia }).eq("comercio_id", comercioId).eq("competencia", competencia).select("id,status,pago_em,referencia_pagamento").maybeSingle();
-    if (error || !data) throw new HttpError("Fechamento não encontrado.", 404);
+    if (error || !data) throw new HttpError("Fechamento nÃ£o encontrado.", 404);
     await db.from("catalogo_comissoes_offline").update({ status: "paga", pago_em: new Date().toISOString(), referencia_pagamento: referencia }).eq("comercio_id", comercioId).eq("competencia", competencia).in("status", ["faturada", "bloqueado"]);
     await db.from("catalogos").update({ bloqueado: false, motivo_bloqueio: null }).eq("comercio_id", comercioId).eq("bloqueado", true);
     return json({ success: true, fechamento: data });
   }
-  return json({ success: false, mensagem: "Ação não reconhecida." }, 400);
+  return json({ success: false, mensagem: "AÃ§Ã£o nÃ£o reconhecida." }, 400);
 }
 Deno.serve(async (request: Request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: HEADERS });
   if (request.method !== "POST") return json({ success: false, mensagem: "Use POST." }, 405);
   try { return await run((await auth(request)).id, (await request.json().catch(() => ({}))) as Record<string, unknown>); }
-  catch (error) { if (error instanceof HttpError) return json({ success: false, mensagem: error.message }, error.status); console.error("catalogo-pedidos-offline-admin failed:", (error as Error).message); return json({ success: false, mensagem: "Falha temporária ao consultar pedidos offline." }, 500); }
+  catch (error) { if (error instanceof HttpError) return json({ success: false, mensagem: error.message }, error.status); console.error("catalogo-pedidos-offline-admin failed:", (error as Error).message); return json({ success: false, mensagem: "Falha temporÃ¡ria ao consultar pedidos offline." }, 500); }
 });
