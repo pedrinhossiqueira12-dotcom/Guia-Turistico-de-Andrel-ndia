@@ -2703,5 +2703,28 @@
     ],
     "status": "ativo",
     "destaque": true
+  },
+  {
+    "id": "pedro-henrique-pereira-da-silva-siqueira",
+    "nome": "PEDRO HENRIQUE PEREIRA DA SILVA SIQUEIRA",
+    "categoria": "Restaurante",
+    "descricao": "",
+    "historia": "",
+    "curiosidades": "",
+    "endereco": "ccqwdceswgvfrtsh",
+    "horario": "",
+    "entrada": "",
+    "telefone": "775670676",
+    "whatsapp": "775670676",
+    "instagram": "",
+    "site": "",
+    "latitude": null,
+    "longitude": null,
+    "imagem": "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/bb15878a-f327-474b-8ac3-75b42e71b79a/1791297967640-0-doshrh8-image_20250422_0002.png",
+    "imagens": [
+      "https://xdmbkflufsfqziixzpxc.supabase.co/storage/v1/object/public/cadastros/bb15878a-f327-474b-8ac3-75b42e71b79a/1791297967640-0-doshrh8-image_20250422_0002.png"
+    ],
+    "status": "ativo",
+    "destaque": false
   }
 ]
