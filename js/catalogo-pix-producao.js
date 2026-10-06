@@ -58,20 +58,21 @@
     const enabled = data.checkout_enabled === true;
     $("ownerCheckout").hidden = false;
     $("paymentBox").hidden = false;
-    $("receiverStatusTitle").textContent = ready ? "Conta Mercado Pago conectada" : connected ? "Conta em análise" : "Conexão pendente";
-    $("receiverStatusText").textContent = ready
-      ? "O comércio poderá receber pedidos quando o checkout de pedidos estiver habilitado."
-      : connected
-        ? "A autorização foi recebida, mas o Mercado Pago ainda não liberou o recebimento."
-        : "Conecte a conta Mercado Pago do comércio para ativar o split dos pedidos.";
+    $("receiverStatusTitle").textContent = connected ? "Conta Mercado Pago conectada" : "Conexão pendente";
+    $("receiverStatusText").textContent = connected
+      ? (enabled ? "O comércio está pronto para receber pedidos via Pix." : "A conta está conectada, mas o checkout de pedidos continua desligado.")
+      : "Conecte a conta Mercado Pago do comércio para ativar o split dos pedidos.";
     $("paymentMessage").textContent = enabled
       ? "A configuração do checkout de pedidos está disponível para este comércio."
-      : "O checkout de pedidos permanece desligado até a conclusão da configuração do marketplace.";
+      : connected
+        ? "Conta conectada. O checkout de pedidos permanece desligado até a conclusão da configuração do marketplace."
+        : "O checkout de pedidos permanece desligado até a conclusão da configuração do marketplace.";
     $("refreshPayment").hidden = false;
     $("refreshPayment").disabled = false;
     $("connectMercadoPago").hidden = connected;
-    setBadge(ready ? "ATIVO" : connected ? "EM ANÁLISE" : "PENDENTE", ready ? "success" : "info");
-    status(ready ? "Recebedor verificado." : "Aguardando configuração da conta recebedora.", ready ? "success" : "info");
+    $("disconnectMercadoPago").hidden = !connected;
+    setBadge(enabled ? "ATIVO" : connected ? "CONECTADO" : "PENDENTE", enabled || connected ? "success" : "info");
+    status(connected ? "Conta recebedora conectada." : "Aguardando configuração da conta recebedora.", connected ? "success" : "info");
   }
   async function refresh() {
     if (busy || !commerceId) return;
@@ -108,6 +109,23 @@
       $("connectMercadoPago").disabled = false;
     }
   }
+  async function disconnect() {
+    if (busy || !window.confirm("Desconectar a conta Mercado Pago deste comércio? O comércio e o histórico serão preservados.")) return;
+    busy = true;
+    $("disconnectMercadoPago").disabled = true;
+    feedback("Desconectando a conta Mercado Pago…");
+    try {
+      const data = await invoke("desconectar_recebedor");
+      feedback(data.mensagem || "Conta desconectada.");
+      await refresh();
+    } catch (error) {
+      feedback(error.message || "Não foi possível desconectar a conta.", true);
+      status(error.message || "Não foi possível desconectar a conta.", "error");
+    } finally {
+      busy = false;
+      $("disconnectMercadoPago").disabled = false;
+    }
+  }
   async function init() {
     setLinks();
     const oauthResult = params.get("oauth");
@@ -133,6 +151,7 @@
       return;
     }
     $("connectMercadoPago").addEventListener("click", connect);
+    $("disconnectMercadoPago").addEventListener("click", disconnect);
     $("refreshPayment").addEventListener("click", refresh);
     await refresh();
   }

@@ -636,6 +636,45 @@ Deno.serve(async (request: Request) => {
       });
     }
 
+    if (action === "desconectar_recebedor") {
+      const { data: pendingOrders, error: pendingOrdersError } = await admin
+        .from("catalogo_pedidos")
+        .select("id")
+        .eq("comercio_id", commerceId)
+        .in("status_pagamento", ["pendente", "processando"])
+        .limit(1);
+      if (pendingOrdersError) throw new Error("Falha ao verificar pedidos pendentes antes da desconexão.");
+      if (pendingOrders?.length) {
+        throw new HttpError("Não é possível desconectar enquanto houver pedido Pix pendente. Aguarde a conciliação ou cancele o pedido pelo painel.", 409);
+      }
+
+      const { data: disconnected, error: disconnectError } = await admin
+        .from("catalogo_recebedores")
+        .update({
+          conta_externa_id: null,
+          status: "desconectado",
+          oauth_user_id: null,
+          oauth_access_token_enc: null,
+          oauth_refresh_token_enc: null,
+          oauth_expires_at: null,
+          oauth_scope: null,
+          oauth_public_key: null,
+          oauth_live_mode: null,
+          oauth_conectado_em: null,
+        })
+        .eq("comercio_id", commerceId)
+        .select("comercio_id")
+        .maybeSingle();
+      if (disconnectError) throw new Error("Não foi possível desconectar a conta Mercado Pago.");
+      return json({
+        success: true,
+        disconnected: Boolean(disconnected),
+        mensagem: disconnected
+          ? "Conta Mercado Pago desconectada. O comércio, catálogo e histórico foram preservados."
+          : "Nenhuma conta Mercado Pago estava conectada.",
+      });
+    }
+
     if (action === "iniciar_conexao") {
       return json(await startMercadoPagoOAuth(owner));
     }
