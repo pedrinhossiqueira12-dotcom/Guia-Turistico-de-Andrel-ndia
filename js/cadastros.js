@@ -33,6 +33,8 @@ CLIENTE SUPABASE
 ========================================================= */
 
 const cadastrosSupabase =
+window.supabaseLoginClient ||
+(typeof supabaseClient !== "undefined" && supabaseClient) ||
 window.supabase.createClient(
 CADASTROS_SUPABASE_URL,
 CADASTROS_SUPABASE_KEY
