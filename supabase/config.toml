@@ -23,3 +23,6 @@ verify_jwt = false
 
 [functions.catalogo-fatura-pix]
 verify_jwt = false
+
+[functions.catalogo-entregas]
+verify_jwt = false # JWT validado explicitamente com auth.getUser na função.

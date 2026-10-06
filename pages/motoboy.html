@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#194138">
+  <meta name="description" content="Painel seguro de entregas atribuídas ao entregador.">
+  <title>Minhas entregas — Guia Turístico de Andrelândia</title>
+  <link rel="stylesheet" href="../styles/design-system.css">
+  <link rel="stylesheet" href="../styles/motoboy.css">
+</head>
+<body class="motoboy-page">
+  <header class="motoboy-topbar">
+    <a class="topbar-back" href="../index.html" aria-label="Voltar ao início">‹ <span>Voltar ao início</span></a>
+    <div class="topbar-right">
+      <span class="topbar-label">PAINEL DO ENTREGADOR</span>
+      <button id="motoboyLogout" class="topbar-logout" type="button" hidden>Sair</button>
+    </div>
+  </header>
+
+  <main class="motoboy-shell">
+    <section class="motoboy-heading" aria-labelledby="motoboyTitle">
+      <span class="eyebrow">ENTREGAS ATRIBUÍDAS</span>
+      <h1 id="motoboyTitle">Minhas entregas</h1>
+      <p>Veja somente os pedidos de entrega presencial que foram atribuídos a esta conta.</p>
+    </section>
+
+    <section id="motoboyNotice" class="motoboy-notice" role="status" aria-live="polite">
+      <strong id="motoboyNoticeTitle">Entre para consultar suas entregas.</strong>
+      <p id="motoboyNoticeText">A autorização para cada comércio é feita pelo proprietário, sem compartilhar senhas.</p>
+    </section>
+
+    <section id="motoboyLoginCard" class="motoboy-card motoboy-login-card" aria-labelledby="motoboyLoginTitle">
+      <span class="eyebrow">ACESSO</span>
+      <h2 id="motoboyLoginTitle">Entrar no painel</h2>
+      <p>Use a conta já cadastrada e confirmada por e-mail. O proprietário não precisa conhecer sua senha.</p>
+      <form id="motoboyLoginForm" class="motoboy-form">
+        <label for="motoboyLoginEmail">E-mail</label>
+        <input id="motoboyLoginEmail" name="email" type="email" autocomplete="email" required>
+        <label for="motoboyLoginPassword">Senha</label>
+        <input id="motoboyLoginPassword" name="password" type="password" autocomplete="current-password" required>
+        <button id="motoboyLoginButton" class="motoboy-button motoboy-button-primary" type="submit">Entrar</button>
+        <p id="motoboyLoginFeedback" class="motoboy-feedback" role="alert"></p>
+      </form>
+      <details id="motoboySignupDetails" class="motoboy-signup">
+        <summary>Ainda não tenho uma conta</summary>
+        <p>Crie sua conta pessoal, confirme o e-mail e depois peça ao proprietário para autorizar este e-mail. O cadastro não concede privilégios automaticamente.</p>
+        <form id="motoboySignupForm" class="motoboy-form">
+          <label for="motoboySignupName">Nome</label>
+          <input id="motoboySignupName" type="text" maxlength="120" autocomplete="name" required>
+          <label for="motoboySignupEmail">E-mail</label>
+          <input id="motoboySignupEmail" type="email" autocomplete="email" required>
+          <label for="motoboySignupPassword">Senha</label>
+          <input id="motoboySignupPassword" type="password" minlength="6" autocomplete="new-password" required>
+          <button id="motoboySignupButton" class="motoboy-button motoboy-button-secondary" type="submit">Criar conta própria</button>
+          <p id="motoboySignupFeedback" class="motoboy-feedback" role="status"></p>
+        </form>
+      </details>
+    </section>
+
+    <section id="motoboyPanel" hidden aria-labelledby="entregasTitulo">
+      <div class="motoboy-card motoboy-toolbar-card">
+        <div>
+          <span class="eyebrow">ROTA DE HOJE</span>
+          <h2 id="entregasTitulo">Pedidos atribuídos</h2>
+          <p id="motoboyInstruction">Confira o endereço e aguarde o pedido ficar pronto para iniciar a entrega.</p>
+        </div>
+        <button id="motoboyRefresh" class="motoboy-button motoboy-button-secondary" type="button">Atualizar</button>
+      </div>
+
+      <div id="motoboyOrders" class="motoboy-delivery-list" aria-live="polite" aria-busy="false"></div>
+      <div id="motoboyEmpty" class="motoboy-card motoboy-empty" hidden>
+        <span class="eyebrow">SEM PEDIDOS ATRIBUÍDOS</span>
+        <h2>Nenhuma entrega por enquanto</h2>
+        <p>Quando um proprietário atribuir um pedido presencial a esta conta, ele aparecerá aqui.</p>
+      </div>
+      <button id="motoboyLoadMore" class="motoboy-button motoboy-button-secondary motoboy-load-more" type="button" hidden>Carregar mais entregas</button>
+      <p id="motoboyOrdersFeedback" class="motoboy-feedback" role="status"></p>
+    </section>
+
+    <p class="motoboy-footer-note">Este painel não exibe códigos de entrega, e-mails, metadados ou pedidos de outros usuários. O pagamento é confirmado presencialmente no momento da entrega.</p>
+  </main>
+
+  <dialog id="motoboyConfirmDialog" class="motoboy-dialog" aria-labelledby="motoboyConfirmTitle">
+    <form id="motoboyConfirmForm">
+      <span class="eyebrow">CONCLUIR ENTREGA</span>
+      <h2 id="motoboyConfirmTitle">Confirmar pedido</h2>
+      <p>Confirme somente depois de entregar todos os produtos e receber o pagamento presencial.</p>
+      <input id="motoboyConfirmOrderId" type="hidden">
+      <input id="motoboyConfirmCommerceId" type="hidden">
+      <label for="motoboyConfirmCode">Código de entrega do cliente</label>
+      <input id="motoboyConfirmCode" type="text" inputmode="numeric" pattern="[0-9]{6}" minlength="6" maxlength="6" autocomplete="one-time-code" required>
+      <label class="motoboy-checkbox-label" for="motoboyConfirmReceived">
+        <input id="motoboyConfirmReceived" type="checkbox" required>
+        <span>Produto entregue e pagamento presencial recebido</span>
+      </label>
+      <p id="motoboyConfirmFeedback" class="motoboy-feedback" role="alert"></p>
+      <div class="motoboy-dialog-actions">
+        <button id="motoboyCancelConfirm" class="motoboy-button motoboy-button-secondary" type="button">Cancelar</button>
+        <button id="motoboySendConfirm" class="motoboy-button motoboy-button-primary" type="submit">Confirmar entrega</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../js/motoboy.js?v=motoboy-20261006"></script>
+</body>
+</html>

@@ -58,7 +58,7 @@
       </section>
 
       <section class="admin-card offline-orders-card" id="pedidosOfflineCard">
-        <div class="section-title"><div><span class="eyebrow">PEDIDOS PRESENCIAIS</span><h2>Pedidos e comissões</h2></div><button id="atualizarPedidosOffline" class="small-button" type="button">Atualizar</button></div>
+        <div class="section-title"><div><span class="eyebrow">PEDIDOS PRESENCIAIS</span><h2>Pedidos e comissões</h2></div><div class="offline-order-actions"><a id="linkGerenciarEntregadores" class="small-button" href="entregadores-admin.html">Gerenciar entregadores</a><button id="atualizarPedidosOffline" class="small-button" type="button">Atualizar</button></div></div>
         <p>O cliente guarda o código. Após a entrega e o recebimento do pagamento, o proprietário autenticado usa <strong>Confirmar código</strong> no pedido. O painel nunca revela o código do cliente.</p>
         <div class="offline-summary" id="offlineSummary" hidden></div>
         <div id="listaPedidosOffline" class="manager-list"><p class="form-feedback">Carregando pedidos…</p></div>
@@ -143,5 +143,6 @@
   <script src="../js/login.js"></script>
   <script src="../js/catalogo-utils.js"></script>
   <script src="../js/catalogo-admin.js?v=confirmacao-segura-20261006"></script>
+  <script src="../js/catalogo-entregadores-link.js?v=motoboy-20261006"></script>
 </body>
 </html>

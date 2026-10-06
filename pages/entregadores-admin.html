@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#194138">
+  <meta name="description" content="Gestão de entregadores autorizados pelo comércio.">
+  <title>Gerenciar entregadores — Guia Turístico de Andrelândia</title>
+  <link rel="stylesheet" href="../styles/design-system.css">
+  <link rel="stylesheet" href="../styles/motoboy.css">
+</head>
+<body class="entregadores-page">
+  <header class="motoboy-topbar">
+    <a id="linkVoltarCatalogo" class="topbar-back" href="catalogo-admin.html">‹ <span>Voltar ao catálogo</span></a>
+    <div class="topbar-right">
+      <span class="topbar-label">ÁREA DO PROPRIETÁRIO</span>
+      <button id="entregadoresLogout" class="topbar-logout" type="button" hidden>Sair</button>
+    </div>
+  </header>
+
+  <main class="motoboy-shell">
+    <section class="motoboy-heading" aria-labelledby="entregadoresTitle">
+      <span class="eyebrow">OPERAÇÃO DE ENTREGAS</span>
+      <h1 id="entregadoresTitle">Gerenciar entregadores</h1>
+      <p id="entregadoresCommerceName">Autorize as contas que podem receber pedidos deste comércio.</p>
+      <nav class="entregadores-shortcuts" aria-label="Atalhos da gestão">
+        <a id="linkAbrirMotoboy" class="motoboy-text-link" href="motoboy.html">Abrir página do entregador</a>
+        <span>As contas do proprietário e do entregador são separadas.</span>
+      </nav>
+    </section>
+
+    <section id="entregadoresNotice" class="motoboy-notice" role="status" aria-live="polite">
+      <strong id="entregadoresNoticeTitle">Entre para continuar.</strong>
+      <p id="entregadoresNoticeText">Somente o proprietário autenticado pode administrar as autorizações deste comércio.</p>
+    </section>
+
+    <section id="entregadoresLoginCard" class="motoboy-card motoboy-login-card" aria-labelledby="entregadoresLoginTitle">
+      <span class="eyebrow">ACESSO DO PROPRIETÁRIO</span>
+      <h2 id="entregadoresLoginTitle">Entrar na gestão</h2>
+      <p>Use a conta proprietária vinculada a este comércio. Uma conta de entregador não recebe acesso a esta área.</p>
+      <form id="entregadoresLoginForm" class="motoboy-form">
+        <label for="entregadoresLoginEmail">E-mail</label>
+        <input id="entregadoresLoginEmail" name="email" type="email" autocomplete="email" required>
+        <label for="entregadoresLoginPassword">Senha</label>
+        <input id="entregadoresLoginPassword" name="password" type="password" autocomplete="current-password" required>
+        <button id="entregadoresLoginButton" class="motoboy-button motoboy-button-primary" type="submit">Entrar</button>
+        <p id="entregadoresLoginFeedback" class="motoboy-feedback" role="alert"></p>
+      </form>
+    </section>
+
+    <section id="entregadoresPanel" hidden>
+      <section class="motoboy-card" aria-labelledby="autorizacaoTitulo">
+        <div class="motoboy-section-heading">
+          <div>
+            <span class="eyebrow">ACESSO POR E-MAIL</span>
+            <h2 id="autorizacaoTitulo">Autorizar entregador</h2>
+          </div>
+        </div>
+        <p>O entregador precisa ter uma conta já cadastrada com e-mail confirmado. Autorizar não libera produtos, faturas ou a gestão do catálogo.</p>
+        <form id="autorizarMotoboyForm" class="motoboy-form motoboy-owner-form">
+          <label for="autorizarMotoboyEmail">E-mail da conta</label>
+          <input id="autorizarMotoboyEmail" type="email" autocomplete="email" required>
+          <label for="autorizarMotoboyNome">Nome para identificação</label>
+          <input id="autorizarMotoboyNome" type="text" maxlength="120" autocomplete="name" required>
+          <button id="autorizarMotoboyButton" class="motoboy-button motoboy-button-primary" type="submit">Autorizar entregador</button>
+          <p id="autorizarMotoboyFeedback" class="motoboy-feedback" role="status"></p>
+        </form>
+      </section>
+
+      <section class="motoboy-card" aria-labelledby="listaMotoboysTitulo">
+        <div class="motoboy-section-heading">
+          <div>
+            <span class="eyebrow">CONTAS AUTORIZADAS</span>
+            <h2 id="listaMotoboysTitulo">Entregadores deste comércio</h2>
+          </div>
+          <button id="atualizarMotoboys" class="motoboy-button motoboy-button-secondary" type="button">Atualizar</button>
+        </div>
+        <p class="motoboy-helper">Suspender bloqueia as entregas deste comércio. A revogação é reversível ao autorizar novamente o mesmo e-mail.</p>
+        <div id="listaMotoboys" class="motoboy-owner-list" aria-live="polite" aria-busy="false"></div>
+        <button id="maisMotoboys" class="motoboy-button motoboy-button-secondary" type="button" hidden>Carregar mais entregadores</button>
+        <p id="listaMotoboysFeedback" class="motoboy-feedback" role="status"></p>
+      </section>
+
+      <section class="motoboy-card" aria-labelledby="atribuicoesTitulo">
+        <div class="motoboy-section-heading">
+          <div>
+            <span class="eyebrow">PEDIDOS ATIVOS</span>
+            <h2 id="atribuicoesTitulo">Atribuir pedidos</h2>
+          </div>
+          <button id="atualizarAtribuicoes" class="motoboy-button motoboy-button-secondary" type="button">Atualizar</button>
+        </div>
+        <p>Escolha um entregador ativo para cada pedido de entrega presencial. É permitido reatribuir ou retirar a atribuição.</p>
+        <div id="listaAtribuicoes" class="motoboy-assignment-list" aria-live="polite" aria-busy="false"></div>
+        <button id="maisAtribuicoes" class="motoboy-button motoboy-button-secondary" type="button" hidden>Carregar mais pedidos</button>
+        <p id="listaAtribuicoesFeedback" class="motoboy-feedback" role="status"></p>
+      </section>
+    </section>
+
+    <p class="motoboy-footer-note">A API verifica o papel do proprietário e o comércio no servidor. Esta interface nunca autoriza contas automaticamente nem compartilha credenciais.</p>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../js/entregadores-admin.js?v=motoboy-20261006"></script>
+</body>
+</html>

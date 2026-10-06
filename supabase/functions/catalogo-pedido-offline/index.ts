@@ -109,6 +109,10 @@ async function createOfflineOrder(body: Record<string, unknown>, rateKey: string
   const total = subtotal + delivery;
   const code = randomDigits();
   const codeHash = await hash(code);
+  // Token de leitura independente do codigo: nunca permite baixar o pedido.
+  const statusBytes = new Uint8Array(32); crypto.getRandomValues(statusBytes);
+  const statusToken = [...statusBytes].map((b) => b.toString(16).padStart(2, "0")).join("");
+  const statusTokenHash = await hash(statusToken);
   const expiration = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
   const { data: order, error: orderError } = await admin.from("catalogo_pedidos").insert({
     comercio_id: comercioId, referencia_externa: `offline-${crypto.randomUUID()}`, provedor: "offline", idempotency_key: crypto.randomUUID(),
@@ -117,7 +121,7 @@ async function createOfflineOrder(body: Record<string, unknown>, rateKey: string
     repasse_bruto_comercio_centavos: subtotal - fee + delivery, cliente_nome: nome, cliente_email: email, cliente_telefone: telefone,
     cliente_endereco: text(client.endereco, 240) || null, cliente_numero: text(client.numero, 30) || null, cliente_bairro: text(client.bairro, 120) || null,
     cliente_complemento: text(client.complemento, 160) || null, cliente_referencia: text(client.referencia, 240) || null, cliente_cidade: "Andrelândia-MG",
-    observacoes: text(body.observacoes, 1000) || null, codigo_entrega_hash: codeHash,
+    observacoes: text(body.observacoes, 1000) || null, codigo_entrega_hash: codeHash, status_token_hash: statusTokenHash,
     codigo_entrega_expira_em: expiration, metadata: { checkout: "offline", taxa_fixa_percentual: 5, codigo_entrega: "hash_sha256" },
   }).select("id,comercio_id,status,forma_pagamento,subtotal_produtos_centavos,entrega_centavos,total_centavos,taxa_plataforma_centavos").single();
   if (orderError || !order) throw new Error("Não foi possível registrar o pedido offline.");
@@ -128,19 +132,57 @@ async function createOfflineOrder(body: Record<string, unknown>, rateKey: string
   }
   // A comissão só nasce quando o código for validado e o pedido for concluído.
   // O código é entregue somente ao cliente nesta resposta; nunca são persistidos em claro.
-  return json({ success: true, pedido_id: order.id, codigo_entrega: code, status: order.status, forma_pagamento: method, subtotal_centavos: subtotal, entrega_centavos: delivery, total_centavos: total, taxa_plataforma_centavos: fee, codigo_expira_em: expiration });
+  return json({ success: true, pedido_id: order.id, codigo_entrega: code, status_token: statusToken, status: order.status, forma_pagamento: method, subtotal_centavos: subtotal, entrega_centavos: delivery, total_centavos: total, taxa_plataforma_centavos: fee, codigo_expira_em: expiration });
+}
+
+async function orderStatus(body: Record<string, unknown>, request: Request, ip: string) {
+  const comercioId = text(body.comercio_id, 180);
+  const pedidoId = text(body.pedido_id, 36);
+  const token = text(body.status_token, 64);
+  if (!/^[a-z0-9-]{1,180}$/.test(comercioId) || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(pedidoId)) throw new HttpError("Pedido inválido.");
+  if (token && !/^[0-9a-f]{64}$/i.test(token)) throw new HttpError("Consulta não autorizada.", 403);
+  await enforceRateLimit(`${ip}|${comercioId}|${pedidoId}|status`);
+  const { data: order, error } = await admin.from("catalogo_pedidos")
+    .select("id,status,status_pagamento,concluido_em,codigo_entrega_usado_em,codigo_entrega_expira_em,codigo_entrega_tentativas,status_token_hash,cliente_email")
+    .eq("id", pedidoId).eq("comercio_id", comercioId).eq("provedor", "offline").maybeSingle();
+  if (error) throw new Error("Falha ao consultar estado do pedido.");
+  let allowed = Boolean(order && token && order.status_token_hash && (await hash(token)) === order.status_token_hash);
+  // Comprovantes legados sem token so podem consultar com identidade comprovada.
+  if (!token && order) {
+    const jwt = request.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1];
+    if (jwt) {
+      const { data, error: authError } = await admin.auth.getUser(jwt);
+      const viewer = !authError ? data?.user : null;
+      if (viewer) {
+        const buyerEmail = viewer.email && order.cliente_email && viewer.email_confirmed_at && String(viewer.email || "").toLowerCase() === String(order.cliente_email || "").toLowerCase();
+        const { data: catalog, error: ownerError } = await admin.from("catalogos").select("proprietario_id").eq("comercio_id", comercioId).maybeSingle();
+        if (ownerError) throw new Error("Falha ao validar identidade do comprador.");
+        allowed = Boolean(buyerEmail || catalog?.proprietario_id === viewer.id || viewer.id === "4b9a0233-6b72-4573-aebd-d596c5b15e1b");
+      }
+    }
+  }
+  // Mesmo erro para pedido inexistente e prova invalida: nao enumera pedidos.
+  if (!allowed || !order) throw new HttpError("Consulta não autorizada.", 403);
+  const concluded = order.status === "entregue" || Boolean(order.concluido_em || order.codigo_entrega_usado_em);
+  const active = !concluded && ["aguardando_pagamento", "em_preparo", "pronto"].includes(order.status)
+    && order.status_pagamento === "pendente" && Number(order.codigo_entrega_tentativas) < 5
+    && Date.parse(order.codigo_entrega_expira_em || "") > Date.now();
+  return json({ success: true, pedido_id: order.id, status: order.status, codigo_ativo: active, concluido: concluded });
 }
 
 Deno.serve(async (request: Request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: CORS_HEADERS });
   if (request.method !== "POST") return json({ success: false, mensagem: "Use POST." }, 405);
-  if (!OFFLINE_CHECKOUT_ENABLED) return json({ success: false, mensagem: "O pagamento offline ainda não está habilitado." }, 503);
   try {
     const body = record(await request.json().catch(() => ({})));
     const action = text(body.acao, 40);
     const comercio = text(body.comercio_id, 180);
     const ip = (request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || "unknown").split(",")[0].trim().slice(0, 120);
-    if (action === "criar_pedido_offline") return await createOfflineOrder(body, `${ip}|${comercio}|create`);
+    if (action === "consultar_status") return await orderStatus(body, request, ip);
+    if (action === "criar_pedido_offline") {
+      if (!OFFLINE_CHECKOUT_ENABLED) return json({ success: false, mensagem: "O pagamento offline ainda não está habilitado." }, 503);
+      return await createOfflineOrder(body, `${ip}|${comercio}|create`);
+    }
     if (action === "confirmar_entrega") return json({ success: false, mensagem: "A confirmação deve ser feita pelo painel autenticado do comércio." }, 410);
     return json({ success: false, mensagem: "Ação não reconhecida." }, 400);
   } catch (error) {

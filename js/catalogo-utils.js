@@ -124,7 +124,11 @@
     if (String(pedido.observacoes || "").trim()) {
       linhas.push("", `Observações: ${String(pedido.observacoes).trim()}`);
     }
-    linhas.push("", "O pagamento será combinado diretamente com o comércio; não foi processado pelo site.");
+    if (pedido.pagamento === "pix" && (pedido.pixGerado === true || pedido.status_pagamento === "pendente")) {
+      linhas.push("", "Status do pagamento: Pix gerado, aguardando confirmação.", "O site não confirma o pagamento; não considere o pedido pago até a confirmação do comércio.");
+    } else {
+      linhas.push("", "O pagamento será combinado diretamente com o comércio; não foi processado pelo site.");
+    }
 
     return linhas.join("\n");
   }

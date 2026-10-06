@@ -19,6 +19,16 @@
   let pedidoEmRevisao = null;
   let podePedir = false;
   let telefonePedido = "";
+  const STATUS_TOKEN_RE = /^[a-f0-9]{64}$/i;
+  const INTERVALO_STATUS_OFFLINE = 20000;
+  let consultaStatusOfflineEmAndamento = null;
+  let consultaStatusOfflineChave = "";
+  let contextoConsultaStatusOffline = null;
+  let consultaStatusOfflineTimer = null;
+  let comprovanteOfflineVersao = 0;
+  let comprovanteOfflineMemoria = null;
+  let statusOfflineAviso = false;
+  let dialogoSomenteComprovante = false;
 
   const $ = (id) => document.getElementById(id);
 
@@ -242,38 +252,199 @@
   }
 
   function chavePedidoOfflineSalvo() { return `guia-offline-order:${comercioId}`; }
-  function lerPedidoOfflineSalvo() {
-    try {
-      const salvo = JSON.parse(localStorage.getItem(chavePedidoOfflineSalvo()) || "null");
-      if (!salvo?.pedido_id || !/^\d{6}$/.test(salvo.codigo_entrega || "") || !Number.isFinite(Date.parse(salvo.codigo_expira_em)) || Date.parse(salvo.codigo_expira_em) <= Date.now()) {
-        localStorage.removeItem(chavePedidoOfflineSalvo());
-        return null;
-      }
-      const comprovante = { pedido_id: salvo.pedido_id, codigo_entrega: salvo.codigo_entrega, codigo_expira_em: salvo.codigo_expira_em };
-      if (salvo.cliente_token) {
-        try { localStorage.setItem(chavePedidoOfflineSalvo(), JSON.stringify(comprovante)); } catch { /* guarda apenas em memória */ }
-      }
-      return comprovante;
-    } catch { return null; }
+  function pedidoEmRevisaoValido(pedido = pedidoEmRevisao) {
+    return Boolean(pedido && Array.isArray(pedido.itens) && pedido.itens.length
+      && pedido.cliente && String(pedido.cliente.nome || "").trim()
+      && String(pedido.cliente.telefone || "").trim()
+      && String(pedido.modalidade || "").trim());
   }
-  function mostrarComprovanteOffline(salvo) {
-    $("offlinePedidoStatus").textContent = "Mostre este código ao entregador somente no momento da entrega.";
+  function tokenStatusValido(token) { return STATUS_TOKEN_RE.test(String(token || "").trim()); }
+  function normalizarComprovanteSalvo(salvo) {
+    if (!salvo || typeof salvo !== "object" || Array.isArray(salvo)) return null;
+    if (!salvo.pedido_id || !/^\d{6}$/.test(String(salvo.codigo_entrega || ""))) return null;
+    if (!Number.isFinite(Date.parse(salvo.codigo_expira_em))) return null;
+    const comprovante = {
+      pedido_id: String(salvo.pedido_id),
+      codigo_entrega: String(salvo.codigo_entrega),
+      codigo_expira_em: String(salvo.codigo_expira_em),
+    };
+    // Comprovantes antigos não têm status_token. Preserve tokens legados sem
+    // permitir que um valor arbitrário seja enviado como token de leitura.
+    if (typeof salvo.status_token === "string" && salvo.status_token.trim()) {
+      comprovante.status_token = salvo.status_token.trim();
+    }
+    return comprovante;
+  }
+  function comprovanteExpirado(salvo) {
+    const expiraEm = Date.parse(salvo?.codigo_expira_em || "");
+    return Number.isFinite(expiraEm) && expiraEm <= Date.now();
+  }
+  function salvarComprovanteOffline(comprovante) {
+    const normalizado = normalizarComprovanteSalvo(comprovante);
+    if (!normalizado) return;
+    comprovanteOfflineMemoria = normalizado;
+    comprovanteOfflineVersao += 1;
+    try { localStorage.setItem(chavePedidoOfflineSalvo(), JSON.stringify(normalizado)); } catch { /* fica disponível na tela */ }
+  }
+  function lerPedidoOfflineSalvo() {
+    let salvo = null;
+    try {
+      salvo = normalizarComprovanteSalvo(JSON.parse(localStorage.getItem(chavePedidoOfflineSalvo()) || "null"));
+    } catch { salvo = comprovanteOfflineMemoria; }
+    if (!salvo) salvo = comprovanteOfflineMemoria;
+    if (!salvo) return null;
+    if (comprovanteExpirado(salvo)) {
+      // A expiração é conhecida localmente; este é o único caso de limpeza
+      // local sem uma resposta efetiva do endpoint.
+      try { localStorage.removeItem(chavePedidoOfflineSalvo()); } catch { /* armazenamento indisponível */ }
+      comprovanteOfflineMemoria = null;
+      comprovanteOfflineVersao += 1;
+      return null;
+    }
+    return salvo;
+  }
+  function comprovanteAindaAtual(salvo, versao) {
+    if (!salvo || versao !== comprovanteOfflineVersao) return false;
+    const atual = lerPedidoOfflineSalvo();
+    return Boolean(atual && atual.pedido_id === salvo.pedido_id
+      && atual.codigo_entrega === salvo.codigo_entrega
+      && atual.codigo_expira_em === salvo.codigo_expira_em
+      && (atual.status_token || "") === (salvo.status_token || ""));
+  }
+  function atualizarAvisoStatusOffline(mostrar, texto) {
+    statusOfflineAviso = Boolean(mostrar);
+    const aviso = $("offlinePedidoStatusAviso");
+    if (aviso) {
+      aviso.textContent = texto || "Não foi possível consultar o status agora. O código continua salvo até a expiração indicada.";
+      aviso.hidden = !statusOfflineAviso;
+    }
+    if (statusOfflineAviso && $("offlinePedidoStatus")) {
+      $("offlinePedidoStatus").textContent = "Não foi possível consultar o status agora. O código continua salvo até a expiração indicada.";
+    }
+  }
+  function documentoVisivel() {
+    return typeof document.visibilityState !== "string" || document.visibilityState === "visible";
+  }
+  function cancelarConsultaStatusOffline() {
+    if (consultaStatusOfflineTimer !== null) window.clearTimeout(consultaStatusOfflineTimer);
+    consultaStatusOfflineTimer = null;
+    consultaStatusOfflineEmAndamento = null;
+    consultaStatusOfflineChave = "";
+    contextoConsultaStatusOffline = null;
+  }
+  function agendarConsultaStatusOffline(salvo, atraso = INTERVALO_STATUS_OFFLINE) {
+    if (!salvo || !documentoVisivel() || consultaStatusOfflineTimer !== null) return;
+    consultaStatusOfflineTimer = window.setTimeout(() => {
+      consultaStatusOfflineTimer = null;
+      consultarStatusOffline(salvo);
+    }, atraso);
+  }
+  function atualizarAcoesComprovante(apenasComprovante = false) {
+    const temRevisao = pedidoEmRevisaoValido() && !apenasComprovante;
+    const whatsapp = $("enviarWhatsApp");
+    if (whatsapp) whatsapp.hidden = !temRevisao || !podePedir;
+    const resumo = $("resumoPedido");
+    const instrucao = $("confirmarPedidoInstrucao");
+    const voltar = $("voltarCheckout");
+    if (resumo) resumo.hidden = apenasComprovante;
+    if (instrucao) instrucao.hidden = apenasComprovante;
+    if (voltar) voltar.hidden = apenasComprovante;
+  }
+  function mostrarComprovanteOffline(salvo, opcoes = {}) {
+    const apenasComprovante = opcoes.somenteComprovante === true || !pedidoEmRevisaoValido();
+    dialogoSomenteComprovante = apenasComprovante;
+    $("offlinePedidoStatus").textContent = statusOfflineAviso
+      ? "Não foi possível consultar o status agora. O código continua salvo até a expiração indicada."
+      : "Mostre este código ao entregador somente no momento da entrega.";
     $("offlinePedidoCodigo").textContent = salvo.codigo_entrega;
     $("offlinePedidoBox").hidden = false;
+    $("pixPedidoBox").hidden = true;
+    $("criarPedidoOffline").hidden = true;
+    atualizarAcoesComprovante(apenasComprovante);
+  }
+  function concluirComprovanteOffline(salvo) {
+    if (!comprovanteAindaAtual(salvo, comprovanteOfflineVersao)) return;
+    try { localStorage.removeItem(chavePedidoOfflineSalvo()); } catch { /* armazenamento indisponível */ }
+    comprovanteOfflineMemoria = null;
+    comprovanteOfflineVersao += 1;
+    cancelarConsultaStatusOffline();
+    statusOfflineAviso = false;
+    const aviso = $("offlinePedidoStatusAviso");
+    if (aviso) aviso.hidden = true;
+    $("offlinePedidoRecente").hidden = true;
+    $("offlinePedidoBox").hidden = true;
+    $("offlinePedidoCodigo").textContent = "";
+    if (dialogoSomenteComprovante && !pedidoEmRevisaoValido() && $("confirmarPedidoDialog").open) {
+      $("confirmarPedidoDialog").close();
+    }
+  }
+  async function consultarStatusOffline(salvo) {
+    if (!salvo || !comercioId || !documentoVisivel()) return;
+    const chave = `${salvo.pedido_id}:${salvo.codigo_expira_em}:${salvo.status_token || ""}`;
+    if (consultaStatusOfflineEmAndamento && consultaStatusOfflineChave === chave) return consultaStatusOfflineEmAndamento;
+    const versao = comprovanteOfflineVersao;
+    const iniciadoEm = Date.now();
+    const contexto = { pedido_id: salvo.pedido_id, iniciado_em: iniciadoEm, versao };
+    contextoConsultaStatusOffline = contexto;
+    const contextoAindaAtual = () => contextoConsultaStatusOffline === contexto
+      && contexto.iniciado_em === iniciadoEm
+      && contexto.pedido_id === salvo.pedido_id
+      && comprovanteAindaAtual(salvo, versao);
+    const tarefa = (async () => {
+      try {
+        const corpo = { acao: "consultar_status", pedido_id: salvo.pedido_id, comercio_id: comercioId };
+        if (tokenStatusValido(salvo.status_token)) corpo.status_token = salvo.status_token;
+        const resposta = await clienteSupabase().functions.invoke("catalogo-pedido-offline", { body: corpo });
+        if (!contextoAindaAtual()) return;
+        const data = resposta?.data;
+        if (resposta?.error || !data?.success || String(data.pedido_id || "") !== String(salvo.pedido_id)) {
+          atualizarAvisoStatusOffline(true);
+          agendarConsultaStatusOffline(salvo);
+          return;
+        }
+        if (data.concluido === true || data.codigo_ativo === false) {
+          concluirComprovanteOffline(salvo);
+          return;
+        }
+        atualizarAvisoStatusOffline(false);
+        agendarConsultaStatusOffline(salvo);
+      } catch {
+        if (!contextoAindaAtual()) return;
+        atualizarAvisoStatusOffline(true);
+        agendarConsultaStatusOffline(salvo);
+      }
+    })();
+    consultaStatusOfflineChave = chave;
+    consultaStatusOfflineEmAndamento = tarefa;
+    tarefa.finally(() => {
+      if (consultaStatusOfflineChave === chave) {
+        consultaStatusOfflineEmAndamento = null;
+        consultaStatusOfflineChave = "";
+      }
+      if (contextoConsultaStatusOffline === contexto) contextoConsultaStatusOffline = null;
+    });
+    return tarefa;
   }
   function atualizarPedidoOfflineRecente() {
     const salvo = lerPedidoOfflineSalvo();
     const aviso = $("offlinePedidoRecente");
-    if (!salvo) { aviso.hidden = true; return; }
-    aviso.hidden = false;
-    $("abrirPedidoOfflineSalvo").onclick = () => {
-      mostrarComprovanteOffline(salvo);
-      if (!$("confirmarPedidoDialog").open) $("confirmarPedidoDialog").showModal();
-    };
-    $("limparPedidoOfflineSalvo").onclick = () => {
-      localStorage.removeItem(chavePedidoOfflineSalvo());
+    if (!salvo) {
       aviso.hidden = true;
+      cancelarConsultaStatusOffline();
+      return;
+    }
+    aviso.hidden = false;
+    const botaoAbrir = $("abrirPedidoOfflineSalvo");
+    botaoAbrir.onclick = () => {
+      const atual = lerPedidoOfflineSalvo();
+      if (!atual) { atualizarPedidoOfflineRecente(); return; }
+      mostrarComprovanteOffline(atual, { somenteComprovante: !pedidoEmRevisaoValido() });
+      if (!$("confirmarPedidoDialog").open) $("confirmarPedidoDialog").showModal();
+      consultarStatusOffline(atual);
     };
+    const avisoAnterior = statusOfflineAviso;
+    atualizarAvisoStatusOffline(avisoAnterior);
+    consultarStatusOffline(salvo);
   }
 
   async function criarPedidoOffline() {
@@ -290,11 +461,14 @@
       } });
       if (error || !data?.success) throw new Error(data?.mensagem || "Não foi possível registrar o pedido.");
       const comprovante = { pedido_id: data.pedido_id, codigo_entrega: data.codigo_entrega, codigo_expira_em: data.codigo_expira_em };
-      try { localStorage.setItem(chavePedidoOfflineSalvo(), JSON.stringify(comprovante)); } catch { /* O comprovante continua disponível nesta tela. */ }
+      if (tokenStatusValido(data.status_token)) comprovante.status_token = String(data.status_token).trim();
+      statusOfflineAviso = false;
+      salvarComprovanteOffline(comprovante);
       mostrarComprovanteOffline(comprovante);
       atualizarPedidoOfflineRecente();
       botao.hidden = true;
-      $("enviarWhatsApp").hidden = true;
+      botao.disabled = true;
+      atualizarAcoesComprovante(false);
       carrinho = {}; salvarCarrinho(); renderizarSacola();
     } catch (error) { $("offlinePedidoStatus").textContent = error.message || "Não foi possível registrar o pedido."; botao.disabled = false; }
   }
@@ -329,7 +503,9 @@
         $("abrirTicketPix").href = data.ticket_url;
         $("abrirTicketPix").hidden = false;
       }
+      pedidoEmRevisao = { ...pedidoEmRevisao, pixGerado: true };
       botao.hidden = true;
+      atualizarAcoesComprovante(false);
     } catch (error) {
       box.hidden = false;
       $("pixPedidoStatus").textContent = error.message || "Não foi possível gerar o Pix.";
@@ -418,6 +594,29 @@
     }
   }
 
+  function mostrarErroWhatsApp(mensagem) {
+    const erro = $("whatsappErro");
+    if (erro) {
+      erro.textContent = mensagem;
+      erro.hidden = false;
+    }
+  }
+  function navegarWhatsApp(link) {
+    if (window.location && typeof window.location.assign === "function") {
+      window.location.assign(link);
+      return;
+    }
+    const ancora = document.createElement("a");
+    ancora.href = link;
+    ancora.target = "_self";
+    ancora.rel = "noopener noreferrer";
+    ancora.textContent = "Continuar pelo WhatsApp";
+    ancora.dataset.whatsapp = "navegacao";
+    document.body.appendChild(ancora);
+    ancora.click();
+    ancora.remove();
+  }
+
   function configurarEventos() {
     $("categoriasNav").addEventListener("click", (event) => {
       const botao = event.target.closest("[data-category]");
@@ -481,16 +680,20 @@
         $("checkoutErro").hidden = false;
         return;
       }
-      pedidoEmRevisao = { itens: itensCarrinho(), cliente, modalidade: cliente.modalidade, pagamento: cliente.pagamento, observacoes: cliente.observacoes };
+      pedidoEmRevisao = { itens: itensCarrinho(), cliente, modalidade: cliente.modalidade, pagamento: cliente.pagamento, observacoes: cliente.observacoes, pixGerado: false };
       renderizarResumo(pedidoEmRevisao);
       $("checkoutDialog").close();
       $("confirmarPedidoDialog").showModal();
+      dialogoSomenteComprovante = false;
+      if ($("resumoPedido")) $("resumoPedido").hidden = false;
+      if ($("confirmarPedidoInstrucao")) $("confirmarPedidoInstrucao").hidden = false;
+      if ($("whatsappErro")) $("whatsappErro").hidden = true;
       const offline = cliente.pagamento !== "pix";
       $("pagarPix").hidden = offline;
       $("criarPedidoOffline").hidden = !offline;
       $("pixPedidoBox").hidden = true;
       $("offlinePedidoBox").hidden = true;
-      $("enviarWhatsApp").hidden = false;
+      atualizarAcoesComprovante(false);
       atualizarPedidoOfflineRecente();
     });
 
@@ -515,7 +718,7 @@
     });
 
     $("enviarWhatsApp").addEventListener("click", () => {
-      if (!pedidoEmRevisao || !comercio) return;
+      if (!pedidoEmRevisaoValido() || !comercio) return;
       try {
         if (!podePedir) throw new Error("Este comércio ainda não possui um WhatsApp válido cadastrado para receber pedidos.");
         const numero = telefonePedido;
@@ -526,14 +729,30 @@
           modalidade: pedidoEmRevisao.modalidade,
           pagamento: pedidoEmRevisao.pagamento,
           observacoes: pedidoEmRevisao.observacoes,
+          pixGerado: pedidoEmRevisao.pixGerado === true,
         });
         const link = window.CatalogoUtils.gerarLinkWhatsApp(numero, mensagem);
-        window.open(link, "_blank", "noopener,noreferrer");
-        $("confirmarPedidoDialog").close();
+        navegarWhatsApp(link);
+        if ($("confirmarPedidoDialog").open) $("confirmarPedidoDialog").close();
       } catch (erro) {
-        $("catalogoErro").textContent = erro.message || "Não foi possível preparar a mensagem do WhatsApp.";
-        $("catalogoErro").hidden = false;
+        mostrarErroWhatsApp(erro.message || "Não foi possível preparar a mensagem do WhatsApp.");
       }
+    });
+
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") {
+        const salvo = lerPedidoOfflineSalvo();
+        if (salvo) consultarStatusOffline(salvo);
+      } else if (consultaStatusOfflineTimer !== null) {
+        window.clearTimeout(consultaStatusOfflineTimer);
+        consultaStatusOfflineTimer = null;
+      }
+    });
+    window.addEventListener("pagehide", () => {
+      // A resposta de uma aba que está saindo não pode limpar um comprovante
+      // que o usuário já substituiu em outra navegação.
+      comprovanteOfflineVersao += 1;
+      cancelarConsultaStatusOffline();
     });
 
     document.querySelectorAll("[data-close-dialog]").forEach((botao) => {
