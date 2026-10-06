@@ -36,14 +36,30 @@ async function enforceRateLimit(rawKey: string) {
   if (data !== true) throw new HttpError("Muitas tentativas. Aguarde um minuto e tente novamente.", 429);
 }
 async function assertOfflineCommerceAuthorized(comercioId: string) {
-  const [{ data: receiver, error: receiverError }, { data: published, error: publishedError }] = await Promise.all([
+  const [{ data: receiver, error: receiverError }, { data: catalog, error: catalogError }, { data: published, error: publishedError }] = await Promise.all([
     admin.from("catalogo_recebedores").select("comercio_id,status,conta_externa_id")
       .eq("comercio_id", comercioId).eq("status", "ativo").not("conta_externa_id", "is", null).maybeSingle(),
-    admin.from("catalogo_publicado").select("comercio_id").eq("comercio_id", comercioId).maybeSingle(),
+    admin.from("catalogos").select("comercio_id,bloqueado").eq("comercio_id", comercioId).maybeSingle(),
+    admin.from("comercios_publicados").select("local_id,status").eq("local_id", comercioId).eq("status", "ativo").maybeSingle(),
   ]);
-  if (receiverError || publishedError) throw new Error("Falha ao validar a conta Mercado Pago e o catálogo.");
-  if (!receiver) throw new HttpError("Conecte a conta Mercado Pago do comércio antes de aceitar pedidos.", 403);
-  if (!published) throw new HttpError("Este catálogo não está ativo para receber pedidos.", 403);
+
+  if (receiverError || catalogError || publishedError) {
+    console.error("Offline authorization lookup failed", {
+      comercioId,
+      receiver: receiverError?.message || null,
+      catalog: catalogError?.message || null,
+      published: publishedError?.message || null,
+    });
+    throw new Error("Falha ao validar a conta Mercado Pago e o catálogo.");
+  }
+
+  if (!receiver) {
+    throw new HttpError("Conecte a conta Mercado Pago do comércio antes de aceitar pedidos.", 403);
+  }
+
+  if (!catalog || catalog.bloqueado || !published) {
+    throw new HttpError("Este catálogo não está ativo para receber pedidos.", 403);
+  }
 }
 function randomDigits() { const bytes = new Uint32Array(1); crypto.getRandomValues(bytes); return String(100000 + (bytes[0] % 900000)); }
 function cents(value: unknown, label: string) { const amount = Number(value); if (!Number.isInteger(amount) || amount < 0 || amount > 999999999) throw new HttpError(`${label} inválido.`); return amount; }
