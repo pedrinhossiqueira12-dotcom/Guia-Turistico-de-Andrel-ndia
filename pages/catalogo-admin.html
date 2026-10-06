@@ -59,9 +59,10 @@
 
       <section class="admin-card offline-orders-card" id="pedidosOfflineCard">
         <div class="section-title"><div><span class="eyebrow">PEDIDOS PRESENCIAIS</span><h2>Pedidos e comissões</h2></div><button id="atualizarPedidosOffline" class="small-button" type="button">Atualizar</button></div>
-        <p>Pedidos em dinheiro ou cartão são concluídos pelo código do cliente na entrega. O comércio não vê o código e não pode marcar o pedido como pago por conta própria.</p>
+        <p>O cliente guarda o código. Após a entrega e o recebimento do pagamento, o proprietário autenticado usa <strong>Confirmar código</strong> no pedido. O painel nunca revela o código do cliente.</p>
         <div class="offline-summary" id="offlineSummary" hidden></div>
         <div id="listaPedidosOffline" class="manager-list"><p class="form-feedback">Carregando pedidos…</p></div>
+        <p id="pedidosOfflineFeedback" class="form-feedback" role="status"></p>
         <div class="offline-statement">
           <div class="section-title"><div><span class="eyebrow">EXTRATO</span><h3>Competência mensal</h3></div></div>
           <div class="statement-controls"><label>Mês <input id="competenciaOffline" type="month"></label><button id="consultarExtratoOffline" class="button button-secondary" type="button">Consultar extrato</button></div>
@@ -116,6 +117,19 @@
     </div>
   </main>
 
+  <dialog id="confirmarEntregaPainelDialog" class="admin-dialog" aria-labelledby="confirmarEntregaPainelTitulo">
+    <form id="confirmarEntregaPainelForm">
+      <h2 id="confirmarEntregaPainelTitulo">Confirmar entrega presencial</h2>
+      <p>Peça o código ao cliente somente após entregar o produto e receber o pagamento.</p>
+      <input id="confirmarEntregaPedidoId" type="hidden">
+      <label>Código do cliente <input id="confirmarEntregaCodigo" type="text" inputmode="numeric" pattern="[0-9]{6}" minlength="6" maxlength="6" autocomplete="off" required></label>
+      <label>Nome do entregador (opcional) <input id="confirmarEntregaEntregador" maxlength="120" autocomplete="off"></label>
+      <label class="checkbox-line"><input id="confirmarEntregaRecebido" type="checkbox" required> Produto entregue e pagamento presencial recebido</label>
+      <p id="confirmarEntregaFeedback" class="form-feedback" role="status"></p>
+      <div class="dialog-actions"><button id="cancelarConfirmarEntrega" class="button button-secondary" type="button">Cancelar</button><button id="confirmarEntregaEnviar" class="button button-primary" type="submit">Confirmar entrega</button></div>
+    </form>
+  </dialog>
+
   <dialog id="reassignCategoryDialog" class="admin-dialog">
     <form id="reassignCategoryForm">
       <h2>Produtos vinculados à categoria</h2>
@@ -128,6 +142,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="../js/login.js"></script>
   <script src="../js/catalogo-utils.js"></script>
-  <script src="../js/catalogo-admin.js"></script>
+  <script src="../js/catalogo-admin.js?v=confirmacao-segura-20261006"></script>
 </body>
 </html>

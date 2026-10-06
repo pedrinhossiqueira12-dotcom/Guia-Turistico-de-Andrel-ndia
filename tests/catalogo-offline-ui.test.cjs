@@ -13,7 +13,8 @@ test('painel administrativo oferece pedidos offline e extrato sem código visív
   assert.match(js, /catalogo-pedidos-offline-admin/);
   assert.match(js, /acao: "listar_pedidos"/);
   assert.match(js, /acao: "consultar_fechamento"/);
-  assert.doesNotMatch(js, /codigo_entrega/);
+  assert.match(js, /acao: "confirmar_entrega"/);
+  assert.doesNotMatch(js, /pedido\.codigo_entrega/);
 });
 
 test('interface só expõe transições de preparo e cancelamento permitidas', () => {

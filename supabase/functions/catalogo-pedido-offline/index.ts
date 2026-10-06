@@ -107,9 +107,8 @@ async function createOfflineOrder(body: Record<string, unknown>, rateKey: string
   const delivery = cents(body.entrega_centavos ?? 0, "Entrega");
   const fee = Math.round(subtotal * 0.05);
   const total = subtotal + delivery;
-  const clienteToken = crypto.randomUUID();
   const code = randomDigits();
-  const [clienteTokenHash, codeHash] = await Promise.all([hash(clienteToken), hash(code)]);
+  const codeHash = await hash(code);
   const expiration = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
   const { data: order, error: orderError } = await admin.from("catalogo_pedidos").insert({
     comercio_id: comercioId, referencia_externa: `offline-${crypto.randomUUID()}`, provedor: "offline", idempotency_key: crypto.randomUUID(),
@@ -118,7 +117,7 @@ async function createOfflineOrder(body: Record<string, unknown>, rateKey: string
     repasse_bruto_comercio_centavos: subtotal - fee + delivery, cliente_nome: nome, cliente_email: email, cliente_telefone: telefone,
     cliente_endereco: text(client.endereco, 240) || null, cliente_numero: text(client.numero, 30) || null, cliente_bairro: text(client.bairro, 120) || null,
     cliente_complemento: text(client.complemento, 160) || null, cliente_referencia: text(client.referencia, 240) || null, cliente_cidade: "Andrelândia-MG",
-    observacoes: text(body.observacoes, 1000) || null, cliente_token_hash: clienteTokenHash, codigo_entrega_hash: codeHash,
+    observacoes: text(body.observacoes, 1000) || null, codigo_entrega_hash: codeHash,
     codigo_entrega_expira_em: expiration, metadata: { checkout: "offline", taxa_fixa_percentual: 5, codigo_entrega: "hash_sha256" },
   }).select("id,comercio_id,status,forma_pagamento,subtotal_produtos_centavos,entrega_centavos,total_centavos,taxa_plataforma_centavos").single();
   if (orderError || !order) throw new Error("Não foi possível registrar o pedido offline.");
@@ -128,24 +127,8 @@ async function createOfflineOrder(body: Record<string, unknown>, rateKey: string
     throw new Error("Não foi possível registrar os itens do pedido.");
   }
   // A comissão só nasce quando o código for validado e o pedido for concluído.
-  // O código/token são entregues somente ao cliente nesta resposta; nunca são persistidos em claro.
-  return json({ success: true, pedido_id: order.id, cliente_token: clienteToken, codigo_entrega: code, status: order.status, forma_pagamento: method, subtotal_centavos: subtotal, entrega_centavos: delivery, total_centavos: total, taxa_plataforma_centavos: fee, codigo_expira_em: expiration });
-}
-
-async function confirmDelivery(body: Record<string, unknown>, rateKey: string) {
-  await enforceRateLimit(rateKey);
-  const token = text(body.cliente_token, 100); const code = text(body.codigo_entrega, 20); const entregador = text(body.entregador, 120) || "não informado";
-  if (!token || !/^\d{6}$/.test(code)) throw new HttpError("Código de entrega inválido.");
-  const [tokenHash, codeHash] = await Promise.all([hash(token), hash(code)]);
-  const { data, error } = await admin.rpc("catalogo_confirmar_pedido_offline", { p_cliente_token_hash: tokenHash, p_codigo_hash: codeHash, p_entregador: entregador });
-  if (error) throw new Error("Falha ao validar o código de entrega.");
-  const result = Array.isArray(data) ? data[0] : data;
-  if (!result?.ok) {
-    const message = String(result?.mensagem || "Não foi possível concluir o pedido.");
-    const status = message.includes("não encontrado") ? 404 : message.includes("incorreto") ? 403 : message.includes("expirou") ? 410 : message.includes("Limite") ? 429 : 409;
-    throw new HttpError(message, status);
-  }
-  return json({ success: true, pedido_id: result.pedido_id, status: result.status, status_pagamento: result.status_pagamento, comissao_registrada: true });
+  // O código é entregue somente ao cliente nesta resposta; nunca são persistidos em claro.
+  return json({ success: true, pedido_id: order.id, codigo_entrega: code, status: order.status, forma_pagamento: method, subtotal_centavos: subtotal, entrega_centavos: delivery, total_centavos: total, taxa_plataforma_centavos: fee, codigo_expira_em: expiration });
 }
 
 Deno.serve(async (request: Request) => {
@@ -158,7 +141,7 @@ Deno.serve(async (request: Request) => {
     const comercio = text(body.comercio_id, 180);
     const ip = (request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || "unknown").split(",")[0].trim().slice(0, 120);
     if (action === "criar_pedido_offline") return await createOfflineOrder(body, `${ip}|${comercio}|create`);
-    if (action === "confirmar_entrega") return await confirmDelivery(body, `${ip}|${text(body.cliente_token, 100)}|confirm`);
+    if (action === "confirmar_entrega") return json({ success: false, mensagem: "A confirmação deve ser feita pelo painel autenticado do comércio." }, 410);
     return json({ success: false, mensagem: "Ação não reconhecida." }, 400);
   } catch (error) {
     if (error instanceof HttpError) return json({ success: false, mensagem: error.message }, error.status);

@@ -18,6 +18,7 @@ MIGRATIONS=(
   "20261005150000_catalogo_fechamento_automatico.sql"
   "20261005160000_catalogo_fatura_pix.sql"
   "20261005170000_catalogo_correcao_confirmacao_offline.sql"
+  "20261006175809_confirmacao_entrega_painel.sql"
 )
 
 cp "$BASE_DIR"/*.sql "$TMP_DIR/"

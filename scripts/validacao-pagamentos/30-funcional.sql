@@ -8,18 +8,20 @@ DO $$
 DECLARE
   v_pedido_b uuid;
   v_pedido_a uuid;
-  v_result record;
+  v_result jsonb;
   v_ok boolean;
   v_msg text;
   v_comissao integer;
   v_status text;
 BEGIN
+  UPDATE public.catalogos SET proprietario_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid WHERE comercio_id='comercio-de-exemplo';
+  UPDATE public.catalogo_pedidos SET codigo_entrega_hash=CASE cliente_token_hash WHEN 'hash-token-A' THEN repeat('a',64) ELSE repeat('b',64) END;
   SELECT id INTO v_pedido_a FROM public.catalogo_pedidos WHERE cliente_token_hash = 'hash-token-A';
   SELECT id INTO v_pedido_b FROM public.catalogo_pedidos WHERE cliente_token_hash = 'hash-token-B';
 
-  SELECT * INTO v_result FROM public.catalogo_confirmar_pedido_offline('hash-token-B', 'hash-codigo-B', 'Entregador de teste');
-  IF NOT v_result.ok OR v_result.pedido_id <> v_pedido_b THEN
-    RAISE EXCEPTION 'A confirmação do pedido correto falhou: % / %', v_result.ok, v_result.mensagem;
+  SELECT public.catalogo_confirmar_entrega_autenticada('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','comercio-de-exemplo',v_pedido_b,repeat('b',64),'Entregador de teste') INTO v_result;
+  IF NOT (v_result->>'ok')::boolean OR (v_result->>'pedido_id')::uuid <> v_pedido_b THEN
+    RAISE EXCEPTION 'A confirmação do pedido correto falhou: % / %', (v_result->>'ok')::boolean, (v_result->>'mensagem');
   END IF;
 
   SELECT status, codigo_entrega_usado_em IS NOT NULL INTO v_status, v_ok FROM public.catalogo_pedidos WHERE id = v_pedido_b;
@@ -37,23 +39,23 @@ BEGIN
     RAISE EXCEPTION 'O pedido A foi confirmado indevidamente por um token diferente.';
   END IF;
 
-  SELECT * INTO v_result FROM public.catalogo_confirmar_pedido_offline('hash-token-B', 'hash-codigo-B', 'Entregador de teste');
-  IF v_result.ok THEN
+  SELECT public.catalogo_confirmar_entrega_autenticada('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','comercio-de-exemplo',v_pedido_b,repeat('b',64),'Entregador de teste') INTO v_result;
+  IF (v_result->>'ok')::boolean THEN
     RAISE EXCEPTION 'Uma segunda confirmação foi aceita.';
   END IF;
-  IF v_result.mensagem <> 'Este pedido não pode mais ser concluído.' THEN
-    RAISE EXCEPTION 'Mensagem inesperada na segunda confirmação: %', v_result.mensagem;
+  IF (v_result->>'mensagem') <> 'Este pedido não pode mais ser concluído.' THEN
+    RAISE EXCEPTION 'Mensagem inesperada na segunda confirmação: %', (v_result->>'mensagem');
   END IF;
 
-  SELECT * INTO v_result FROM public.catalogo_confirmar_pedido_offline('hash-token-A', '999999', 'Entregador de teste');
-  IF v_result.ok OR v_result.mensagem <> 'Código de entrega incorreto.' THEN
-    RAISE EXCEPTION 'Código incorreto não foi recusado: %', v_result.mensagem;
+  SELECT public.catalogo_confirmar_entrega_autenticada('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','comercio-de-exemplo',v_pedido_a,repeat('0',64),'Entregador de teste') INTO v_result;
+  IF (v_result->>'ok')::boolean OR (v_result->>'mensagem') <> 'Código de entrega incorreto.' THEN
+    RAISE EXCEPTION 'Código incorreto não foi recusado: %', (v_result->>'mensagem');
   END IF;
 
   UPDATE public.catalogo_pedidos SET codigo_entrega_expira_em = now() - interval '1 hour' WHERE id = v_pedido_a;
-  SELECT * INTO v_result FROM public.catalogo_confirmar_pedido_offline('hash-token-A', 'hash-codigo-A', 'Entregador de teste');
-  IF v_result.ok OR v_result.mensagem <> 'O código de entrega expirou.' THEN
-    RAISE EXCEPTION 'Código expirado não foi recusado: %', v_result.mensagem;
+  SELECT public.catalogo_confirmar_entrega_autenticada('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','comercio-de-exemplo',v_pedido_a,repeat('a',64),'Entregador de teste') INTO v_result;
+  IF (v_result->>'ok')::boolean OR (v_result->>'mensagem') <> 'O código de entrega expirou.' THEN
+    RAISE EXCEPTION 'Código expirado não foi recusado: %', (v_result->>'mensagem');
   END IF;
 
   RAISE NOTICE 'A. confirmação offline: OK (única, recusa código errado e expirado, comissão de 5%%)';

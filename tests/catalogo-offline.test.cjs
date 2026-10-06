@@ -21,8 +21,9 @@ test('pedido offline só aceita métodos explícitos no catálogo', () => {
 
 test('código de entrega não é persistido em claro e só gera comissão após confirmação', () => {
   assert.match(offlineFunction, /codigo_entrega_hash: codeHash/);
-  assert.match(offlineFunction, /cliente_token_hash: clienteTokenHash/);
-  assert.match(offlineFunction, /catalogo_confirmar_pedido_offline/);
+  assert.doesNotMatch(offlineFunction, /cliente_token:|cliente_token_hash:/);
+  const admin = fs.readFileSync('supabase/functions/catalogo-pedidos-offline-admin/index.ts', 'utf8');
+  assert.match(admin, /catalogo_confirmar_entrega_autenticada/);
   assert.match(migration, /status = 'entregue'/);
   assert.match(migration, /INSERT INTO public\.catalogo_comissoes_offline/);
   assert.doesNotMatch(offlineFunction, /catalogo_comissoes_offline.*insert/s);

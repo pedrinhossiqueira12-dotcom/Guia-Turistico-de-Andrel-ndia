@@ -245,18 +245,20 @@
   function lerPedidoOfflineSalvo() {
     try {
       const salvo = JSON.parse(localStorage.getItem(chavePedidoOfflineSalvo()) || "null");
-      if (!salvo?.codigo_entrega || !salvo?.cliente_token || Date.parse(salvo.codigo_expira_em) <= Date.now()) {
+      if (!salvo?.pedido_id || !/^\d{6}$/.test(salvo.codigo_entrega || "") || !Number.isFinite(Date.parse(salvo.codigo_expira_em)) || Date.parse(salvo.codigo_expira_em) <= Date.now()) {
         localStorage.removeItem(chavePedidoOfflineSalvo());
         return null;
       }
-      return salvo;
+      const comprovante = { pedido_id: salvo.pedido_id, codigo_entrega: salvo.codigo_entrega, codigo_expira_em: salvo.codigo_expira_em };
+      if (salvo.cliente_token) {
+        try { localStorage.setItem(chavePedidoOfflineSalvo(), JSON.stringify(comprovante)); } catch { /* guarda apenas em memória */ }
+      }
+      return comprovante;
     } catch { return null; }
   }
   function mostrarComprovanteOffline(salvo) {
     $("offlinePedidoStatus").textContent = "Mostre este código ao entregador somente no momento da entrega.";
     $("offlinePedidoCodigo").textContent = salvo.codigo_entrega;
-    $("offlineConfirmLink").href = `pedido-offline.html?token=${encodeURIComponent(salvo.cliente_token)}`;
-    $("offlineConfirmLink").hidden = false;
     $("offlinePedidoBox").hidden = false;
   }
   function atualizarPedidoOfflineRecente() {
@@ -287,7 +289,7 @@
         cliente: pedidoEmRevisao.cliente, modalidade: pedidoEmRevisao.modalidade, observacoes: pedidoEmRevisao.observacoes,
       } });
       if (error || !data?.success) throw new Error(data?.mensagem || "Não foi possível registrar o pedido.");
-      const comprovante = { pedido_id: data.pedido_id, codigo_entrega: data.codigo_entrega, cliente_token: data.cliente_token, codigo_expira_em: data.codigo_expira_em };
+      const comprovante = { pedido_id: data.pedido_id, codigo_entrega: data.codigo_entrega, codigo_expira_em: data.codigo_expira_em };
       try { localStorage.setItem(chavePedidoOfflineSalvo(), JSON.stringify(comprovante)); } catch { /* O comprovante continua disponível nesta tela. */ }
       mostrarComprovanteOffline(comprovante);
       atualizarPedidoOfflineRecente();

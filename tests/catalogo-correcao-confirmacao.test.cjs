@@ -14,11 +14,12 @@ test('o alvo do conflito deixou de ser ambíguo com o parâmetro de saída pedid
   assert.match(anterior, /ON CONFLICT \(pedido_id\) DO NOTHING/);
 });
 
-test('o contrato devolvido à Edge Function não mudou', () => {
+test('o contrato antigo permanece no histórico e a confirmação pública é encerrada', () => {
   assert.match(correcao, /RETURNS TABLE\(ok boolean, pedido_id uuid, status text, status_pagamento text, mensagem text\)/);
   const edge = fs.readFileSync('supabase/functions/catalogo-pedido-offline/index.ts', 'utf8');
-  assert.match(edge, /pedido_id: result\.pedido_id/);
-  assert.match(edge, /status_pagamento: result\.status_pagamento/);
+  assert.match(edge, /action === "confirmar_entrega".*410/);
+  const admin = fs.readFileSync('supabase/functions/catalogo-pedidos-offline-admin/index.ts', 'utf8');
+  assert.match(admin, /catalogo_confirmar_entrega_autenticada/);
 });
 
 test('a correção preserva as travas de segurança da confirmação', () => {

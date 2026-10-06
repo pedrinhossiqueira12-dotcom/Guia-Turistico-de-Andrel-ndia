@@ -49,7 +49,7 @@
       <section id="offlinePedidoRecente" class="payment-notice" role="status" hidden>
         <strong>Você tem um pedido presencial recente</strong>
         <p>O código fica salvo somente neste dispositivo até expirar.</p>
-        <button id="abrirPedidoOfflineSalvo" class="secondary-button" type="button">Ver código e confirmação</button>
+        <button id="abrirPedidoOfflineSalvo" class="secondary-button" type="button">Ver código do pedido</button>
         <button id="limparPedidoOfflineSalvo" class="text-button" type="button">Remover deste dispositivo</button>
       </section>
 
@@ -132,7 +132,7 @@
       <p id="offlinePedidoStatus">Mostre este código ao entregador somente no momento da entrega.</p>
       <p class="delivery-code" id="offlinePedidoCodigo"></p>
       <button id="copiarCodigoOffline" class="secondary-button" type="button">Copiar código</button><br>
-      <small>Guarde também o link de confirmação. O código expira em 48 horas e só pode ser usado uma vez.</small><br><a id="offlineConfirmLink" href="#" target="_blank" rel="noopener noreferrer" hidden>Abrir confirmação da entrega</a>
+      <small>Informe o código somente depois de receber o produto. Apenas o comércio autenticado pode dar baixa. O código expira em 48 horas e só pode ser usado uma vez.</small>
     </div>
     <div id="pixPedidoBox" class="payment-notice" hidden>
       <strong>Pix do pedido</strong>
@@ -148,6 +148,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="../js/login.js"></script>
   <script src="../js/catalogo-utils.js"></script>
-  <script src="../js/catalogo.js"></script>
+  <script src="../js/catalogo.js?v=confirmacao-segura-20261006"></script>
 </body>
 </html>
