@@ -20,3 +20,6 @@ verify_jwt = false
 
 [functions.catalogo-pedidos-offline-admin]
 verify_jwt = false
+
+[functions.catalogo-fatura-pix]
+verify_jwt = false
