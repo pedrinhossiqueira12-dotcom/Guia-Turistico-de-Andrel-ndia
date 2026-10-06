@@ -88,10 +88,10 @@
         return;
       }
 
-      $("activationTitle").textContent = data.ativo ? "Seu catálogo está ativo" : "Configure os recebimentos do catálogo";
+      $("activationTitle").textContent = data.ativo ? "Seu catálogo está ativo" : "Conecte o Mercado Pago para ativar";
       $("activationText").textContent = data.ativo
-        ? "A assinatura antiga continua preservada no histórico. Agora os novos pedidos usarão comissão por transação."
-        : "Conecte sua conta Mercado Pago para receber pedidos com Pix no próprio site. Não há mensalidade ou anuidade no novo modelo.";
+        ? "Catálogo liberado. Os pedidos Pix repassam 95% ao comércio e 5% ao Guia; pagamentos na entrega geram comissão no fechamento mensal."
+        : "Conecte a conta Mercado Pago do comércio. A liberação é gratuita e automática; não há mensalidade nem Pix de assinatura.";
       $("linkGerenciar").hidden = !data.ativo;
       $("linkPixProducao").hidden = false;
       $("linkTestePix").hidden = true;

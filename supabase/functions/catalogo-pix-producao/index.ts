@@ -15,6 +15,7 @@ const LEGACY_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const MP_PRODUCTION_ENABLED = Deno.env.get("MP_PRODUCTION_ENABLED") === "true";
 const MP_PROD_ACCESS_TOKEN = Deno.env.get("MP_PROD_ACCESS_TOKEN") ?? "";
 const MP_PROD_SELLER_ID = Deno.env.get("MP_PROD_SELLER_ID") ?? "";
+const MARKETPLACE_CHECKOUT_ENABLED = Deno.env.get("MARKETPLACE_CHECKOUT_ENABLED") === "true";
 const MP_PROD_WEBHOOK_SECRET = Deno.env.get("MP_PROD_WEBHOOK_SECRET") ?? "";
 const MP_OAUTH_CLIENT_ID = Deno.env.get("MP_OAUTH_CLIENT_ID") ?? "";
 const MP_OAUTH_REDIRECT_URI = Deno.env.get("MP_OAUTH_REDIRECT_URI") ?? "";
@@ -620,6 +621,7 @@ Deno.serve(async (request: Request) => {
         .maybeSingle();
       if (receiverError) throw new Error("Falha ao consultar a conta recebedora do comércio.");
       const receiverStatus = safeString(receiver?.status) || "pendente";
+      const receiverActive = receiverStatus === "ativo" && Boolean(receiver?.conta_externa_id);
       return json({
         success: true,
         proprietario: true,
@@ -628,11 +630,16 @@ Deno.serve(async (request: Request) => {
         recebedor_status: receiverStatus,
         recebedor_conectado: Boolean(receiver?.conta_externa_id),
         percentual_plataforma: Number(receiver?.percentual_plataforma ?? 5),
-        checkout_enabled: false,
-        production: false,
-        mensagem: receiver
-          ? "Configuração do recebedor consultada. O checkout de pedidos ainda não foi ativado."
-          : "Nenhuma conta Mercado Pago foi conectada para este comércio.",
+        catalog_activated: receiverActive,
+        checkout_enabled: receiverActive && MARKETPLACE_CHECKOUT_ENABLED,
+        production: receiverActive,
+        mensagem: !receiver
+          ? "Nenhuma conta Mercado Pago foi conectada para este comércio."
+          : receiverActive && MARKETPLACE_CHECKOUT_ENABLED
+            ? "Conta conectada; catálogo e checkout de pedidos ativos."
+            : receiverActive
+              ? "Conta conectada e catálogo liberado. O checkout global de pedidos ainda está em validação."
+              : "A conta Mercado Pago ainda não está ativa para este comércio.",
       });
     }
 
@@ -676,9 +683,13 @@ Deno.serve(async (request: Request) => {
     }
 
     if (action === "iniciar_conexao") {
+      await ensureCatalog(owner);
       return json(await startMercadoPagoOAuth(owner));
     }
 
+    if (["listar_planos", "criar_pix", "consultar_pix"].includes(action)) {
+      return json({ success: false, mensagem: "O catálogo é gratuito. Não existe cobrança Pix de assinatura; conecte a conta Mercado Pago para ativar." }, 410);
+    }
     if (action === "verificar_checkout") {
       let checkoutReady = MP_PRODUCTION_ENABLED
         && Boolean(MP_PROD_ACCESS_TOKEN)

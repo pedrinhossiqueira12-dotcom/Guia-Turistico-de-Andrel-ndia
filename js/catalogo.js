@@ -356,7 +356,7 @@
         .maybeSingle();
       if (erroEstado) throw erroEstado;
       if (!estadoCatalogo) {
-        mostrarEstado("Catálogo digital indisponível", "Este comércio ainda não tem uma assinatura ativa ou está temporariamente indisponível.");
+        mostrarEstado("Catálogo digital indisponível", "Este comércio ainda não conectou uma conta Mercado Pago ou está temporariamente indisponível.");
         return;
       }
 

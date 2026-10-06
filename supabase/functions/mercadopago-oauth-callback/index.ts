@@ -6,6 +6,7 @@ const LEGACY_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const MP_OAUTH_CLIENT_ID = Deno.env.get("MP_OAUTH_CLIENT_ID") ?? "";
 const MP_OAUTH_CLIENT_SECRET = Deno.env.get("MP_OAUTH_CLIENT_SECRET") ?? "";
 const MP_OAUTH_REDIRECT_URI = Deno.env.get("MP_OAUTH_REDIRECT_URI") ?? "";
+const MP_PROD_SELLER_ID = Deno.env.get("MP_PROD_SELLER_ID") ?? "";
 const MP_OAUTH_ENCRYPTION_KEY = Deno.env.get("MP_OAUTH_ENCRYPTION_KEY") ?? "";
 const SITE_URL = (Deno.env.get("SITE_URL") || "https://guia-turistico-de-andrelandia.pages.dev").replace(/\/$/, "");
 const CORS_HEADERS = { "Cache-Control": "no-store, no-cache, must-revalidate", "Referrer-Policy": "no-referrer" };
@@ -60,6 +61,12 @@ Deno.serve(async (request: Request) => {
     const { data: oauthState, error: stateError } = await admin.from("catalogo_oauth_estados").select("id,comercio_id,proprietario_id,code_verifier,expira_em,usado_em").eq("estado_hash", stateHash).maybeSingle();
     if (stateError || !oauthState || oauthState.usado_em || new Date(oauthState.expira_em).getTime() < Date.now()) return redirectToSite("", "error");
     const credentials = await exchangeCode(code, oauthState.code_verifier);
+    if (MP_PROD_SELLER_ID && String(credentials.user_id) === MP_PROD_SELLER_ID) {
+      throw new Error("A conta da plataforma não pode ser conectada como recebedora de um comércio.");
+    }
+    if (credentials.live_mode !== true) {
+      throw new Error("Conecte uma conta Mercado Pago de produção, não uma conta de teste.");
+    }
     const now = new Date().toISOString();
     const { error: updateStateError } = await admin.from("catalogo_oauth_estados").update({ usado_em: now }).eq("id", oauthState.id).is("usado_em", null);
     if (updateStateError) throw new Error("Não foi possível finalizar o estado OAuth.");

@@ -21,6 +21,7 @@ type CatalogConfigRow = {
   criado_em: string;
 };
 type SubscriptionRow = { comercio_id: string; status: string; expira_em: string | null; criado_em: string };
+type ReceiverRow = { comercio_id: string; status: string; conta_externa_id: string | null; conectado_em: string | null };
 type PublishedCommerceRow = { local_id: string; status: string };
 
 let serviceKey = "";
@@ -139,67 +140,34 @@ async function ensureCatalog(userId: string, commerceId: string, createIfMissing
   return { allowed: true, exists: true, blocked: Boolean(existing.bloqueado), reason: existing.motivo_bloqueio || null };
 }
 
-async function subscriptionState(commerceId: string) {
-  const { data: active, error: activeError } = await admin
-    .from("catalogo_assinaturas")
-    .select("id,status,expira_em")
+async function receiverState(commerceId: string) {
+  const { data, error } = await admin.from("catalogo_recebedores")
+    .select("comercio_id,status,conta_externa_id,conectado_em")
     .eq("comercio_id", commerceId)
-    .eq("status", "ativa")
-    .order("criado_em", { ascending: false })
-    .limit(1)
     .maybeSingle();
-  if (activeError) throw new Error(`Falha ao consultar assinatura: ${activeError.message}`);
-
-  if (active && (!active.expira_em || Date.parse(active.expira_em) > Date.now())) {
-    return { ativo: true, assinatura_status: "ativa" };
-  }
-
-  const { data: pending, error: pendingError } = await admin
-    .from("catalogo_assinaturas")
-    .select("id,status")
-    .eq("comercio_id", commerceId)
-    .eq("status", "pendente")
-    .order("criado_em", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (pendingError) throw new Error(`Falha ao consultar solicitação pendente: ${pendingError.message}`);
-  if (pending) return { ativo: false, assinatura_status: "pendente" };
-
-  const { data: previous, error: previousError } = await admin
-    .from("catalogo_assinaturas")
-    .select("status,expira_em")
-    .eq("comercio_id", commerceId)
-    .in("status", ["cancelada", "expirada", "ativa"])
-    .order("criado_em", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (previousError) throw new Error(`Falha ao consultar histórico da assinatura: ${previousError.message}`);
-  if (previous?.status === "ativa" && previous.expira_em && Date.parse(previous.expira_em) <= Date.now()) {
-    return { ativo: false, assinatura_status: "expirada" };
-  }
-  return { ativo: false, assinatura_status: previous?.status || "sem_assinatura" };
+  if (error) throw new Error(`Falha ao consultar conta Mercado Pago: ${error.message}`);
+  const connected = Boolean(data?.conta_externa_id);
+  const active = connected && data?.status === "ativo";
+  return {
+    ativo: active,
+    receiver_status: data?.status || "pendente",
+    receiver_connected: connected,
+    conectado_em: data?.conectado_em || null,
+    assinatura_status: "não aplicável",
+  };
 }
-
 async function solicitarAtivacao(commerceId: string) {
-  const current = await subscriptionState(commerceId);
-  if (current.ativo) return { solicitacao_registrada: true, assinatura_status: "ativa", ativo: true };
-  if (current.assinatura_status === "pendente") {
-    return { solicitacao_registrada: true, assinatura_status: "pendente", ativo: false };
-  }
-
-  const { error } = await admin.from("catalogo_assinaturas").insert({
-    comercio_id: commerceId,
-    status: "pendente",
-    valor: null,
-    gateway: null,
-    cobranca_id: null,
-    metadata: { modo: "demonstracao", cobranca_criada: false },
-  });
-  if (error && error.code !== "23505") throw new Error(`Falha ao registrar interesse: ${error.message}`);
-  const after = await subscriptionState(commerceId);
-  return { solicitacao_registrada: after.assinatura_status === "pendente" || after.ativo, assinatura_status: after.assinatura_status, ativo: after.ativo };
+  const receiver = await receiverState(commerceId);
+  return {
+    solicitacao_registrada: false,
+    ...receiver,
+    cobranca_criada: false,
+    pix_gerado: false,
+    mensagem: receiver.ativo
+      ? "Catálogo liberado. A conta Mercado Pago está pronta para receber pedidos."
+      : "Conecte a conta Mercado Pago do comércio para liberar o catálogo.",
+  };
 }
-
 async function listarCatalogosAdmin() {
   const { data: configs, error: configError } = await admin.from("catalogos")
     .select("comercio_id,bloqueado,motivo_bloqueio,modalidades,metodos_pagamento,criado_em")
@@ -209,44 +177,32 @@ async function listarCatalogosAdmin() {
   const rows = (configs || []) as CatalogConfigRow[];
   if (!rows.length) return [];
   const ids = rows.map((row) => row.comercio_id);
-  const [{ data: subscriptions, error: subscriptionError }, { data: businesses, error: businessError }] = await Promise.all([
-    admin.from("catalogo_assinaturas").select("comercio_id,status,expira_em,criado_em")
-      .in("comercio_id", ids).order("criado_em", { ascending: false }).limit(2000),
+  const [{ data: receivers, error: receiverError }, { data: businesses, error: businessError }] = await Promise.all([
+    admin.from("catalogo_recebedores").select("comercio_id,status,conta_externa_id,conectado_em")
+      .in("comercio_id", ids).limit(1000),
     admin.from("comercios_publicados").select("local_id,status").in("local_id", ids).limit(1000),
   ]);
-  if (subscriptionError) throw new Error(`Falha ao listar assinaturas: ${subscriptionError.message}`);
+  if (receiverError) throw new Error(`Falha ao listar contas Mercado Pago: ${receiverError.message}`);
   if (businessError) throw new Error(`Falha ao validar publicação: ${businessError.message}`);
-
-  const now = Date.now();
-  const subscriptionRows = (subscriptions || []) as SubscriptionRow[];
+  const receiverRows = (receivers || []) as ReceiverRow[];
   const businessRows = (businesses || []) as PublishedCommerceRow[];
-  const subscriptionsByCommerce = new Map<string, SubscriptionRow[]>();
-  for (const subscription of subscriptionRows) {
-    const group = subscriptionsByCommerce.get(subscription.comercio_id) || [];
-    group.push(subscription);
-    subscriptionsByCommerce.set(subscription.comercio_id, group);
-  }
+  const receiverByCommerce = new Map<string, ReceiverRow>(receiverRows.map((row) => [row.comercio_id, row]));
   const businessStatus = new Map<string, string>(businessRows.map((row) => [row.local_id, row.status]));
-
   return rows.map((config: CatalogConfigRow) => {
-    const history = subscriptionsByCommerce.get(config.comercio_id) || [];
-    const active = history.find((item) => item.status === "ativa" && (!item.expira_em || Date.parse(item.expira_em) > now));
-    const pending = history.find((item) => item.status === "pendente");
-    const expiredActive = history.find((item) => item.status === "ativa" && item.expira_em && Date.parse(item.expira_em) <= now);
-    const expired = history.find((item) => item.status === "expirada");
-    const latest = history[0];
-    const assinaturaStatus = active ? "ativa" : pending ? "pendente" : expiredActive || expired ? "expirada" : latest?.status || "sem_assinatura";
-    const catalogoAtivo = Boolean(active && !config.bloqueado && businessStatus.get(config.comercio_id) === "ativo");
+    const receiver = receiverByCommerce.get(config.comercio_id);
+    const connected = Boolean(receiver?.conta_externa_id);
+    const active = connected && receiver?.status === "ativo";
     return {
       ...config,
-      assinatura_status: assinaturaStatus,
-      expira_em: active?.expira_em || null,
-      catalogo_ativo: catalogoAtivo,
+      assinatura_status: "não aplicável",
+      expira_em: null,
+      receiver_status: receiver?.status || "pendente",
+      receiver_connected: connected,
+      catalogo_ativo: Boolean(active && !config.bloqueado && businessStatus.get(config.comercio_id) === "ativo"),
       comercio_publicado: businessStatus.get(config.comercio_id) === "ativo",
     };
   });
 }
-
 async function adminAction(userId: string, body: Record<string, unknown>) {
   if (userId !== ADMIN_USER_ID) return json({ success: false, mensagem: "Ação administrativa não autorizada." }, 403);
   if (body.acao === "admin_listar_catalogos") {
@@ -293,7 +249,7 @@ Deno.serve(async (request: Request) => {
       if (ownership.valid) {
         const catalog = await ensureCatalog(authenticated.user.id, commerceId, false);
         if (!catalog.allowed) return json({ proprietario: false, admin: true, mensagem: catalog.reason }, 403);
-        const state = await subscriptionState(commerceId);
+        const state = await receiverState(commerceId);
         return json({
           proprietario: true,
           admin: true,
@@ -312,7 +268,7 @@ Deno.serve(async (request: Request) => {
         .maybeSingle();
       if (configError) throw new Error(`Falha ao validar acesso administrativo: ${configError.message}`);
       if (!config) return json({ proprietario: false, admin: true, admin_catalog_access: false, mensagem: "Este comércio ainda não possui configuração de catálogo." }, 404);
-      const state = await subscriptionState(commerceId);
+      const state = await receiverState(commerceId);
       return json({ proprietario: false, admin: true, admin_catalog_access: true, ativo: state.ativo && !config.bloqueado, bloqueado: config.bloqueado, motivo_bloqueio: config.motivo_bloqueio, assinatura_status: state.assinatura_status });
     }
 
@@ -326,7 +282,7 @@ Deno.serve(async (request: Request) => {
     if (action === "verificar_proprietario" && !catalog.exists) {
       return json({ proprietario: true, ativo: false, bloqueado: false, assinatura_status: "sem_assinatura", modo_demonstracao: true });
     }
-    const subscription = await subscriptionState(commerceId);
+    const subscription = await receiverState(commerceId);
 
     if (action === "verificar_proprietario") {
       return json({
@@ -347,10 +303,7 @@ Deno.serve(async (request: Request) => {
       ...result,
       proprietario: true,
       bloqueado: false,
-      modo_demonstracao: true,
-      cobranca_criada: false,
-      pix_gerado: false,
-      mensagem: "Interesse registrado sem cobrança Pix e sem ativação de assinatura.",
+      modo_demonstracao: false,
     });
   } catch (error) {
     console.error("catalogo-admin failed:", (error as Error).message);

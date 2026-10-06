@@ -11,10 +11,10 @@ test('checkout offline exige catálogo publicado e ativo no servidor', () => {
   assert.match(fn, /if \(!published\)/);
 });
 
-test('checkout offline exige autorização server-side da allowlist ativa', () => {
-  assert.match(fn, /catalogo_marketplace_testes/);
-  assert.match(fn, /\.eq\("ativo", true\)/);
-  assert.match(fn, /Este comércio não está autorizado para o checkout offline/);
+test('checkout offline exige recebedor Mercado Pago ativo e catálogo publicado', () => {
+  assert.match(fn, /catalogo_recebedores/);
+  assert.match(fn, /\.eq\("status", "ativo"\)/);
+  assert.match(fn, /Conecte a conta Mercado Pago/);
   assert.match(fn, /await assertOfflineCommerceAuthorized\(comercioId\)/);
 });
 

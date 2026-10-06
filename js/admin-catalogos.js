@@ -28,12 +28,11 @@
 
   function statusLabel(row) {
     if (row.bloqueado) return "Bloqueado pela administração";
-    if (row.catalogo_ativo) return "Assinatura ativa";
-    if (row.assinatura_status === "pendente") return "Pendente — sem Pix";
-    if (row.assinatura_status === "expirada") return "Assinatura expirada";
-    if (row.assinatura_status === "cancelada") return "Assinatura cancelada";
+    if (row.catalogo_ativo) return "Recebedor Mercado Pago ativo";
+    if (row.receiver_status === "pendente" || !row.receiver_connected) return "Mercado Pago não conectado";
+    if (row.receiver_status !== "ativo") return "Recebedor em análise ou bloqueado";
     if (!row.comercio_publicado) return "Comércio não publicado";
-    return "Sem assinatura ativa";
+    return "Catálogo indisponível";
   }
 
   function render() {

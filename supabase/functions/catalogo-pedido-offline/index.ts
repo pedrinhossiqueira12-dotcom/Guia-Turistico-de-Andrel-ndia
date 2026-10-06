@@ -36,14 +36,14 @@ async function enforceRateLimit(rawKey: string) {
   if (data !== true) throw new HttpError("Muitas tentativas. Aguarde um minuto e tente novamente.", 429);
 }
 async function assertOfflineCommerceAuthorized(comercioId: string) {
-  const { data, error } = await admin
-    .from("catalogo_marketplace_testes")
-    .select("comercio_id")
-    .eq("comercio_id", comercioId)
-    .eq("ativo", true)
-    .maybeSingle();
-  if (error) throw new Error("Falha ao validar autorização do comércio.");
-  if (!data) throw new HttpError("Este comércio não está autorizado para o checkout offline.", 403);
+  const [{ data: receiver, error: receiverError }, { data: published, error: publishedError }] = await Promise.all([
+    admin.from("catalogo_recebedores").select("comercio_id,status,conta_externa_id")
+      .eq("comercio_id", comercioId).eq("status", "ativo").not("conta_externa_id", "is", null).maybeSingle(),
+    admin.from("catalogo_publicado").select("comercio_id").eq("comercio_id", comercioId).maybeSingle(),
+  ]);
+  if (receiverError || publishedError) throw new Error("Falha ao validar a conta Mercado Pago e o catálogo.");
+  if (!receiver) throw new HttpError("Conecte a conta Mercado Pago do comércio antes de aceitar pedidos.", 403);
+  if (!published) throw new HttpError("Este catálogo não está ativo para receber pedidos.", 403);
 }
 function randomDigits() { const bytes = new Uint32Array(1); crypto.getRandomValues(bytes); return String(100000 + (bytes[0] % 900000)); }
 function cents(value: unknown, label: string) { const amount = Number(value); if (!Number.isInteger(amount) || amount < 0 || amount > 999999999) throw new HttpError(`${label} inválido.`); return amount; }

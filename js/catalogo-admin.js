@@ -104,12 +104,10 @@
           $("linkContratacao").hidden = true;
         } else {
           $("lockedTitle").textContent = "Catálogo não liberado";
-          $("lockedText").textContent = resultado.assinatura_status === "pendente"
-            ? "Há uma solicitação pendente, mas esta demonstração não gerou Pix nem liberou o catálogo."
-            : "Para gerenciar produtos, o catálogo precisa estar com assinatura ativa.";
+          $("lockedText").textContent = "Conecte a conta Mercado Pago do comércio para liberar gratuitamente a gestão do catálogo.";
           $("linkContratacao").hidden = false;
         }
-        setNotice("Acesso à gestão bloqueado", "A administração e a vitrine dependem de assinatura ativa.");
+        setNotice("Acesso à gestão bloqueado", "A gestão e a vitrine são liberadas após a conexão ativa do Mercado Pago.");
         return;
       }
 

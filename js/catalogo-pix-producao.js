@@ -60,7 +60,7 @@
     $("paymentBox").hidden = false;
     $("receiverStatusTitle").textContent = connected ? "Conta Mercado Pago conectada" : "Conexão pendente";
     $("receiverStatusText").textContent = connected
-      ? (enabled ? "O comércio está pronto para receber pedidos via Pix." : "A conta está conectada, mas o checkout de pedidos continua desligado.")
+      ? (enabled ? "O comércio está pronto para receber pedidos via Pix." : "A conta está conectada e o catálogo está liberado; o checkout global ainda está em validação.")
       : "Conecte a conta Mercado Pago do comércio para ativar o split dos pedidos.";
     $("paymentMessage").textContent = enabled
       ? "A configuração do checkout de pedidos está disponível para este comércio."

@@ -51,13 +51,11 @@
       return;
     }
     if (estado.ativo) {
-      texto.textContent = "Sua assinatura está ativa. Atualize produtos, categorias e opções de pedido.";
+      texto.textContent = "Seu catálogo está ativo. Atualize produtos, categorias e opções de pedido.";
       link.textContent = "Gerenciar catálogo";
       link.href = `catalogo-admin.html?id=${encodeURIComponent(comercioId)}`;
     } else {
-      texto.textContent = estado.assinatura_status === "pendente"
-        ? "Existe um pedido de teste pendente; nenhuma cobrança real ocorreu e a vitrine continua fechada."
-        : "Planos definidos: R$ 59,90 por mês ou R$ 599,90 por ano. O link abre somente o teste sandbox; não ativa a vitrine.";
+      texto.textContent = "Conecte a conta Mercado Pago do comércio para ativar gratuitamente o catálogo.";
       link.textContent = "Criar catálogo digital";
       link.href = `catalogo-venda.html?id=${encodeURIComponent(comercioId)}`;
     }
