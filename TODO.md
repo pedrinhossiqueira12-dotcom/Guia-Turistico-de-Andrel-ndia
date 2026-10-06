@@ -93,3 +93,25 @@
 - [x] 48 testes de unidade/regressão, checagem Deno e build com tabela vazia; prévia em 8766, sem notícia fictícia cadastrada no Supabase.
 - [ ] Configurar Cloudflare Pages para executar build e secret de Deploy Hook; o conector Cloudflare foi oferecido nesta sessão e permaneceu desabilitado, então esses passos ficam manuais. A integração real com login admin no navegador e criação de uma publicação legítima ainda dependem da conta do proprietário.
 - [ ] O evento legado Festival de Inverno ainda não foi importado: a capa referida em `DATA/eventos.json` não existe no repositório e faltam data/local confirmados.
+
+## 11. Fechamento automático e cobrança Pix da fatura (05/10/2026)
+
+Detalhes em `FECHAMENTO-E-FATURA-PIX.md`. Tudo preparado localmente e **desligado**; nada aplicado no Supabase.
+
+- [x] Aplicar o patch do fechamento automático (`20261005150000`) na branch de trabalho e validar com testes.
+- [x] Tornar o agendamento `pg_cron` defensivo: sem a extensão, a migration registra aviso e não aborta.
+- [x] Registrar auditoria de cada execução automática em `catalogo_automacao_execucoes` (origem, competência, fechamentos, bloqueios, erro).
+- [x] Corrigir o cálculo do fechamento: o total não encolhe quando a comissão passa para `bloqueado`/`paga`, o vencimento já gravado é preservado e estados terminais não são rebaixados por recálculo.
+- [x] Implementar a cobrança Pix da fatura: tabelas, RPCs transacionais, Edge Function, webhook com HMAC e bloco “Pix da fatura” no painel do comércio.
+- [ ] Aplicar as migrations `20261005150000`, `20261005160000` e `20261005170000` no Supabase, uma por vez, e conferir o resultado.
+- [ ] Habilitar `pg_cron` no projeto antes de aplicar, para o agendamento ser criado de imediato.
+- [ ] Implantar `catalogo-fatura-pix` e configurar `MP_PLATFORM_ACCESS_TOKEN`, `MP_PLATFORM_SELLER_ID`, `MP_PLATFORM_WEBHOOK_SECRET` e `FATURA_PIX_ENABLED=false`.
+- [ ] Cadastrar a URL de webhook de Orders da fatura no painel do Mercado Pago.
+- [ ] Testar em faturas controladas: valor divergente, confirmação repetida, cancelamento, quitação e estorno.
+- [ ] Definir a política de divergência de valor e o alinhamento do desbloqueio do painel administrativo antigo.
+- [ ] Só então avaliar `FATURA_PIX_ENABLED=true` e `fatura_pix_ativo=true`, com autorização explícita.
+
+### Defeito encontrado e corrigido nesta entrega
+
+- [x] `catalogo_confirmar_pedido_offline` falhava em toda confirmação válida: o `INSERT` da comissão usava `ON CONFLICT (pedido_id)`, ambíguo com o parâmetro de saída `pedido_id`, e o PostgreSQL abortava com `column reference "pedido_id" is ambiguous`. Corrigido em `20261005170000` com `ON CONFLICT ON CONSTRAINT catalogo_comissoes_offline_pedido_id_key`, sem mudar o contrato da Edge Function. **Aplicar antes de ligar `OFFLINE_CHECKOUT_ENABLED`.**
+- [ ] Adicionar teste funcional de banco (hoje os testes do fluxo offline são estáticos, lendo o texto dos arquivos): o defeito acima passou por eles.

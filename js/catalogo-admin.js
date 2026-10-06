@@ -194,6 +194,70 @@
     } catch (error) { $("extratoOffline").innerHTML = `<p class="form-feedback">${escapar(error.message || "Não foi possível consultar o extrato.")}</p>`; }
   }
 
+  function traducaoCobranca(status) {
+    return ({
+      aberto: "Em aberto",
+      faturado: "Fechada, aguardando pagamento",
+      pendente: "Pix pendente",
+      pago: "Paga",
+      vencido: "Vencida",
+      bloqueado: "Bloqueada por inadimplência",
+      expirado: "Pix expirado",
+      cancelado: "Cancelada",
+      estornado: "Estornada (crédito revogado)",
+      contestado: "Contestada (chargeback)",
+      divergente: "Divergência de valor — conferência manual",
+    })[status] || status || "sem cobrança";
+  }
+
+  async function chamarFaturaPix(body) {
+    const { data, error } = await getClient().functions.invoke("catalogo-fatura-pix", { body: { ...body, comercio_id: comercioId } });
+    if (error || !data?.success) throw new Error(data?.mensagem || error?.message || "Não foi possível processar a cobrança da fatura.");
+    return data;
+  }
+
+  function competenciaDaFatura() {
+    const competencia = $("competenciaOffline").value;
+    if (!competencia) throw new Error("Escolha o mês da fatura antes de gerar o Pix.");
+    return competencia;
+  }
+
+  function renderizarPixFatura(data) {
+    const fatura = data.fatura || {};
+    const pix = data.pix || {};
+    const total = Number(data.valor_centavos ?? fatura.total_comissao_centavos ?? 0);
+    const situacao = data.cobranca_status || fatura.status || "";
+    const partes = [
+      `<p><strong>Comissão da competência:</strong> ${reais(total)}</p>`,
+      `<p><strong>Situação:</strong> ${escapar(traducaoCobranca(situacao))}${fatura.vencimento_em ? ` · vencimento ${escapar(fatura.vencimento_em)}` : ""}</p>`,
+    ];
+    if (data.mensagem) partes.push(`<p class="form-feedback">${escapar(data.mensagem)}</p>`);
+    if (pix.code) {
+      if (pix.imageBase64) partes.push(`<img class="pix-qr" alt="QR Code Pix da fatura" src="data:image/png;base64,${pix.imageBase64}">`);
+      partes.push(`<label class="pix-copy">Pix copia e cola<textarea readonly rows="3">${escapar(pix.code)}</textarea></label>`);
+      partes.push('<button id="copiarPixFatura" class="small-button" type="button">Copiar código Pix</button>');
+      if (/^https:\/\//.test(pix.ticketUrl || "")) partes.push(`<p><a class="button button-secondary" href="${escapar(pix.ticketUrl)}" target="_blank" rel="noopener">Abrir no Mercado Pago</a></p>`);
+    }
+    $("faturaPixResultado").innerHTML = partes.join("");
+    const copiar = $("copiarPixFatura");
+    if (copiar) copiar.addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText(pix.code); copiar.textContent = "Código copiado"; }
+      catch { copiar.textContent = "Copie o código manualmente"; }
+    });
+  }
+
+  async function gerarPixFatura() {
+    $("faturaPixResultado").innerHTML = '<p class="form-feedback">Solicitando o Pix da fatura…</p>';
+    try { renderizarPixFatura(await chamarFaturaPix({ acao: "criar_cobranca", competencia: competenciaDaFatura() })); }
+    catch (error) { $("faturaPixResultado").innerHTML = `<p class="form-feedback">${escapar(error.message || "Não foi possível gerar o Pix da fatura.")}</p>`; }
+  }
+
+  async function consultarPixFatura() {
+    $("faturaPixResultado").innerHTML = '<p class="form-feedback">Verificando o pagamento da fatura…</p>';
+    try { renderizarPixFatura(await chamarFaturaPix({ acao: "consultar_cobranca", competencia: competenciaDaFatura() })); }
+    catch (error) { $("faturaPixResultado").innerHTML = `<p class="form-feedback">${escapar(error.message || "Não foi possível verificar o pagamento da fatura.")}</p>`; }
+  }
+
   async function carregarDadosPainel() {
     const supabase = getClient();
     const [{ data: cfg, error: erroCfg }, { data: cats, error: erroCats }, { data: prods, error: erroProds }] = await Promise.all([
@@ -576,3 +640,5 @@
     iniciar();
   });
 })();
+    $("gerarPixFatura").addEventListener("click", gerarPixFatura);
+    $("consultarPixFatura").addEventListener("click", consultarPixFatura);

@@ -66,6 +66,15 @@
           <div class="section-title"><div><span class="eyebrow">EXTRATO</span><h3>Competência mensal</h3></div></div>
           <div class="statement-controls"><label>Mês <input id="competenciaOffline" type="month"></label><button id="consultarExtratoOffline" class="button button-secondary" type="button">Consultar extrato</button></div>
           <div id="extratoOffline" class="offline-statement-result"><p class="form-feedback">Escolha um mês para consultar o extrato.</p></div>
+          <div class="offline-invoice" id="faturaPixBloco">
+            <div class="section-title"><div><span class="eyebrow">PAGAMENTO DA COMISSÃO</span><h3>Pix da fatura</h3></div></div>
+            <p>O Pix é emitido pela plataforma <strong>com o valor exato da comissão fechada</strong>. A quitação só é registrada depois que o Mercado Pago confirma o pagamento; a conferência manual continua disponível para a administração.</p>
+            <div class="statement-controls">
+              <button id="gerarPixFatura" class="button button-primary" type="button">Gerar Pix da fatura</button>
+              <button id="consultarPixFatura" class="button button-secondary" type="button">Verificar pagamento</button>
+            </div>
+            <div id="faturaPixResultado" class="offline-statement-result"><p class="form-feedback">Consulte o extrato do mês para carregar a fatura.</p></div>
+          </div>
         </div>
       </section>
 
