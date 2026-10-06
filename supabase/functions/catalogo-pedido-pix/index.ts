@@ -20,11 +20,16 @@ function money(centsValue: number) { return (centsValue / 100).toFixed(2); }
 function hexKey(value: string) { return Uint8Array.from(value.match(/.{1,2}/g) || [], (pair) => Number.parseInt(pair, 16)); }
 function base64Bytes(value: string) { const padded = value.replace(/-/g, "+").replace(/_/g, "/") + "==="; const binary = atob(padded.slice(0, padded.length - (padded.length % 4))); return Uint8Array.from(binary, (char) => char.charCodeAt(0)); }
 async function decrypt(value: string) {
-  const [ivEncoded, cipherEncoded] = value.split("."); const raw = hexKey(MP_OAUTH_ENCRYPTION_KEY);
-  if (raw.length !== 32 || !ivEncoded || !cipherEncoded) throw new HttpError("A proteção da conta recebedora está incompleta.", 503);
-  const key = await crypto.subtle.importKey("raw", raw, "AES-GCM", false, ["decrypt"]);
-  const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: base64Bytes(ivEncoded) }, key, base64Bytes(cipherEncoded));
-  return new TextDecoder().decode(plain);
+  try {
+    const [ivEncoded, cipherEncoded] = value.split("."); const raw = hexKey(MP_OAUTH_ENCRYPTION_KEY);
+    if (raw.length !== 32 || !ivEncoded || !cipherEncoded) throw new Error("invalid encryption configuration");
+    const key = await crypto.subtle.importKey("raw", raw, "AES-GCM", false, ["decrypt"]);
+    const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: base64Bytes(ivEncoded) }, key, base64Bytes(cipherEncoded));
+    return new TextDecoder().decode(plain);
+  } catch (error) {
+    console.error("Marketplace receiver token could not be decrypted", error instanceof Error ? error.message : String(error));
+    throw new HttpError("A conexão deste comércio com o Mercado Pago está inválida. Reconecte a conta antes de gerar um Pix.", 503);
+  }
 }
 function validEmail(value: string) { return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(value) && value.length <= 180; }
 function orderPix(data: Record<string, unknown>) {
@@ -68,14 +73,21 @@ Deno.serve(async (request: Request) => {
     const byId = new Map((products || []).map((product: Record<string, unknown>) => [String(product.id), product])); if (byId.size !== ids.length) throw new HttpError("Um produto não está mais disponível. Atualize o catálogo.");
     const items = ids.map((id) => { const product = byId.get(id)!; const unit = Math.round(Number(product.preco) * 100); if (!Number.isInteger(unit) || unit <= 0) throw new HttpError("Preço de produto inválido."); const quantity = requested.get(id)!; return { produto_id: id, nome_produto: text(product.nome, 120), descricao_produto: text(product.descricao, 600), preco_unitario_centavos: unit, quantidade: quantity, total_item_centavos: unit * quantity }; });
     const subtotal = items.reduce((sum, item) => sum + item.total_item_centavos, 0); const delivery = 0; const fee = Math.round(subtotal * 0.05); const total = subtotal + delivery;
+    const token = await decrypt(String(receiver.oauth_access_token_enc));
     const { data: orderRow, error: orderError } = await admin.from("catalogo_pedidos").insert({ comercio_id: comercioId, referencia_externa: `guia-${requestId}`, idempotency_key: requestId, modalidade, forma_pagamento: "pix", subtotal_produtos_centavos: subtotal, entrega_centavos: delivery, total_centavos: total, taxa_plataforma_centavos: fee, repasse_bruto_comercio_centavos: subtotal - fee + delivery, cliente_nome: nome, cliente_email: email, cliente_telefone: telefone, cliente_endereco: endereco || null, cliente_numero: numero || null, cliente_bairro: bairro || null, cliente_complemento: complemento || null, cliente_referencia: referencia || null, cliente_cidade: "Andrelândia-MG", observacoes: observacoes || null, metadata: { checkout: "orders_api", marketplace_fee_centavos: fee } }).select("id").single();
     if (orderError || !orderRow) { if (orderError?.code === "23505") throw new HttpError("Esta tentativa de pedido já está sendo processada.", 409); throw new Error("Não foi possível reservar o pedido."); }
-    const token = await decrypt(String(receiver.oauth_access_token_enc));
-    const mpData = await mpOrder(token, { type: "online", total_amount: money(total), external_reference: `guia-${orderRow.id}`, description: `Pedido no catálogo ${comercioId}`, processing_mode: "automatic", marketplace_fee: money(fee), transactions: { payments: [{ amount: money(total), payment_method: { id: "pix", type: "bank_transfer" }, expiration_time: "PT24H" }] }, payer: { email } }, requestId);
+    let mpData: Record<string, unknown>;
+    try {
+      mpData = await mpOrder(token, { type: "online", total_amount: money(total), external_reference: `guia-${orderRow.id}`, description: `Pedido no catálogo ${comercioId}`, processing_mode: "automatic", marketplace_fee: money(fee), transactions: { payments: [{ amount: money(total), payment_method: { id: "pix", type: "bank_transfer" }, expiration_time: "PT24H" }] }, payer: { email } }, requestId);
+    } catch (error) {
+      await admin.from("catalogo_pedidos").delete().eq("id", orderRow.id).is("order_id", null);
+      throw error;
+    }
     const pix = orderPix(mpData);
     const { error: updateError } = await admin.from("catalogo_pedidos").update({ order_id: pix.order_id, payment_id: pix.payment_id || null, status: "aguardando_pagamento", status_pagamento: "pendente", pix_codigo: pix.pix_codigo, pix_qr_code_base64: pix.pix_qr_code_base64, pix_expira_em: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), metadata: { checkout: "orders_api", marketplace_fee_centavos: fee, status_detail: pix.status_detail } }).eq("id", orderRow.id);
     if (updateError) throw new Error("Pix criado, mas não foi possível registrar o pedido com segurança.");
-    await admin.from("catalogo_pedido_itens").insert(items.map((item) => ({ ...item, pedido_id: orderRow.id })));
+    const { error: itemError } = await admin.from("catalogo_pedido_itens").insert(items.map((item) => ({ ...item, pedido_id: orderRow.id })));
+    if (itemError) throw new Error("Pix criado, mas não foi possível registrar os itens do pedido com segurança.");
     return json({ success: true, pedido_id: orderRow.id, order_id: pix.order_id, payment_id: pix.payment_id, total_centavos: total, taxa_plataforma_centavos: fee, pix_codigo: pix.pix_codigo, pix_qr_code_base64: pix.pix_qr_code_base64, ticket_url: pix.ticket_url, status: pix.status, status_detail: pix.status_detail });
   } catch (error) { if (error instanceof HttpError) return json({ success: false, mensagem: error.message }, error.status); console.error("catalogo-pedido-pix failed:", (error as Error).message); return json({ success: false, mensagem: "Não foi possível criar o Pix. Nenhum pagamento foi confirmado." }, 500); }
 });

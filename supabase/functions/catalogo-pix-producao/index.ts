@@ -93,11 +93,24 @@ function safeString(value: unknown): string {
 function base64Url(bytes: Uint8Array): string { let binary = ""; for (const byte of bytes) binary += String.fromCharCode(byte); return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, ""); }
 async function sha256Base64Url(value: string): Promise<string> { return base64Url(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)))); }
 function randomBase64Url(size = 32): string { return base64Url(crypto.getRandomValues(new Uint8Array(size))); }
+function errorInfo(error: unknown) {
+  const value = asRecord(error);
+  return {
+    message: error instanceof Error ? error.message : safeString(value.message || error),
+    code: safeString(value.code),
+    details: safeString(value.details),
+    hint: safeString(value.hint),
+  };
+}
 async function startMercadoPagoOAuth(owner: Owner) {
   if (!MP_OAUTH_CLIENT_ID || !MP_OAUTH_REDIRECT_URI) return { success: false, mensagem: "A conexão Mercado Pago ainda aguarda a configuração OAuth pelo administrador. Nenhuma cobrança foi criada." };
   const state = randomBase64Url(); const codeVerifier = randomBase64Url();
+  await admin.from("catalogo_oauth_estados").delete().eq("comercio_id", owner.commerceId).lt("expira_em", new Date().toISOString());
   const { error } = await admin.from("catalogo_oauth_estados").insert({ estado_hash: await sha256Base64Url(state), comercio_id: owner.commerceId, proprietario_id: owner.userId, code_verifier: codeVerifier, expira_em: new Date(Date.now() + 600000).toISOString() });
-  if (error) throw new Error("Não foi possível iniciar a conexão segura com o Mercado Pago.");
+  if (error) {
+    console.error("Mercado Pago OAuth state insert failed", { ...errorInfo(error), comercio_id: owner.commerceId, proprietario_id: owner.userId });
+    throw new HttpError("Não foi possível iniciar a conexão. Atualize a página e tente novamente.", 503);
+  }
   const authorization = new URL("https://auth.mercadopago.com.br/authorization");
   authorization.search = new URLSearchParams({ client_id: MP_OAUTH_CLIENT_ID, response_type: "code", platform_id: "mp", state, redirect_uri: MP_OAUTH_REDIRECT_URI, code_challenge: await sha256Base64Url(codeVerifier), code_challenge_method: "S256" }).toString();
   return { success: true, authorization_url: authorization.toString(), expires_in: 600 };
