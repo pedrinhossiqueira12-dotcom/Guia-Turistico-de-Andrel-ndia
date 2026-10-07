@@ -1,0 +1,113 @@
+-- Testes pgTAP da finalização da lógica V2.
+-- Executar com: supabase test db
+-- Estes testes são estruturais e de regras; não movimentam dinheiro.
+
+begin;
+
+select plan(12);
+
+select ok(
+  exists(
+    select 1 from public.catalogo_fluxo_config
+    where id=true and taxa_sem_entrega_percentual=7.00
+  ),
+  'taxa configurada em 7%'
+);
+
+select results_eq(
+  $$select (catalogo_fluxo_precificar('retirada',10000,NULL)->>'taxa_total_centavos')::integer$$,
+  $$values (700)$$,
+  'retirada cobra exatamente 7%'
+);
+
+select results_eq(
+  $$select (catalogo_fluxo_precificar('consumo_local',10000,NULL)->>'taxa_total_centavos')::integer$$,
+  $$values (700)$$,
+  'consumo local cobra exatamente 7%'
+);
+
+select results_eq(
+  $$select (catalogo_fluxo_precificar('entrega',10000,NULL)->>'taxa_total_centavos')::integer$$,
+  $$values (700)$$,
+  'entrega cobra exatamente 7%'
+);
+
+select results_eq(
+  $$select (catalogo_fluxo_precificar('entrega',10000,NULL)->>'taxa_plataforma_centavos')::integer$$,
+  $$values (500)$$,
+  'entrega reserva 5% para a plataforma'
+);
+
+select results_eq(
+  $$select (catalogo_fluxo_precificar('entrega',10000,NULL)->>'taxa_motoboy_centavos')::integer$$,
+  $$values (200)$$,
+  'entrega reserva 2% para o motoboy'
+);
+
+select ok(
+  not exists(
+    select 1 from public.catalogo_pedidos
+    where versao_financeira=2
+      and modalidade<>'entrega'
+      and taxa_motoboy_centavos<>0
+  ),
+  'V2 sem entrega nunca cria remuneração de motoboy'
+);
+
+select ok(
+  not exists(
+    select 1 from public.catalogo_pedidos
+    where versao_financeira=2
+      and modalidade='entrega'
+      and taxa_motoboy_centavos <>
+          round(subtotal_produtos_centavos*0.02)::integer
+  ),
+  'V2 entrega mantém snapshot de 2% para motoboy'
+);
+
+select ok(
+  not exists(
+    select 1 from public.catalogo_pedidos
+    where versao_financeira=2
+      and taxa_total_centavos <>
+          taxa_plataforma_centavos+taxa_motoboy_centavos
+  ),
+  'snapshot total é soma das parcelas'
+);
+
+select ok(
+  exists(
+    select 1
+    from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+    where n.nspname='public'
+      and p.proname='catalogo_confirmar_cobranca_fatura'
+      and pg_get_functiondef(p.oid) like '%fatura_paga%'
+  ),
+  'pagamento de fatura contém liquidação financeira'
+);
+
+select ok(
+  exists(
+    select 1
+    from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+    where n.nspname='public'
+      and p.proname='catalogo_confirmar_pedido_offline'
+      and pg_get_functiondef(p.oid) like '%Pedidos com entrega devem ser concluídos pelo fluxo autenticado de entrega.%'
+  ),
+  'fluxo legado não conclui entrega V2 pelo token do cliente'
+);
+
+select ok(
+  not exists(
+    select 1
+    from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+    where n.nspname='public'
+      and p.proname in ('catalogo_motoboy_acao_v2','catalogo_operacao_admin_v2')
+      and pg_get_functiondef(p.oid) ~* '10[.,]00|>= *1000|< *1000'
+  ),
+  'nenhum piso de R$10 foi codificado nos fluxos de saque/repasse existentes'
+);
+
+select * from finish();
+
+rollback;
