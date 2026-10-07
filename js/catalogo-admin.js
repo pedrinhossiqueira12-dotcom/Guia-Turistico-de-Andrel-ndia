@@ -438,7 +438,7 @@
 
   async function chamarFaturaPix(body) {
     const { data, error } = await getClient().functions.invoke("catalogo-fatura-pix", { body: { ...body, comercio_id: comercioId } });
-    if (error || !data?.success) throw new Error(data?.mensagem || error?.message || "Não foi possível processar a cobrança da fatura.");
+    if (error || !data?.success) throw new Error(data?.mensagem || error?.message || "Não foi possível processar o pagamento da fatura.");
     return data;
   }
 
@@ -454,7 +454,7 @@
     const total = Number(data.valor_centavos ?? fatura.total_comissao_centavos ?? 0);
     const situacao = data.cobranca_status || fatura.status || "";
     const partes = [
-      `<p><strong>Comissão da competência:</strong> ${reais(total)}</p>`,
+      `<p><strong>Total a pagar:</strong> ${reais(total)}</p>`,
       `<p><strong>Situação:</strong> ${escapar(traducaoCobranca(situacao))}${fatura.vencimento_em ? ` · vencimento ${escapar(fatura.vencimento_em)}` : ""}</p>`,
     ];
     if (data.mensagem) partes.push(`<p class="form-feedback">${escapar(data.mensagem)}</p>`);
