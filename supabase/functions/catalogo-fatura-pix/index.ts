@@ -41,6 +41,7 @@ try {
 } catch { /* fallback durante rotação de secrets */ }
 if (!serviceKey) serviceKey = LEGACY_SERVICE_ROLE_KEY;
 const admin = createClient(SUPABASE_URL, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
+const INTERNAL_SERVICE_KEYS = [...new Set([serviceKey, LEGACY_SERVICE_ROLE_KEY].filter((key) => typeof key === "string" && key.trim() !== ""))];
 
 class HttpError extends Error {
   status: number;
@@ -87,6 +88,37 @@ async function auth(request: Request) {
   return data.user;
 }
 
+async function constantTimeTokenMatch(candidate: string, expected: string) {
+  if (!candidate || !expected) return false;
+  const [leftDigest, rightDigest] = await Promise.all([
+    crypto.subtle.digest("SHA-256", new TextEncoder().encode(candidate)),
+    crypto.subtle.digest("SHA-256", new TextEncoder().encode(expected)),
+  ]);
+  const left = new Uint8Array(leftDigest), right = new Uint8Array(rightDigest);
+  let difference = left.length ^ right.length;
+  const length = Math.max(left.length, right.length);
+  for (let index = 0; index < length; index += 1) difference |= (left[index] || 0) ^ (right[index] || 0);
+  return difference === 0;
+}
+
+async function authorizeConfigValidation(request: Request) {
+  const token = request.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1] || "";
+  // O painel atual envia a chave interna no cabeçalho apikey, sem Bearer.
+  // Aceita somente as MESMAS chaves de serviço configuradas; anon/publishable não autorizam.
+  const candidates = [token, request.headers.get("apikey") || ""];
+  let serviceMatch = false;
+  for (const expected of INTERNAL_SERVICE_KEYS) {
+    for (const candidate of candidates) {
+      serviceMatch = (await constantTimeTokenMatch(candidate, expected)) || serviceMatch;
+    }
+  }
+  if (serviceMatch) return;
+  if (!token) throw new HttpError("Sessão ausente.", 401);
+  const { data, error } = await admin.auth.getUser(token);
+  if (error || !data.user) throw new HttpError("Sessão inválida.", 401);
+  if (data.user.id !== ADMIN_USER_ID) throw new HttpError("Acesso não autorizado.", 403);
+}
+
 async function owner(userId: string, comercioId: string) {
   if (!isComercioId(comercioId)) throw new HttpError("Comércio inválido.");
   if (userId === ADMIN_USER_ID) return { admin: true };
@@ -104,6 +136,49 @@ async function configuracoes() {
     fechamento_offline_ativo: Boolean(data?.fechamento_offline_ativo),
     emissao_habilitada: FATURA_PIX_ENABLED && Boolean(MP_ACCESS_TOKEN) && Boolean(MP_SELLER_ID) && Boolean(MP_WEBHOOK_SECRET),
   };
+}
+
+function credentialPresence() {
+  return {
+    access_token: Boolean(MP_ACCESS_TOKEN),
+    seller_id: Boolean(MP_SELLER_ID),
+    webhook_secret: Boolean(MP_WEBHOOK_SECRET),
+  };
+}
+
+async function validarConfiguracao(request: Request) {
+  await authorizeConfigValidation(request);
+  let config: Awaited<ReturnType<typeof configuracoes>>;
+  try {
+    config = await configuracoes();
+  } catch {
+    return json({
+      success: false, pronto: false, credenciais_presentes: credentialPresence(), vendedor_validado: false,
+      fatura_pix_enabled: FATURA_PIX_ENABLED, fatura_pix_ativo: false, fechamento_offline_ativo: false,
+      emissao_habilitada: false, mensagem: "Configuração indisponível.",
+    }, 503);
+  }
+  const credenciais = credentialPresence();
+  const credenciaisCompletas = credenciais.access_token && credenciais.seller_id && credenciais.webhook_secret;
+  const base = {
+    pronto: false,
+    credenciais_presentes: credenciais,
+    vendedor_validado: false,
+    fatura_pix_enabled: FATURA_PIX_ENABLED,
+    ...config,
+  };
+  if (!credenciaisCompletas) return json({ success: false, ...base, mensagem: "Configuração indisponível." }, 503);
+  try {
+    await assertSeller();
+  } catch {
+    return json({ success: false, ...base, mensagem: "Configuração do provedor inválida." }, 502);
+  }
+  return json({
+    success: true,
+    ...base,
+    vendedor_validado: true,
+    pronto: Boolean(config.emissao_habilitada && config.fatura_pix_ativo),
+  });
 }
 
 async function carregarFatura(comercioId: string, competencia: string) {
@@ -328,10 +403,11 @@ Deno.serve(async (request: Request) => {
   if (request.method !== "POST") return json({ success: false, mensagem: "Use POST." }, 405);
   try {
     if (new URL(request.url).pathname.replace(/\/$/, "").endsWith("/webhook")) return await webhook(request);
-    const user = await auth(request);
-    const userId = user.id;
     const body = record(await request.json().catch(() => ({})));
     const acao = text(body.acao, 40);
+    if (acao === "validar_configuracao") return await validarConfiguracao(request);
+    const user = await auth(request);
+    const userId = user.id;
     if (acao === "obter_fatura") return await obterFatura(userId, body);
     if (acao === "criar_cobranca") return await criarCobranca(userId, body, user.email || "");
     if (acao === "consultar_cobranca") return await consultarCobranca(userId, body);

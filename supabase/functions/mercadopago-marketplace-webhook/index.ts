@@ -1,9 +1,10 @@
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
-import { decryptAesGcm, extractProviderPayment, providerFactsError, sanitizedProviderId, verifyWebhookSignature } from "../_shared/catalogo-pagamentos-v2.ts";
+import { decryptAesGcm, extractProviderPayment, providerFactsError, sanitizedProviderId, parseWebhookSignature, verifyWebhookSignature } from "../_shared/catalogo-pagamentos-v2.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const MP_OAUTH_ENCRYPTION_KEY = Deno.env.get("MP_OAUTH_ENCRYPTION_KEY") ?? "";
-const MP_MARKETPLACE_WEBHOOK_SECRET = Deno.env.get("MP_MARKETPLACE_WEBHOOK_SECRET") ?? "";
+const MP_WEBHOOK_SECRET_RAW = Deno.env.get("MP_MARKETPLACE_WEBHOOK_SECRET") ?? "";
+const MP_MARKETPLACE_WEBHOOK_SECRET = MP_WEBHOOK_SECRET_RAW.trim();
 const MP_API = "https://api.mercadopago.com";
 const CORS_HEADERS = { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" };
 let serviceKey = "";
@@ -49,6 +50,34 @@ async function lookupPedido(kind: "payment" | "order", id: string) {
   if (error) throw new Error("Falha ao localizar o pedido para conciliação.");
   return data ? record(data) : null;
 }
+async function lookupFaturaCobranca(orderId: string) {
+  const { data, error } = await admin.from("catalogo_fatura_cobrancas")
+    .select("id,order_id").eq("order_id", orderId).maybeSingle();
+  if (error) throw new Error("Falha ao localizar o vínculo da cobrança da fatura.");
+  return data ? record(data) : null;
+}
+function canonicalOrderType(url: URL, body: Record<string, unknown>): "order" | "orders_v2" {
+  const type = String(url.searchParams.get("type") || body.type || "").toLowerCase();
+  return type === "orders_v2" || type === "orders" ? "orders_v2" : "order";
+}
+async function forwardFaturaWebhook(request: Request, url: URL, body: Record<string, unknown>, orderId: string): Promise<Response> {
+  if (!SUPABASE_URL) throw new Error("SUPABASE_URL ausente para encaminhar o webhook da fatura.");
+  const destination = new URL("/functions/v1/catalogo-fatura-pix/webhook", SUPABASE_URL);
+  destination.searchParams.set("type", canonicalOrderType(url, body));
+  destination.searchParams.set("data.id", orderId);
+  const downstream = await fetch(destination.toString(), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      "x-signature": request.headers.get("x-signature") || "",
+      "x-request-id": request.headers.get("x-request-id") || "",
+    },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(12000),
+  });
+  return new Response(await downstream.text(), { status: downstream.status, headers: CORS_HEADERS });
+}
 async function receiverToken(comercioId: string) {
   const { data, error } = await admin.from("catalogo_recebedores").select("status,conta_externa_id,oauth_access_token_enc").eq("comercio_id", comercioId).maybeSingle();
   if (error || !data || data.status !== "ativo" || !data.conta_externa_id || !data.oauth_access_token_enc) throw new Error("Recebedor Mercado Pago indisponível.");
@@ -72,11 +101,28 @@ async function reconcile(request: Request): Promise<Response> {
   const kind = eventKind(String(url.searchParams.get("type") || body.type || body.action || ""), body);
   if (!kind) return json({ success: true, ignored: true });
   const id = eventId(url, body), requestId = (request.headers.get("x-request-id") || "").trim();
-  if (!id || !requestId || requestId.length > 200) return json({ success: false, mensagem: "Webhook inválido." }, 401);
-  if (!await verifyWebhookSignature({ header: request.headers.get("x-signature"), requestId, dataId: id, secret: MP_MARKETPLACE_WEBHOOK_SECRET })) return json({ success: false, mensagem: "Webhook inválido." }, 401);
+  const signatureHeader = request.headers.get("x-signature");
+  if (!id || !requestId || requestId.length > 200) {
+    console.error("marketplace webhook rejected:", JSON.stringify({ fase: "identificacao", recurso_valido: Boolean(id), request_id_presente: Boolean(requestId), request_id_tamanho_valido: requestId.length <= 200, assinatura_presente: Boolean(signatureHeader) }));
+    return json({ success: false, mensagem: "Webhook inválido." }, 401);
+  }
+  if (!await verifyWebhookSignature({ header: signatureHeader, requestId, dataId: id, secret: MP_MARKETPLACE_WEBHOOK_SECRET })) {
+    const parsed = parseWebhookSignature(signatureHeader);
+    const timestamp = parsed ? Number(parsed.timestamp) * (parsed.timestamp.length === 10 ? 1000 : 1) : NaN;
+    // A conferência fora da janela serve SOMENTE ao diagnóstico. Ela nunca
+    // autoriza a notificação: este caminho sempre encerra com HTTP 401.
+    const hmacMatches = parsed && MP_MARKETPLACE_WEBHOOK_SECRET
+      ? await verifyWebhookSignature({ header: signatureHeader, requestId, dataId: id, secret: MP_MARKETPLACE_WEBHOOK_SECRET, now: timestamp, maxAgeMs: 0 })
+      : false;
+    console.error("marketplace webhook rejected:", JSON.stringify({ fase: "assinatura", pagamento_id: id, assinatura_presente: Boolean(signatureHeader), formato_valido: Boolean(parsed), segredo_configurado: Boolean(MP_MARKETPLACE_WEBHOOK_SECRET), segredo_normalizado: MP_WEBHOOK_SECRET_RAW !== MP_MARKETPLACE_WEBHOOK_SECRET, idade_segundos: Number.isFinite(timestamp) ? Math.round((Date.now() - timestamp) / 1000) : null, hmac_confere: Boolean(hmacMatches) }));
+    return json({ success: false, mensagem: "Webhook inválido." }, 401);
+  }
   const pedido = await lookupPedido(kind, id);
   // Webhook pode chegar antes do POST persistir payment_id. Nunca ACK definitivo:
   // o provedor deve repetir após a reserva local publicar os artefatos (mesma idempotência).
+  if (!pedido && kind === "order" && await lookupFaturaCobranca(id)) {
+    return await forwardFaturaWebhook(request, url, body, id);
+  }
   if (!pedido) return json({ success: false, retry: true, mensagem: "Pagamento ainda não localizado; repetir conciliação." }, 503);
   if (pedido.provedor !== "mercadopago") return json({ success: false, mensagem: "Provedor do pedido inválido." }, 409);
   const receiver = await receiverToken(String(pedido.comercio_id));

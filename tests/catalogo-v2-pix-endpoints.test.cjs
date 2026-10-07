@@ -154,6 +154,7 @@ async function fixture(options={}) {
     order.metadata={...order.metadata,sql_conciliado:true};
     return {data:{ok:true,status_pagamento:order.status_pagamento,financiamento_comprovado:args.p_status==='aprovado'&&args.p_taxa_centavos===order.taxa_total_centavos},error:null};
   };
+  const diagnostics=[];
   const provider={posts:[],gets:[],payments:new Map(),idempotent:new Map(),mutate:null,postHttpStatus:201,getHttpStatus:200,beforePost:null};
   const fetchFake=async(url,opts={})=>{
     assert.match(String(url),/^https:\/\/api\.mercadopago\.com\/v1\/(payments|orders)(\/[^/]+)?$/);
@@ -180,8 +181,8 @@ async function fixture(options={}) {
   };
   function loadEndpoint(rel) {
     let handler;
-    const env={SUPABASE_URL:'https://db.invalid',SUPABASE_SERVICE_ROLE_KEY:'local-service',MP_OAUTH_ENCRYPTION_KEY:key,MP_MARKETPLACE_WEBHOOK_SECRET:secret,MARKETPLACE_CHECKOUT_ENABLED:'true'};
-    const context=vm.createContext(baseContext({...h,createClient:()=>db,fetch:fetchFake,Deno:{env:{get:n=>env[n]},serve:fn=>{handler=fn;}}}));
+    const env={SUPABASE_URL:'https://db.invalid',SUPABASE_SERVICE_ROLE_KEY:'local-service',MP_OAUTH_ENCRYPTION_KEY:key,MP_MARKETPLACE_WEBHOOK_SECRET:options.webhookSecret ?? secret,MARKETPLACE_CHECKOUT_ENABLED:'true'};
+    const context=vm.createContext(baseContext({...h,console:{error(...args){ diagnostics.push(args.join(" ")); }},createClient:()=>db,fetch:fetchFake,Deno:{env:{get:n=>env[n]},serve:fn=>{handler=fn;}}}));
     const src=read(rel).replace(/^import[\s\S]*?;\s*$/gm,'');
     vm.runInContext(stripTypeScriptTypes(src,{mode:'strip'}),context,{filename:rel}); assert.equal(typeof handler,'function'); return handler;
   }
@@ -194,7 +195,7 @@ async function fixture(options={}) {
     const response=await webhook(new Request('https://local.invalid/webhook?type='+kind+(queryId===null?'':'&data.id='+queryId),{method:'POST',headers:{'content-type':'application/json','x-request-id':rid,'x-signature':`ts=${ts},v1=${signature?sig:'0'.repeat(64)}`},body:JSON.stringify({id:bodyId,type:kind,data:{id:bodyDataId},...extra})}));
     return {status:response.status,body:await response.json()};
   };
-  return {db,provider,pix,webhook,body,call,notify};
+  return {db,provider,pix,webhook,body,call,notify,diagnostics};
 }
 
 test('catalogo-v2-pix-endpoints criação entrega: código6/hash/token forte/AAD e fee7% com schema real',async()=>{
@@ -370,4 +371,31 @@ test('catalogo-v2-pix-endpoints legacy orders body.id é recurso somente quando 
   const f=await fixture({active:false});await f.call();const order=f.db.tables.catalogo_pedidos[0];order.order_id='ORD123';
   f.provider.payments.set('ORD123',{id:'ORD123',status:'processed',external_reference:'guia-'+order.id,collector_id:123,currency_id:'BRL',total_amount:100,marketplace_fee:5});
   const r=await f.notify({id:'ORD123',kind:'orders',queryId:null,bodyDataId:null,bodyId:'ORD123'});assert.equal(r.status,200);assert.equal(r.body.order_id,'ORD123');
+});
+
+
+test('webhook normaliza apenas espaço externo do segredo copiado, sem dispensar HMAC',async()=>{
+  const f=await fixture({webhookSecret:' \r\n'+secret+'\n '});await f.call();f.provider.payments.get('9000').status='approved';
+  assert.equal((await f.notify()).status,200);
+  const before=f.provider.gets.length;
+  assert.equal((await f.notify({signature:false})).status,401);
+  assert.equal(f.provider.gets.length,before);
+});
+test('diagnóstico distingue assinatura divergente de timestamp antigo sem revelar segredo/header',async()=>{
+  const f=await fixture();await f.call();const before=f.provider.gets.length;
+  assert.equal((await f.notify({signature:false})).status,401);
+  let log=JSON.parse(f.diagnostics.at(-1).split('marketplace webhook rejected: ')[1]);
+  assert.equal(log.hmac_confere,false);assert.equal(log.formato_valido,true);assert.equal(log.segredo_configurado,true);
+  assert.equal((await f.notify({ts:String(Math.floor(Date.now()/1000)-601)})).status,401);
+  log=JSON.parse(f.diagnostics.at(-1).split('marketplace webhook rejected: ')[1]);
+  assert.equal(log.hmac_confere,true);assert.ok(log.idade_segundos>=600);
+  assert.equal(f.provider.gets.length,before);
+  const text=f.diagnostics.join('\n');assert.ok(!text.includes(secret));assert.ok(!text.includes('v1='));assert.ok(!text.includes('seller-token'));
+});
+test('segredo ausente permanece fail-closed e registra somente sua ausência',async()=>{
+  const f=await fixture({webhookSecret:''});await f.call();const before=f.provider.gets.length;
+  assert.equal((await f.notify()).status,401);
+  const log=JSON.parse(f.diagnostics.at(-1).split('marketplace webhook rejected: ')[1]);
+  assert.equal(log.segredo_configurado,false);assert.equal(log.hmac_confere,false);
+  assert.equal(f.provider.gets.length,before);
 });
