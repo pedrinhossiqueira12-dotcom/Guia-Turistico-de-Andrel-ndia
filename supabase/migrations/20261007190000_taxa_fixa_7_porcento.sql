@@ -45,21 +45,32 @@ ALTER TABLE public.catalogo_pedidos
   );
 
 ALTER TABLE public.catalogo_comissoes_offline
+  ADD COLUMN IF NOT EXISTS modalidade text;
+
+UPDATE public.catalogo_comissoes_offline c
+   SET modalidade = p.modalidade
+  FROM public.catalogo_pedidos p
+ WHERE p.id = c.pedido_id
+   AND c.modalidade IS DISTINCT FROM p.modalidade;
+
+ALTER TABLE public.catalogo_comissoes_offline
+  ALTER COLUMN modalidade SET NOT NULL;
+
+ALTER TABLE public.catalogo_comissoes_offline
+  DROP CONSTRAINT IF EXISTS catalogo_comissoes_offline_modalidade_check,
   DROP CONSTRAINT IF EXISTS catalogo_comissoes_offline_v2_snapshot_check;
 
 ALTER TABLE public.catalogo_comissoes_offline
-  ADD CONSTRAINT catalogo_comissoes_offline_v2_snapshot_check
-  CHECK (
+  ADD CONSTRAINT catalogo_comissoes_offline_modalidade_check
+  CHECK (modalidade IN ('entrega','retirada','consumo_local'));
+
+ALTER TABLE public.catalogo_comissoes_offline
+  ADD CONSTRAINT catalogo_comissoes_offline_v2_snapshot_check CHECK (
     versao_financeira IN (1,2)
     AND taxa_plataforma_centavos =
       CASE
-        WHEN versao_financeira = 2 AND EXISTS (
-          SELECT 1
-          FROM public.catalogo_pedidos p
-          WHERE p.id = pedido_id
-            AND p.modalidade <> 'entrega'
-        )
-        THEN round(subtotal_produtos_centavos * 0.07)::integer
+        WHEN versao_financeira = 2 AND modalidade <> 'entrega'
+          THEN round(subtotal_produtos_centavos * 0.07)::integer
         ELSE round(subtotal_produtos_centavos * 0.05)::integer
       END
     AND taxa_motoboy_centavos >= 0
@@ -72,18 +83,31 @@ ALTER TABLE public.catalogo_comissoes_offline
         versao_financeira = 2
         AND taxa_motoboy_centavos =
           CASE
-            WHEN EXISTS (
-              SELECT 1
-              FROM public.catalogo_pedidos p
-              WHERE p.id = pedido_id
-                AND p.modalidade = 'entrega'
-            )
-            THEN round(subtotal_produtos_centavos * 0.02)::integer
+            WHEN modalidade = 'entrega' THEN round(subtotal_produtos_centavos * 0.02)::integer
             ELSE 0
           END
       )
     )
   );
+
+CREATE OR REPLACE FUNCTION catalogo_private.catalogo_v2_comissao_defaults()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
+BEGIN
+  NEW.taxa_plataforma_centavos := coalesce(NEW.taxa_plataforma_centavos,NEW.valor_comissao_centavos);
+  NEW.valor_total_centavos := coalesce(NEW.valor_total_centavos,NEW.valor_comissao_centavos);
+  IF NEW.modalidade IS NULL THEN
+    SELECT p.modalidade INTO NEW.modalidade
+      FROM public.catalogo_pedidos p
+     WHERE p.id=NEW.pedido_id;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS catalogo_comissao_v2_defaults ON public.catalogo_comissoes_offline;
+CREATE TRIGGER catalogo_comissao_v2_defaults
+BEFORE INSERT ON public.catalogo_comissoes_offline
+FOR EACH ROW EXECUTE FUNCTION catalogo_private.catalogo_v2_comissao_defaults();
 
 CREATE OR REPLACE FUNCTION public.catalogo_fluxo_precificar(
   p_modalidade text,
@@ -252,12 +276,12 @@ BEGIN
 
     INSERT INTO public.catalogo_comissoes_offline(
       pedido_id,comercio_id,competencia,subtotal_produtos_centavos,
-      taxa_percentual,valor_comissao_centavos,versao_financeira,
+      taxa_percentual,valor_comissao_centavos,versao_financeira,modalidade,
       taxa_plataforma_centavos,taxa_motoboy_centavos,valor_total_centavos,metadata
     )
     VALUES(
       v_pedido.id,v_pedido.comercio_id,v_comp,v_pedido.subtotal_produtos_centavos,
-      7.00,v_pedido.taxa_total_centavos,2,
+      7.00,v_pedido.taxa_total_centavos,2,v_pedido.modalidade,
       v_pedido.taxa_plataforma_centavos,v_pedido.taxa_motoboy_centavos,
       v_pedido.taxa_total_centavos,
       jsonb_build_object(
