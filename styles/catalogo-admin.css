@@ -41,3 +41,42 @@
 .order-notes strong { color: var(--green); }
 .order-items-missing { color: #855631!important; font-size: 13px; }
 @media(max-width:420px) { .order-items li { flex-wrap: wrap; gap: 8px; } .order-item-description { flex: 1 1 160px; } .offline-order-copy { width: 100%; } }
+
+/* Ajustes de layout do painel em desktop: ações não comprimem o conteúdo dos pedidos. */
+.section-title { flex-wrap: wrap; }
+.offline-orders-card > .section-title { align-items: flex-start; }
+.offline-orders-card > .section-title > .offline-order-actions {
+  display: flex;
+  flex: 1 1 280px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 7px;
+  min-width: 0;
+}
+.offline-orders-card > .section-title > .offline-order-actions .small-button {
+  white-space: nowrap;
+}
+.offline-order-row > .offline-order-copy {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.offline-order-row > .offline-order-actions {
+  flex: 0 1 260px;
+  min-width: 180px;
+  align-items: flex-start;
+}
+.offline-order-row > .offline-order-actions .form-feedback {
+  flex: 1 1 100%;
+}
+
+@media (max-width: 900px) and (min-width: 651px) {
+  .offline-order-row { flex-direction: column; }
+  .offline-order-row > .offline-order-actions {
+    width: 100%;
+    min-width: 0;
+    justify-content: flex-start;
+  }
+  .offline-order-row > .offline-order-actions .small-button {
+    flex: 0 1 auto;
+  }
+}
