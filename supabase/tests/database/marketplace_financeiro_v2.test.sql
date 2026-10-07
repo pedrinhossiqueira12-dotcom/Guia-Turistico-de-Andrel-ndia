@@ -4,7 +4,7 @@
 
 begin;
 
-select plan(17);
+select plan(21);
 
 update public.catalogo_fluxo_config
    set ativo=true, comercios_piloto=NULL
@@ -145,6 +145,30 @@ select results_eq(
   $select (catalogo_fluxo_precificar('entrega',0,NULL)->>'http_status')::integer$,
   $values (400)$,
   'subtotal zero e rejeitado antes de criar cobranca'
+);
+
+select ok(
+  not has_function_privilege('anon',
+    'public.catalogo_aplicar_pagamento_v2(uuid,text,integer,integer,text)', 'EXECUTE'),
+  'anon nao pode aprovar pagamentos diretamente'
+);
+
+select ok(
+  not has_function_privilege('authenticated',
+    'public.catalogo_confirmar_cobranca_fatura(text,text,text,integer,text)', 'EXECUTE'),
+  'usuario comum nao pode quitar faturas diretamente'
+);
+
+select ok(
+  not has_function_privilege('anon',
+    'public.catalogo_confirmar_entrega_motoboy(uuid,text,uuid,text)', 'EXECUTE'),
+  'anon nao pode confirmar entrega diretamente'
+);
+
+select ok(
+  not has_function_privilege('authenticated',
+    'public.catalogo_motoboy_acao_v2(uuid,text,uuid,boolean,text,text,text)', 'EXECUTE'),
+  'usuario autenticado nao pode assumir identidade de motoboy por RPC direta'
 );
 
 select * from finish();
