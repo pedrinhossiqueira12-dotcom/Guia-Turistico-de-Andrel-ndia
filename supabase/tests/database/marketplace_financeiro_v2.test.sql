@@ -20,31 +20,31 @@ select ok(
 
 select results_eq(
   $$select (catalogo_fluxo_precificar('retirada',10000,NULL)->>'taxa_total_centavos')::integer$$,
-  $$$values (700)$$$,
+  $values (700)$,
   'retirada cobra exatamente 7%'
 );
 
 select results_eq(
   $$select (catalogo_fluxo_precificar('consumo_local',10000,NULL)->>'taxa_total_centavos')::integer$$,
-  $$$values (700)$$$,
+  $values (700)$,
   'consumo local cobra exatamente 7%'
 );
 
 select results_eq(
   $$select (catalogo_fluxo_precificar('entrega',10000,NULL)->>'taxa_total_centavos')::integer$$,
-  $$$values (700)$$$,
+  $values (700)$,
   'entrega cobra exatamente 7%'
 );
 
 select results_eq(
   $$select (catalogo_fluxo_precificar('entrega',10000,NULL)->>'taxa_plataforma_centavos')::integer$$,
-  $$$values (500)$$$,
+  $values (500)$,
   'entrega reserva 5% para a plataforma'
 );
 
 select results_eq(
   $$select (catalogo_fluxo_precificar('entrega',10000,NULL)->>'taxa_motoboy_centavos')::integer$$,
-  $$$values (200)$$$,
+  $values (200)$,
   'entrega reserva 2% para o motoboy'
 );
 
