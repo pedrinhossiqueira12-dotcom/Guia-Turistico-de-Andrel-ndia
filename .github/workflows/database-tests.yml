@@ -1,0 +1,28 @@
+name: Database tests
+
+on:
+  pull_request:
+    paths:
+      - "supabase/**"
+      - ".github/workflows/database-tests.yml"
+  push:
+    branches:
+      - "logic/finalizacao-marketplace-2026-10-07"
+
+jobs:
+  database-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start Supabase
+        run: supabase start
+
+      - name: Run pgTAP tests
+        run: supabase test db
