@@ -2,6 +2,7 @@
   "version": "5",
   "specifiers": {
     "npm:@electric-sql/pglite@0.5.8": "0.5.8",
+    "npm:@supabase/supabase-js@2": "2.117.2",
     "npm:@supabase/supabase-js@2.117.2": "2.117.2"
   },
   "npm": {

@@ -29,6 +29,9 @@ const SUPABASE_ANON_KEY =
 const EDGE_FUNCTION_URL =
 "https://xdmbkflufsfqziixzpxc.supabase.co/functions/v1/whatsapp-bot";
 
+const CATALOGO_ADMIN_URL =
+`${SUPABASE_URL}/functions/v1/catalogo-admin`;
+
 const FALLBACK_IMAGE =
 "../img/icones/imgnaodisponivel.png";
 
@@ -71,6 +74,14 @@ let usuarioProprietarioVerificado = null;
 let verificacaoProprietarioEmAndamento = false;
 
 let imagensEdicaoComercio = [];
+
+let bannerCatalogoAtual = null;
+let bannerCatalogoArquivo = null;
+let bannerCatalogoPreviewUrl = "";
+let bannerCatalogoRemovido = false;
+let bannerCatalogoOperacao = 0;
+let bannerCatalogoConsultado = false;
+let bannerCatalogoSalvando = false;
 
 /* =========================================================
 SUPABASE
@@ -2006,6 +2017,305 @@ return publico.data.publicUrl;
 
 }
 
+function mostrarMensagemBannerCatalogo(mensagem, tipo = "erro") {
+  const elemento = document.getElementById("mensagemBannerCatalogo");
+  if (!elemento) return;
+  elemento.textContent = mensagem;
+  elemento.dataset.tipo = tipo;
+  elemento.hidden = false;
+  elemento.style.color = tipo === "sucesso" ? "#1f6b45" : "#a32626";
+}
+
+function revogarPreviewBannerCatalogo() {
+  if (bannerCatalogoPreviewUrl) {
+    URL.revokeObjectURL(bannerCatalogoPreviewUrl);
+    bannerCatalogoPreviewUrl = "";
+  }
+}
+
+function invalidarOperacaoBannerCatalogo() {
+  bannerCatalogoOperacao += 1;
+  revogarPreviewBannerCatalogo();
+  bannerCatalogoArquivo = null;
+  const input = document.getElementById("inputBannerCatalogo");
+  if (input) input.value = "";
+}
+
+function prepararEditorBannerCatalogo() {
+  invalidarOperacaoBannerCatalogo();
+  bannerCatalogoAtual = null;
+  bannerCatalogoConsultado = false;
+  bannerCatalogoRemovido = false;
+  renderizarPreviewBannerCatalogo();
+  const mensagem = document.getElementById("mensagemBannerCatalogo");
+  if (mensagem) {
+    mensagem.textContent = "";
+    mensagem.hidden = true;
+  }
+}
+
+function validarUrlBannerCatalogo(valor) {
+  if (typeof valor !== "string" || !valor.trim() || valor.length > 2048) return null;
+  try {
+    const parsed = new URL(valor.trim());
+    const projeto = new URL(SUPABASE_URL);
+    if (parsed.protocol !== "https:" || parsed.origin !== projeto.origin || parsed.username || parsed.password || parsed.search || parsed.hash) return null;
+    const prefixo = "/storage/v1/object/public/cadastros/";
+    if (!parsed.pathname.startsWith(prefixo)) return null;
+    const parte = parsed.pathname.slice(prefixo.length);
+    const segmentos = parte.split("/");
+    if (segmentos.length !== 2 || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(segmentos[0])) return null;
+    const arquivo = decodeURIComponent(segmentos[1]);
+    if (!/^[a-zA-Z0-9._-]+\.(?:jpe?g|png|webp)$/i.test(arquivo) || arquivo.includes("..")) return null;
+    return parsed.href;
+  } catch {
+    return null;
+  }
+}
+
+function renderizarPreviewBannerCatalogo() {
+  const preview = document.getElementById("previewBannerCatalogo");
+  const imagem = document.getElementById("imagemPreviewBannerCatalogo");
+  const remover = document.getElementById("removerBannerCatalogo");
+  if (!preview || !imagem) return;
+  const origem = bannerCatalogoRemovido ? null : bannerCatalogoArquivo
+    ? bannerCatalogoPreviewUrl
+    : validarUrlBannerCatalogo(bannerCatalogoAtual);
+  if (!origem) {
+    preview.hidden = true;
+    imagem.removeAttribute("src");
+    if (remover) remover.disabled = true;
+    return;
+  }
+  imagem.src = origem;
+  imagem.alt = bannerCatalogoArquivo ? "Prévia da nova foto do banner" : "Banner atual do catálogo";
+  preview.hidden = false;
+  if (remover) remover.disabled = false;
+}
+
+function validarArquivoBannerCatalogo(arquivo) {
+  const tipos = ["image/jpeg", "image/png", "image/webp"];
+  if (!arquivo || !tipos.includes(arquivo.type)) {
+    window.alert("Use somente uma foto JPG, PNG ou WEBP.");
+    return false;
+  }
+  if (!arquivo.size || arquivo.size > 4 * 1024 * 1024) {
+    window.alert("A foto do banner deve ter no máximo 4 MiB.");
+    return false;
+  }
+  return true;
+}
+
+function selecionarArquivoBannerCatalogo(arquivo) {
+  if (!validarArquivoBannerCatalogo(arquivo)) return;
+  bannerCatalogoOperacao += 1;
+  revogarPreviewBannerCatalogo();
+  bannerCatalogoArquivo = arquivo;
+  bannerCatalogoRemovido = false;
+  bannerCatalogoPreviewUrl = URL.createObjectURL(arquivo);
+  renderizarPreviewBannerCatalogo();
+}
+
+function removerBannerCatalogo() {
+  bannerCatalogoOperacao += 1;
+  revogarPreviewBannerCatalogo();
+  bannerCatalogoArquivo = null;
+  bannerCatalogoRemovido = true;
+  const input = document.getElementById("inputBannerCatalogo");
+  if (input) input.value = "";
+  renderizarPreviewBannerCatalogo();
+}
+
+function caminhoUploadBannerCatalogo(usuarioId, arquivo) {
+  const extensao = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" }[arquivo.type];
+  let aleatorio = "foto";
+  try {
+    aleatorio = typeof crypto?.randomUUID === "function" ? crypto.randomUUID() : Math.random().toString(36).slice(2);
+  } catch { aleatorio = Math.random().toString(36).slice(2); }
+  return `${usuarioId}/${Date.now()}-banner-${String(aleatorio).replace(/[^a-zA-Z0-9-]/g, "")}.${extensao}`;
+}
+
+async function obterAutenticacaoBannerCatalogo() {
+  const supabase = obterSupabaseClient();
+  if (!supabase?.auth?.getUser || !supabase?.auth?.getSession) return null;
+  try {
+    const [usuarioResposta, sessaoResposta] = await Promise.all([
+      supabase.auth.getUser(),
+      supabase.auth.getSession(),
+    ]);
+    const usuario = usuarioResposta?.data?.user;
+    const sessao = sessaoResposta?.data?.session;
+    if (usuarioResposta?.error || sessaoResposta?.error || !usuario?.id || !sessao?.access_token) return null;
+    if (sessao.user?.id && sessao.user.id !== usuario.id) return null;
+    return { usuario, token: sessao.access_token };
+  } catch (erro) {
+    console.error("Erro ao obter autenticação do banner:", erro);
+    return null;
+  }
+}
+
+async function chamarCatalogoAdminBanner(acao, comercioId, autenticacao, bannerUrl) {
+  const corpo = { acao, comercio_id: comercioId };
+  if (acao === "salvar_banner") corpo.banner_url = bannerUrl;
+  const resposta = await fetch(CATALOGO_ADMIN_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${autenticacao.token}`,
+      "apikey": SUPABASE_ANON_KEY,
+    },
+    body: JSON.stringify(corpo),
+  });
+  let resultado = null;
+  try { resultado = await resposta.json(); } catch { resultado = {}; }
+  if (!resposta.ok || resultado?.success === false) {
+    throw new Error(resultado?.mensagem || `Não foi possível concluir a operação do banner (HTTP ${resposta.status}).`);
+  }
+  return resultado;
+}
+
+async function enviarBannerCatalogo(arquivo, usuarioId) {
+  const supabase = obterSupabaseClient();
+  if (!supabase?.storage?.from) throw new Error("Cliente Supabase não disponível.");
+  const caminho = caminhoUploadBannerCatalogo(usuarioId, arquivo);
+  const resposta = await supabase.storage.from(STORAGE_BUCKET).upload(caminho, arquivo, {
+    cacheControl: "3600",
+    upsert: false,
+    contentType: arquivo.type,
+  });
+  if (resposta.error) throw new Error(resposta.error.message || "Não foi possível enviar a foto do banner.");
+  const publico = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(caminho);
+  const url = validarUrlBannerCatalogo(publico.data?.publicUrl);
+  if (!url) throw new Error("O Storage não retornou uma URL pública segura para o banner.");
+  return url;
+}
+
+async function carregarBannerCatalogo() {
+  const inicio = bannerCatalogoOperacao;
+  const autenticacao = await obterAutenticacaoBannerCatalogo();
+  if (inicio !== bannerCatalogoOperacao) return;
+  if (!autenticacao || !localAtual) {
+    mostrarMensagemBannerCatalogo("Sua sessão expirou. Faça login novamente para consultar o banner.");
+    return;
+  }
+  const comercioId = String(localAtual.id || localAtual.local_id || "").trim();
+  if (!comercioId) {
+    mostrarMensagemBannerCatalogo("Não foi possível identificar o comércio do catálogo.");
+    return;
+  }
+  try {
+    const resultado = await chamarCatalogoAdminBanner("consultar_banner", comercioId, autenticacao);
+    if (inicio !== bannerCatalogoOperacao || String(localAtual?.id || localAtual?.local_id || "").trim() !== comercioId) return;
+    const atual = await obterAutenticacaoBannerCatalogo();
+    if (inicio !== bannerCatalogoOperacao || atual?.usuario.id !== autenticacao.usuario.id) return;
+    bannerCatalogoConsultado = true;
+    bannerCatalogoAtual = validarUrlBannerCatalogo(resultado?.banner_url);
+    bannerCatalogoRemovido = false;
+    renderizarPreviewBannerCatalogo();
+  } catch (erro) {
+    if (inicio !== bannerCatalogoOperacao) return;
+    bannerCatalogoConsultado = false;
+    bannerCatalogoAtual = null;
+    renderizarPreviewBannerCatalogo();
+    mostrarMensagemBannerCatalogo(erro?.message || "Não foi possível consultar o banner. Você ainda pode escolher uma foto.");
+  }
+}
+
+async function salvarBannerCatalogo() {
+  if (bannerCatalogoSalvando) return;
+  const inicio = bannerCatalogoOperacao;
+  const arquivo = bannerCatalogoArquivo;
+  const autenticacaoInicial = await obterAutenticacaoBannerCatalogo();
+  if (!autenticacaoInicial || !localAtual) {
+    mostrarMensagemBannerCatalogo("Sua sessão expirou. Faça login novamente antes de salvar o banner.");
+    return;
+  }
+  const comercioId = String(localAtual.id || localAtual.local_id || "").trim();
+  if (!comercioId) {
+    mostrarMensagemBannerCatalogo("Não foi possível identificar o comércio do catálogo.");
+    return;
+  }
+
+  if (inicio !== bannerCatalogoOperacao) return;
+  if (!arquivo && !bannerCatalogoRemovido && !bannerCatalogoConsultado) {
+    mostrarMensagemBannerCatalogo("Consulte o banner atual ou escolha uma nova foto antes de salvar.");
+    return;
+  }
+  bannerCatalogoSalvando = true;
+  let novoBanner = null;
+  let persistenciaIniciada = false;
+  const botaoSalvar = document.getElementById("salvarBannerCatalogo");
+  if (botaoSalvar) botaoSalvar.disabled = true;
+  try {
+    let bannerUrl = bannerCatalogoRemovido ? null : bannerCatalogoAtual;
+    let autenticacaoAtual = autenticacaoInicial;
+    if (arquivo) {
+      if (inicio !== bannerCatalogoOperacao || arquivo !== bannerCatalogoArquivo) return;
+      mostrarMensagemBannerCatalogo("Enviando a foto do banner…", "sucesso");
+      bannerUrl = await enviarBannerCatalogo(arquivo, autenticacaoInicial.usuario.id);
+      novoBanner = bannerUrl;
+      if (inicio !== bannerCatalogoOperacao || arquivo !== bannerCatalogoArquivo) return;
+    }
+    autenticacaoAtual = await obterAutenticacaoBannerCatalogo();
+    if (!autenticacaoAtual || autenticacaoAtual.usuario.id !== autenticacaoInicial.usuario.id) {
+      mostrarMensagemBannerCatalogo("Sua sessão mudou ou expirou. O banner não foi salvo.");
+      return;
+    }
+    if (inicio !== bannerCatalogoOperacao) return;
+    persistenciaIniciada = true;
+    const resultado = await chamarCatalogoAdminBanner("salvar_banner", comercioId, autenticacaoAtual, bannerUrl || null);
+    if (inicio !== bannerCatalogoOperacao) return;
+    bannerCatalogoAtual = validarUrlBannerCatalogo(resultado?.banner_url);
+    bannerCatalogoConsultado = true;
+    bannerCatalogoArquivo = null;
+    bannerCatalogoRemovido = false;
+    revogarPreviewBannerCatalogo();
+    const input = document.getElementById("inputBannerCatalogo");
+    if (input) input.value = "";
+    renderizarPreviewBannerCatalogo();
+    mostrarMensagemBannerCatalogo("Banner salvo no catálogo. Esta ação não altera os dados do comércio.", "sucesso");
+  } catch (erro) {
+    if (inicio !== bannerCatalogoOperacao) return;
+    mostrarMensagemBannerCatalogo(erro?.message || "Não foi possível salvar o banner.");
+  } finally {
+    // Só remove o upload recém-criado se nenhuma persistência foi iniciada.
+    // Depois de enviar o POST, uma falha de rede pode ocultar um commit bem-sucedido.
+    if (novoBanner && !persistenciaIniciada) {
+      try {
+        const limpeza = await obterAutenticacaoBannerCatalogo();
+        if (limpeza?.usuario.id === autenticacaoInicial.usuario.id) {
+          const caminho = new URL(novoBanner).pathname.replace("/storage/v1/object/public/cadastros/", "");
+          await obterSupabaseClient().storage.from(STORAGE_BUCKET).remove([caminho]);
+        }
+      } catch { /* Sem a sessão original, não ampliar privilégios nem remover uma referência incerta. */ }
+    }
+    bannerCatalogoSalvando = false;
+    if (botaoSalvar) botaoSalvar.disabled = false;
+  }
+}
+
+function configurarEventosBannerCatalogo() {
+  const input = document.getElementById("inputBannerCatalogo");
+  const salvar = document.getElementById("salvarBannerCatalogo");
+  const remover = document.getElementById("removerBannerCatalogo");
+  if (input && !input.dataset.bannerConfigurado) {
+    input.dataset.bannerConfigurado = "true";
+    input.addEventListener("change", () => {
+      const arquivo = input.files?.[0] || null;
+      input.value = "";
+      if (arquivo) selecionarArquivoBannerCatalogo(arquivo);
+    });
+  }
+  if (salvar && !salvar.dataset.bannerConfigurado) {
+    salvar.dataset.bannerConfigurado = "true";
+    salvar.addEventListener("click", salvarBannerCatalogo);
+  }
+  if (remover && !remover.dataset.bannerConfigurado) {
+    remover.dataset.bannerConfigurado = "true";
+    remover.addEventListener("click", removerBannerCatalogo);
+  }
+}
+
 function editarMeuComercio() {
 
 if (!localAtual) {
@@ -2052,6 +2362,7 @@ return;
 }
 
 liberarImagensEdicao();
+prepararEditorBannerCatalogo();
 
 imagensEdicaoComercio =
 obterImagensParaEdicao();
@@ -2187,6 +2498,8 @@ document.body.classList.add(
 "modal-edicao-aberto"
 );
 
+void carregarBannerCatalogo();
+
 const primeiroCampo =
 document.getElementById(
 "editarNome"
@@ -2212,6 +2525,8 @@ FECHAR EDITOR
 ========================================================= */
 
 function fecharEditorComercio() {
+
+invalidarOperacaoBannerCatalogo();
 
 const modal =
 document.getElementById(
@@ -3466,6 +3781,8 @@ fecharEditorComercio;
 
 }
 
+configurarEventosBannerCatalogo();
+
 const formularioEdicao =
 document.getElementById(
 "formEditarComercio"
@@ -3567,6 +3884,10 @@ sessao
 const novoUsuario =
 sessao?.user?.id ||
 null;
+
+if (novoUsuario !== usuarioProprietarioVerificado) {
+invalidarOperacaoBannerCatalogo();
+}
 
 if (
 novoUsuario ===

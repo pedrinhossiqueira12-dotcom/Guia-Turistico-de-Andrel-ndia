@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#194138">
   <meta name="description" content="Confira produtos e faça seu pedido diretamente pelo WhatsApp do comércio em Andrelândia.">
   <title>Catálogo digital — Guia Turístico de Andrelândia</title>
-  <link rel="stylesheet" href="../styles/catalogo.css">
+  <link rel="stylesheet" href="../styles/catalogo.css?v=liberacao-20261007">
   <link rel="stylesheet" href="../styles/design-system.css">
 </head>
 <body class="catalog-page">
@@ -24,6 +24,10 @@
 
     <div id="catalogoConteudo" hidden>
       <section class="store-hero" aria-labelledby="nomeComercio">
+        <div id="storeHeroBannerLayer" class="store-hero-banner-layer" hidden aria-hidden="true">
+          <img id="storeHeroBannerImage" class="store-hero-banner-image" alt="" width="1120" height="300">
+          <span class="store-hero-banner-overlay"></span>
+        </div>
         <img id="fotoComercio" class="store-photo" src="../img/sem-foto.png" alt="" width="112" height="112">
         <div class="store-copy">
           <span class="eyebrow">CATÁLOGO DIGITAL</span>
@@ -162,6 +166,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="../js/login.js"></script>
   <script src="../js/catalogo-utils.js"></script>
-  <script src="../js/catalogo.js?v=pix-20261007"></script>
+  <script src="../js/catalogo.js?v=pix-20261007-banner-20261007"></script>
 </body>
 </html>

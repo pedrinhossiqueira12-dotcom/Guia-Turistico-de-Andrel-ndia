@@ -162,6 +162,45 @@
 
   function pedidoIdSeguro(pedido) { return String(pedido.id || pedido.pedido_id || ""); }
 
+  function renderizarContatoCliente(pedido) {
+    if (pedido.dados_cliente_ocultos || Number(pedido.versao_financeira) === 2 && !pedido.aceito_em) {
+      return '<small class="customer-contact customer-contact-locked">Telefone e demais contatos disponíveis após aceitar o pedido.</small>';
+    }
+    const telefone = String(pedido.cliente_telefone || "").trim();
+    if (!telefone) return '<small class="customer-contact">Telefone não informado.</small>';
+    const digitos = telefone.replace(/\D/g, "");
+    const ligar = /^\d{8,15}$/.test(digitos) ? `<a href="tel:+${digitos.length <= 11 ? "55" : ""}${digitos}">Ligar</a>` : "";
+    let whatsapp = "";
+    try {
+      const link = window.CatalogoUtils.gerarLinkWhatsApp(telefone, "Olá! Somos do comércio e precisamos esclarecer uma informação sobre seu pedido.");
+      whatsapp = `<a href="${escapar(link)}" target="_blank" rel="noopener noreferrer">WhatsApp do comprador</a>`;
+    } catch { /* Mantém o número legível mesmo quando não for um WhatsApp válido. */ }
+    return `<div class="customer-contact"><span><strong>Telefone do comprador:</strong> ${escapar(telefone)}</span><div class="customer-contact-actions">${ligar}${whatsapp}</div></div>`;
+  }
+
+  function renderizarEstadoEntregador(pedido) {
+    if (pedido.modalidade !== "entrega") return "";
+    const responsavelId = String(pedido.motoboy_id || "");
+    const preferidoId = String(pedido.motoboy_preferido_id || "");
+    const conhecido = entregaState.motoboys.find((item) => String(item.usuario_id) === (responsavelId || preferidoId));
+    const nome = escapar(conhecido?.nome || "Motoboy autorizado");
+    const fase = String(pedido.entrega_status || "");
+    let titulo = "Nenhum motoboy atribuído";
+    let detalhe = pedido.status === "pronto" ? "Oferta disponível na rede; aguardando um motoboy aceitar." : "Selecione um motoboy ou use a rede e marque o pedido como pronto.";
+    let estado = "sem_responsavel";
+    if (responsavelId) {
+      titulo = `Motoboy atribuído: ${nome}`;
+      detalhe = ({ coletado: "Pedido coletado pelo motoboy.", em_entrega: "Motoboy a caminho do comprador.", entregue: "Entrega concluída." })[fase] || "O motoboy assumiu a entrega. Aguardando a coleta.";
+      estado = "atribuido";
+    } else if (preferidoId) {
+      titulo = `Motoboy selecionado: ${nome}`;
+      detalhe = pedido.status === "pronto" ? "Oferta disponibilizada para esse motoboy; aguardando o aceite dele." : "Marque como pronto para disponibilizar o pedido ao motoboy.";
+      estado = "selecionado";
+    }
+    if (["cancelado", "entregue"].includes(pedido.status)) detalhe = pedido.status === "entregue" ? "Entrega concluída." : "Pedido cancelado; não enviar para entrega.";
+    return `<div class="delivery-responsibility" data-delivery-state="${estado}" role="status"><strong>${titulo}</strong><small>${detalhe}</small></div>`;
+  }
+
   async function chamarEntregas(acao, dados = {}, generation = entregaState.generation, userId = entregaState.userId) {
     const client = getClient();
     if (!client?.auth) throw new Error("Autenticação indisponível. Atualize a página e entre novamente.");
@@ -244,7 +283,7 @@
       const snapshots = pedido.feeSnapshots || pedido.fee_snapshots || pedido.metadata?.feeSnapshots;
       const snapshotText = snapshots ? ` · snapshot ${escapar(typeof snapshots === "string" ? snapshots : "registrado")}` : "";
       const atribuir = pedido.modalidade === "entrega" && !["entregue", "cancelado"].includes(pedido.status) ? renderizarMotoboysLinha(pedido) : "";
-      return `<article class="manager-row offline-order-row" data-pedido-id="${escapar(id)}"><div class="offline-order-copy"><strong>${escapar(pedido.cliente_nome || "Cliente")} · ${reais(pedido.total_centavos)}</strong><small>${escapar(pedido.provedor || "offline")} · ${escapar(pedido.forma_pagamento || "Pagamento não informado")} · ${escapar(pedido.modalidade || "")}${endereco}</small><small>Produtos: ${reais(pedido.subtotal_produtos_centavos)} · Plataforma: ${reais(plataforma)} · Logística: ${reais(motoboy)} · Total taxas: ${reais(totalFee)}</small><small>${escapar(versao)}${snapshotText} · ${escapar(statusPagamento(pedido.status_pagamento))}</small><span class="offline-status" data-status="${escapar(pedido.entrega_status || pedido.status)}">${escapar(statusOffline(pedido.entrega_status || pedido.status))}</span></div><div class="manager-actions offline-order-actions">${aguardandoPix ? `<p class="form-feedback">Aguardando pagamento Pix. O aceite será liberado após a aprovação.</p>` : ""}${proxima ? `<button class="small-button" type="button" data-offline-next="${escapar(id)}" data-offline-status="${escapar(["aguardando_pagamento", "pago"].includes(pedido.status) ? "em_preparo" : "pronto")}">${proxima}</button>` : ""}${podeConfirmar ? `<button class="small-button" type="button" data-offline-confirm="${escapar(id)}">Confirmar código</button>` : ""}${podeCancelar ? `<button class="small-button danger" type="button" data-offline-cancel="${escapar(id)}">${aceito ? "Solicitar ocorrência" : "Cancelar pedido"}</button>` : ""}${atribuir}</div></article>`;
+      return `<article class="manager-row offline-order-row" data-pedido-id="${escapar(id)}"><div class="offline-order-copy"><strong>${escapar(pedido.cliente_nome || "Cliente")} · ${reais(pedido.total_centavos)}</strong><small>${escapar(pedido.provedor || "offline")} · ${escapar(pedido.forma_pagamento || "Pagamento não informado")} · ${escapar(pedido.modalidade || "")}${endereco}</small>${renderizarContatoCliente(pedido)}${renderizarEstadoEntregador(pedido)}<small>Produtos: ${reais(pedido.subtotal_produtos_centavos)} · Plataforma: ${reais(plataforma)} · Logística: ${reais(motoboy)} · Total taxas: ${reais(totalFee)}</small><small>${escapar(versao)}${snapshotText} · ${escapar(statusPagamento(pedido.status_pagamento))}</small><span class="offline-status" data-status="${escapar(pedido.entrega_status || pedido.status)}">${escapar(statusOffline(pedido.entrega_status || pedido.status))}</span></div><div class="manager-actions offline-order-actions">${aguardandoPix ? `<p class="form-feedback">Aguardando pagamento Pix. O aceite será liberado após a aprovação.</p>` : ""}${proxima ? `<button class="small-button" type="button" data-offline-next="${escapar(id)}" data-offline-status="${escapar(["aguardando_pagamento", "pago"].includes(pedido.status) ? "em_preparo" : "pronto")}">${proxima}</button>` : ""}${podeConfirmar ? `<button class="small-button" type="button" data-offline-confirm="${escapar(id)}">Confirmar código</button>` : ""}${podeCancelar ? `<button class="small-button danger" type="button" data-offline-cancel="${escapar(id)}">${aceito ? "Solicitar ocorrência" : "Cancelar pedido"}</button>` : ""}${atribuir}</div></article>`;
     }).join("");
   }
 
@@ -273,7 +312,7 @@
     try {
       await chamarEntregas("atribuir_pedido", { pedido_id: pedidoId, motoboy_id: selecao.value || null }, generation, userId);
       await carregarPedidosOffline();
-      setFeedback("pedidosOfflineFeedback", selecao.value ? "Preferência de motoboy salva antes do pronto." : "Pedido configurado para Motoboys disponíveis; o backend ofertará ao marcar pronto.");
+      setFeedback("pedidosOfflineFeedback", selecao.value ? "Motoboy selecionado. Confira o destaque no card: o pedido deve estar pronto e o motoboy precisa aceitar a oferta." : "Pedido configurado para Motoboys disponíveis; o backend ofertará ao marcar pronto.");
     } catch (error) {
       if (error.message !== STALE_SESSION_REQUEST) setFeedback("pedidosOfflineFeedback", error.message || "Não foi possível atribuir o pedido.", true);
     } finally { botao.disabled = false; }

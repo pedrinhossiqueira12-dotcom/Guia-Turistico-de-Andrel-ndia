@@ -22,7 +22,7 @@ test('interface só expõe transições de preparo e cancelamento permitidas', (
   assert.match(js, /data-offline-cancel/);
   assert.match(js, /status === "aguardando_pagamento"/);
   assert.match(js, /status === "em_preparo"/);
-  assert.doesNotMatch(js, /status.*=.*"entregue"/);
+  assert.doesNotMatch(js, /status\s*=(?!=)\s*"entregue"|data-offline-status="entregue"/);
 });
 
 test('valores da interface usam centavos retornados pelo servidor', () => {

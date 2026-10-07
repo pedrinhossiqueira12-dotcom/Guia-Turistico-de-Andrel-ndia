@@ -1710,6 +1710,21 @@ letter-spacing: .1em;
 }
 #formEditarComercio > .editar-fotos-campo { grid-column: 1 / -1; }
 
+.editor-banner-catalogo { margin: 0 20px 20px; padding: 18px; border: 1px solid rgba(25,65,56,.2); border-radius: 12px; background: #edf3ef; }
+.editor-banner-cabecalho h3 { margin: 4px 0 5px; color: var(--verde-escuro, #194138); font-size: 17px; }
+.editor-banner-cabecalho p { margin: 5px 0; color: #555; font-size: 13px; line-height: 1.45; }
+.editor-banner-instrucao { max-width: 70ch; color: #3f5149 !important; }
+.preview-banner-catalogo { max-width: 840px; margin: 14px 0; overflow: hidden; border-radius: 10px; background: #dfe8e2; }
+.preview-banner-catalogo img { display: block; width: 100%; max-width: 100%; height: clamp(130px, 22vw, 220px); object-fit: cover; }
+.campo-banner-catalogo { display: grid; gap: 7px; margin-top: 13px; color: #555; font-size: 12px; font-weight: 700; }
+.campo-banner-catalogo input { width: 100%; min-height: 42px; padding: 9px 10px; border: 1px solid #d5d5d5; border-radius: 8px; background: #fff; color: #292929; font: inherit; font-size: 13px; }
+.campo-banner-catalogo small { color: #666; font-size: 11px; font-weight: 400; }
+.acoes-banner-catalogo { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; margin-top: 14px; }
+.botao-remover-banner, .botao-salvar-banner { min-height: 40px; padding: 9px 14px; border: 0; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 700; }
+.botao-remover-banner { background: #fff; color: #a32626; border: 1px solid #e4c4c0; }
+.botao-salvar-banner { background: #194138; color: #fff; }
+.botao-remover-banner:disabled { cursor: not-allowed; opacity: .5; }
+.mensagem-banner-catalogo { margin: 12px 0 0; font-size: 13px; line-height: 1.45; }
 
 /* Estado acessível quando o local não está mais publicado */
 .local-indisponivel { display: grid; justify-items: center; gap: 12px; max-width: 640px; margin: clamp(48px, 10vh, 120px) auto; padding: 32px 24px; border: 1px solid var(--borda); border-radius: 16px; background: var(--branco); text-align: center; }
@@ -1717,6 +1732,7 @@ letter-spacing: .1em;
 .local-indisponivel p { margin: 0; line-height: 1.6; }
 .local-indisponivel a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px; border-radius: 8px; background: var(--verde); color: var(--branco); font-weight: 700; }
 @media (max-width: 600px) { .local-indisponivel { margin: 32px 16px; padding: 24px 18px; } }
+@media (max-width: 650px) { .editor-banner-catalogo { margin: 0 12px 12px; padding: 15px; } .acoes-banner-catalogo { flex-direction: column-reverse; } .botao-remover-banner, .botao-salvar-banner { width: 100%; } }
 
 
 /* Catálogo Digital */

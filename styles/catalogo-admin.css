@@ -13,3 +13,16 @@
 .delivery-code{margin:14px 0!important;padding:14px 18px;border-radius:12px;background:#edf3ef;color:var(--green)!important;font:900 2rem ui-monospace,monospace;letter-spacing:.22em;text-align:center}
 .admin-topbar-actions{display:flex;align-items:center;gap:14px}.topbar-logout{padding:7px 10px;border:1px solid rgba(255,255,255,.35);border-radius:8px;background:transparent;color:#fff;font-size:12px;font-weight:800}.delivery-assignment{display:grid;grid-template-columns:minmax(120px,auto) minmax(160px,1fr) auto;align-items:end;gap:7px;width:min(100%,520px);margin-top:10px;padding-top:9px;border-top:1px dashed var(--line)}.delivery-assignment label{grid-column:1/-1;color:var(--green);font-size:11px;font-weight:800}.delivery-assignment select{min-height:34px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);font-size:12px}.delivery-assignment .small-button{min-height:34px}@media(max-width:650px){.delivery-assignment{grid-template-columns:1fr}.delivery-assignment .small-button{width:100%}}
 .offline-invoice{margin-top:22px;padding-top:18px;border-top:1px dashed #cfded5}.offline-invoice p{margin:6px 0;color:var(--muted);line-height:1.5}.offline-invoice .statement-controls{margin-top:12px}.pix-qr{display:block;width:min(240px,100%);margin:14px auto;padding:8px;border:1px solid var(--line);border-radius:14px;background:#fff}.pix-copy{display:grid;gap:7px;margin-top:12px;color:var(--green);font-size:13px;font-weight:700}.pix-copy textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:11px;background:#fff;color:var(--muted);font:400 12px ui-monospace,monospace;resize:vertical;overflow-wrap:anywhere}
+
+/* Contatos e responsável pela entrega: informação operacional, sem expor dados antes do aceite. */
+.customer-contact { display: grid; gap: 7px; margin: 10px 0; padding: 10px 12px; border-radius: 10px; background: #f5f3ef; font-size: 13px; overflow-wrap: anywhere; }
+.customer-contact strong { color: var(--green); }
+.customer-contact-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.customer-contact-actions a { padding: 5px 8px; border: 1px solid #cfded5; border-radius: 7px; color: var(--green); background: #fff; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
+.customer-contact-actions a:focus-visible { outline: 2px solid var(--green); outline-offset: 3px; }
+.customer-contact-locked { color: var(--muted); }
+.delivery-responsibility { display: grid; gap: 5px; margin: 9px 0; padding: 12px; border: 1px solid #ddddd5; border-left: 4px solid #9b9f96; border-radius: 10px; background: #f5f3ef; }
+.delivery-responsibility strong { color: var(--green); font-size: 13px; overflow-wrap: anywhere; }
+.delivery-responsibility small { line-height: 1.5; }
+.delivery-responsibility[data-delivery-state="selecionado"] { border-color: #e5c997; border-left-color: #bd823b; background: #fff7e8; }
+.delivery-responsibility[data-delivery-state="atribuido"] { border-color: #b8d7c3; border-left-color: #23724c; background: #edf6ef; }

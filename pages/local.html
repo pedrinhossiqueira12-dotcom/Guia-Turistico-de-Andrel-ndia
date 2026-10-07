@@ -35,7 +35,7 @@
 
   <link
     rel="stylesheet"
-    href="../styles/local.css"
+    href="../styles/local.css?v=liberacao-20261007"
   >
 
 
@@ -890,6 +890,28 @@
 
 </form>
 
+<section id="secaoBannerCatalogo" class="editor-banner-catalogo" aria-labelledby="tituloBannerCatalogo">
+  <div class="editor-banner-cabecalho">
+    <span class="modal-editar-kicker">VITRINE DIGITAL</span>
+    <h3 id="tituloBannerCatalogo">Banner do catálogo</h3>
+    <p>Escolha uma foto para o topo da página pública do seu catálogo.</p>
+    <p class="editor-banner-instrucao"><strong>Salvar banner é independente</strong> de salvar as alterações do comércio. O botão abaixo só confirma o banner quando o servidor concluir a operação.</p>
+  </div>
+  <div id="previewBannerCatalogo" class="preview-banner-catalogo" hidden>
+    <img id="imagemPreviewBannerCatalogo" alt="" width="840" height="220">
+  </div>
+  <label class="campo-banner-catalogo" for="inputBannerCatalogo">
+    Foto do banner
+    <input type="file" id="inputBannerCatalogo" accept="image/jpeg,image/png,image/webp">
+    <small>JPG, PNG ou WEBP · máximo de 4 MiB.</small>
+  </label>
+  <div class="acoes-banner-catalogo">
+    <button type="button" id="removerBannerCatalogo" class="botao-remover-banner" disabled>Remover banner</button>
+    <button type="button" id="salvarBannerCatalogo" class="botao-salvar-banner">Salvar banner</button>
+  </div>
+  <p id="mensagemBannerCatalogo" class="mensagem-banner-catalogo" role="status" aria-live="polite" hidden></p>
+</section>
+
 </div>
 
 </div> <!-- ======================================================= FIM DO MODAL — EDITAR MEU COMÉRCIO ======================================================== -->
@@ -1129,7 +1151,7 @@
 <!-- LÓGICA DA PÁGINA LOCAL -->
 
 <script
-  src="../js/local.js"
+  src="../js/local.js?v=liberacao-20261007"
 ></script>
 
 <script src="../js/catalogo-local.js"></script>

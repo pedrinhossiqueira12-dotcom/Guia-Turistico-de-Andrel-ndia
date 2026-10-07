@@ -61,6 +61,43 @@
     return data?.publicUrl || IMAGEM_PADRAO;
   }
 
+  function validarUrlBannerCatalogo(valor) {
+    if (typeof valor !== "string" || !valor.trim() || valor.length > 2048) return null;
+    try {
+      const parsed = new URL(valor.trim());
+      const projeto = new URL(SUPABASE_URL);
+      if (parsed.protocol !== "https:" || parsed.origin !== projeto.origin || parsed.username || parsed.password || parsed.search || parsed.hash) return null;
+      const prefixo = "/storage/v1/object/public/cadastros/";
+      if (!parsed.pathname.startsWith(prefixo)) return null;
+      const parte = parsed.pathname.slice(prefixo.length);
+      const segmentos = parte.split("/");
+      if (segmentos.length !== 2 || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(segmentos[0])) return null;
+      const arquivo = decodeURIComponent(segmentos[1]);
+      if (!/^[a-zA-Z0-9._-]+\.(?:jpe?g|png|webp)$/i.test(arquivo) || arquivo.includes("..")) return null;
+      return parsed.href;
+    } catch {
+      return null;
+    }
+  }
+
+  function renderizarHeroBanner(valor) {
+    const camada = $("storeHeroBannerLayer");
+    const imagem = $("storeHeroBannerImage");
+    if (!camada || !imagem) return;
+    const url = validarUrlBannerCatalogo(valor);
+    imagem.onerror = () => {
+      camada.hidden = true;
+      imagem.removeAttribute("src");
+    };
+    if (!url) {
+      camada.hidden = true;
+      imagem.removeAttribute("src");
+      return;
+    }
+    imagem.src = url;
+    camada.hidden = false;
+  }
+
   function salvarCarrinho() {
     try {
       localStorage.setItem(chaveCarrinho, JSON.stringify(carrinho));
@@ -820,7 +857,7 @@
     try {
       const { data: estadoCatalogo, error: erroEstado } = await supabase
         .from("catalogo_publicado")
-        .select("comercio_id, modalidades, metodos_pagamento")
+        .select("comercio_id, modalidades, metodos_pagamento, banner_url")
         .eq("comercio_id", comercioId)
         .maybeSingle();
       if (erroEstado) throw erroEstado;
@@ -848,6 +885,7 @@
       categorias = Array.isArray(dadosCategorias) ? dadosCategorias : [];
       produtos = (Array.isArray(dadosProdutos) ? dadosProdutos : []).filter((produto) => categorias.some((categoria) => String(categoria.id) === String(produto.categoria_id)));
 
+      renderizarHeroBanner(estadoCatalogo.banner_url);
       $("fotoComercio").src = comercio.imagem || comercio.imagens?.[0] || IMAGEM_PADRAO;
       $("fotoComercio").alt = `Foto de ${comercio.nome || "comércio"}`;
       $("fotoComercio").addEventListener("error", () => { $("fotoComercio").src = IMAGEM_PADRAO; }, { once: true });

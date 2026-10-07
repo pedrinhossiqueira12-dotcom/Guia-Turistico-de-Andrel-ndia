@@ -14,6 +14,7 @@ const CORS_HEADERS = {
 
 type CatalogConfigRow = {
   comercio_id: string;
+  banner_url?: string | null;
   bloqueado: boolean;
   motivo_bloqueio: string | null;
   modalidades: string[];
@@ -103,7 +104,7 @@ async function verifyCommerceOwner(userId: string, commerceId: string) {
 async function ensureCatalog(userId: string, commerceId: string, createIfMissing = false) {
   const { data: existing, error: lookupError } = await admin
     .from("catalogos")
-    .select("comercio_id,proprietario_id,bloqueado,motivo_bloqueio")
+    .select("comercio_id,proprietario_id,bloqueado,motivo_bloqueio,banner_url")
     .eq("comercio_id", commerceId)
     .maybeSingle();
   if (lookupError) throw new Error(`Falha ao consultar configuração do catálogo: ${lookupError.message}`);
@@ -112,7 +113,7 @@ async function ensureCatalog(userId: string, commerceId: string, createIfMissing
   }
 
   if (!existing) {
-    if (!createIfMissing) return { allowed: true, exists: false, blocked: false, reason: null };
+    if (!createIfMissing) return { allowed: true, exists: false, blocked: false, reason: null, banner_url: null };
     const { error: insertError } = await admin.from("catalogos").insert({
       comercio_id: commerceId,
       proprietario_id: userId,
@@ -125,19 +126,58 @@ async function ensureCatalog(userId: string, commerceId: string, createIfMissing
     if (insertError?.code === "23505") {
       const { data: raced, error: raceError } = await admin
         .from("catalogos")
-        .select("comercio_id,proprietario_id,bloqueado,motivo_bloqueio")
+        .select("comercio_id,proprietario_id,bloqueado,motivo_bloqueio,banner_url")
         .eq("comercio_id", commerceId)
         .maybeSingle();
       if (raceError) throw new Error(`Falha ao confirmar vínculo do catálogo: ${raceError.message}`);
       if (!raced || raced.proprietario_id !== userId) {
         return { allowed: false, exists: true, blocked: false, reason: "O comércio já está vinculado a outra conta." };
       }
-      return { allowed: true, exists: true, blocked: Boolean(raced.bloqueado), reason: raced.motivo_bloqueio || null };
+      return { allowed: true, exists: true, blocked: Boolean(raced.bloqueado), reason: raced.motivo_bloqueio || null, banner_url: raced.banner_url || null };
     }
-    return { allowed: true, exists: true, blocked: false, reason: null };
+    return { allowed: true, exists: true, blocked: false, reason: null, banner_url: null };
   }
 
-  return { allowed: true, exists: true, blocked: Boolean(existing.bloqueado), reason: existing.motivo_bloqueio || null };
+  return { allowed: true, exists: true, blocked: Boolean(existing.bloqueado), reason: existing.motivo_bloqueio || null, banner_url: existing.banner_url || null };
+}
+
+function analisarBannerUrl(value: unknown, userId: string) {
+  if (typeof value !== "string" || !value.trim() || value.length > 2048) return null;
+  let parsed: URL;
+  try {
+    parsed = new URL(value.trim());
+    const project = new URL(SUPABASE_URL);
+    if (parsed.protocol !== "https:" || parsed.origin !== project.origin || parsed.username || parsed.password || parsed.search || parsed.hash) return null;
+  } catch {
+    return null;
+  }
+
+  const prefix = `/storage/v1/object/public/cadastros/${userId}/`;
+  if (!parsed.pathname.startsWith(prefix)) return null;
+  const rawFile = parsed.pathname.slice(prefix.length);
+  let fileName = "";
+  try {
+    fileName = decodeURIComponent(rawFile);
+  } catch {
+    return null;
+  }
+  if (!rawFile || rawFile.includes("/") || rawFile.includes("\\") || fileName.includes("/") || fileName.includes("\\") || fileName === "." || fileName === ".." || fileName.includes("..") || /[\u0000-\u001f\u007f]/.test(fileName)) return null;
+  const extension = fileName.split(".").pop()?.toLowerCase() || "";
+  if (!/^(jpe?g|png|webp)$/.test(extension)) return null;
+  return { fileName, filePath: `${userId}/${fileName}` };
+}
+
+async function bannerObjectExists(filePath: string) {
+  const separator = filePath.lastIndexOf("/");
+  const folder = filePath.slice(0, separator);
+  const fileName = filePath.slice(separator + 1);
+  const { data, error } = await admin.storage.from("cadastros").list(folder, { limit: 100, search: fileName });
+  if (error) throw new Error("Não foi possível verificar a foto no Storage.");
+  const file = (data || []).find((item) => item.name === fileName);
+  if (!file) return false;
+  const mime = String(file.metadata?.mimetype || "").toLowerCase();
+  const size = Number(file.metadata?.size);
+  return ["image/jpeg", "image/png", "image/webp"].includes(mime) && Number.isSafeInteger(size) && size > 0 && size <= 4 * 1024 * 1024;
 }
 
 async function receiverState(commerceId: string) {
@@ -239,7 +279,7 @@ Deno.serve(async (request: Request) => {
 
     const commerceId = String(body?.comercio_id || "").trim();
     if (!commerceId) return json({ success: false, mensagem: "Informe o comércio." }, 400);
-    if (!["verificar_proprietario", "solicitar_ativacao"].includes(action)) {
+    if (!["verificar_proprietario", "solicitar_ativacao", "consultar_banner", "salvar_banner"].includes(action)) {
       return json({ success: false, mensagem: "Ação não reconhecida." }, 400);
     }
 
@@ -277,8 +317,39 @@ Deno.serve(async (request: Request) => {
       return json({ proprietario: false, mensagem: ownership.reason || "Proprietário não confirmado." }, 403);
     }
 
-    const catalog = await ensureCatalog(authenticated.user.id, commerceId, action === "solicitar_ativacao");
+    const catalog = await ensureCatalog(
+      authenticated.user.id,
+      commerceId,
+      action === "solicitar_ativacao" || action === "consultar_banner" || action === "salvar_banner",
+    );
     if (!catalog.allowed) return json({ proprietario: false, mensagem: catalog.reason }, 403);
+    if (action === "consultar_banner") {
+      return json({ success: true, proprietario: true, banner_url: catalog.banner_url || null });
+    }
+    if (action === "salvar_banner") {
+      const rawBanner = body.banner_url;
+      if (!Object.hasOwn(body, "banner_url") || rawBanner !== null && typeof rawBanner !== "string") {
+        return json({ success: false, mensagem: "O banner informado é inválido." }, 400);
+      }
+      const bannerUrl = typeof rawBanner === "string" ? rawBanner.trim() : null;
+      if (bannerUrl) {
+        const parsedBanner = analisarBannerUrl(bannerUrl, authenticated.user.id);
+        if (!parsedBanner) return json({ success: false, mensagem: "Use uma foto JPG, PNG ou WEBP do seu Storage público, sem alterar a URL." }, 400);
+        if (!(await bannerObjectExists(parsedBanner.filePath))) {
+          return json({ success: false, mensagem: "Use uma foto JPG, PNG ou WEBP existente no seu Storage, com até 4 MiB." }, 400);
+        }
+      }
+      const { data: savedBanner, error: bannerError } = await admin
+        .from("catalogos")
+        .update({ banner_url: bannerUrl || null })
+        .eq("comercio_id", commerceId)
+        .eq("proprietario_id", authenticated.user.id)
+        .select("comercio_id,banner_url")
+        .maybeSingle();
+      if (bannerError) throw new Error(`Falha ao salvar banner: ${bannerError.message}`);
+      if (!savedBanner) return json({ success: false, mensagem: "Catálogo não encontrado ou sem permissão para salvar o banner." }, 403);
+      return json({ success: true, proprietario: true, banner_url: savedBanner.banner_url || null });
+    }
     if (action === "verificar_proprietario" && !catalog.exists) {
       return json({ proprietario: true, ativo: false, bloqueado: false, assinatura_status: "sem_assinatura", modo_demonstracao: true });
     }
