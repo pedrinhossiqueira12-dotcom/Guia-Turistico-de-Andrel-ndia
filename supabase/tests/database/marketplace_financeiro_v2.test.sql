@@ -4,7 +4,11 @@
 
 begin;
 
-select plan(12);
+select plan(13);
+
+update public.catalogo_fluxo_config
+   set ativo=true, comercios_piloto=NULL
+ where id=true;
 
 select ok(
   exists(
@@ -106,6 +110,17 @@ select ok(
       and pg_get_functiondef(p.oid) ~* '10[.,]00|>= *1000|< *1000'
   ),
   'nenhum piso de R$10 foi codificado nos fluxos de saque/repasse existentes'
+);
+
+select ok(
+  exists(
+    select 1
+    from pg_constraint
+    where conrelid='public.catalogo_pedidos'::regclass
+      and conname='catalogo_pedidos_taxas_v2_check'
+      and pg_get_constraintdef(oid) like '%versao_financeira = 2%'
+  ),
+  'a regra de taxas diferencia V2 dos pedidos legados'
 );
 
 select * from finish();
