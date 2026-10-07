@@ -8,14 +8,14 @@ BEGIN;
 ALTER TABLE public.catalogo_fluxo_config
   DROP CONSTRAINT IF EXISTS catalogo_fluxo_config_taxa_sem_entrega_percentual_check;
 
-ALTER TABLE public.catalogo_fluxo_config
-  ADD CONSTRAINT catalogo_fluxo_config_taxa_sem_entrega_percentual_check
-  CHECK (taxa_sem_entrega_percentual = 7.00);
-
 UPDATE public.catalogo_fluxo_config
    SET taxa_sem_entrega_percentual = 7.00,
        atualizado_em = pg_catalog.now()
  WHERE id = true;
+
+ALTER TABLE public.catalogo_fluxo_config
+  ADD CONSTRAINT catalogo_fluxo_config_taxa_sem_entrega_percentual_check
+  CHECK (taxa_sem_entrega_percentual = 7.00);
 
 ALTER TABLE public.catalogo_pedidos
   DROP CONSTRAINT IF EXISTS catalogo_pedidos_taxas_v2_check;
