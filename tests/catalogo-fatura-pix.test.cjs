@@ -34,7 +34,9 @@ test('a order é criada com Pix e chave de idempotência, sem repetir cobrança 
   assert.match(fn, /chaveIdempotenciaFatura/);
   assert.match(fn, /reutilizada: true/);
   assert.match(fn, /payment_method: \{ id: "pix", type: "bank_transfer" \}/);
-  assert.doesNotMatch(fn, /payer: \{ email: payerEmail \}/);
+  assert.match(fn, /payer: \{ email: payerEmail \}/);
+  assert.match(fn, /criarCobranca\(userId, body, user\.email \|\| ""\)/);
+  assert.doesNotMatch(fn, /payerEmail\s*=\s*body\./);
 });
 
 test('webhook da fatura exige HMAC e reconsulta a order no provedor', () => {

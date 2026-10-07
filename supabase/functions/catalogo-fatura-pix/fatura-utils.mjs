@@ -27,7 +27,9 @@ export function isCompetencia(value) {
 export function normalizarCompetencia(value) {
   if (typeof value !== "string") return "";
   const match = /^(\d{4}-\d{2})(?:-\d{2})?$/.exec(value.trim());
-  return match ? match[1] : "";
+  if (!match) return "";
+  const [year, month] = match[1].split("-").map(Number);
+  return year >= 1 && month >= 1 && month <= 12 ? match[1] : "";
 }
 
 // Referência estável da fatura: permite reconciliar a order do provedor com a

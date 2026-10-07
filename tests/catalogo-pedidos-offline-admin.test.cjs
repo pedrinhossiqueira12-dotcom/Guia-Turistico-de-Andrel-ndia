@@ -11,11 +11,14 @@ test('admin offline exige Bearer e verifica proprietário por proprietario_id', 
   assert.match(fn, /Acesso não autorizado/);
 });
 
-test('transições do comércio não permitem concluir ou reabrir pedido', () => {
-  assert.match(fn, /aguardando_pagamento: \["em_preparo", "cancelado"\]/);
-  assert.match(fn, /em_preparo: \["pronto", "cancelado"\]/);
-  assert.match(fn, /pronto: \["cancelado"\]/);
-  assert.match(fn, /Esta transição não é permitida/);
+test('transições do comércio são autorizadas e transacionais, sem conclusão pelo seletor', () => {
+  assert.match(fn, /em_preparo: "aceitar", pronto: "pronto", cancelado: "solicitar_cancelamento"/);
+  assert.match(fn, /catalogo_operar_pedido_v2/);
+  assert.match(fn, /p_operador_id: userId/);
+  assert.match(fn, /Transição inválida/);
+  const inicio = fn.indexOf('async function updateStatus');
+  const fim = fn.indexOf('async function confirmDelivery', inicio);
+  assert.doesNotMatch(fn.slice(inicio, fim), /\.update\(/);
 });
 
 test('confirmação aceita pedido preparado mas continua única', () => {
@@ -31,8 +34,8 @@ test('auditoria registra mudanças de status sem código ou token', () => {
   assert.doesNotMatch(sql, /codigo_entrega_hash.*catalogo_pedido_eventos/);
 });
 
-test('pagamento do fechamento só pode ser conferido pelo administrador', () => {
+test('referência manual nunca comprova financiamento da fatura ou desbloqueia o comércio', () => {
   assert.match(fn, /Somente o administrador pode conferir pagamentos/);
-  assert.match(fn, /status: "pago"/);
-  assert.match(fn, /status: "paga"/);
+  assert.match(fn, /A baixa manual por referência foi desativada/);
+  assert.doesNotMatch(fn, /status: "pago"|status: "paga"/);
 });

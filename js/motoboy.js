@@ -4,14 +4,48 @@
   const SUPABASE_URL = "https://xdmbkflufsfqziixzpxc.supabase.co";
   const SUPABASE_KEY = "sb_publishable_dvwNkLDf3oZrCqvZ5uAaRA_VsfiuZFy";
   const API_URL = `${SUPABASE_URL}/functions/v1/catalogo-entregas`;
-  const STATUS_LABELS = {
-    aguardando_pagamento: "Aguardando preparo",
-    em_preparo: "Em preparo",
-    pronto: "Pronto para entrega",
-    entregue: "Entregue",
-    cancelado: "Cancelado",
-  };
   const STALE_REQUEST = "STALE_SESSION_REQUEST";
+  const STATUS_LABELS = {
+    nao_atribuido: "Aguardando distribuição",
+    ofertado: "Oferta disponível",
+    reservado: "Reservada para você",
+    coletado: "Pedido coletado",
+    em_entrega: "Em entrega",
+    entregue: "Entregue",
+    cancelamento_solicitado: "Ocorrência em análise",
+    cancelado: "Cancelada",
+    aguardando_pagamento: "Aguardando pagamento",
+    em_preparo: "Em preparo",
+    pronto: "Pronto para coleta",
+  };
+  const PAYMENT_LABELS = {
+    pix: "Pix",
+    mercadopago: "Pagamento online",
+    dinheiro: "Presencial em dinheiro",
+    cartao_credito: "Presencial no cartão de crédito",
+    cartao_debito: "Presencial no cartão de débito",
+    pagamento_entrega: "Pagamento presencial",
+    pagamento_local: "Pagamento presencial",
+  };
+  const OCCURRENCE_CATEGORIES = {
+    cliente_nao_localizado: "Cliente não localizado",
+    endereco_incorreto: "Endereço incorreto",
+    problema_pedido: "Problema com o pedido",
+    acidente: "Imprevisto no trajeto",
+    outro: "Outro motivo",
+  };
+  const ACTION_FIELDS = {
+    listar_entregas: ["offset"],
+    consultar_extrato: ["offset"],
+    definir_disponibilidade: ["disponivel"],
+    aceitar_entrega: ["pedido_id"],
+    coletar: ["pedido_id"],
+    em_entrega: ["pedido_id"],
+    desistir_entrega: ["pedido_id", "motivo"],
+    registrar_ocorrencia: ["pedido_id", "categoria", "motivo"],
+    salvar_chave_pix: ["chave_pix"],
+    confirmar_entrega: ["pedido_id", "comercio_id", "codigo_entrega", "recebimento_confirmado"],
+  };
 
   const state = {
     client: null,
@@ -22,12 +56,17 @@
     pedidos: [],
     offset: 0,
     hasMore: false,
+    extrato: null,
     timer: null,
     subscription: null,
     destroyed: false,
     lockedAfterLogout: false,
-    commerceNames: new Map(),
     loading: false,
+    extractLoading: false,
+    actionInFlight: new Set(),
+    availability: false,
+    availabilityLoading: false,
+    commerceNames: new Map(),
   };
 
   const $ = (id) => document.getElementById(id);
@@ -54,6 +93,10 @@
       '"': "&quot;",
       "'": "&#039;",
     })[caractere]);
+  }
+
+  function textoSeguro(valor, limite = 500) {
+    return String(valor ?? "").trim().slice(0, limite);
   }
 
   function definirFeedback(id, mensagem, erro = false) {
@@ -85,12 +128,23 @@
     return data.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
   }
 
+  function statusEntrega(pedido) {
+    return String(pedido?.entrega_status || pedido?.status || "").toLowerCase();
+  }
+
   function statusLabel(status) {
     return STATUS_LABELS[status] || "Em acompanhamento";
   }
 
+  function statusClass(status) {
+    if (["ofertado", "pronto"].includes(status)) return "is-ready";
+    if (["entregue"].includes(status)) return "is-complete";
+    if (["cancelado", "cancelamento_solicitado"].includes(status)) return "is-danger";
+    return "is-waiting";
+  }
+
   function enderecoPedido(pedido) {
-    return [pedido.cliente_endereco, pedido.cliente_numero, pedido.cliente_bairro, pedido.cliente_complemento, pedido.cliente_referencia, pedido.cliente_cidade]
+    return [pedido?.cliente_endereco, pedido?.cliente_numero, pedido?.cliente_bairro, pedido?.cliente_complemento, pedido?.cliente_referencia, pedido?.cliente_cidade]
       .filter((valor) => String(valor ?? "").trim())
       .map((valor) => String(valor).trim())
       .join(", ");
@@ -107,16 +161,63 @@
     const url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destino)}`;
     try {
       const validada = new URL(url);
-      return validada.protocol === "https:" ? validada.href : "";
+      return validada.protocol === "https:" && validada.hostname === "www.google.com" ? validada.href : "";
     } catch {
       return "";
     }
+  }
+
+  function formaPagamento(pedido) {
+    const forma = String(pedido?.forma_pagamento || pedido?.metodo_pagamento || "").toLowerCase();
+    return PAYMENT_LABELS[forma] || (forma ? textoSeguro(forma, 60) : "Pagamento informado pelo servidor");
+  }
+
+  function pagamentoPix(pedido) {
+    const forma = String(pedido?.forma_pagamento || pedido?.metodo_pagamento || "").toLowerCase();
+    return forma === "pix" || forma === "pix_online" || pedido?.pix_pago === true;
+  }
+
+  function pedidoEhOferta(pedido) {
+    return pedido?.oferta === true || statusEntrega(pedido) === "ofertado";
+  }
+
+  function pedidoPertenceAoMotoboy(pedido) {
+    if (pedidoEhOferta(pedido)) return false;
+    const ids = [pedido?.motoboy_id, pedido?.entregador_id, pedido?.responsavel_id, pedido?.atribuido_para]
+      .filter(Boolean).map(String);
+    return !ids.length || ids.includes(String(state.userId));
   }
 
   function validarSessaoAtual(generation, userId) {
     if (state.destroyed || generation !== state.generation || !state.session || state.userId !== userId) {
       throw new Error(STALE_REQUEST);
     }
+  }
+
+  function prepararBody(body) {
+    const entrada = body && typeof body === "object" ? body : {};
+    const acao = textoSeguro(entrada.acao, 40);
+    const permitido = ACTION_FIELDS[acao] || [];
+    const saida = { acao };
+    for (const campo of permitido) {
+      if (entrada[campo] === undefined) continue;
+      if (campo === "pedido_id" || campo === "comercio_id") {
+        const valor = textoSeguro(entrada[campo], 180);
+        if (valor) saida[campo] = valor;
+      } else if (campo === "offset") {
+        const valor = Number(entrada[campo]);
+        saida[campo] = Number.isInteger(valor) && valor >= 0 ? Math.min(valor, 10000) : 0;
+      } else if (campo === "disponivel" || campo === "recebimento_confirmado") {
+        saida[campo] = entrada[campo] === true;
+      } else if (campo === "codigo_entrega") {
+        saida[campo] = textoSeguro(entrada[campo], 6);
+      } else if (campo === "chave_pix") {
+        saida[campo] = textoSeguro(entrada[campo], 120);
+      } else {
+        saida[campo] = textoSeguro(entrada[campo], campo === "motivo" ? 500 : 80);
+      }
+    }
+    return saida;
   }
 
   async function chamarApi(body, generation = state.generation, userId = state.userId) {
@@ -136,11 +237,11 @@
         "apikey": SUPABASE_KEY,
         "Authorization": `Bearer ${token}`,
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify(prepararBody(body)),
     });
     const resultado = await resposta.json().catch(() => ({}));
     validarSessaoAtual(generation, userId);
-    if (!resposta.ok || resultado?.success !== true) {
+    if (!resposta.ok || (resultado?.success !== true && resultado?.ok !== true)) {
       const failure = new Error(resultado?.mensagem || "A operação não foi autorizada.");
       failure.status = resposta.status;
       failure.code = resultado?.codigo || "";
@@ -153,67 +254,119 @@
     state.pedidos = [];
     state.offset = 0;
     state.hasMore = false;
-    $("motoboyOrders").innerHTML = "";
-    $("motoboyOrders").setAttribute("aria-busy", "false");
-    $("motoboyEmpty").hidden = true;
-    $("motoboyLoadMore").hidden = true;
+    const lista = $("motoboyOrders");
+    if (lista) {
+      lista.innerHTML = "";
+      lista.setAttribute("aria-busy", "false");
+    }
+    if ($("motoboyEmpty")) $("motoboyEmpty").hidden = true;
+    if ($("motoboyLoadMore")) $("motoboyLoadMore").hidden = true;
+  }
+
+  function limparExtrato() {
+    state.extrato = null;
+    state.availability = false;
+    const extrato = $("motoboyEarnings");
+    if (extrato) extrato.hidden = true;
+    const perfil = $("motoboyProfileForm");
+    if (perfil) perfil.reset();
+  }
+
+  function limparDadosPrivados() {
+    limparPedidos();
+    limparExtrato();
+    state.actionInFlight.clear();
   }
 
   function renderizarPedidos() {
     const lista = $("motoboyOrders");
+    if (!lista) return;
     const pedidos = state.pedidos;
     if (!pedidos.length) {
-      $("motoboyEmpty").hidden = false;
+      if ($("motoboyEmpty")) $("motoboyEmpty").hidden = false;
       lista.innerHTML = "";
     } else {
-      $("motoboyEmpty").hidden = true;
+      if ($("motoboyEmpty")) $("motoboyEmpty").hidden = true;
       lista.innerHTML = pedidos.map(renderizarPedido).join("");
     }
-    $("motoboyLoadMore").hidden = !state.hasMore || !pedidos.length;
+    if ($("motoboyLoadMore")) $("motoboyLoadMore").hidden = !state.hasMore || !pedidos.length;
+  }
+
+  function renderizarAcao(pedido, acao, label, classe = "motoboy-button-primary") {
+    const id = String(pedido?.pedido_id || "");
+    const chave = `${acao}:${id}`;
+    const ocupado = state.actionInFlight.has(chave);
+    return `<button class="motoboy-button ${classe}" type="button" data-entrega-action="${escapar(acao)}" data-pedido-id="${escapar(id)}" ${ocupado ? "disabled aria-busy=\"true\"" : ""}>${escapar(ocupado ? "Processando…" : label)}</button>`;
   }
 
   function renderizarPedido(pedido) {
-    const id = String(pedido.pedido_id || "");
-    const comercioId = String(pedido.comercio_id || "");
-    const endereco = enderecoPedido(pedido);
-    const telefone = telefoneSeguro(pedido.cliente_telefone);
-    const rota = rotaSegura(pedido);
-    const pronto = pedido.status === "pronto";
-    const statusClass = pronto ? "is-ready" : "is-waiting";
-    const itens = Array.isArray(pedido.itens) ? pedido.itens : [];
+    const id = String(pedido?.pedido_id || "");
+    const comercioId = String(pedido?.comercio_id || "");
+    const comercio = state.commerceNames.get(comercioId) || pedido?.comercio_nome || comercioId || "Comércio autorizado";
+    const status = statusEntrega(pedido);
+    const oferta = pedidoEhOferta(pedido);
+    const responsavel = pedidoPertenceAoMotoboy(pedido);
+    const podeVerDados = !oferta && responsavel && Boolean(pedido?.cliente_endereco || pedido?.cliente_nome || pedido?.itens);
+    const itens = podeVerDados && Array.isArray(pedido?.itens) ? pedido.itens : [];
     const itensHtml = itens.length
-      ? `<ul class="motoboy-items" aria-label="Itens do pedido">${itens.map((item) => `<li>${escapar(item.quantidade)} × ${escapar(item.nome_produto)}</li>`).join("")}</ul>`
+      ? `<ul class="motoboy-items" aria-label="Itens seguros do pedido">${itens.map((item) => `<li>${escapar(item?.quantidade)} × ${escapar(item?.nome_produto || item?.nome)}</li>`).join("")}</ul>`
       : "";
-    const contato = telefone
-      ? `<a href="${escapar(telefone)}">Ligar para o cliente</a>`
-      : "Telefone não informado";
-    const navegacao = rota
-      ? `<a href="${escapar(rota)}" target="_blank" rel="noopener noreferrer">Abrir rota no Google Maps</a>`
-      : "Rota indisponível";
-    const forma = ({ dinheiro: "Dinheiro", cartao_credito: "Cartão de crédito", cartao_debito: "Cartão de débito", pagamento_entrega: "Pagamento na entrega", pagamento_local: "Pagamento presencial" })[pedido.forma_pagamento] || "Pagamento presencial";
-    const orientacao = pronto
-      ? "Pedido pronto. Entregue os produtos, receba presencialmente e peça o código ao cliente."
-      : "Aguarde o comércio deixar o pedido pronto antes de iniciar a entrega.";
-    return `<article class="motoboy-delivery-card" data-pedido-id="${escapar(id)}">
+    const telefone = podeVerDados ? telefoneSeguro(pedido?.cliente_telefone) : "";
+    const rota = podeVerDados ? rotaSegura(pedido) : "";
+    const contato = telefone ? `<a href="${escapar(telefone)}">Ligar para o cliente</a>` : "Telefone não informado";
+    const navegacao = rota ? `<a href="${escapar(rota)}" target="_blank" rel="noopener noreferrer">Abrir rota segura</a>` : "Rota disponível após aceite";
+    const orientacao = oferta
+      ? "Oferta para motoboys autorizados e disponíveis. O primeiro aceite válido reserva o pedido."
+      : status === "reservado" || status === "pronto"
+        ? "Confirme a coleta somente quando estiver com o pedido em mãos."
+        : status === "coletado"
+          ? "Pedido coletado. Marque em entrega quando iniciar o trajeto."
+          : status === "em_entrega"
+            ? "Ao chegar, peça o código de seis números ao cliente."
+            : status === "entregue"
+              ? "Entrega confirmada pelo servidor."
+              : "Acompanhe a próxima etapa pelo servidor.";
+    const forma = !oferta && pedido?.forma_pagamento ? formaPagamento(pedido) : "Pagamento conforme dados liberados após aceite";
+    const detalhes = podeVerDados
+      ? `<div class="motoboy-detail-line"><strong>Cliente</strong><span>${escapar(pedido?.cliente_nome || "Cliente")}</span></div>
+         <div class="motoboy-detail-line"><strong>Endereço</strong><span>${escapar(enderecoPedido(pedido) || "Endereço não informado")}</span><span>${navegacao}</span></div>
+         <div class="motoboy-detail-line"><strong>Contato</strong><span>${contato}</span></div>`
+      : `<div class="motoboy-safe-offer"><strong>Oferta sem dados pessoais</strong><span>Endereço, telefone, observações e itens aparecem somente depois do aceite autorizado.</span></div>`;
+    const pagamento = !oferta && pedido?.status_pagamento
+      ? `${forma} · ${escapar(String(pedido.status_pagamento) === "aprovado" ? "status confirmado pelo servidor" : "status acompanhado pelo servidor")}`
+      : forma;
+    const taxa = Number.isFinite(Number(pedido?.taxa_motoboy_centavos))
+      ? `<div class="motoboy-detail-line"><strong>Remuneração indicada</strong><span>${formatarMoeda(pedido.taxa_motoboy_centavos)} conforme extrato do servidor</span></div>`
+      : "";
+    let acoes = "";
+    if (oferta) {
+      acoes += renderizarAcao(pedido, "aceitar_entrega", "Aceitar oferta");
+    } else if (["reservado", "pronto"].includes(status)) {
+      acoes += renderizarAcao(pedido, "coletar", "Confirmar coleta");
+      acoes += renderizarAcao(pedido, "desistir_entrega", "Desistir antes da coleta", "motoboy-button-danger");
+    } else if (status === "coletado") {
+      acoes += renderizarAcao(pedido, "em_entrega", "Iniciar entrega");
+      acoes += renderizarAcao(pedido, "registrar_ocorrencia", "Relatar ocorrência", "motoboy-button-secondary");
+    } else if (status === "em_entrega") {
+      acoes += renderizarAcao(pedido, "confirmar_entrega", "Informar código de entrega");
+      acoes += renderizarAcao(pedido, "registrar_ocorrencia", "Relatar ocorrência", "motoboy-button-secondary");
+    } else if (["cancelamento_solicitado", "cancelado", "entregue"].includes(status)) {
+      acoes = `<span class="motoboy-action-note">Nenhuma ação adicional disponível nesta etapa.</span>`;
+    }
+    return `<article class="motoboy-delivery-card ${oferta ? "is-offer" : ""}" data-pedido-id="${escapar(id)}">
       <div class="motoboy-delivery-header">
-        <div>
-          <h3>${escapar(state.commerceNames.get(comercioId) || pedido.comercio_nome || comercioId || "Comércio")}</h3>
-          <p class="motoboy-order-total">Total do pedido: ${formatarMoeda(pedido.total_centavos)}${pedido.criado_em ? ` · ${escapar(formatarData(pedido.criado_em))}` : ""}</p>
-        </div>
-        <span class="motoboy-status ${statusClass}">${escapar(statusLabel(pedido.status))}</span>
+        <div><span class="eyebrow">${oferta ? "OFERTA AUTORIZADA" : "MINHA ENTREGA"}</span><h3>${escapar(comercio)}</h3>
+          <p class="motoboy-order-total">Pedido ${escapar(id)} · ${formatarMoeda(pedido?.total_centavos)}${pedido?.criado_em ? ` · ${escapar(formatarData(pedido.criado_em))}` : ""}</p></div>
+        <span class="motoboy-status ${statusClass(status)}">${escapar(statusLabel(status))}</span>
       </div>
       <div class="motoboy-delivery-details">
-        <div class="motoboy-detail-line"><strong>Pagamento</strong><span>${escapar(forma)} · Receber ${formatarMoeda(pedido.total_centavos)}</span></div>
-        <div class="motoboy-detail-line"><strong>Cliente</strong><span>${escapar(pedido.cliente_nome || "Cliente")}</span></div>
-        <div class="motoboy-detail-line"><strong>Endereço</strong><span>${escapar(endereco || "Endereço não informado")}</span><span>${navegacao}</span></div>
-        <div class="motoboy-detail-line"><strong>Contato</strong><span>${contato}</span></div>
+        <div class="motoboy-detail-line"><strong>Pagamento</strong><span>${pagamento}</span></div>
+        ${taxa}${detalhes}
       </div>
       ${itensHtml}
-      ${pedido.observacoes ? `<p class="motoboy-order-guidance"><strong>Observações:</strong> ${escapar(pedido.observacoes)}</p>` : ""}
+      ${podeVerDados && pedido?.observacoes ? `<p class="motoboy-order-guidance"><strong>Orientações do comércio:</strong> ${escapar(pedido.observacoes)}</p>` : ""}
       <p class="motoboy-order-guidance">${escapar(orientacao)}</p>
-      <div class="motoboy-delivery-actions">
-        <button class="motoboy-button motoboy-button-primary" type="button" data-confirmar-pedido="${escapar(id)}" data-confirmar-comercio="${escapar(comercioId)}" ${pronto ? "" : "disabled"}>${pronto ? "Confirmar entrega" : "Aguardar pedido pronto"}</button>
-      </div>
+      <div class="motoboy-delivery-actions">${acoes}</div>
     </article>`;
   }
 
@@ -226,53 +379,126 @@
     const userId = state.userId;
     const offset = append ? Math.min(10000, Math.max(0, Math.floor(Number(state.offset) || 0))) : 0;
     state.loading = true;
-    $("motoboyOrders").setAttribute("aria-busy", "true");
+    $("motoboyOrders")?.setAttribute("aria-busy", "true");
     if (!append) {
-      $("motoboyEmpty").hidden = true;
-      $("motoboyOrders").innerHTML = '<p class="motoboy-feedback">Atualizando entregas…</p>';
+      if ($("motoboyEmpty")) $("motoboyEmpty").hidden = true;
+      if ($("motoboyOrders")) $("motoboyOrders").innerHTML = '<p class="motoboy-feedback">Atualizando entregas…</p>';
     }
     definirFeedback("motoboyOrdersFeedback", "");
     try {
       const resultado = await chamarApi({ acao: "listar_entregas", offset }, generation, userId);
       validarSessaoAtual(generation, userId);
-      const pedidos = Array.isArray(resultado.pedidos) ? resultado.pedidos : [];
+      const pedidos = Array.isArray(resultado?.pedidos) ? resultado.pedidos : [];
       state.pedidos = append ? state.pedidos.concat(pedidos) : pedidos;
       state.offset = state.pedidos.length;
-      state.hasMore = resultado.has_more === true;
+      state.hasMore = resultado?.has_more === true;
       renderizarPedidos();
-      definirAviso("Entregas atualizadas", "A lista mostra apenas pedidos presenciais ativos atribuídos a esta conta.", "sucesso");
+      definirAviso("Entregas atualizadas", "Ofertas e entregas mostram somente o que a conta está autorizada a receber.", "sucesso");
     } catch (erro) {
       if (erro.message === STALE_REQUEST) return;
-      if (erro.status === 403 || erro.status === 401) { limparPedidos(); fecharConfirmacao(); }
-      if (!append) {
-        $("motoboyOrders").innerHTML = "";
-        $("motoboyEmpty").hidden = true;
-      }
+      if (erro.status === 403 || erro.status === 401) { limparDadosPrivados(); fecharConfirmacao(); }
+      if (!append && $("motoboyOrders")) $("motoboyOrders").innerHTML = "";
       definirFeedback("motoboyOrdersFeedback", erro.message || "Não foi possível carregar suas entregas.", true);
       definirAviso("Não foi possível atualizar", erro.message || "Verifique sua sessão e tente novamente.", "erro");
     } finally {
       if (generation === state.generation) {
         state.loading = false;
-        $("motoboyOrders").setAttribute("aria-busy", "false");
+        $("motoboyOrders")?.setAttribute("aria-busy", "false");
       }
+    }
+  }
+
+  function renderizarExtrato() {
+    const bloco = $("motoboyEarnings");
+    if (!bloco || !state.extrato) return;
+    const saldo = state.extrato.saldo || {};
+    const confiabilidade = state.extrato.confiabilidade || {};
+    const perfil = state.extrato.perfil || {};
+    bloco.hidden = false;
+    $("motoboyBalanceAReceber").textContent = formatarMoeda(saldo.a_receber_centavos);
+    $("motoboyBalancePago").textContent = formatarMoeda(saldo.pago_centavos);
+    $("motoboyBalanceRetido").textContent = formatarMoeda(saldo.retido_centavos);
+    const amostra = Number(confiabilidade.amostra);
+    const indice = Number(confiabilidade.indice);
+    const emFormacao = confiabilidade.situacao === "em_formacao" || !Number.isFinite(indice) || !Number.isFinite(amostra) || amostra <= 0;
+    $("motoboyReliabilityValue").textContent = emFormacao ? "Em formação" : `${indice.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
+    $("motoboyReliabilityText").textContent = emFormacao
+      ? "Ainda não há amostra suficiente para uma leitura de confiabilidade. Cancelamentos do cliente ou do comércio não são atribuídos automaticamente a você."
+      : `Leitura baseada em ${amostra} registro(s) concluído(s) pela fonte do servidor. O histórico pode ser revisado pelo administrador.`;
+    const disponibilidade = perfil.disponivel === true;
+    state.availability = disponibilidade;
+    const checkbox = $("motoboyAvailability");
+    if (checkbox) { checkbox.checked = disponibilidade; checkbox.disabled = false; }
+    const chave = $("motoboyPixKey");
+    if (chave && typeof perfil.chave_pix === "string" && document.activeElement !== chave) chave.value = perfil.chave_pix;
+    const concluidadas = Array.isArray(state.extrato.entregas_concluidas) ? state.extrato.entregas_concluidas : [];
+    const pagamentos = Array.isArray(state.extrato.pagamentos) ? state.extrato.pagamentos : [];
+    const historico = $("motoboyHistory");
+    if (historico) {
+      const rows = concluidadas.concat(pagamentos);
+      historico.innerHTML = rows.length ? rows.slice(0, 100).map((item) => {
+        const nome = item.comercio_nome || item.comercio_id || "Comércio autorizado";
+        const valor = item.remuneracao_centavos ?? item.valor_centavos ?? item.taxa_motoboy_centavos;
+        const status = item.status_pagamento || item.status || "Registrado no servidor";
+        return `<li><strong>${escapar(nome)}</strong><span>Pedido ${escapar(item.pedido_id || "não informado")} · ${escapar(status)}</span><b>${formatarMoeda(valor)}</b><small>${escapar(formatarData(item.pago_em || item.criado_em || item.entregue_em))}</small></li>`;
+      }).join("") : '<li class="motoboy-history-empty">Ainda não há lançamentos no extrato do servidor.</li>';
+    }
+  }
+
+  async function carregarExtrato() {
+    if (!state.session || state.extractLoading || !navigator.onLine) return;
+    const generation = state.generation;
+    const userId = state.userId;
+    state.extractLoading = true;
+    definirFeedback("motoboyEarningsFeedback", "Consultando saldo e histórico na fonte do servidor…");
+    try {
+      const resultado = await chamarApi({ acao: "consultar_extrato", offset: 0 }, generation, userId);
+      validarSessaoAtual(generation, userId);
+      state.extrato = resultado;
+      renderizarExtrato();
+      definirFeedback("motoboyEarningsFeedback", "Extrato atualizado pela fonte do servidor.");
+    } catch (erro) {
+      if (erro.message === STALE_REQUEST) return;
+      if (erro.status === 401 || erro.status === 403) limparDadosPrivados();
+      definirFeedback("motoboyEarningsFeedback", erro.message || "Não foi possível consultar o extrato.", true);
+    } finally {
+      if (generation === state.generation) state.extractLoading = false;
     }
   }
 
   function fecharConfirmacao() {
     const dialog = $("motoboyConfirmDialog");
     if (dialog?.open) dialog.close();
-    $("motoboyConfirmForm").reset();
+    $("motoboyConfirmForm")?.reset();
     definirFeedback("motoboyConfirmFeedback", "");
   }
 
-  function abrirConfirmacao(pedidoId, comercioId) {
+  function pedidoPorId(pedidoId) {
+    return state.pedidos.find((pedido) => String(pedido?.pedido_id) === String(pedidoId)) || null;
+  }
+
+  function atualizarModoPagamento(pedido) {
+    const pix = pagamentoPix(pedido);
+    const checkbox = $("motoboyConfirmReceived");
+    const label = $("motoboyConfirmReceivedText");
+    const info = $("motoboyConfirmPaymentInfo");
+    if (checkbox) { checkbox.checked = pix; checkbox.disabled = pix; }
+    if (label) label.textContent = pix ? "Pagamento Pix já consta como confirmado pelo servidor" : "Produto entregue e pagamento presencial recebido";
+    if (info) info.textContent = pix ? "Pagamento Pix: a baixa financeira vem do servidor; confirme apenas o código de entrega." : "Pagamento presencial: confirme o recebimento somente depois de receber do cliente.";
+  }
+
+  function abrirConfirmacao(pedidoId) {
     if (!state.session) return;
-    $("motoboyConfirmForm").reset();
+    const pedido = pedidoPorId(pedidoId) || { pedido_id: pedidoId };
+    $("motoboyConfirmForm")?.reset();
     $("motoboyConfirmOrderId").value = pedidoId || "";
-    $("motoboyConfirmCommerceId").value = comercioId || "";
+    $("motoboyConfirmCommerceId").value = pedido?.comercio_id || "";
+    atualizarModoPagamento(pedido);
     definirFeedback("motoboyConfirmFeedback", "");
-    $("motoboyConfirmDialog").showModal();
-    $("motoboyConfirmCode").focus();
+    const dialog = $("motoboyConfirmDialog");
+    if (!dialog) return;
+    dialog.showModal();
+    $("motoboyConfirmCode")?.focus();
   }
 
   async function confirmarEntrega(event) {
@@ -280,19 +506,21 @@
     const codigo = $("motoboyConfirmCode").value.trim();
     const pedidoId = $("motoboyConfirmOrderId").value;
     const comercioId = $("motoboyConfirmCommerceId").value;
+    const pedido = pedidoPorId(pedidoId) || {};
     if (!/^\d{6}$/.test(codigo)) {
       definirFeedback("motoboyConfirmFeedback", "Informe exatamente seis números.", true);
       return;
     }
-    if (!$("motoboyConfirmReceived").checked) {
-      definirFeedback("motoboyConfirmFeedback", "Confirme que o produto foi entregue e o pagamento presencial foi recebido.", true);
+    const recebeu = pagamentoPix(pedido) || $("motoboyConfirmReceived").checked;
+    if (!recebeu) {
+      definirFeedback("motoboyConfirmFeedback", "Confirme o recebimento do pagamento presencial antes de concluir.", true);
       return;
     }
     const botao = $("motoboySendConfirm");
     const generation = state.generation;
     const userId = state.userId;
     botao.disabled = true;
-    definirFeedback("motoboyConfirmFeedback", "Validando código…");
+    definirFeedback("motoboyConfirmFeedback", "Validando código no servidor…");
     try {
       const resultado = await chamarApi({
         acao: "confirmar_entrega",
@@ -302,25 +530,151 @@
         recebimento_confirmado: true,
       }, generation, userId);
       validarSessaoAtual(generation, userId);
-      if (resultado?.pedido?.status !== "entregue") throw new Error("A API não confirmou a entrega.");
-      state.pedidos = state.pedidos.filter((pedido) => String(pedido.pedido_id) !== String(pedidoId));
+      const status = resultado?.pedido?.status || resultado?.status;
+      if (status && status !== "entregue") throw new Error("A API não confirmou a entrega.");
+      state.pedidos = state.pedidos.filter((item) => String(item?.pedido_id) !== String(pedidoId));
       state.offset = state.pedidos.length;
       renderizarPedidos();
       fecharConfirmacao();
-      definirFeedback("motoboyOrdersFeedback", "Entrega confirmada com sucesso. O pedido foi removido da sua lista.");
-      definirAviso("Entrega confirmada", "O pedido foi atualizado como entregue e não será exibido novamente nesta lista.", "sucesso");
+      definirFeedback("motoboyOrdersFeedback", "Entrega confirmada. A remuneração aparecerá no extrato após a baixa financeira válida.");
+      definirAviso("Entrega registrada", "O código foi validado pelo servidor e a entrega saiu da lista ativa.", "sucesso");
+      carregarExtrato();
     } catch (erro) {
       if (erro.message === STALE_REQUEST) return;
       if (erro.status === 401 || (erro.status === 403 && erro.code !== "codigo_incorreto" && erro.message !== "Código de entrega incorreto.")) {
-        limparPedidos(); fecharConfirmacao();
-        definirFeedback("motoboyOrdersFeedback", erro.message, true);
-        definirAviso("Acesso à entrega atualizado", "Sua autorização ou atribuição mudou. Atualize a lista antes de continuar.", "erro");
+        limparDadosPrivados(); fecharConfirmacao();
+        definirFeedback("motoboyOrdersFeedback", erro.message || "A autorização desta entrega mudou.", true);
+        definirAviso("Acesso à entrega atualizado", "Atualize a lista antes de continuar.", "erro");
         return;
       }
-      // A resposta da API (inclusive 403, 410 ou 429) é exibida sem tentar consumir o código no navegador.
       definirFeedback("motoboyConfirmFeedback", erro.message || "Não foi possível confirmar a entrega.", true);
     } finally {
-      if (generation === state.generation) botao.disabled = false;
+      if (generation === state.generation && botao) botao.disabled = false;
+    }
+  }
+
+  function abrirOcorrencia(pedidoId) {
+    if (!state.session) return;
+    $("motoboyOccurrenceForm")?.reset();
+    $("motoboyOccurrenceOrderId").value = pedidoId || "";
+    definirFeedback("motoboyOccurrenceFeedback", "");
+    const dialog = $("motoboyOccurrenceDialog");
+    if (dialog) dialog.showModal();
+  }
+
+  async function registrarOcorrencia(event) {
+    event.preventDefault();
+    const pedidoId = $("motoboyOccurrenceOrderId").value;
+    const categoria = $("motoboyOccurrenceCategory").value;
+    const motivo = textoSeguro($("motoboyOccurrenceReason").value, 500);
+    if (!Object.prototype.hasOwnProperty.call(OCCURRENCE_CATEGORIES, categoria)) {
+      definirFeedback("motoboyOccurrenceFeedback", "Escolha uma categoria.", true);
+      return;
+    }
+    if (motivo.length < 3) {
+      definirFeedback("motoboyOccurrenceFeedback", "Explique o ocorrido em poucas palavras.", true);
+      return;
+    }
+    const generation = state.generation;
+    const chave = `registrar_ocorrencia:${pedidoId}`;
+    if (state.actionInFlight.has(chave)) return;
+    state.actionInFlight.add(chave);
+    renderizarPedidos();
+    const botao = $("motoboyOccurrenceSubmit");
+    if (botao) botao.disabled = true;
+    try {
+      await chamarApi({ acao: "registrar_ocorrencia", pedido_id: pedidoId, categoria, motivo }, generation, state.userId);
+      validarSessaoAtual(generation, state.userId);
+      $("motoboyOccurrenceDialog")?.close();
+      definirAviso("Ocorrência registrada", "O comércio e a operação poderão analisar o relato. Nenhuma entrega foi concluída ou cancelada automaticamente.", "sucesso");
+      await carregarEntregas();
+    } catch (erro) {
+      if (erro.message !== STALE_REQUEST) definirFeedback("motoboyOccurrenceFeedback", erro.message || "Não foi possível registrar a ocorrência.", true);
+    } finally {
+      state.actionInFlight.delete(chave);
+      if (generation === state.generation && botao) botao.disabled = false;
+      renderizarPedidos();
+    }
+  }
+
+  async function executarAcao(pedidoId, acao) {
+    const pedido = pedidoPorId(pedidoId);
+    if (!pedido || !state.session) return;
+    if (acao === "confirmar_entrega") { abrirConfirmacao(pedidoId); return; }
+    if (acao === "registrar_ocorrencia") { abrirOcorrencia(pedidoId); return; }
+    if (acao === "desistir_entrega" && typeof window.confirm === "function" && !window.confirm("Desistir antes da coleta? O pedido será reofertado pelo servidor.")) return;
+    const chave = `${acao}:${pedidoId}`;
+    if (state.actionInFlight.has(chave)) return;
+    state.actionInFlight.add(chave);
+    renderizarPedidos();
+    const generation = state.generation;
+    try {
+      await chamarApi({ acao, pedido_id: pedidoId, motivo: acao === "desistir_entrega" ? "desistencia_antes_coleta" : undefined }, generation, state.userId);
+      validarSessaoAtual(generation, state.userId);
+      const texto = acao === "aceitar_entrega" ? "Oferta aceita. A reserva concorrente foi decidida pelo servidor." : acao === "coletar" ? "Coleta registrada. Só avance quando estiver com o pedido." : acao === "em_entrega" ? "Entrega iniciada." : "Desistência registrada; a oferta poderá ser reaberta pelo servidor.";
+      definirFeedback("motoboyOrdersFeedback", texto);
+      await carregarEntregas();
+    } catch (erro) {
+      if (erro.message !== STALE_REQUEST) {
+        definirFeedback("motoboyOrdersFeedback", erro.message || "Não foi possível executar esta ação.", true);
+        if (erro.status === 401 || erro.status === 403) limparDadosPrivados();
+      }
+    } finally {
+      state.actionInFlight.delete(chave);
+      renderizarPedidos();
+    }
+  }
+
+  async function definirDisponibilidade(event) {
+    const checkbox = event.currentTarget || $("motoboyAvailability");
+    if (!state.session || state.availabilityLoading) return;
+    const anterior = state.availability;
+    const disponivel = Boolean(checkbox?.checked);
+    state.availabilityLoading = true;
+    if (checkbox) checkbox.disabled = true;
+    definirFeedback("motoboyAvailabilityFeedback", "Salvando disponibilidade…");
+    const generation = state.generation;
+    try {
+      await chamarApi({ acao: "definir_disponibilidade", disponivel }, generation, state.userId);
+      validarSessaoAtual(generation, state.userId);
+      state.availability = disponivel;
+      definirFeedback("motoboyAvailabilityFeedback", disponivel ? "Você está disponível para novas ofertas." : "Você não receberá novas ofertas enquanto estiver indisponível.");
+    } catch (erro) {
+      if (erro.message !== STALE_REQUEST) {
+        state.availability = anterior;
+        if (checkbox) checkbox.checked = anterior;
+        definirFeedback("motoboyAvailabilityFeedback", erro.message || "Não foi possível salvar a disponibilidade.", true);
+      }
+    } finally {
+      if (generation === state.generation) {
+        state.availabilityLoading = false;
+        if (checkbox) checkbox.disabled = false;
+      }
+    }
+  }
+
+  async function salvarChavePix(event) {
+    event.preventDefault();
+    const campo = $("motoboyPixKey");
+    const chavePix = textoSeguro(campo?.value, 120);
+    if (chavePix && chavePix.length < 3) {
+      definirFeedback("motoboyPixFeedback", "Informe uma chave Pix válida ou deixe o campo vazio.", true);
+      return;
+    }
+    const botao = $("motoboyPixButton");
+    const generation = state.generation;
+    if (botao) botao.disabled = true;
+    definirFeedback("motoboyPixFeedback", "Salvando sua chave Pix…");
+    try {
+      const resultado = await chamarApi({ acao: "salvar_chave_pix", chave_pix: chavePix }, generation, state.userId);
+      validarSessaoAtual(generation, state.userId);
+      const perfil = resultado?.perfil || {};
+      if (campo && typeof perfil.chave_pix === "string") campo.value = perfil.chave_pix;
+      definirFeedback("motoboyPixFeedback", chavePix ? "Chave Pix própria salva. O repasse continua sujeito a comprovação administrativa." : "Chave Pix removida do seu perfil.");
+    } catch (erro) {
+      if (erro.message !== STALE_REQUEST) definirFeedback("motoboyPixFeedback", erro.message || "Não foi possível salvar a chave Pix.", true);
+    } finally {
+      if (generation === state.generation && botao) botao.disabled = false;
     }
   }
 
@@ -333,7 +687,10 @@
     pararPolling();
     if (!state.session || state.destroyed) return;
     state.timer = window.setInterval(() => {
-      if (document.visibilityState === "visible" && navigator.onLine && !$("motoboyConfirmDialog")?.open) carregarEntregas();
+      if (document.visibilityState === "visible" && navigator.onLine && !$("motoboyConfirmDialog")?.open && !$("motoboyOccurrenceDialog")?.open) {
+        carregarEntregas();
+        carregarExtrato();
+      }
     }, 30000);
   }
 
@@ -343,13 +700,15 @@
     state.sessionToken = "";
     state.userId = "";
     state.loading = false;
+    state.extractLoading = false;
     pararPolling();
-    limparPedidos();
+    limparDadosPrivados();
     fecharConfirmacao();
-    $("motoboyLoginCard").hidden = false;
-    $("motoboyPanel").hidden = true;
-    $("motoboyLogout").hidden = true;
-    definirAviso("Entre para consultar suas entregas.", "A autorização para cada comércio é feita pelo proprietário, sem compartilhar senhas.");
+    $("motoboyOccurrenceDialog")?.close();
+    if ($("motoboyLoginCard")) $("motoboyLoginCard").hidden = false;
+    if ($("motoboyPanel")) $("motoboyPanel").hidden = true;
+    if ($("motoboyLogout")) $("motoboyLogout").hidden = true;
+    definirAviso("Entre para consultar ofertas e entregas.", "A autorização é feita por cada comércio, sem compartilhar senhas.");
   }
 
   async function aplicarSessao(session) {
@@ -367,24 +726,22 @@
     state.sessionToken = token;
     state.userId = userId;
     state.loading = false;
-    limparPedidos();
+    state.extractLoading = false;
+    limparDadosPrivados();
     fecharConfirmacao();
-    $("motoboyLoginCard").hidden = true;
-    $("motoboyPanel").hidden = false;
-    $("motoboyLogout").hidden = false;
+    if ($("motoboyLoginCard")) $("motoboyLoginCard").hidden = true;
+    if ($("motoboyPanel")) $("motoboyPanel").hidden = false;
+    if ($("motoboyLogout")) $("motoboyLogout").hidden = false;
     definirFeedback("motoboyLoginFeedback", "");
-    definirAviso("Sessão autenticada", "Verificando entregas atribuídas a esta conta…");
+    definirAviso("Sessão autenticada", "Consultando ofertas e extrato autorizados para esta conta…");
     iniciarPolling();
-    await carregarEntregas();
+    await Promise.all([carregarEntregas(), carregarExtrato()]);
   }
 
   async function fazerLogin(event) {
     event.preventDefault();
     const cliente = obterCliente();
-    if (!cliente) {
-      definirFeedback("motoboyLoginFeedback", "Não foi possível conectar ao serviço de login.", true);
-      return;
-    }
+    if (!cliente) { definirFeedback("motoboyLoginFeedback", "Não foi possível conectar ao serviço de login.", true); return; }
     const botao = $("motoboyLoginButton");
     botao.disabled = true;
     definirFeedback("motoboyLoginFeedback", "Entrando…");
@@ -399,53 +756,35 @@
       await aplicarSessao(data.session);
     } catch (erro) {
       definirFeedback("motoboyLoginFeedback", erro.message || "Não foi possível entrar.", true);
-    } finally {
-      botao.disabled = false;
-    }
+    } finally { botao.disabled = false; }
   }
 
   async function criarConta(event) {
     event.preventDefault();
     const cliente = obterCliente();
-    if (!cliente) {
-      definirFeedback("motoboySignupFeedback", "Não foi possível conectar ao serviço de login.", true);
-      return;
-    }
+    if (!cliente) { definirFeedback("motoboySignupFeedback", "Não foi possível conectar ao serviço de login.", true); return; }
     const nome = $("motoboySignupName").value.trim();
     const email = $("motoboySignupEmail").value.trim();
     const password = $("motoboySignupPassword").value;
-    if (!nome) {
-      definirFeedback("motoboySignupFeedback", "Informe seu nome.", true);
-      return;
-    }
-    if (password.length < 6) {
-      definirFeedback("motoboySignupFeedback", "A senha precisa ter pelo menos 6 caracteres.", true);
-      return;
-    }
+    if (!nome) { definirFeedback("motoboySignupFeedback", "Informe seu nome.", true); return; }
+    if (password.length < 6) { definirFeedback("motoboySignupFeedback", "A senha precisa ter pelo menos 6 caracteres.", true); return; }
     const botao = $("motoboySignupButton");
     botao.disabled = true;
     definirFeedback("motoboySignupFeedback", "Criando sua conta…");
     try {
-      const { data, error } = await cliente.auth.signUp({
-        email,
-        password,
-        options: { data: { nome } },
-      });
+      const { data, error } = await cliente.auth.signUp({ email, password, options: { data: { nome } } });
       if (error) throw new Error(error.message || "Não foi possível criar sua conta.");
       if (data?.session) {
         state.lockedAfterLogout = false;
         $("motoboySignupPassword").value = "";
         await aplicarSessao(data.session);
       } else {
-        definirFeedback("motoboySignupFeedback", "Conta criada. Confirme o e-mail e peça ao proprietário para autorizar este e-mail antes de entrar.");
+        definirFeedback("motoboySignupFeedback", "Conta criada. Confirme o e-mail e peça ao comércio para autorizar este e-mail.");
         $("motoboyLoginEmail").value = email;
         $("motoboySignupForm").reset();
       }
-    } catch (erro) {
-      definirFeedback("motoboySignupFeedback", erro.message || "Não foi possível criar sua conta.", true);
-    } finally {
-      botao.disabled = false;
-    }
+    } catch (erro) { definirFeedback("motoboySignupFeedback", erro.message || "Não foi possível criar sua conta.", true); }
+    finally { botao.disabled = false; }
   }
 
   async function sair() {
@@ -464,34 +803,37 @@
   }
 
   function iniciarEventos() {
-    $("motoboyLoginForm").addEventListener("submit", fazerLogin);
-    $("motoboySignupForm").addEventListener("submit", criarConta);
-    $("motoboyLogout").addEventListener("click", sair);
-    $("motoboyRefresh").addEventListener("click", () => carregarEntregas());
-    $("motoboyLoadMore").addEventListener("click", () => carregarEntregas({ append: true }));
-    $("motoboyCancelConfirm").addEventListener("click", fecharConfirmacao);
-    $("motoboyConfirmForm").addEventListener("submit", confirmarEntrega);
-    $("motoboyOrders").addEventListener("click", (event) => {
-      const botao = event.target.closest("[data-confirmar-pedido]");
+    $("motoboyLoginForm")?.addEventListener("submit", fazerLogin);
+    $("motoboySignupForm")?.addEventListener("submit", criarConta);
+    $("motoboyLogout")?.addEventListener("click", sair);
+    $("motoboyRefresh")?.addEventListener("click", () => { carregarEntregas(); carregarExtrato(); });
+    $("motoboyLoadMore")?.addEventListener("click", () => carregarEntregas({ append: true }));
+    $("motoboyAvailability")?.addEventListener("change", definirDisponibilidade);
+    $("motoboyPixForm")?.addEventListener("submit", salvarChavePix);
+    $("motoboyCancelConfirm")?.addEventListener("click", fecharConfirmacao);
+    $("motoboyConfirmForm")?.addEventListener("submit", confirmarEntrega);
+    $("motoboyCancelOccurrence")?.addEventListener("click", () => $("motoboyOccurrenceDialog")?.close());
+    $("motoboyOccurrenceForm")?.addEventListener("submit", registrarOcorrencia);
+    $("motoboyOrders")?.addEventListener("click", (event) => {
+      const botao = event.target.closest?.("[data-entrega-action]");
       if (!botao || botao.disabled) return;
-      abrirConfirmacao(botao.dataset.confirmarPedido, botao.dataset.confirmarComercio);
+      executarAcao(botao.dataset.pedidoId, botao.dataset.entregaAction);
     });
-    $("motoboyConfirmDialog").addEventListener("click", (event) => {
-      if (event.target === $("motoboyConfirmDialog")) fecharConfirmacao();
-    });
-    $("motoboyConfirmDialog").addEventListener("close", () => {
-      $("motoboyConfirmForm").reset();
-      definirFeedback("motoboyConfirmFeedback", "");
-    });
+    $("motoboyConfirmDialog")?.addEventListener("click", (event) => { if (event.target === $("motoboyConfirmDialog")) fecharConfirmacao(); });
+    $("motoboyConfirmDialog")?.addEventListener("close", () => { $("motoboyConfirmForm")?.reset(); definirFeedback("motoboyConfirmFeedback", ""); });
+    $("motoboyOccurrenceDialog")?.addEventListener("click", (event) => { if (event.target === $("motoboyOccurrenceDialog")) $("motoboyOccurrenceDialog").close(); });
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "hidden") pararPolling();
       else if (state.session) {
         iniciarPolling();
-        if (!$("motoboyConfirmDialog")?.open && navigator.onLine) carregarEntregas();
+        if (!$('motoboyConfirmDialog')?.open && !$('motoboyOccurrenceDialog')?.open && navigator.onLine) {
+          carregarEntregas();
+          carregarExtrato();
+        }
       }
     });
     window.addEventListener("online", () => {
-      if (state.session && document.visibilityState === "visible") carregarEntregas();
+      if (state.session && document.visibilityState === "visible") { carregarEntregas(); carregarExtrato(); }
     });
     window.addEventListener("pagehide", () => {
       state.destroyed = true;
@@ -503,7 +845,8 @@
       state.subscription?.unsubscribe?.();
       state.subscription = null;
       fecharConfirmacao();
-      limparPedidos();
+      $("motoboyOccurrenceDialog")?.close();
+      limparDadosPrivados();
     });
     window.addEventListener("pageshow", (event) => {
       if (!event.persisted) return;
@@ -531,8 +874,8 @@
       if (!response.ok) return;
       const rows = await response.json();
       if (!Array.isArray(rows)) return;
-      state.commerceNames = new Map(rows.filter(row => row && row.id && row.nome).map(row => [String(row.id), String(row.nome)]));
-    } catch { /* O ID continua como identificacao se os dados publicos falharem. */ }
+      state.commerceNames = new Map(rows.filter((row) => row && row.id && row.nome).map((row) => [String(row.id), String(row.nome)]));
+    } catch { /* O nome do comércio pode vir da resposta autorizada do servidor. */ }
   }
 
   async function iniciar() {
@@ -544,14 +887,14 @@
       return;
     }
     if (!state.subscription) {
-    const listener = cliente.auth.onAuthStateChange((_evento, session) => {
-      window.setTimeout(() => { aplicarSessao(session); }, 0);
-    });
-    state.subscription = listener?.data?.subscription || null;
+      const listener = cliente.auth.onAuthStateChange((_evento, session) => {
+        window.setTimeout(() => { aplicarSessao(session); }, 0);
+      });
+      state.subscription = listener?.data?.subscription || null;
     }
     const { data, error } = await cliente.auth.getSession();
     if (error) {
-      definirAviso("Não foi possível verificar a sessão", "Entre novamente para consultar suas entregas.", "erro");
+      definirAviso("Não foi possível verificar a sessão", "Entre novamente para consultar o painel.", "erro");
       return;
     }
     await aplicarSessao(data?.session || null);

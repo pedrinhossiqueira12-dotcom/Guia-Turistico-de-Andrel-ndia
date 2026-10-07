@@ -11,7 +11,7 @@
 <body class="admin-page">
   <header class="admin-topbar">
     <a id="linkPerfil" href="../index.html">‹ <span>Voltar ao comércio</span></a>
-    <span>ÁREA DO PROPRIETÁRIO</span>
+    <div class="admin-topbar-actions"><span>ÁREA DO PROPRIETÁRIO</span><button id="logoutCatalogo" class="topbar-logout" type="button" hidden>Sair</button></div>
   </header>
 
   <main class="admin-shell">
@@ -58,8 +58,8 @@
       </section>
 
       <section class="admin-card offline-orders-card" id="pedidosOfflineCard">
-        <div class="section-title"><div><span class="eyebrow">PEDIDOS PRESENCIAIS</span><h2>Pedidos e comissões</h2></div><div class="offline-order-actions"><a id="linkGerenciarEntregadores" class="small-button" href="entregadores-admin.html">Gerenciar entregadores</a><button id="atualizarPedidosOffline" class="small-button" type="button">Atualizar</button></div></div>
-        <p>O cliente guarda o código. Após a entrega e o recebimento do pagamento, o proprietário autenticado usa <strong>Confirmar código</strong> no pedido. O painel nunca revela o código do cliente.</p>
+        <div class="section-title"><div><span class="eyebrow">PEDIDOS E ENTREGAS</span><h2>Pedidos, fases e comissões</h2></div><div class="offline-order-actions"><a id="linkGerenciarEntregadores" class="small-button" href="entregadores-admin.html">Gerenciar entregadores</a><a id="linkOperacaoEntregas" class="small-button" href="entregas-operacao.html">Operação da plataforma</a><button id="atualizarPedidosOffline" class="small-button" type="button">Atualizar</button></div></div>
+        <p>O cliente guarda o código. Após a entrega e o recebimento do pagamento, o proprietário autenticado usa <strong>Confirmar código</strong> no pedido. O painel nunca revela o código do cliente. A oferta automática ao marcar pronto é decidida pelo backend.</p>
         <div class="offline-summary" id="offlineSummary" hidden></div>
         <div id="listaPedidosOffline" class="manager-list"><p class="form-feedback">Carregando pedidos…</p></div>
         <p id="pedidosOfflineFeedback" class="form-feedback" role="status"></p>
@@ -112,7 +112,7 @@
 
       <section class="admin-footer-note">
         <p>Fotos removidas da vitrine entram na rotina de retenção de sete dias. Nenhuma imagem é apagada imediatamente.</p>
-        <p>Pedidos presenciais só geram comissão quando o código do cliente é confirmado. O checkout offline permanece sujeito à habilitação do administrador.</p>
+        <p>Pedidos antigos permanecem em V1 com a taxa histórica. Em V2, quando habilitado pelo administrador, os valores exibidos separam 5% plataforma e 2% logística; a configuração nova começa desligada.</p>
       </section>
     </div>
   </main>
@@ -136,6 +136,18 @@
       <p>Escolha para qual categoria os produtos disponíveis serão movidos antes de arquivar esta categoria.</p>
       <label>Nova categoria <select id="reassignCategorySelect" required></select></label>
       <div class="dialog-actions"><button id="cancelarReassign" class="button button-secondary" type="button">Cancelar</button><button class="button button-primary" type="submit">Mover e arquivar</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="cancelamentoDialog" class="admin-dialog" aria-labelledby="cancelamentoTitulo">
+    <form id="cancelamentoForm">
+      <h2 id="cancelamentoTitulo">Cancelar ou solicitar ocorrência</h2>
+      <input id="cancelamentoPedidoId" type="hidden">
+      <p id="cancelamentoDepoisAceite">Informe um motivo confirmado.</p>
+      <label>Motivo confirmado <textarea id="cancelamentoMotivo" maxlength="500" rows="4" required></textarea></label>
+      <label class="checkbox-line"><input id="cancelamentoConfirmado" type="checkbox" required> Confirmo que este motivo corresponde ao pedido</label>
+      <p id="cancelamentoFeedback" class="form-feedback" role="status"></p>
+      <div class="dialog-actions"><button id="cancelarCancelamento" class="button button-secondary" type="button">Voltar</button><button id="cancelamentoEnviar" class="button button-primary" type="submit">Continuar</button></div>
     </form>
   </dialog>
 

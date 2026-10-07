@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#194138">
+  <title>Operação de entregas — Guia Turístico de Andrelândia</title>
+  <link rel="stylesheet" href="../styles/entregas-admin.css">
+  <link rel="stylesheet" href="../styles/design-system.css">
+</head>
+<body class="admin-page">
+  <header class="admin-topbar">
+    <a href="catalogo-admin.html">‹ <span>Voltar ao catálogo</span></a>
+    <div class="admin-topbar-actions"><span>ADMINISTRAÇÃO DA PLATAFORMA</span><button id="operationLogout" class="topbar-logout" type="button" hidden>Sair</button></div>
+  </header>
+  <main class="admin-shell">
+    <section class="admin-heading">
+      <span class="eyebrow">OPERAÇÃO E AUDITORIA</span>
+      <h1>Entregas e repasses</h1>
+      <p>Revisão administrativa de ocorrências e registro de repasses já realizados. Esta página não executa, agenda ou solicita transferência bancária.</p>
+    </section>
+    <section id="operationNotice" class="admin-notice" role="status" aria-live="polite">
+      <strong id="operationNoticeTitle">Entre para continuar</strong>
+      <p id="operationNoticeText">Nenhum dado operacional é exibido antes da autorização explícita do backend.</p>
+    </section>
+    <section id="operationLoginCard" class="admin-card login-card" aria-labelledby="operationLoginTitle">
+      <span class="eyebrow">ACESSO RESTRITO</span>
+      <h2 id="operationLoginTitle">Administrador da plataforma</h2>
+      <p>O vínculo com um comércio nunca concede acesso a este painel. A autorização é conferida no servidor para cada carregamento.</p>
+      <form id="operationLoginForm" class="login-fields">
+        <label for="operationLoginEmail">E-mail <input id="operationLoginEmail" type="email" autocomplete="email" required></label>
+        <label for="operationLoginPassword">Senha <input id="operationLoginPassword" type="password" autocomplete="current-password" required></label>
+        <button id="operationLoginButton" class="button button-primary" type="submit">Entrar</button>
+        <p id="operationLoginFeedback" class="form-feedback" role="alert"></p>
+      </form>
+    </section>
+    <section id="operationPanel" hidden>
+      <div class="section-title"><div><span class="eyebrow">DADOS AUTORIZADOS</span><h2>Fila de operação</h2></div><button id="atualizarOperacao" class="button button-secondary" type="button">Atualizar</button></div>
+      <div class="operation-grid">
+        <section class="admin-card wide" aria-labelledby="ocorrenciasTitulo">
+          <span class="eyebrow">REVISÃO</span><h2 id="ocorrenciasTitulo">Ocorrências pendentes</h2>
+          <p>Resolver exige uma decisão fundamentada. Cancelamento legítimo, manutenção e ocorrência comprovada seguem o registro do backend; não altere comissão diretamente nesta tela.</p>
+          <div id="listaOcorrencias" class="manager-list" aria-live="polite"></div>
+          <form id="ocorrenciaForm" class="operation-form">
+            <label for="ocorrenciaId">ID da ocorrência <input id="ocorrenciaId" required></label>
+            <label for="ocorrenciaDecisao">Decisão <select id="ocorrenciaDecisao" required><option value="">Escolha</option><option value="cancelamento_legitimo">Cancelamento legítimo</option><option value="manter">Manter em análise</option><option value="ocorrencia_comprovada">Ocorrência comprovada</option></select></label>
+            <label for="ocorrenciaMotivo">Motivo fundamentado <textarea id="ocorrenciaMotivo" rows="3" maxlength="1000" required></textarea></label>
+            <div class="form-actions"><button id="resolverOcorrencia" class="button button-primary" type="submit">Resolver ocorrência</button></div>
+            <p id="ocorrenciaFeedback" class="form-feedback" role="status"></p>
+          </form>
+        </section>
+        <section class="admin-card" aria-labelledby="repassesTitulo">
+          <span class="eyebrow">A RECEBER</span><h2 id="repassesTitulo">Repasses financiados</h2>
+          <p>Somente créditos <strong>a_receber</strong>, financiados e ainda não pagos aparecem para registro.</p>
+          <div id="listaRepasses" class="manager-list" aria-live="polite"></div>
+        </section>
+        <section class="admin-card" aria-labelledby="repasseFormTitulo">
+          <span class="eyebrow">PROVA MANUAL</span><h2 id="repasseFormTitulo">Registrar repasse</h2>
+          <p>O checkbox confirma uma transferência que já aconteceu fora do sistema. O envio apenas registra referência e comprovante; não cria pagamento.</p>
+          <form id="repasseForm" class="operation-form">
+            <label for="repasseCredito">Crédito disponível <select id="repasseCredito" required><option value="">Carregando…</option></select></label>
+            <div id="repassePreview" class="admin-card"><p class="empty-state">Selecione um crédito disponível para revisar as provas antes de registrar o repasse.</p></div>
+            <label for="repasseReferencia">Referência da transferência <input id="repasseReferencia" maxlength="160" required></label>
+            <label for="repasseComprovante">Comprovante ou prova <textarea id="repasseComprovante" maxlength="1000" rows="3" required></textarea></label>
+            <label class="checkbox-line" for="transferenciaConfirmada"><input id="transferenciaConfirmada" type="checkbox" required> Confirmo que a transferência já foi realizada</label>
+            <div class="form-actions"><button id="registrarRepasse" class="button button-primary" type="submit" disabled>Registrar prova do repasse</button></div>
+            <p id="repasseFeedback" class="form-feedback" role="status"></p>
+          </form>
+        </section>
+        <section class="admin-card wide" aria-labelledby="historicoTitulo">
+          <span class="eyebrow">HISTÓRICO SEPARADO</span><h2 id="historicoTitulo">Repasses já registrados</h2>
+          <div id="historicoRepasses" class="manager-list" aria-live="polite"></div>
+        </section>
+      </div>
+      <p class="security-note">Não são exibidos tokens, códigos de entrega ou chaves Pix completas. O backend determina beneficiário, valor, provas e pedidos autorizados.</p>
+    </section>
+  </main>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../js/entregas-operacao.js?v=operacao-v2-20261006"></script>
+</body>
+</html>

@@ -252,6 +252,7 @@
   }
 
   function chavePedidoOfflineSalvo() { return `guia-offline-order:${comercioId}`; }
+  function chaveComprovanteArquivado() { return `guia-offline-receipt:${comercioId}`; }
   function pedidoEmRevisaoValido(pedido = pedidoEmRevisao) {
     return Boolean(pedido && Array.isArray(pedido.itens) && pedido.itens.length
       && pedido.cliente && String(pedido.cliente.nome || "").trim()
@@ -261,17 +262,27 @@
   function tokenStatusValido(token) { return STATUS_TOKEN_RE.test(String(token || "").trim()); }
   function normalizarComprovanteSalvo(salvo) {
     if (!salvo || typeof salvo !== "object" || Array.isArray(salvo)) return null;
-    if (!salvo.pedido_id || !/^\d{6}$/.test(String(salvo.codigo_entrega || ""))) return null;
-    if (!Number.isFinite(Date.parse(salvo.codigo_expira_em))) return null;
+    if (!salvo.pedido_id || !Number.isFinite(Date.parse(salvo.codigo_expira_em))) return null;
+    const codigo = String(salvo.codigo_entrega || "");
+    const semCodigoPermitido = salvo.concluido === true || String(salvo.status || "") === "entregue"
+      || STATUS_TOKEN_RE.test(String(salvo.status_token || ""));
+    if (codigo && !/^\d{6}$/.test(codigo)) return null;
+    if (!codigo && !semCodigoPermitido) return null;
     const comprovante = {
       pedido_id: String(salvo.pedido_id),
-      codigo_entrega: String(salvo.codigo_entrega),
+      codigo_entrega: codigo,
       codigo_expira_em: String(salvo.codigo_expira_em),
     };
     // Comprovantes antigos não têm status_token. Preserve tokens legados sem
     // permitir que um valor arbitrário seja enviado como token de leitura.
-    if (typeof salvo.status_token === "string" && salvo.status_token.trim()) {
+    if (typeof salvo.status_token === "string" && STATUS_TOKEN_RE.test(salvo.status_token.trim())) {
       comprovante.status_token = salvo.status_token.trim();
+    }
+    for (const campo of ["provedor", "status", "status_pagamento"]) {
+      if (typeof salvo[campo] === "string" && salvo[campo].trim()) comprovante[campo] = salvo[campo].trim();
+    }
+    for (const campo of ["aceito_em", "reembolso_pendente", "codigo_ativo", "concluido"]) {
+      if (typeof salvo[campo] === "boolean" || (campo === "aceito_em" && salvo[campo])) comprovante[campo] = salvo[campo];
     }
     return comprovante;
   }
@@ -286,17 +297,27 @@
     comprovanteOfflineVersao += 1;
     try { localStorage.setItem(chavePedidoOfflineSalvo(), JSON.stringify(normalizado)); } catch { /* fica disponível na tela */ }
   }
+  function arquivarComprovanteOffline(comprovante) {
+    const normalizado = normalizarComprovanteSalvo({ ...comprovante, codigo_entrega: "", concluido: true, codigo_ativo: false });
+    if (!normalizado) return;
+    try { localStorage.setItem(chaveComprovanteArquivado(), JSON.stringify(normalizado)); } catch { /* preserva em memória quando possível */ }
+  }
   function lerPedidoOfflineSalvo() {
     let salvo = null;
     try {
       salvo = normalizarComprovanteSalvo(JSON.parse(localStorage.getItem(chavePedidoOfflineSalvo()) || "null"));
+      if (!salvo) salvo = normalizarComprovanteSalvo(JSON.parse(localStorage.getItem(chaveComprovanteArquivado()) || "null"));
     } catch { salvo = comprovanteOfflineMemoria; }
     if (!salvo) salvo = comprovanteOfflineMemoria;
     if (!salvo) return null;
-    if (comprovanteExpirado(salvo)) {
-      // A expiração é conhecida localmente; este é o único caso de limpeza
-      // local sem uma resposta efetiva do endpoint.
-      try { localStorage.removeItem(chavePedidoOfflineSalvo()); } catch { /* armazenamento indisponível */ }
+    if (comprovanteExpirado(salvo) && salvo.concluido !== true) {
+      // Expira somente o segredo de entrega: mantém o pedido e o token para acompanhar baixa/reembolso.
+      if (tokenStatusValido(salvo.status_token)) {
+        const semCodigo = { ...salvo, codigo_entrega: "", codigo_ativo: false };
+        if (salvo.codigo_entrega) salvarComprovanteOffline(semCodigo);
+        return semCodigo;
+      }
+      try { localStorage.removeItem(chavePedidoOfflineSalvo()); } catch { /* comprovante legado sem recuperação */ }
       comprovanteOfflineMemoria = null;
       comprovanteOfflineVersao += 1;
       return null;
@@ -321,6 +342,11 @@
     if (statusOfflineAviso && $("offlinePedidoStatus")) {
       $("offlinePedidoStatus").textContent = "Não foi possível consultar o status agora. O código continua salvo até a expiração indicada.";
     }
+  }
+  function comprovantePodeExibirCodigo(salvo) {
+    if (!salvo?.codigo_entrega || salvo.codigo_ativo === false || salvo.concluido === true || ["cancelado", "estornado", "entregue"].includes(String(salvo.status || ""))) return false;
+    if (["pix", "mercadopago"].includes(salvo.provedor)) return String(salvo.status_pagamento || "") === "aprovado";
+    return true;
   }
   function documentoVisivel() {
     return typeof document.visibilityState !== "string" || document.visibilityState === "visible";
@@ -353,17 +379,27 @@
   function mostrarComprovanteOffline(salvo, opcoes = {}) {
     const apenasComprovante = opcoes.somenteComprovante === true || !pedidoEmRevisaoValido();
     dialogoSomenteComprovante = apenasComprovante;
-    $("offlinePedidoStatus").textContent = statusOfflineAviso
-      ? "Não foi possível consultar o status agora. O código continua salvo até a expiração indicada."
-      : "Mostre este código ao entregador somente no momento da entrega.";
-    $("offlinePedidoCodigo").textContent = salvo.codigo_entrega;
-    $("offlinePedidoBox").hidden = false;
-    $("pixPedidoBox").hidden = true;
-    $("criarPedidoOffline").hidden = true;
+    const podeExibir = comprovantePodeExibirCodigo(salvo);
+    const status = salvo.status === "cancelado"
+      ? "Pedido cancelado. Se o Pix tiver sido aprovado, o reembolso permanece pendente de confirmação."
+      : salvo.provedor === "pix" && !podeExibir
+        ? "O código ficará disponível somente depois da aprovação real do Pix."
+        : salvo.concluido === true
+          ? "Pedido concluído. O código foi removido; o comprovante permanece salvo neste dispositivo."
+          : statusOfflineAviso
+            ? "Não foi possível consultar o status agora. O código continua salvo até a expiração indicada."
+            : "Mostre este código ao entregador somente no momento da entrega.";
+    if ($("offlinePedidoStatus")) $("offlinePedidoStatus").textContent = status;
+    if ($("offlinePedidoCodigo")) $("offlinePedidoCodigo").textContent = podeExibir ? salvo.codigo_entrega : "";
+    if ($("offlinePedidoBox")) $("offlinePedidoBox").hidden = false;
+    if ($("pixPedidoBox")) $("pixPedidoBox").hidden = true;
+    if ($("criarPedidoOffline")) $("criarPedidoOffline").hidden = true;
+    atualizarBotoesCancelamento(salvo);
     atualizarAcoesComprovante(apenasComprovante);
   }
   function concluirComprovanteOffline(salvo) {
     if (!comprovanteAindaAtual(salvo, comprovanteOfflineVersao)) return;
+    arquivarComprovanteOffline(salvo);
     try { localStorage.removeItem(chavePedidoOfflineSalvo()); } catch { /* armazenamento indisponível */ }
     comprovanteOfflineMemoria = null;
     comprovanteOfflineVersao += 1;
@@ -371,11 +407,92 @@
     statusOfflineAviso = false;
     const aviso = $("offlinePedidoStatusAviso");
     if (aviso) aviso.hidden = true;
-    $("offlinePedidoRecente").hidden = true;
-    $("offlinePedidoBox").hidden = true;
-    $("offlinePedidoCodigo").textContent = "";
-    if (dialogoSomenteComprovante && !pedidoEmRevisaoValido() && $("confirmarPedidoDialog").open) {
+    if ($("offlinePedidoRecente")) $("offlinePedidoRecente").hidden = true;
+    if ($("offlinePedidoBox")) $("offlinePedidoBox").hidden = true;
+    if ($("offlinePedidoCodigo")) $("offlinePedidoCodigo").textContent = "";
+    if (dialogoSomenteComprovante && !pedidoEmRevisaoValido() && $("confirmarPedidoDialog")?.open) {
       $("confirmarPedidoDialog").close();
+    }
+  }
+  function mesclarStatusComprovante(salvo, data) {
+    const proximo = { ...salvo };
+    const terminalAtual = salvo.concluido === true || ["entregue", "cancelado", "estornado"].includes(String(salvo.status || ""));
+    const respostaTerminal = data.concluido === true || ["entregue", "cancelado", "estornado"].includes(String(data.status || ""));
+    if (terminalAtual && !respostaTerminal) return proximo;
+    for (const campo of ["provedor", "status", "status_pagamento", "aceito_em", "codigo_expira_em"]) {
+      if (typeof data[campo] === "string" && data[campo].trim()) proximo[campo] = data[campo].trim();
+    }
+    for (const campo of ["reembolso_pendente", "codigo_ativo", "concluido"]) {
+      if (typeof data[campo] === "boolean") proximo[campo] = data[campo];
+    }
+    if (tokenStatusValido(salvo.status_token) && /^\d{6}$/.test(String(data.codigo_entrega || ""))) {
+      proximo.codigo_entrega = String(data.codigo_entrega);
+    }
+    return proximo;
+  }
+  const MENSAGEM_CANCELAMENTO_APOS_ACEITE = "seu pedido já esta sendo preparado pelo estabelecimento e não pode mais ser cancelado normalmente. caso exista um problema com o pedido entre em contato com o estabelecimento via WhatsApp.";
+  function pedidoFoiAceito(salvo) {
+    return Boolean(salvo?.aceito_em) || ["em_preparo", "pronto", "reservado", "coletado", "em_entrega"].includes(String(salvo?.status || ""));
+  }
+  function ocultarConfirmacaoCancelamento() {
+    const caixa = $("cancelamentoConfirmacao");
+    if (caixa) caixa.hidden = true;
+  }
+  function mostrarConfirmacaoCancelamento(salvo) {
+    const caixa = $("cancelamentoConfirmacao");
+    const mensagem = $("cancelamentoMensagem");
+    if (!caixa || !mensagem) return;
+    const aceito = pedidoFoiAceito(salvo);
+    mensagem.textContent = aceito ? MENSAGEM_CANCELAMENTO_APOS_ACEITE : "Tem certeza que quer cancelar o pedido?";
+    caixa.hidden = false;
+    const confirmar = $("confirmarCancelamentoOffline");
+    if (confirmar) confirmar.hidden = aceito;
+    const whatsapp = $("cancelamentoWhatsApp");
+    if (whatsapp) {
+      whatsapp.hidden = !aceito || !podePedir;
+      if (aceito && podePedir) {
+        try { whatsapp.href = window.CatalogoUtils.gerarLinkWhatsApp(telefonePedido, "Olá! Preciso de ajuda com meu pedido."); } catch { whatsapp.hidden = true; }
+      }
+    }
+  }
+  function atualizarBotoesCancelamento(salvo) {
+    const permitido = Boolean(salvo && tokenStatusValido(salvo.status_token) && salvo.concluido !== true && salvo.status !== "cancelado");
+    for (const id of ["cancelarPedidoOffline", "cancelarPedidoNoDialog"]) {
+      const botao = $(id);
+      if (botao) botao.hidden = !permitido;
+    }
+  }
+  function cancelarPedidoComToken() {
+    const salvo = lerPedidoOfflineSalvo();
+    if (!salvo || !tokenStatusValido(salvo.status_token)) return;
+    mostrarConfirmacaoCancelamento(salvo);
+  }
+  async function confirmarCancelamentoOffline() {
+    const salvo = lerPedidoOfflineSalvo();
+    if (!salvo || !tokenStatusValido(salvo.status_token) || pedidoFoiAceito(salvo)) return;
+    const botao = $("confirmarCancelamentoOffline");
+    if (botao) botao.disabled = true;
+    cancelarConsultaStatusOffline();
+    comprovanteOfflineVersao += 1;
+    try {
+      const { data, error } = await clienteSupabase().functions.invoke("catalogo-pedido-offline", { body: {
+        acao: "cancelar_pedido", pedido_id: salvo.pedido_id, comercio_id: comercioId,
+        status_token: salvo.status_token, motivo: "Cancelado pelo comprador.",
+      } });
+      if (error || !data?.success) throw new Error(data?.mensagem || "Não foi possível cancelar o pedido.");
+      const atualizado = mesclarStatusComprovante(salvo, data);
+      atualizado.status = String(data.status || "cancelado");
+      atualizado.codigo_ativo = false;
+      salvarComprovanteOffline(atualizado);
+      ocultarConfirmacaoCancelamento();
+      mostrarComprovanteOffline(atualizado, { somenteComprovante: !pedidoEmRevisaoValido() });
+      atualizarPedidoOfflineRecente();
+    } catch (erro) {
+      const mensagem = $("cancelamentoMensagem");
+      if (mensagem) mensagem.textContent = erro.message || "Não foi possível cancelar o pedido.";
+    } finally {
+      if (botao) botao.disabled = false;
+      atualizarPedidoOfflineRecente();
     }
   }
   async function consultarStatusOffline(salvo) {
@@ -402,8 +519,11 @@
           agendarConsultaStatusOffline(salvo);
           return;
         }
-        if (data.concluido === true || data.codigo_ativo === false) {
-          concluirComprovanteOffline(salvo);
+        const atualizado = mesclarStatusComprovante(salvo, data);
+        if (JSON.stringify(atualizado) !== JSON.stringify(salvo)) salvarComprovanteOffline(atualizado);
+        if (data.concluido === true || String(data.status || "") === "entregue") {
+          const atual = lerPedidoOfflineSalvo() || atualizado;
+          concluirComprovanteOffline(atual);
           return;
         }
         atualizarAvisoStatusOffline(false);
@@ -433,13 +553,21 @@
       cancelarConsultaStatusOffline();
       return;
     }
+    if (salvo.concluido === true || salvo.status === "entregue") {
+      aviso.hidden = true;
+      cancelarConsultaStatusOffline();
+      return;
+    }
     aviso.hidden = false;
+    atualizarBotoesCancelamento(salvo);
     const botaoAbrir = $("abrirPedidoOfflineSalvo");
-    botaoAbrir.onclick = () => {
+    if (botaoAbrir) botaoAbrir.textContent = salvo.status === "cancelado" || comprovanteExpirado(salvo)
+      ? "Consultar situação do pedido" : "Ver código do pedido";
+    if (botaoAbrir) botaoAbrir.onclick = () => {
       const atual = lerPedidoOfflineSalvo();
       if (!atual) { atualizarPedidoOfflineRecente(); return; }
       mostrarComprovanteOffline(atual, { somenteComprovante: !pedidoEmRevisaoValido() });
-      if (!$("confirmarPedidoDialog").open) $("confirmarPedidoDialog").showModal();
+      if ($("confirmarPedidoDialog") && !$("confirmarPedidoDialog").open) $("confirmarPedidoDialog").showModal();
       consultarStatusOffline(atual);
     };
     const avisoAnterior = statusOfflineAviso;
@@ -460,7 +588,7 @@
         cliente: pedidoEmRevisao.cliente, modalidade: pedidoEmRevisao.modalidade, observacoes: pedidoEmRevisao.observacoes,
       } });
       if (error || !data?.success) throw new Error(data?.mensagem || "Não foi possível registrar o pedido.");
-      const comprovante = { pedido_id: data.pedido_id, codigo_entrega: data.codigo_entrega, codigo_expira_em: data.codigo_expira_em };
+      const comprovante = { pedido_id: data.pedido_id, codigo_entrega: data.codigo_entrega, codigo_expira_em: data.codigo_expira_em, provedor: "offline", status: data.status || "aguardando_pagamento", status_pagamento: data.status_pagamento || "pendente", codigo_ativo: data.codigo_ativo !== false, concluido: data.concluido === true, reembolso_pendente: data.reembolso_pendente === true };
       if (tokenStatusValido(data.status_token)) comprovante.status_token = String(data.status_token).trim();
       statusOfflineAviso = false;
       salvarComprovanteOffline(comprovante);
@@ -481,10 +609,11 @@
     $("pixPedidoStatus").textContent = "Validando produtos e preparando o Pix…";
     box.hidden = false;
     try {
+      pedidoEmRevisao.pixRequestId = pedidoEmRevisao.pixRequestId || crypto.randomUUID();
       const { data, error } = await clienteSupabase().functions.invoke("catalogo-pedido-pix", {
         body: {
           comercio_id: comercioId,
-          request_id: crypto.randomUUID(),
+          request_id: pedidoEmRevisao.pixRequestId,
           itens: pedidoEmRevisao.itens.map((item) => ({ id: String(item.id), quantidade: Number(item.quantidade) })),
           cliente: pedidoEmRevisao.cliente,
           modalidade: pedidoEmRevisao.modalidade,
@@ -504,6 +633,24 @@
         $("abrirTicketPix").hidden = false;
       }
       pedidoEmRevisao = { ...pedidoEmRevisao, pixGerado: true };
+      const pixReceipt = {
+        pedido_id: data.pedido_id,
+        codigo_entrega: /^\d{6}$/.test(String(data.codigo_entrega || "")) ? String(data.codigo_entrega) : "",
+        codigo_expira_em: data.codigo_expira_em || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        provedor: "pix",
+        status: data.status || "aguardando_pagamento",
+        // A resposta de criação nunca prova baixa; consultar_status consulta o provedor.
+        status_pagamento: "pendente",
+        codigo_ativo: false,
+        concluido: false,
+        reembolso_pendente: false,
+      };
+      if (tokenStatusValido(data.status_token)) pixReceipt.status_token = String(data.status_token).trim();
+      if (pixReceipt.pedido_id && tokenStatusValido(pixReceipt.status_token)) {
+        salvarComprovanteOffline(pixReceipt);
+        atualizarPedidoOfflineRecente();
+        consultarStatusOffline(pixReceipt);
+      }
       botao.hidden = true;
       atualizarAcoesComprovante(false);
     } catch (error) {
@@ -716,6 +863,10 @@
       await navigator.clipboard?.writeText(codigo);
       $("offlinePedidoStatus").textContent = "Código copiado. Mostre-o ao entregador somente no momento da entrega.";
     });
+    if ($("cancelarPedidoOffline")) $("cancelarPedidoOffline").addEventListener("click", cancelarPedidoComToken);
+    if ($("cancelarPedidoNoDialog")) $("cancelarPedidoNoDialog").addEventListener("click", cancelarPedidoComToken);
+    if ($("confirmarCancelamentoOffline")) $("confirmarCancelamentoOffline").addEventListener("click", confirmarCancelamentoOffline);
+    if ($("voltarCancelamentoOffline")) $("voltarCancelamentoOffline").addEventListener("click", ocultarConfirmacaoCancelamento);
 
     $("enviarWhatsApp").addEventListener("click", () => {
       if (!pedidoEmRevisaoValido() || !comercio) return;

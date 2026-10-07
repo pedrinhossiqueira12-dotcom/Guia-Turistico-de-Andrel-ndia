@@ -13,10 +13,11 @@ function load(path,{membership=true,assigned=true,rpcResult={ok:true,status:'ent
  const db={
   auth:{getUser:async token=>({data:{user:token==='valid'?viewer:null},error:null})},
   rpc:async(name,body)=>{calls.push({name,body});return {data:name==='catalogo_offline_consumir_limite'?true:rpcResult,error:null};},
-  from:name=>{const q={select(){return q;},eq(){return q;},maybeSingle:async()=>({data:name==='catalogo_motoboys'?(membership?{usuario_id:RIDER}:null):name==='catalogo_entregas_atribuidas'?(assigned?{pedido_id:ORDER}:null):name==='catalogo_pedidos'?order: name==='catalogos'?{proprietario_id:OWNER}:null,error:null})};return q;},
+  from:name=>{const q={select(){return q;},eq(){return q;},in(){return q;},maybeSingle:async()=>({data:name==='catalogo_motoboys'?(membership?{usuario_id:RIDER}:null):name==='catalogo_entregas_atribuidas'?(assigned?{pedido_id:ORDER}:null):name==='catalogo_pedidos'?order: name==='catalogos'?{proprietario_id:OWNER}:null,error:null})};return q;},
  };
- const source=fs.readFileSync(path,'utf8').replace(/^import .*createClient.*;\s*/m,'');
- vm.runInNewContext(stripTypeScriptTypes(source),{createClient:()=>db,Request,Response,TextEncoder,crypto:webcrypto,console:{error(){}},Deno:{env:{get:key=>key==='OFFLINE_CHECKOUT_ENABLED'?(offline?'true':'false'):'test'},serve:h=>{handler=h;}}});
+ const source=fs.readFileSync(path,'utf8').replace(/^import[^;]+;\s*/gm,'');
+ const helper=stripTypeScriptTypes(fs.readFileSync('supabase/functions/_shared/catalogo-entregas-crypto-v2.ts','utf8')).replace(/^export\s+/gm,'');
+ vm.runInNewContext(helper+"\n"+stripTypeScriptTypes(source),{createClient:()=>db,Request,Response,TextEncoder,TextDecoder,atob,btoa,crypto:webcrypto,console:{error(){}},Deno:{env:{get:key=>key==='OFFLINE_CHECKOUT_ENABLED'?(offline?'true':'false'):'test'},serve:h=>{handler=h;}}});
  return {handler,calls};
 }
 function req(body,auth='Bearer valid'){
@@ -30,7 +31,7 @@ test('motoboy: ausência/invalidade de JWT bloqueia ações',async()=>{
 test('motoboy: body não muda operador nem transforma listagem em gestão',async()=>{
  const e=load(endpoint,{rpcResult:{ok:true,pedidos:[],has_more:false}});
  assert.equal((await e.handler(req({acao:'listar_entregas',comercio_id:'loja-b',p_operador_id:OWNER,user_id:OWNER}))).status,200);
- assert.equal(e.calls[0].body.p_operador_id,RIDER);assert.equal(e.calls[0].body.p_comercio_id,null);
+ assert.equal(e.calls[0].body.p_operador_id,RIDER);assert.equal(e.calls[0].body.p_comercio_id,undefined);
 });
 test('motoboy: falta de vínculo ou atribuição impede qualquer chamada de baixa',async()=>{
  for(const config of [{membership:false},{assigned:false}]){const e=load(endpoint,config);assert.equal((await e.handler(req(confirmation))).status,403);assert.equal(e.calls.length,0);}
@@ -53,11 +54,13 @@ test('motoboy: gestão usa UUID do JWT e recusa resposta SQL de não proprietár
  assert.equal(e.calls[0].body.p_operador_id,RIDER);
 });
 const statusPath='supabase/functions/catalogo-pedido-offline/index.ts';
-const baseOrder={id:ORDER,status:'pronto',status_pagamento:'pendente',concluido_em:null,codigo_entrega_usado_em:null,codigo_entrega_expira_em:'2099-01-01T00:00:00Z',codigo_entrega_tentativas:0,status_token_hash:createHash('sha256').update(STATUS_TOKEN).digest('hex'),cliente_email:'buyer@example.test'};
+const baseOrder={id:ORDER,comercio_id:'loja-a',provedor:'offline',versao_financeira:1,status:'pronto',status_pagamento:'pendente',concluido_em:null,codigo_entrega_usado_em:null,codigo_entrega_expira_em:'2099-01-01T00:00:00Z',codigo_entrega_tentativas:0,status_token_hash:createHash('sha256').update(STATUS_TOKEN).digest('hex'),cliente_email:'buyer@example.test'};
 const read={acao:'consultar_status',comercio_id:'loja-a',pedido_id:ORDER,status_token:STATUS_TOKEN};
 test('comprador: token forte só devolve estado mínimo, mesmo com checkout desativado',async()=>{
  const e=load(statusPath,{order:baseOrder,offline:false});const r=await e.handler(req(read,''));assert.equal(r.status,200);
- assert.deepEqual(await r.json(),{success:true,pedido_id:ORDER,status:'pronto',codigo_ativo:true,concluido:false});
+ const body=await r.json();assert.equal(body.success,true);assert.equal(body.pedido_id,ORDER);assert.equal(body.status,'pronto');assert.equal(body.codigo_ativo,true);assert.equal(body.concluido,false);
+ assert.doesNotMatch(JSON.stringify(body),/buyer@example|cliente_email|status_token_hash|codigo_entrega_hash/);
+ assert.deepEqual(Object.keys(body).sort(),['success','pedido_id','provedor','status','status_pagamento','aceito_em','reembolso_pendente','codigo_ativo','concluido','codigo_expira_em'].sort());
 });
 test('comprador: UUID ou código de seis dígitos não permite consultar sem prova',async()=>{
  for(const extra of [{status_token:'b'.repeat(64)},{status_token:null,codigo_entrega:'123456'},{status_token:'123456'}]){

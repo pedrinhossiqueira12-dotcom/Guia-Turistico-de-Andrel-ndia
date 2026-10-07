@@ -1,4 +1,4 @@
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 
 const URL = Deno.env.get("SUPABASE_URL") ?? "";
 const BUNDLE = Deno.env.get("SUPABASE_SECRET_KEYS") ?? "";
@@ -11,6 +11,15 @@ const db = createClient(URL, key, { auth: { persistSession: false, autoRefreshTo
 class HttpError extends Error { status: number; constructor(message: string, status = 400) { super(message); this.status = status; } }
 const json = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: HEADERS });
 const text = (value: unknown, max: number) => { const v = typeof value === "string" ? value.trim() : ""; if (v.length > max) throw new HttpError("Campo inválido."); return v; };
+function month(value: unknown): string {
+  let result = text(value, 10);
+  if (!result) {
+    const parts = new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", timeZone: "America/Sao_Paulo" }).formatToParts(new Date());
+    result = `${parts.find(p => p.type === "year")?.value}-${parts.find(p => p.type === "month")?.value}`;
+  }
+  if (!/^\d{4}-(0[1-9]|1[0-2])(?:-01)?$/.test(result)) throw new HttpError("Competência inválida.");
+  return `${result.slice(0, 7)}-01`;
+}
 
 async function auth(request: Request) {
   const token = request.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1];
@@ -27,26 +36,40 @@ async function owner(userId: string, comercioId: string) {
   if (!data || data.proprietario_id !== userId) throw new HttpError("Acesso não autorizado.", 403);
   return { admin: false, bloqueado: data.bloqueado };
 }
-const transitions: Record<string, string[]> = {
-  aguardando_pagamento: ["em_preparo", "cancelado"],
-  em_preparo: ["pronto", "cancelado"],
-  pronto: ["cancelado"],
-};
-async function listOrders(comercioId: string) {
-  const { data, error } = await db.from("catalogo_pedidos").select("id,referencia_externa,status,status_pagamento,modalidade,forma_pagamento,subtotal_produtos_centavos,entrega_centavos,total_centavos,taxa_plataforma_centavos,cliente_nome,cliente_telefone,cliente_endereco,cliente_numero,cliente_bairro,observacoes,criado_em,atualizado_em,concluido_em").eq("comercio_id", comercioId).eq("provedor", "offline").order("criado_em", { ascending: false }).limit(100);
+async function listOrders(comercioId: string, isPlatformAdmin = false) {
+  const { data, error } = await db.from("catalogo_pedidos").select("id,referencia_externa,status,status_pagamento,provedor,modalidade,forma_pagamento,subtotal_produtos_centavos,entrega_centavos,total_centavos,taxa_plataforma_centavos,taxa_motoboy_centavos,taxa_total_centavos,versao_financeira,aceito_em,entrega_status,motoboy_preferido_id,modo_distribuicao,coletado_em,em_entrega_em,reembolso_pendente,cliente_nome,cliente_telefone,cliente_endereco,cliente_numero,cliente_bairro,observacoes,criado_em,atualizado_em,concluido_em").eq("comercio_id", comercioId).order("criado_em", { ascending: false }).limit(100);
   if (error) throw new Error("Falha ao listar pedidos.");
-  return data || [];
+  if (!data?.length) return [];
+  const { data: assignments, error: assignmentError } = await db.from("catalogo_entregas_atribuidas")
+    .select("pedido_id,motoboy_id").in("pedido_id", data.map(row => row.id)).eq("comercio_id", comercioId).limit(100);
+  if (assignmentError) throw new Error("Falha ao consultar os responsáveis pelas entregas.");
+  const assigned = new Map((assignments || []).map(row => [row.pedido_id, row.motoboy_id]));
+  return data.map(row => {
+    const visible: Record<string, unknown> = { ...row, motoboy_id: assigned.get(row.id) || null };
+    if (!isPlatformAdmin && Number(row.versao_financeira) === 2 && !row.aceito_em) {
+      // O comércio vê os valores e o bairro, mas não consegue desviar o contato antes de assumir a comissão.
+      for (const field of Object.keys(visible)) if (field.startsWith("cliente_") && field !== "cliente_bairro") visible[field] = null;
+      visible.cliente_nome = "Dados disponíveis após o aceite";
+      visible.observacoes = null;
+      visible.dados_cliente_ocultos = true;
+    }
+    return visible;
+  });
 }
 async function updateStatus(userId: string, body: Record<string, unknown>) {
   const comercioId = text(body.comercio_id, 180); const pedidoId = text(body.pedido_id, 60); const next = text(body.status, 30); const motivo = text(body.motivo, 500);
   const access = await owner(userId, comercioId); if (access.bloqueado && next !== "cancelado") throw new HttpError("Catálogo bloqueado por inadimplência.", 423);
-  if (!transitions[next] && !Object.keys(transitions).some((from) => transitions[from].includes(next))) throw new HttpError("Transição inválida.");
-  const { data: current, error: readError } = await db.from("catalogo_pedidos").select("id,status,status_pagamento").eq("id", pedidoId).eq("comercio_id", comercioId).eq("provedor", "offline").maybeSingle();
-  if (readError || !current) throw new HttpError("Pedido não encontrado.", 404);
-  if (!transitions[current.status]?.includes(next)) throw new HttpError("Esta transição não é permitida.", 409);
-  const { data, error } = await db.from("catalogo_pedidos").update({ status: next, cancelado_em: next === "cancelado" ? new Date().toISOString() : null, motivo_cancelamento: next === "cancelado" ? motivo || "Cancelado pelo comércio." : null }).eq("id", pedidoId).eq("status", current.status).select("id,status,status_pagamento,atualizado_em").maybeSingle();
-  if (error || !data) throw new HttpError("O pedido foi alterado por outra sessão; atualize a lista.", 409);
-  return data;
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(pedidoId)) throw new HttpError("Pedido inválido.");
+  const operations: Record<string, string> = { em_preparo: "aceitar", pronto: "pronto", cancelado: "solicitar_cancelamento" };
+  if (!operations[next]) throw new HttpError("Transição inválida.");
+  if (next === "cancelado" && !motivo) throw new HttpError("Informe o motivo da solicitação de cancelamento.");
+  const { data, error } = await db.rpc("catalogo_operar_pedido_v2", {
+    p_operador_id: userId, p_comercio_id: comercioId, p_pedido_id: pedidoId,
+    p_acao: operations[next], p_motoboy_id: null, p_motivo: motivo || null,
+  });
+  if (error) { console.error("Order operation failed", { code: error.code }); throw new Error("Falha ao processar a transição do pedido."); }
+  if (!data?.ok) throw new HttpError(String(data?.mensagem || "A operação não foi autorizada."), Number(data?.http_status) || 409);
+  return data.pedido || data;
 }
 async function confirmDelivery(userId: string, body: Record<string, unknown>) {
   const comercioId = text(body.comercio_id, 180);
@@ -77,8 +100,7 @@ async function confirmDelivery(userId: string, body: Record<string, unknown>) {
 
 async function statement(userId: string, comercioId: string, competencia: string) {
   await owner(userId, comercioId);
-  if (!/^\d{4}-\d{2}(-\d{2})?$/.test(competencia)) throw new HttpError("Competência inválida.");
-  const date = `${competencia.slice(0, 7)}-01`;
+  const date = month(competencia);
   const { data: closing, error } = await db.from("catalogo_fechamentos_offline").select("id,comercio_id,competencia,total_pedidos,total_comissao_centavos,status,vencimento_em,pago_em,referencia_pagamento").eq("comercio_id", comercioId).eq("competencia", date).maybeSingle();
   if (error) throw new Error("Falha ao consultar fechamento.");
   const { data: fees, error: feeError } = await db.from("catalogo_comissoes_offline").select("pedido_id,competencia,subtotal_produtos_centavos,valor_comissao_centavos,status,criado_em").eq("comercio_id", comercioId).eq("competencia", date).order("criado_em", { ascending: false });
@@ -88,25 +110,19 @@ async function statement(userId: string, comercioId: string, competencia: string
 async function run(userId: string, body: Record<string, unknown>) {
   const action = text(body.acao, 40); const comercioId = text(body.comercio_id, 180);
   const access = await owner(userId, comercioId);
-  if (action === "listar_pedidos") return json({ success: true, pedidos: await listOrders(comercioId) });
+  if (action === "listar_pedidos") return json({ success: true, pedidos: await listOrders(comercioId, access.admin) });
   if (action === "atualizar_status") return json({ success: true, pedido: await updateStatus(userId, body) });
   if (action === "confirmar_entrega") return json({ success: true, pedido: await confirmDelivery(userId, body) });
-  if (action === "consultar_fechamento") return json({ success: true, ...(await statement(userId, comercioId, text(body.competencia, 10) || new Date().toISOString().slice(0, 7))) });
+  if (action === "consultar_fechamento") return json({ success: true, ...(await statement(userId, comercioId, month(body.competencia))) });
   if (action === "gerar_fechamento") {
-    const competencia = text(body.competencia, 10) || new Date().toISOString().slice(0, 7);
-    const { data, error } = await db.rpc("catalogo_gerar_fechamento_offline", { p_comercio_id: comercioId, p_competencia: `${competencia.slice(0, 7)}-01` });
+    const competencia = month(body.competencia);
+    const { data, error } = await db.rpc("catalogo_gerar_fechamento_offline", { p_comercio_id: comercioId, p_competencia: competencia });
     if (error) throw new Error("Falha ao gerar fechamento.");
     return json({ success: true, fechamento_id: data });
   }
   if (action === "registrar_pagamento") {
     if (!access.admin) throw new HttpError("Somente o administrador pode conferir pagamentos.", 403);
-    const referencia = text(body.referencia_pagamento, 120); if (!referencia) throw new HttpError("Informe a referência do pagamento.");
-    const competencia = `${text(body.competencia, 10).slice(0, 7)}-01`;
-    const { data, error } = await db.from("catalogo_fechamentos_offline").update({ status: "pago", pago_em: new Date().toISOString(), referencia_pagamento: referencia }).eq("comercio_id", comercioId).eq("competencia", competencia).select("id,status,pago_em,referencia_pagamento").maybeSingle();
-    if (error || !data) throw new HttpError("Fechamento não encontrado.", 404);
-    await db.from("catalogo_comissoes_offline").update({ status: "paga", pago_em: new Date().toISOString(), referencia_pagamento: referencia }).eq("comercio_id", comercioId).eq("competencia", competencia).in("status", ["faturada", "bloqueado"]);
-    await db.from("catalogos").update({ bloqueado: false, motivo_bloqueio: null }).eq("comercio_id", comercioId).eq("bloqueado", true);
-    return json({ success: true, fechamento: data });
+    throw new HttpError("A baixa manual por referência foi desativada. Concilie a cobrança Pix da fatura pelo provedor para liberar saldo com lastro.", 410);
   }
   return json({ success: false, mensagem: "Ação não reconhecida." }, 400);
 }

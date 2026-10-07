@@ -87,11 +87,13 @@ test("área de recebimentos mostra status e não cria cobrança sem OAuth public
   assert.match(productionPage, /Conecte o Mercado Pago/);
 });
 
-test("checkout Pix público valida recebedor, congela preços do banco e aplica marketplace_fee", () => {
+test("checkout Pix público usa application_fee da Payments API e preserva snapshot do banco", () => {
   assert.match(orderPixFunction, /MARKETPLACE_CHECKOUT_ENABLED/);
   assert.match(orderPixFunction, /status !== "ativo"/);
   assert.match(orderPixFunction, /catalogo_produtos/);
-  assert.match(orderPixFunction, /marketplace_fee: money\(fee\)/);
+  assert.match(orderPixFunction, /application_fee:/);
+  assert.match(orderPixFunction, /\/v1\/payments/);
+  assert.doesNotMatch(orderPixFunction, /marketplace_fee:/);
   assert.match(orderPixFunction, /X-Idempotency-Key/);
   assert.match(orderPixFunction, /catalogo_pedido_itens/);
 });
@@ -99,9 +101,10 @@ test("checkout Pix público valida recebedor, congela preços do banco e aplica 
 test("webhook do marketplace valida assinatura e só confirma order conferida no Mercado Pago", () => {
   assert.match(orderWebhookFunction, /MP_MARKETPLACE_WEBHOOK_SECRET/);
   assert.match(orderWebhookFunction, /x-signature/);
-  assert.match(orderWebhookFunction, /\/v1\/orders\/\$\{encodeURIComponent\(orderId\)\}/);
-  assert.match(orderWebhookFunction, /external_reference/);
-  assert.match(orderWebhookFunction, /status_pagamento: "aprovado"/);
+  assert.match(orderWebhookFunction, /\/v1\/orders\/\$\{encodeURIComponent\([A-Za-z_][A-Za-z0-9_]*\)\}/);
+  assert.match(orderWebhookFunction, /providerFactsError\(facts, id, expectedReference, receiver\.conta/);
+  assert.match(orderWebhookFunction, /catalogo_aplicar_pagamento_v2/);
+  assert.match(orderWebhookFunction, /extractProviderPayment/);
 });
 
 test("callback OAuth redireciona para a tela visual e a página trata o retorno", () => {

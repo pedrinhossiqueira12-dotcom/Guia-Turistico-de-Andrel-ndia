@@ -743,3 +743,231 @@
     animation-duration: .01ms !important;
   }
 }
+
+
+/* Extensões do fluxo v2: mesmas cores, tipografia e cartões do painel existente. */
+.motoboy-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 44px;
+  padding: 9px 12px;
+  border: 1px solid var(--motoboy-line);
+  border-radius: 11px;
+  color: var(--motoboy-green);
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.motoboy-switch input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--motoboy-green);
+}
+
+.motoboy-safe-offer {
+  display: grid;
+  gap: 3px;
+  padding: 11px 12px;
+  border: 1px solid #d5e3d8;
+  border-radius: 10px;
+  background: #f4f8f4;
+  color: var(--motoboy-muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.motoboy-safe-offer strong {
+  color: var(--motoboy-green);
+  font-size: 12px;
+}
+
+.motoboy-delivery-card.is-offer {
+  border-color: #bfd8c7;
+  box-shadow: 0 5px 16px rgba(25, 65, 56, .08);
+}
+
+.motoboy-status.is-complete {
+  background: #e4f1e6;
+  color: #1e6544;
+}
+
+.motoboy-status.is-danger {
+  background: #fff0ed;
+  color: var(--motoboy-danger);
+}
+
+.motoboy-order-guidance {
+  color: var(--motoboy-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.motoboy-action-note {
+  color: var(--motoboy-muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.motoboy-earnings,
+.motoboy-profile-card {
+  margin-top: 22px;
+}
+
+.motoboy-balance-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.motoboy-balance-card {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 13px;
+  border: 1px solid #e2e6df;
+  border-radius: 12px;
+  background: #f8faf7;
+}
+
+.motoboy-balance-card span {
+  color: var(--motoboy-muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.motoboy-balance-card strong {
+  color: var(--motoboy-green);
+  font-size: clamp(16px, 3vw, 22px);
+  overflow-wrap: anywhere;
+}
+
+.motoboy-reliability {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 5px 15px;
+  align-items: center;
+  margin-top: 18px;
+  padding: 15px;
+  border: 1px solid #e8e2d8;
+  border-radius: 13px;
+  background: #fbf8f3;
+}
+
+.motoboy-reliability h3,
+.motoboy-history-block h3 {
+  margin: 5px 0 0;
+  color: var(--motoboy-green);
+  font: 700 19px/1.2 Georgia, "Times New Roman", serif;
+}
+
+.motoboy-reliability > strong {
+  color: var(--motoboy-green);
+  font-size: 18px;
+  text-align: right;
+}
+
+.motoboy-reliability p {
+  grid-column: 1 / -1;
+  margin: 2px 0 0;
+  font-size: 13px;
+}
+
+.motoboy-history-block {
+  margin-top: 20px;
+}
+
+.motoboy-history {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.motoboy-history li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 3px 12px;
+  padding: 11px 0;
+  border-top: 1px solid #efeee8;
+}
+
+.motoboy-history li strong {
+  color: var(--motoboy-green);
+  overflow-wrap: anywhere;
+}
+
+.motoboy-history li span,
+.motoboy-history li small {
+  color: var(--motoboy-muted);
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.motoboy-history li b {
+  color: var(--motoboy-green);
+  font-size: 14px;
+  text-align: right;
+}
+
+.motoboy-history li small {
+  grid-column: 1 / -1;
+}
+
+.motoboy-history .motoboy-history-empty {
+  display: block;
+  color: var(--motoboy-muted);
+  font-size: 13px;
+}
+
+.motoboy-profile-card p {
+  max-width: 720px;
+}
+
+.motoboy-pix-form {
+  max-width: 620px;
+}
+
+.motoboy-dialog textarea,
+.motoboy-dialog select {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--motoboy-line);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--motoboy-ink);
+  font: inherit;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.motoboy-dialog textarea:focus,
+.motoboy-dialog select:focus {
+  border-color: var(--motoboy-accent);
+  outline: 2px solid rgba(189, 107, 77, .14);
+}
+
+@media (max-width: 620px) {
+  .motoboy-toolbar-card .motoboy-switch,
+  .motoboy-toolbar-card .motoboy-button {
+    width: 100%;
+  }
+
+  .motoboy-balance-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .motoboy-reliability {
+    grid-template-columns: 1fr;
+  }
+
+  .motoboy-reliability > strong {
+    text-align: left;
+  }
+}

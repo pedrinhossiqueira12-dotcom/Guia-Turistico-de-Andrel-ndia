@@ -15,6 +15,9 @@
   let comercio = null;
   let removendoCategoriaId = null;
   let carregando = false;
+  const ENTREGA_API_URL = `${SUPABASE_URL}/functions/v1/catalogo-entregas`;
+  const STALE_SESSION_REQUEST = "STALE_SESSION_REQUEST";
+  const entregaState = { motoboys: [], generation: 0, userId: "", sessionToken: "", carregando: false };
 
   const modalidades = { entrega: "Entrega", retirada: "Retirada", consumo_local: "Consumo no local" };
   const pagamentos = {
@@ -83,6 +86,7 @@
     try {
       const { data: { session } = {} } = await supabase.auth.getSession();
       if (!session) {
+        entregaState.generation += 1; entregaState.userId = ""; entregaState.sessionToken = ""; entregaState.motoboys = [];
         $("loginCard").hidden = false;
         $("catalogoBloqueado").hidden = true;
         $("painelCatalogo").hidden = true;
@@ -90,7 +94,11 @@
         return;
       }
 
+      entregaState.generation += 1;
+      entregaState.userId = session.user?.id || "";
+      entregaState.sessionToken = session.access_token || "";
       $("loginCard").hidden = true;
+      $("logoutCatalogo").hidden = false;
       const resultado = await validarProprietario();
       comercio = await carregarComercio();
       $("nomeComercioAdmin").textContent = comercio?.nome || comercioId;
@@ -145,8 +153,57 @@
   }
 
   function statusOffline(status) {
-    return ({ aguardando_pagamento: "Aguardando confirmação", em_preparo: "Em preparo", pronto: "Pronto para entrega", entregue: "Concluído", cancelado: "Cancelado" })[status] || status;
+    return ({ aguardando_pagamento: "Aguardando confirmação", em_preparo: "Em preparo", pronto: "Pronto para entrega", entregue: "Concluído", cancelado: "Cancelado", cancelamento_solicitado: "Ocorrência solicitada", nao_atribuido: "Sem entregador", ofertado: "Ofertado à rede", reservado: "Reservado", coletado: "Coletado", em_entrega: "Em entrega" })[status] || status || "Em acompanhamento";
   }
+
+  function statusPagamento(status) {
+    return ({ aprovado: "Pagamento aprovado", pendente: "Pagamento pendente", processando: "Pagamento em processamento", recusado: "Pagamento recusado", cancelado: "Pagamento cancelado", estornado: "Pagamento estornado", contestado: "Pagamento contestado" })[status] || status || "Pagamento não informado";
+  }
+
+  function pedidoIdSeguro(pedido) { return String(pedido.id || pedido.pedido_id || ""); }
+
+  async function chamarEntregas(acao, dados = {}, generation = entregaState.generation, userId = entregaState.userId) {
+    const client = getClient();
+    if (!client?.auth) throw new Error("Autenticação indisponível. Atualize a página e entre novamente.");
+    const { data, error } = await client.auth.getSession();
+    if (error) throw new Error("Não foi possível verificar sua sessão.");
+    const session = data?.session;
+    const token = session?.access_token;
+    if (!token) throw new Error("Sua sessão expirou. Entre novamente.");
+    if (generation !== entregaState.generation || !entregaState.userId || entregaState.userId !== userId || session.user?.id !== userId) throw new Error(STALE_SESSION_REQUEST);
+    const response = await fetch(ENTREGA_API_URL, { method: "POST", headers: { "Content-Type": "application/json", apikey: SUPABASE_KEY, Authorization: `Bearer ${token}` }, body: JSON.stringify({ acao, comercio_id: comercioId, ...dados }) });
+    const result = await response.json().catch(() => ({}));
+    if (generation !== entregaState.generation || entregaState.userId !== userId) throw new Error(STALE_SESSION_REQUEST);
+    if (!response.ok || result?.success !== true) { const failure = new Error(result?.mensagem || "A operação de entregas não foi autorizada."); failure.status = response.status; throw failure; }
+    return result;
+  }
+
+  function opcoesMotoboys(pedido) {
+    const atual = String(pedido.motoboy_id || pedido.motoboy_preferido_id || "");
+    const rede = `<option value="" ${atual ? "" : "selected"}>🛵 Motoboys disponíveis</option>`;
+    const conhecidos = entregaState.motoboys.filter((item) => item && item.ativo === true);
+    return rede + conhecidos.map((item) => `<option value="${escapar(item.usuario_id)}" ${String(item.usuario_id) === atual ? "selected" : ""}>${escapar(item.nome || item.email || "Motoboy")}</option>`).join("");
+  }
+
+  function renderizarMotoboysLinha(pedido) {
+    const id = pedidoIdSeguro(pedido);
+    const fase = pedido.entrega_status || "";
+    const bloqueado = ["coletado", "em_entrega", "entregue", "cancelado"].includes(fase) || ["coletado", "em_entrega", "entregue", "cancelado"].includes(pedido.status);
+    return `<div class="delivery-assignment" data-delivery-assignment="${escapar(id)}"><label for="motoboy-${escapar(id)}">Entregador</label><select id="motoboy-${escapar(id)}" data-atribuir-select="${escapar(id)}" ${bloqueado ? "disabled" : ""}>${opcoesMotoboys(pedido)}</select><button class="small-button" type="button" data-atribuir="${escapar(id)}" ${bloqueado ? "disabled" : ""}>${pedido.motoboy_id ? "Atualizar atribuição" : "Atribuir"}</button></div>`;
+  }
+
+  async function carregarMotoboys() {
+    if (!entregaState.userId) return;
+    try {
+      const resultado = await chamarEntregas("listar_motoboys", {}, entregaState.generation, entregaState.userId);
+      entregaState.motoboys = Array.isArray(resultado.motoboys) ? resultado.motoboys : [];
+      if (Array.isArray(ultimaListaPedidos)) renderizarPedidosOffline(ultimaListaPedidos);
+    } catch (error) {
+      if (error.message !== STALE_SESSION_REQUEST) setFeedback("pedidosOfflineFeedback", error.message || "Não foi possível carregar os motoboys.", true);
+    }
+  }
+
+  let ultimaListaPedidos = [];
 
   async function chamarPedidosOffline(body) {
     const client = getClient();
@@ -164,28 +221,95 @@
   }
 
   function renderizarPedidosOffline(pedidos) {
+    ultimaListaPedidos = Array.isArray(pedidos) ? pedidos : [];
     const lista = $("listaPedidosOffline");
-    const ativos = pedidos.filter((pedido) => ["aguardando_pagamento", "em_preparo", "pronto"].includes(pedido.status)).length;
-    $("offlineSummary").innerHTML = `<span>${pedidos.length} pedido(s) no histórico</span><span>${ativos} em andamento</span>`;
+    const ativos = ultimaListaPedidos.filter((pedido) => !["entregue", "cancelado"].includes(pedido.status)).length;
+    $("offlineSummary").innerHTML = `<span>${ultimaListaPedidos.length} pedido(s) no histórico</span><span>${ativos} em andamento</span><span>V2: ${ultimaListaPedidos.filter((pedido) => Number(pedido.versao_financeira) === 2).length} · V1: ${ultimaListaPedidos.filter((pedido) => Number(pedido.versao_financeira || 1) !== 2).length}</span>`;
     $("offlineSummary").hidden = false;
-    if (!pedidos.length) { lista.innerHTML = '<p class="form-feedback">Nenhum pedido presencial registrado.</p>'; return; }
-    lista.innerHTML = pedidos.map((pedido) => {
+    if (!ultimaListaPedidos.length) { lista.innerHTML = '<p class="form-feedback">Nenhum pedido registrado.</p>'; return; }
+    lista.innerHTML = ultimaListaPedidos.map((pedido) => {
+      const id = pedidoIdSeguro(pedido);
       const proxima = pedido.status === "aguardando_pagamento" ? "Aceitar e preparar" : pedido.status === "em_preparo" ? "Marcar como pronto" : "";
       const podeCancelar = ["aguardando_pagamento", "em_preparo", "pronto"].includes(pedido.status);
+      const aceito = Boolean(pedido.aceito_em) || ["reservado", "coletado", "em_entrega", "entregue", "cancelamento_solicitado"].includes(pedido.entrega_status);
       const endereco = pedido.modalidade === "entrega" && pedido.cliente_endereco ? ` · ${escapar(pedido.cliente_endereco)}${pedido.cliente_numero ? `, ${escapar(pedido.cliente_numero)}` : ""}` : "";
-      return `<article class="manager-row offline-order-row"><div class="offline-order-copy"><strong>${escapar(pedido.cliente_nome)} · ${reais(pedido.total_centavos)}</strong><small>${escapar(pedido.forma_pagamento)} · ${escapar(pedido.modalidade)}${endereco}</small><small>Produtos: ${reais(pedido.subtotal_produtos_centavos)} · Comissão: ${reais(pedido.taxa_plataforma_centavos)}</small><span class="offline-status" data-status="${escapar(pedido.status)}">${escapar(statusOffline(pedido.status))}</span></div><div class="manager-actions offline-order-actions">${proxima ? `<button class="small-button" type="button" data-offline-next="${escapar(pedido.id)}" data-offline-status="${escapar(pedido.status === "aguardando_pagamento" ? "em_preparo" : "pronto")}">${proxima}</button>` : ""}${podeCancelar ? `<button class="small-button" type="button" data-offline-confirm="${escapar(pedido.id)}">Confirmar código</button>` : ""}${podeCancelar ? `<button class="small-button danger" type="button" data-offline-cancel="${escapar(pedido.id)}">Cancelar</button>` : ""}</div></article>`;
+      const versao = Number(pedido.versao_financeira) === 2 ? "V2 · 5% plataforma + 2% logística" : "V1 · taxa histórica preservada";
+      const plataforma = Number(pedido.taxa_plataforma_centavos ?? pedido.taxa_plataforma ?? 0);
+      const motoboy = Number(pedido.taxa_motoboy_centavos ?? 0);
+      const totalFee = Number(pedido.taxa_total_centavos ?? plataforma + motoboy);
+      const snapshots = pedido.feeSnapshots || pedido.fee_snapshots || pedido.metadata?.feeSnapshots;
+      const snapshotText = snapshots ? ` · snapshot ${escapar(typeof snapshots === "string" ? snapshots : "registrado")}` : "";
+      const atribuir = pedido.modalidade === "entrega" && !["entregue", "cancelado"].includes(pedido.status) ? renderizarMotoboysLinha(pedido) : "";
+      return `<article class="manager-row offline-order-row" data-pedido-id="${escapar(id)}"><div class="offline-order-copy"><strong>${escapar(pedido.cliente_nome || "Cliente")} · ${reais(pedido.total_centavos)}</strong><small>${escapar(pedido.provedor || "offline")} · ${escapar(pedido.forma_pagamento || "Pagamento não informado")} · ${escapar(pedido.modalidade || "")}${endereco}</small><small>Produtos: ${reais(pedido.subtotal_produtos_centavos)} · Plataforma: ${reais(plataforma)} · Logística: ${reais(motoboy)} · Total taxas: ${reais(totalFee)}</small><small>${escapar(versao)}${snapshotText} · ${escapar(statusPagamento(pedido.status_pagamento))}</small><span class="offline-status" data-status="${escapar(pedido.entrega_status || pedido.status)}">${escapar(statusOffline(pedido.entrega_status || pedido.status))}</span></div><div class="manager-actions offline-order-actions">${proxima ? `<button class="small-button" type="button" data-offline-next="${escapar(id)}" data-offline-status="${escapar(pedido.status === "aguardando_pagamento" ? "em_preparo" : "pronto")}">${proxima}</button>` : ""}${podeCancelar ? `<button class="small-button" type="button" data-offline-confirm="${escapar(id)}">Confirmar código</button>` : ""}${podeCancelar ? `<button class="small-button danger" type="button" data-offline-cancel="${escapar(id)}">${aceito ? "Solicitar ocorrência" : "Cancelar pedido"}</button>` : ""}${atribuir}</div></article>`;
     }).join("");
   }
 
   async function carregarPedidosOffline() {
     $("listaPedidosOffline").innerHTML = '<p class="form-feedback">Atualizando pedidos…</p>';
-    try { renderizarPedidosOffline((await chamarPedidosOffline({ acao: "listar_pedidos" })).pedidos || []); }
+    try {
+      renderizarPedidosOffline((await chamarPedidosOffline({ acao: "listar_pedidos" })).pedidos || []);
+      await carregarMotoboys();
+    }
     catch (error) { $("listaPedidosOffline").innerHTML = `<p class="form-feedback">${escapar(error.message || "Não foi possível carregar os pedidos.")}</p>`; }
   }
 
   async function alterarStatusOffline(pedidoId, status, motivo = "") {
     await chamarPedidosOffline({ acao: "atualizar_status", pedido_id: pedidoId, status, motivo });
     await carregarPedidosOffline();
+    setFeedback("pedidosOfflineFeedback", status === "pronto" ? "Pedido pronto. O backend fará a oferta automática aos motoboys autorizados/disponíveis." : "Status atualizado.");
+  }
+
+  async function atribuirPedidoLinha(pedidoId, botao) {
+    const selecao = Array.from(document.querySelectorAll("[data-atribuir-select]")).find((elemento) => String(elemento.dataset.atribuirSelect) === String(pedidoId));
+    if (!selecao) return;
+    const generation = entregaState.generation;
+    const userId = entregaState.userId;
+    botao.disabled = true;
+    setFeedback("pedidosOfflineFeedback", "Salvando preferência de entrega…");
+    try {
+      await chamarEntregas("atribuir_pedido", { pedido_id: pedidoId, motoboy_id: selecao.value || null }, generation, userId);
+      await carregarPedidosOffline();
+      setFeedback("pedidosOfflineFeedback", selecao.value ? "Preferência de motoboy salva antes do pronto." : "Pedido configurado para Motoboys disponíveis; o backend ofertará ao marcar pronto.");
+    } catch (error) {
+      if (error.message !== STALE_SESSION_REQUEST) setFeedback("pedidosOfflineFeedback", error.message || "Não foi possível atribuir o pedido.", true);
+    } finally { botao.disabled = false; }
+  }
+
+  function pedidoAceito(pedidoId) {
+    return ultimaListaPedidos.find((pedido) => pedidoIdSeguro(pedido) === String(pedidoId));
+  }
+
+  function abrirCancelamento(pedidoId) {
+    const pedido = pedidoAceito(pedidoId);
+    if (!pedido) return;
+    $("cancelamentoPedidoId").value = pedidoId;
+    $("cancelamentoMotivo").value = "";
+    $("cancelamentoConfirmado").checked = false;
+    $("cancelamentoDepoisAceite").textContent = Boolean(pedido.aceito_em) || pedido.entrega_status && !["nao_atribuido", "ofertado"].includes(pedido.entrega_status)
+      ? "O pedido já foi aceito ou entrou no fluxo de entrega. Isto criará uma solicitação/ocorrência para análise; nenhuma comissão será alterada diretamente."
+      : "Antes do aceite, o cancelamento encerra o pedido conforme as regras legadas.";
+    $("cancelamentoDialog").showModal();
+    $("cancelamentoMotivo").focus();
+  }
+
+  async function confirmarCancelamento(event) {
+    event.preventDefault();
+    const pedidoId = $("cancelamentoPedidoId").value;
+    const pedido = pedidoAceito(pedidoId);
+    const motivo = $("cancelamentoMotivo").value.trim();
+    if (!motivo || !$("cancelamentoConfirmado").checked) { setFeedback("cancelamentoFeedback", "Confirme o motivo do cancelamento para continuar.", true); return; }
+    const posAceite = Boolean(pedido?.aceito_em) || Boolean(pedido?.entrega_status && !["nao_atribuido", "ofertado"].includes(pedido.entrega_status));
+    const botao = $("cancelamentoEnviar");
+    botao.disabled = true;
+    setFeedback("cancelamentoFeedback", posAceite ? "Registrando solicitação para análise…" : "Cancelando pedido…");
+    try {
+      if (posAceite) await chamarEntregas("solicitar_cancelamento", { pedido_id: pedidoId, motivo });
+      else await alterarStatusOffline(pedidoId, "cancelado", motivo);
+      $("cancelamentoDialog").close();
+      await carregarPedidosOffline();
+      setFeedback("pedidosOfflineFeedback", posAceite ? "Solicitação/ocorrência registrada. A comissão permanece para análise administrativa." : "Pedido cancelado antes do aceite.");
+    } catch (error) { setFeedback("cancelamentoFeedback", error.message || "Não foi possível registrar o cancelamento.", true); }
+    finally { botao.disabled = false; }
   }
 
   function abrirConfirmacaoOffline(pedidoId) {
@@ -213,7 +337,7 @@
       $("confirmarEntregaPainelDialog").close();
       $("confirmarEntregaPainelForm").reset();
       await carregarPedidosOffline();
-      setFeedback("pedidosOfflineFeedback", "Entrega confirmada. Comissão de 5% registrada uma única vez.");
+      setFeedback("pedidosOfflineFeedback", "Entrega confirmada. A taxa registrada é a do snapshot financeiro do pedido e não é cobrada novamente.");
     } catch (error) {
       setFeedback("confirmarEntregaFeedback", error.message || "Não foi possível confirmar a entrega.", true);
     } finally { botao.disabled = false; }
@@ -638,10 +762,17 @@
         abrirConfirmacaoOffline(button.dataset.offlineConfirm);
         return;
       }
+      if (button.dataset.atribuir) {
+        await atribuirPedidoLinha(button.dataset.atribuir, button);
+        return;
+      }
+      if (button.dataset.offlineCancel) {
+        abrirCancelamento(button.dataset.offlineCancel);
+        return;
+      }
       button.disabled = true;
       try {
         if (button.dataset.offlineNext) await alterarStatusOffline(button.dataset.offlineNext, button.dataset.offlineStatus);
-        if (button.dataset.offlineCancel) await alterarStatusOffline(button.dataset.offlineCancel, "cancelado", "Cancelado pelo comércio.");
       } catch (error) { setFeedback("settingsFeedback", error.message || "Não foi possível atualizar o pedido.", true); button.disabled = false; }
     });
     $("confirmarEntregaPainelForm").addEventListener("submit", confirmarEntregaOffline);
@@ -654,6 +785,14 @@
     $("consultarExtratoOffline").addEventListener("click", consultarExtratoOffline);
     $("gerarPixFatura").addEventListener("click", gerarPixFatura);
     $("consultarPixFatura").addEventListener("click", consultarPixFatura);
+    $("cancelamentoForm").addEventListener("submit", confirmarCancelamento);
+    $("cancelarCancelamento").addEventListener("click", () => $("cancelamentoDialog").close());
+    $("cancelamentoDialog").addEventListener("close", () => { $("cancelamentoForm").reset(); setFeedback("cancelamentoFeedback", ""); });
+    $("logoutCatalogo").addEventListener("click", async () => {
+      entregaState.generation += 1; entregaState.userId = ""; entregaState.sessionToken = ""; entregaState.motoboys = []; ultimaListaPedidos = [];
+      $("listaPedidosOffline").innerHTML = ""; $("painelCatalogo").hidden = true; $("loginCard").hidden = false; $("logoutCatalogo").hidden = true;
+      try { await getClient()?.auth?.signOut({ scope: "local" }); } catch { /* bloqueio visual mesmo se a sessão remota falhar */ }
+    });
     $("reassignCategoryForm").addEventListener("submit", async (event) => {
       event.preventDefault();
       if (!removendoCategoriaId) return;

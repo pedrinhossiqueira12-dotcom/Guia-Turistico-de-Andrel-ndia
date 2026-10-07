@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex, nofollow">
   <meta name="theme-color" content="#194138">
-  <meta name="description" content="Painel seguro de entregas atribuídas ao entregador.">
-  <title>Minhas entregas — Guia Turístico de Andrelândia</title>
+  <meta name="description" content="Painel seguro de ofertas e entregas autorizadas ao motoboy.">
+  <title>Painel do entregador — Guia Turístico de Andrelândia</title>
   <link rel="stylesheet" href="../styles/design-system.css">
   <link rel="stylesheet" href="../styles/motoboy.css">
 </head>
@@ -21,20 +21,20 @@
 
   <main class="motoboy-shell">
     <section class="motoboy-heading" aria-labelledby="motoboyTitle">
-      <span class="eyebrow">ENTREGAS ATRIBUÍDAS</span>
-      <h1 id="motoboyTitle">Minhas entregas</h1>
-      <p>Veja somente os pedidos de entrega presencial que foram atribuídos a esta conta.</p>
+      <span class="eyebrow">ENTREGAS AUTORIZADAS</span>
+      <h1 id="motoboyTitle">Ofertas e minhas entregas</h1>
+      <p>Ative sua disponibilidade para receber ofertas de comércios que autorizaram esta conta. Dados do cliente só aparecem depois do aceite válido.</p>
     </section>
 
     <section id="motoboyNotice" class="motoboy-notice" role="status" aria-live="polite">
-      <strong id="motoboyNoticeTitle">Entre para consultar suas entregas.</strong>
-      <p id="motoboyNoticeText">A autorização para cada comércio é feita pelo proprietário, sem compartilhar senhas.</p>
+      <strong id="motoboyNoticeTitle">Entre para consultar ofertas e entregas.</strong>
+      <p id="motoboyNoticeText">A autorização é feita por cada comércio, sem compartilhar senhas.</p>
     </section>
 
     <section id="motoboyLoginCard" class="motoboy-card motoboy-login-card" aria-labelledby="motoboyLoginTitle">
       <span class="eyebrow">ACESSO</span>
       <h2 id="motoboyLoginTitle">Entrar no painel</h2>
-      <p>Use a conta já cadastrada e confirmada por e-mail. O proprietário não precisa conhecer sua senha.</p>
+      <p>Use sua conta pessoal já cadastrada e confirmada por e-mail. O comércio não precisa conhecer sua senha.</p>
       <form id="motoboyLoginForm" class="motoboy-form">
         <label for="motoboyLoginEmail">E-mail</label>
         <input id="motoboyLoginEmail" name="email" type="email" autocomplete="email" required>
@@ -45,7 +45,7 @@
       </form>
       <details id="motoboySignupDetails" class="motoboy-signup">
         <summary>Ainda não tenho uma conta</summary>
-        <p>Crie sua conta pessoal, confirme o e-mail e depois peça ao proprietário para autorizar este e-mail. O cadastro não concede privilégios automaticamente.</p>
+        <p>Crie sua conta pessoal, confirme o e-mail e depois peça ao comércio para autorizar este e-mail. O cadastro não concede acesso a pedidos sozinho.</p>
         <form id="motoboySignupForm" class="motoboy-form">
           <label for="motoboySignupName">Nome</label>
           <input id="motoboySignupName" type="text" maxlength="120" autocomplete="name" required>
@@ -59,51 +59,117 @@
       </details>
     </section>
 
-    <section id="motoboyPanel" hidden aria-labelledby="entregasTitulo">
+    <section id="motoboyPanel" hidden aria-labelledby="motoboyPanelTitle">
       <div class="motoboy-card motoboy-toolbar-card">
         <div>
-          <span class="eyebrow">ROTA DE HOJE</span>
-          <h2 id="entregasTitulo">Pedidos atribuídos</h2>
-          <p id="motoboyInstruction">Confira o endereço e aguarde o pedido ficar pronto para iniciar a entrega.</p>
+          <span class="eyebrow">REDE MULTICOMÉRCIO</span>
+          <h2 id="motoboyPanelTitle">Minha disponibilidade</h2>
+          <p>Disponibilidade é opt-in. A lista é filtrada pelo servidor para mostrar somente vínculos autorizados.</p>
         </div>
+        <label class="motoboy-switch" for="motoboyAvailability">
+          <input id="motoboyAvailability" type="checkbox">
+          <span>Receber novas ofertas</span>
+        </label>
         <button id="motoboyRefresh" class="motoboy-button motoboy-button-secondary" type="button">Atualizar</button>
+        <p id="motoboyAvailabilityFeedback" class="motoboy-feedback" role="status"></p>
       </div>
 
       <div id="motoboyOrders" class="motoboy-delivery-list" aria-live="polite" aria-busy="false"></div>
       <div id="motoboyEmpty" class="motoboy-card motoboy-empty" hidden>
-        <span class="eyebrow">SEM PEDIDOS ATRIBUÍDOS</span>
-        <h2>Nenhuma entrega por enquanto</h2>
-        <p>Quando um proprietário atribuir um pedido presencial a esta conta, ele aparecerá aqui.</p>
+        <span class="eyebrow">SEM OFERTAS ATIVAS</span>
+        <h2>Nenhuma oferta por enquanto</h2>
+        <p>Quando um comércio autorizado disponibilizar uma entrega, ela aparecerá aqui. Pedidos de outros comércios não são exibidos.</p>
       </div>
-      <button id="motoboyLoadMore" class="motoboy-button motoboy-button-secondary motoboy-load-more" type="button" hidden>Carregar mais entregas</button>
+      <button id="motoboyLoadMore" class="motoboy-button motoboy-button-secondary motoboy-load-more" type="button" hidden>Carregar mais ofertas</button>
       <p id="motoboyOrdersFeedback" class="motoboy-feedback" role="status"></p>
+
+      <section id="motoboyEarnings" class="motoboy-card motoboy-earnings" hidden aria-labelledby="motoboyEarningsTitle">
+        <div class="motoboy-section-heading">
+          <div>
+            <span class="eyebrow">FONTE DO SERVIDOR</span>
+            <h2 id="motoboyEarningsTitle">Ganhos e histórico</h2>
+          </div>
+        </div>
+        <div class="motoboy-balance-grid" aria-label="Saldos do extrato">
+          <div class="motoboy-balance-card"><span>A receber</span><strong id="motoboyBalanceAReceber">R$ 0,00</strong></div>
+          <div class="motoboy-balance-card"><span>Pago</span><strong id="motoboyBalancePago">R$ 0,00</strong></div>
+          <div class="motoboy-balance-card"><span>Retido</span><strong id="motoboyBalanceRetido">R$ 0,00</strong></div>
+        </div>
+        <p id="motoboyEarningsFeedback" class="motoboy-feedback" role="status"></p>
+        <div class="motoboy-reliability">
+          <div><span class="eyebrow">LEITURA PRUDENTE</span><h3>Confiabilidade</h3></div>
+          <strong id="motoboyReliabilityValue">Em formação</strong>
+          <p id="motoboyReliabilityText">O histórico será informado pelo servidor quando houver amostra suficiente.</p>
+        </div>
+        <div class="motoboy-history-block">
+          <h3>Histórico de entregas e pagamentos</h3>
+          <ul id="motoboyHistory" class="motoboy-history" aria-live="polite"></ul>
+        </div>
+      </section>
+
+      <section class="motoboy-card motoboy-profile-card" aria-labelledby="motoboyProfileTitle">
+        <span class="eyebrow">RECEBIMENTO OPCIONAL</span>
+        <h2 id="motoboyProfileTitle">Chave Pix própria</h2>
+        <p>Informe somente uma chave sua. Ela é guardada pelo servidor para eventual repasse comprovado; a tela não envia identidade nem valor para criar remuneração.</p>
+        <form id="motoboyPixForm" class="motoboy-form motoboy-pix-form">
+          <label for="motoboyPixKey">Chave Pix <span class="motoboy-label-note">opcional</span></label>
+          <input id="motoboyPixKey" type="text" maxlength="120" autocomplete="off" placeholder="Deixe vazio para remover">
+          <button id="motoboyPixButton" class="motoboy-button motoboy-button-secondary" type="submit">Salvar chave Pix</button>
+          <p id="motoboyPixFeedback" class="motoboy-feedback" role="status"></p>
+        </form>
+      </section>
     </section>
 
-    <p class="motoboy-footer-note">Este painel não exibe códigos de entrega, e-mails, metadados ou pedidos de outros usuários. O pagamento é confirmado presencialmente no momento da entrega.</p>
+    <p class="motoboy-footer-note">Este painel não exibe faturas, catálogo de produtos ou pedidos de outros usuários. Códigos e dados pessoais aparecem apenas na etapa autorizada da entrega. Repasses dependem de baixa e comprovação administrativa.</p>
   </main>
 
   <dialog id="motoboyConfirmDialog" class="motoboy-dialog" aria-labelledby="motoboyConfirmTitle">
     <form id="motoboyConfirmForm">
       <span class="eyebrow">CONCLUIR ENTREGA</span>
-      <h2 id="motoboyConfirmTitle">Confirmar pedido</h2>
-      <p>Confirme somente depois de entregar todos os produtos e receber o pagamento presencial.</p>
+      <h2 id="motoboyConfirmTitle">Informar código de entrega</h2>
+      <p id="motoboyConfirmPaymentInfo">O servidor valida o código de seis números e o estado financeiro antes de concluir.</p>
       <input id="motoboyConfirmOrderId" type="hidden">
       <input id="motoboyConfirmCommerceId" type="hidden">
       <label for="motoboyConfirmCode">Código de entrega do cliente</label>
       <input id="motoboyConfirmCode" type="text" inputmode="numeric" pattern="[0-9]{6}" minlength="6" maxlength="6" autocomplete="one-time-code" required>
       <label class="motoboy-checkbox-label" for="motoboyConfirmReceived">
-        <input id="motoboyConfirmReceived" type="checkbox" required>
-        <span>Produto entregue e pagamento presencial recebido</span>
+        <input id="motoboyConfirmReceived" type="checkbox">
+        <span id="motoboyConfirmReceivedText">Produto entregue e pagamento presencial recebido</span>
       </label>
       <p id="motoboyConfirmFeedback" class="motoboy-feedback" role="alert"></p>
       <div class="motoboy-dialog-actions">
-        <button id="motoboyCancelConfirm" class="motoboy-button motoboy-button-secondary" type="button">Cancelar</button>
-        <button id="motoboySendConfirm" class="motoboy-button motoboy-button-primary" type="submit">Confirmar entrega</button>
+        <button id="motoboyCancelConfirm" class="motoboy-button motoboy-button-secondary" type="button">Voltar</button>
+        <button id="motoboySendConfirm" class="motoboy-button motoboy-button-primary" type="submit">Validar código</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="motoboyOccurrenceDialog" class="motoboy-dialog" aria-labelledby="motoboyOccurrenceTitle">
+    <form id="motoboyOccurrenceForm">
+      <span class="eyebrow">REGISTRO DE OCORRÊNCIA</span>
+      <h2 id="motoboyOccurrenceTitle">O que aconteceu?</h2>
+      <p>Relatar após a coleta não conclui nem cancela a entrega. O comércio e a operação analisarão o caso.</p>
+      <input id="motoboyOccurrenceOrderId" type="hidden">
+      <label for="motoboyOccurrenceCategory">Categoria</label>
+      <select id="motoboyOccurrenceCategory" required>
+        <option value="">Selecione</option>
+        <option value="cliente_nao_localizado">Cliente não localizado</option>
+        <option value="endereco_incorreto">Endereço incorreto</option>
+        <option value="problema_pedido">Problema com o pedido</option>
+        <option value="acidente">Imprevisto no trajeto</option>
+        <option value="outro">Outro motivo</option>
+      </select>
+      <label for="motoboyOccurrenceReason">Motivo</label>
+      <textarea id="motoboyOccurrenceReason" maxlength="500" rows="4" required></textarea>
+      <p id="motoboyOccurrenceFeedback" class="motoboy-feedback" role="alert"></p>
+      <div class="motoboy-dialog-actions">
+        <button id="motoboyCancelOccurrence" class="motoboy-button motoboy-button-secondary" type="button">Voltar</button>
+        <button id="motoboyOccurrenceSubmit" class="motoboy-button motoboy-button-primary" type="submit">Registrar ocorrência</button>
       </div>
     </form>
   </dialog>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="../js/motoboy.js?v=motoboy-20261006"></script>
+  <script src="../js/motoboy.js?v=motoboy-v2-20261006"></script>
 </body>
 </html>

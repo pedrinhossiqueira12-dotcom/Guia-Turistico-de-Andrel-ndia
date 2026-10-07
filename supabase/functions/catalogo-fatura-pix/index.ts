@@ -1,7 +1,7 @@
 // Cobrança Pix da fatura mensal de comissões presenciais.
 // A função é instalada desligada: sem FATURA_PIX_ENABLED=true e sem as credenciais da
 // conta recebedora da plataforma, nenhuma order é criada no Mercado Pago.
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import {
   assessFaturaOrder,
   centsToAmountString,
@@ -25,6 +25,7 @@ const MP_SELLER_ID = Deno.env.get("MP_PLATFORM_SELLER_ID") ?? "";
 const MP_WEBHOOK_SECRET = Deno.env.get("MP_PLATFORM_WEBHOOK_SECRET") ?? "";
 const ADMIN_USER_ID = Deno.env.get("ADMIN_USER_ID") ?? "4b9a0233-6b72-4573-aebd-d596c5b15e1b";
 const MP_API = "https://api.mercadopago.com";
+const MP_USER_PROFILE_API = "https://api.mercadolibre.com";
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "apikey, authorization, content-type, x-client-info, x-signature, x-request-id",
@@ -58,10 +59,10 @@ function requireEnabled() {
   }
 }
 
-async function mpRequest(path: string, method: string, body?: unknown, idempotencyKey?: string) {
+async function mpRequest(path: string, method: string, body?: unknown, idempotencyKey?: string, apiBase = MP_API) {
   const headers: Record<string, string> = { Authorization: `Bearer ${MP_ACCESS_TOKEN}`, "Content-Type": "application/json" };
   if (idempotencyKey) headers["X-Idempotency-Key"] = idempotencyKey;
-  const response = await fetch(`${MP_API}${path}`, { method, headers, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(15000) });
+  const response = await fetch(`${apiBase}${path}`, { method, headers, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(15000) });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     console.error("Mercado Pago recusou a requisição da fatura.", { path, status: response.status });
@@ -71,7 +72,7 @@ async function mpRequest(path: string, method: string, body?: unknown, idempoten
 }
 
 async function assertSeller() {
-  const me = await mpRequest("/users/me", "GET") as Record<string, unknown>;
+  const me = await mpRequest("/users/me", "GET", undefined, undefined, MP_USER_PROFILE_API) as Record<string, unknown>;
   if (String(me.id ?? "") !== String(MP_SELLER_ID)) {
     throw new HttpError("A credencial configurada não pertence à conta recebedora esperada. Nenhuma cobrança foi criada.", 503);
   }
@@ -143,7 +144,7 @@ async function obterFatura(userId: string, body: Record<string, unknown>) {
   });
 }
 
-async function criarCobranca(userId: string, body: Record<string, unknown>) {
+async function criarCobranca(userId: string, body: Record<string, unknown>, payerEmail: string) {
   requireEnabled();
   const comercioId = text(body.comercio_id, 180);
   const competencia = text(body.competencia, 7);
@@ -168,16 +169,23 @@ async function criarCobranca(userId: string, body: Record<string, unknown>) {
       orderId: String(cobrancaExistente.order_id), externalReference: referencia,
       sellerId, amountCents: valorCentavos, requirePixArtifacts: false,
     });
-    if (avaliacao.valid && avaliacao.state === "pendente") {
-      const pix = extractPixDetails(order);
+    if (!avaliacao.valid) throw new HttpError("A cobrança existente não corresponde à fatura. Não foi criado outro Pix.", 409);
+    if (avaliacao.state === "aprovado") {
+      const result = await conciliar(String(cobrancaExistente.order_id), order, avaliacao, referencia, valorCentavos);
+      return json({ success: true, reutilizada: true, cobranca_status: result?.status || "pago", order_id: cobrancaExistente.order_id, valor_centavos: valorCentavos, pix: updatedPix(order, cobrancaExistente) });
+    }
+    if (avaliacao.state === "pendente") {
+      const pix = updatedPix(order, cobrancaExistente);
       return json({
         success: true, reutilizada: true, pedido_id: null, fatura: fechamento,
         cobranca_status: "pendente", order_id: cobrancaExistente.order_id,
         valor_centavos: valorCentavos, pix, mensagem: "Já existe um Pix pendente para esta fatura; ele foi reapresentado.",
       });
     }
-    if (avaliacao.valid && ["cancelado", "expirado", "recusado"].includes(avaliacao.state)) {
+    if (["cancelado", "expirado", "recusado"].includes(avaliacao.state)) {
       await conciliar(String(cobrancaExistente.order_id), order, avaliacao, referencia, valorCentavos);
+    } else {
+      throw new HttpError("A cobrança existente exige conciliação; não foi criado outro Pix.", 409);
     }
   }
   if (cobrancaExistente?.status === "pago") throw new HttpError("Esta fatura já está paga.", 409);
@@ -187,15 +195,19 @@ async function criarCobranca(userId: string, body: Record<string, unknown>) {
   if (!chave) throw new HttpError("Não foi possível montar a chave de idempotência da cobrança.");
   const valor = centsToAmountString(valorCentavos);
 
-  const order = await mpRequest("/v1/orders", "POST", {
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payerEmail) || payerEmail.length > 254) throw new HttpError("Sua conta precisa de um e-mail válido para emitir a fatura Pix.", 400);
+  const created = await mpRequest("/v1/orders", "POST", {
     type: "online",
     processing_mode: "automatic",
+    payer: { email: payerEmail },
     external_reference: referencia,
     total_amount: valor,
     transactions: { payments: [{ amount: valor, payment_method: { id: "pix", type: "bank_transfer" } }] },
   }, chave);
 
-  const orderId = String(order.id ?? "");
+  const orderId = String(created.id ?? "");
+  if (!/^[a-zA-Z0-9_-]{1,100}$/.test(orderId)) throw new HttpError("O provedor não confirmou o identificador da cobrança.", 502);
+  const order = await mpRequest(`/v1/orders/${encodeURIComponent(orderId)}`, "GET");
   const preflight = assessFaturaOrder(order, {
     orderId, externalReference: referencia, sellerId, amountCents: valorCentavos, requirePixArtifacts: true,
   });
@@ -224,7 +236,8 @@ async function criarCobranca(userId: string, body: Record<string, unknown>) {
   });
 }
 
-async function conciliar(orderId: string, order: Record<string, unknown>, avaliacao: { state: string; paymentId?: string }, referencia: string, valorCentavos: number) {
+async function conciliar(orderId: string, order: Record<string, unknown>, avaliacao: { valid: boolean; state: string; paymentId?: string }, referencia: string, valorCentavos: number) {
+  if (!avaliacao.valid) throw new HttpError("A cobrança diverge do recebedor, valor ou referência esperados. Nenhuma quitação foi registrada.", 409);
   if (String(order.external_reference ?? "") !== referencia) {
     throw new HttpError("A referência da order não corresponde à fatura. Nenhuma quitação foi registrada.", 409);
   }
@@ -250,8 +263,8 @@ async function consultarCobranca(userId: string, body: Record<string, unknown>) 
   if (!fatura.cobranca?.order_id) {
     return json({ success: true, ...fatura, cobranca_status: null, mensagem: "Nenhuma cobrança emitida para esta fatura." });
   }
-  if (fatura.cobranca.status === "pago") return json({ success: true, ...fatura, cobranca_status: "pago" });
-  requireEnabled();
+  // Reconsulta também a cobrança paga: webhook perdido não mantém lastro falso indefinidamente.
+  if (!MP_ACCESS_TOKEN || !MP_SELLER_ID || !MP_WEBHOOK_SECRET) throw new HttpError("A conciliação está temporariamente indisponível; nenhum saldo foi liberado.", 503);
   const sellerId = await assertSeller();
   const order = await mpRequest(`/v1/orders/${encodeURIComponent(String(fatura.cobranca.order_id))}`, "GET");
   const avaliacao = assessFaturaOrder(order, {
@@ -297,7 +310,8 @@ async function webhook(request: Request) {
     .eq("order_id", orderId)
     .maybeSingle();
   if (error) throw new Error("Falha ao localizar a cobrança da fatura.");
-  if (!cobranca) return json({ success: true, ignorado: true });
+  if (!cobranca) return json({ success: false, mensagem: "Vínculo da cobrança ainda pendente; reenvie a notificação." }, 503);
+  await assertSeller();
 
   const order = await mpRequest(`/v1/orders/${encodeURIComponent(orderId)}`, "GET");
   const referencia = montarReferenciaFatura(String(cobranca.comercio_id), String(cobranca.competencia));
@@ -314,11 +328,12 @@ Deno.serve(async (request: Request) => {
   if (request.method !== "POST") return json({ success: false, mensagem: "Use POST." }, 405);
   try {
     if (new URL(request.url).pathname.replace(/\/$/, "").endsWith("/webhook")) return await webhook(request);
-    const userId = (await auth(request)).id;
+    const user = await auth(request);
+    const userId = user.id;
     const body = record(await request.json().catch(() => ({})));
     const acao = text(body.acao, 40);
     if (acao === "obter_fatura") return await obterFatura(userId, body);
-    if (acao === "criar_cobranca") return await criarCobranca(userId, body);
+    if (acao === "criar_cobranca") return await criarCobranca(userId, body, user.email || "");
     if (acao === "consultar_cobranca") return await consultarCobranca(userId, body);
     return json({ success: false, mensagem: "Ação não reconhecida." }, 400);
   } catch (error) {

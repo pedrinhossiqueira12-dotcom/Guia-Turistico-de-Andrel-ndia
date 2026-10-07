@@ -23,7 +23,6 @@
     motoboys: [],
     pedidos: [],
     maisMotoboys: false,
-    maisPedidos: false,
     subscription: null,
     destroyed: false,
     lockedAfterLogout: false,
@@ -110,12 +109,10 @@
   function limparDados() {
     state.motoboys = [];
     state.pedidos = [];
-    state.maisMotoboys = false; state.maisPedidos = false;
+    state.maisMotoboys = false;
     if ($("maisMotoboys")) $("maisMotoboys").hidden = true;
-    if ($("maisAtribuicoes")) $("maisAtribuicoes").hidden = true;
     if ($("listaMotoboys")) $("listaMotoboys").innerHTML = "";
     $("autorizarMotoboyForm").reset();
-    if ($("listaAtribuicoes")) $("listaAtribuicoes").innerHTML = "";
   }
 
   function formatarData(valor) {
@@ -158,39 +155,6 @@
     }).join("");
   }
 
-  function opcoesMotoboys(pedido) {
-    const ativos = state.motoboys.filter((motoboy) => motoboy.ativo === true);
-    const atual = String(pedido.motoboy_id || "");
-    const opcaoAtual = atual && !ativos.some((motoboy) => String(motoboy.usuario_id) === atual)
-      ? '<option value="" selected>Retirar atribuição</option>'
-      : '<option value="">Retirar atribuição</option>';
-    return opcaoAtual + ativos.map((motoboy) => `<option value="${escapar(motoboy.usuario_id)}" ${String(motoboy.usuario_id) === atual ? "selected" : ""}>${escapar(motoboy.nome || motoboy.email || "Entregador")}</option>`).join("");
-  }
-
-  function renderizarAtribuicoes() {
-    $("maisAtribuicoes").hidden = !state.maisPedidos;
-    const lista = $("listaAtribuicoes");
-    if (!state.pedidos.length) {
-      lista.innerHTML = '<p class="motoboy-feedback">Nenhum pedido ativo de entrega para atribuir.</p>';
-      return;
-    }
-    lista.innerHTML = state.pedidos.map((pedido) => {
-      const atual = state.motoboys.find((motoboy) => String(motoboy.usuario_id) === String(pedido.motoboy_id || ""));
-      const endereco = enderecoPedido(pedido);
-      const itens = Array.isArray(pedido.itens) ? pedido.itens.map((item) => `${item.quantidade} × ${item.nome_produto}`).join(" · ") : "";
-      return `<article class="motoboy-assignment-card">
-        <h3>${escapar(pedido.cliente_nome || "Cliente")}</h3>
-        <p class="motoboy-assignment-meta"><strong>${escapar(statusLabel(pedido.status))}</strong>${pedido.comercio_nome ? ` · ${escapar(state.commerceNames.get(String(pedido.comercio_id)) || pedido.comercio_nome)}` : ""}${pedido.criado_em ? ` · ${escapar(formatarData(pedido.criado_em))}` : ""}<br>${escapar(endereco || "Endereço não informado")}${itens ? `<br>Itens: ${escapar(itens)}` : ""}</p>
-        <p class="motoboy-assignment-meta">${atual ? `Atribuído atualmente a: <strong>${escapar(atual.nome || atual.email || "Entregador")}</strong>` : pedido.motoboy_id ? "Atribuição atual está suspensa; escolha um entregador ativo." : "Sem entregador atribuído."}</p>
-        <div class="motoboy-assignment-form">
-          <label for="atribuir-${escapar(pedido.pedido_id)}">Entregador ativo</label>
-          <select id="atribuir-${escapar(pedido.pedido_id)}" class="motoboy-assignment-select" data-pedido-select="${escapar(pedido.pedido_id)}">${opcoesMotoboys(pedido)}</select>
-          <button class="motoboy-small-button" type="button" data-atribuir-pedido="${escapar(pedido.pedido_id)}">Atribuir pedido</button>
-        </div>
-      </article>`;
-    }).join("");
-  }
-
   async function carregarMotoboys(generation = state.generation, userId = state.userId) {
     const resultado = await chamarApi("listar_motoboys", {}, generation, userId);
     validarSessaoAtual(generation, userId);
@@ -199,34 +163,19 @@
     renderizarMotoboys();
   }
 
-  async function carregarAtribuicoes(generation = state.generation, userId = state.userId) {
-    const resultado = await chamarApi("listar_para_atribuicao", {}, generation, userId);
-    validarSessaoAtual(generation, userId);
-    state.pedidos = Array.isArray(resultado.pedidos) ? resultado.pedidos : [];
-    state.maisPedidos = resultado.has_more === true;
-    renderizarAtribuicoes();
-  }
-
   async function carregarPainel() {
     if (!state.session || state.loading) return;
     const generation = state.generation;
     const userId = state.userId;
     state.loading = true;
     $("listaMotoboys").setAttribute("aria-busy", "true");
-    $("listaAtribuicoes").setAttribute("aria-busy", "true");
     $("listaMotoboys").innerHTML = '<p class="motoboy-feedback">Atualizando autorizações…</p>';
-    $("listaAtribuicoes").innerHTML = '<p class="motoboy-feedback">Atualizando pedidos…</p>';
     try {
-      const [motoboys, pedidos] = await Promise.all([
-        chamarApi("listar_motoboys", {}, generation, userId),
-        chamarApi("listar_para_atribuicao", {}, generation, userId),
-      ]);
+      const motoboys = await chamarApi("listar_motoboys", {}, generation, userId);
       validarSessaoAtual(generation, userId);
       state.motoboys = Array.isArray(motoboys.motoboys) ? motoboys.motoboys : [];
-      state.pedidos = Array.isArray(pedidos.pedidos) ? pedidos.pedidos : [];
-      state.maisMotoboys = motoboys.has_more === true; state.maisPedidos = pedidos.has_more === true;
+      state.maisMotoboys = motoboys.has_more === true;
       renderizarMotoboys();
-      renderizarAtribuicoes();
       $("entregadoresPanel").hidden = false;
       aviso("Acesso confirmado", "A lista é deste comércio. A API continua validando o papel do proprietário no servidor.", "sucesso");
     } catch (erro) {
@@ -234,13 +183,11 @@
       limparDados();
       $("entregadoresPanel").hidden = true;
       feedback("listaMotoboysFeedback", erro.message || "Não foi possível carregar os entregadores.", true);
-      feedback("listaAtribuicoesFeedback", erro.message || "Não foi possível carregar os pedidos.", true);
       aviso("Acesso não confirmado", erro.message || "A API recusou esta operação.", "erro");
     } finally {
       if (generation === state.generation) {
         state.loading = false;
         $("listaMotoboys").setAttribute("aria-busy", "false");
-        $("listaAtribuicoes").setAttribute("aria-busy", "false");
       }
     }
   }
@@ -280,47 +227,22 @@
     }
   }
 
-  async function atribuirPedido(pedidoId, botao) {
-    const selecao = Array.from(document.querySelectorAll("[data-pedido-select]"))
-      .find((elemento) => String(elemento.dataset.pedidoSelect) === String(pedidoId));
-    if (!selecao) return;
-    botao.disabled = true;
-    feedback("listaAtribuicoesFeedback", "Salvando atribuição…");
-    try {
-      await chamarApi("atribuir_pedido", { pedido_id: pedidoId, motoboy_id: selecao.value || null });
-      feedback("listaAtribuicoesFeedback", selecao.value ? "Pedido atribuído. O entregador verá a entrega ao atualizar o painel." : "Atribuição retirada do pedido.");
-      await carregarAtribuicoes();
-    } catch (erro) {
-      if (erro.message !== STALE_REQUEST) feedback("listaAtribuicoesFeedback", erro.message || "Não foi possível atribuir o pedido.", true);
-    } finally {
-      botao.disabled = false;
-    }
-  }
-
   async function carregarMais(tipo) {
     if (!state.session || state.loading) return;
     const generation = state.generation, userId = state.userId;
-    const motoboys = tipo === "motoboys";
-    const botao = $(motoboys ? "maisMotoboys" : "maisAtribuicoes");
+    const botao = $("maisMotoboys");
     state.loading = true; botao.disabled = true;
     try {
-      const result = await chamarApi(motoboys ? "listar_motoboys" : "listar_para_atribuicao", {
-        offset: motoboys ? state.motoboys.length : state.pedidos.length,
+      const result = await chamarApi("listar_motoboys", {
+        offset: state.motoboys.length,
       }, generation, userId);
       validarSessaoAtual(generation, userId);
-      if (motoboys) {
-        const combined = new Map(state.motoboys.map(item => [item.usuario_id, item]));
-        for (const item of result.motoboys || []) combined.set(item.usuario_id, item);
-        state.motoboys = [...combined.values()]; state.maisMotoboys = result.has_more === true;
-        renderizarMotoboys(); renderizarAtribuicoes();
-      } else {
-        const combined = new Map(state.pedidos.map(item => [item.pedido_id, item]));
-        for (const item of result.pedidos || []) combined.set(item.pedido_id, item);
-        state.pedidos = [...combined.values()]; state.maisPedidos = result.has_more === true;
-        renderizarAtribuicoes();
-      }
+      const combined = new Map(state.motoboys.map(item => [item.usuario_id, item]));
+      for (const item of result.motoboys || []) combined.set(item.usuario_id, item);
+      state.motoboys = [...combined.values()]; state.maisMotoboys = result.has_more === true;
+      renderizarMotoboys();
     } catch (error) {
-      if (error.message !== STALE_REQUEST) feedback(motoboys ? "listaMotoboysFeedback" : "listaAtribuicoesFeedback", error.message, true);
+      if (error.message !== STALE_REQUEST) feedback("listaMotoboysFeedback", error.message, true);
     } finally { if (generation === state.generation) { state.loading = false; botao.disabled = false; } }
   }
 
@@ -411,16 +333,10 @@
     $("entregadoresLogout").addEventListener("click", sair);
     $("autorizarMotoboyForm").addEventListener("submit", autorizarMotoboy);
     $("maisMotoboys").addEventListener("click", () => carregarMais("motoboys"));
-    $("maisAtribuicoes").addEventListener("click", () => carregarMais("pedidos"));
     $("atualizarMotoboys").addEventListener("click", carregarPainel);
-    $("atualizarAtribuicoes").addEventListener("click", carregarPainel);
     $("listaMotoboys").addEventListener("click", (event) => {
       const botao = event.target.closest("[data-suspender-motoboy]");
       if (botao) suspenderMotoboy(botao.dataset.suspenderMotoboy, botao);
-    });
-    $("listaAtribuicoes").addEventListener("click", (event) => {
-      const botao = event.target.closest("[data-atribuir-pedido]");
-      if (botao) atribuirPedido(botao.dataset.atribuirPedido, botao);
     });
     window.addEventListener("pagehide", () => {
       state.destroyed = true;
@@ -472,7 +388,7 @@
   }
 
   async function iniciar() {
-    carregarNomesPublicos().then(() => { if (!state.destroyed) { configurarLinks(); if (state.session) renderizarAtribuicoes(); } });
+    carregarNomesPublicos().then(() => { if (!state.destroyed) configurarLinks(); });
     configurarLinks();
     iniciarEventos();
     if (!COMERCIO_ID) {
