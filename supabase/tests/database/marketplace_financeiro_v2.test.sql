@@ -4,7 +4,7 @@
 
 begin;
 
-select plan(13);
+select plan(17);
 
 update public.catalogo_fluxo_config
    set ativo=true, comercios_piloto=NULL
@@ -121,6 +121,30 @@ select ok(
       and pg_get_constraintdef(oid) like '%versao_financeira = 2%'
   ),
   'a regra de taxas diferencia V2 dos pedidos legados'
+);
+
+select results_eq(
+  $select (catalogo_fluxo_precificar('entrega',101,NULL)->>'taxa_total_centavos')::integer$,
+  $values (7)$,
+  'arredondamento em valores pequenos conserva 7 centavos'
+);
+
+select results_eq(
+  $select (catalogo_fluxo_precificar('retirada',10000,NULL)->>'taxa_motoboy_centavos')::integer$,
+  $values (0)$,
+  'retirada nao reserva pagamento para motoboy'
+);
+
+select results_eq(
+  $select (catalogo_fluxo_precificar('consumo_local',10000,NULL)->>'taxa_plataforma_centavos')::integer$,
+  $values (700)$,
+  'consumo local entrega integralmente 7% para a plataforma'
+);
+
+select results_eq(
+  $select (catalogo_fluxo_precificar('entrega',0,NULL)->>'http_status')::integer$,
+  $values (400)$,
+  'subtotal zero e rejeitado antes de criar cobranca'
 );
 
 select * from finish();
