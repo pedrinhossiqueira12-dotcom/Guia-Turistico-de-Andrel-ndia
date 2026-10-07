@@ -17,6 +17,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Verify historical schema baseline
+        run: |
+          echo "::error::The earliest historical migration requires existing cadastros_comercios and mural_cadastros tables and a specific approved commerce row. This repository lacks a reproducible baseline. Do not run migrations against production to fix CI."
+          exit 1
+
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1
         with:
