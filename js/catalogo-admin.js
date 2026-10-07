@@ -162,6 +162,27 @@
 
   function pedidoIdSeguro(pedido) { return String(pedido.id || pedido.pedido_id || ""); }
 
+  function renderizarItensPedido(pedido) {
+    const itens = Array.isArray(pedido.itens) ? pedido.itens.filter((item) => item && typeof item === "object") : [];
+    if (!itens.length) return '<p class="order-items-missing">Detalhes dos itens indisponíveis neste pedido. Não prepare apenas pelo valor total.</p>';
+    const linhas = itens.map((item) => {
+      const quantidade = Number(item.quantidade);
+      const quantidadeTexto = Number.isInteger(quantidade) && quantidade > 0 ? String(quantidade) : "Quantidade não informada";
+      const preco = Number(item.preco_unitario_centavos);
+      const total = Number(item.total_item_centavos);
+      const precoTexto = item.preco_unitario_centavos != null && Number.isSafeInteger(preco) && preco >= 0 ? `${reais(preco)} cada` : "Preço não informado";
+      const totalTexto = item.total_item_centavos != null && Number.isSafeInteger(total) && total >= 0 ? reais(total) : "Valor não informado";
+      return `<li><div class="order-item-description"><strong>${escapar(quantidadeTexto)} × ${escapar(item.nome_produto || "Produto não identificado")}</strong>${item.descricao_produto ? `<small>${escapar(item.descricao_produto)}</small>` : ""}<small>${escapar(precoTexto)}</small></div><span class="order-item-total">${escapar(totalTexto)}</span></li>`;
+    }).join("");
+    return `<details class="order-items" open><summary>Itens do pedido</summary><ul>${linhas}</ul></details>`;
+  }
+
+  function renderizarObservacoesPedido(pedido) {
+    if (pedido.dados_cliente_ocultos || Number(pedido.versao_financeira) === 2 && !pedido.aceito_em) return "";
+    const observacoes = String(pedido.observacoes || "").trim();
+    return observacoes ? `<p class="order-notes"><strong>Observações do comprador:</strong> ${escapar(observacoes)}</p>` : "";
+  }
+
   function renderizarContatoCliente(pedido) {
     if (pedido.dados_cliente_ocultos || Number(pedido.versao_financeira) === 2 && !pedido.aceito_em) {
       return '<small class="customer-contact customer-contact-locked">Telefone e demais contatos disponíveis após aceitar o pedido.</small>';
@@ -283,7 +304,7 @@
       const snapshots = pedido.feeSnapshots || pedido.fee_snapshots || pedido.metadata?.feeSnapshots;
       const snapshotText = snapshots ? ` · snapshot ${escapar(typeof snapshots === "string" ? snapshots : "registrado")}` : "";
       const atribuir = pedido.modalidade === "entrega" && !["entregue", "cancelado"].includes(pedido.status) ? renderizarMotoboysLinha(pedido) : "";
-      return `<article class="manager-row offline-order-row" data-pedido-id="${escapar(id)}"><div class="offline-order-copy"><strong>${escapar(pedido.cliente_nome || "Cliente")} · ${reais(pedido.total_centavos)}</strong><small>${escapar(pedido.provedor || "offline")} · ${escapar(pedido.forma_pagamento || "Pagamento não informado")} · ${escapar(pedido.modalidade || "")}${endereco}</small>${renderizarContatoCliente(pedido)}${renderizarEstadoEntregador(pedido)}<small>Produtos: ${reais(pedido.subtotal_produtos_centavos)} · Plataforma: ${reais(plataforma)} · Logística: ${reais(motoboy)} · Total taxas: ${reais(totalFee)}</small><small>${escapar(versao)}${snapshotText} · ${escapar(statusPagamento(pedido.status_pagamento))}</small><span class="offline-status" data-status="${escapar(pedido.entrega_status || pedido.status)}">${escapar(statusOffline(pedido.entrega_status || pedido.status))}</span></div><div class="manager-actions offline-order-actions">${aguardandoPix ? `<p class="form-feedback">Aguardando pagamento Pix. O aceite será liberado após a aprovação.</p>` : ""}${proxima ? `<button class="small-button" type="button" data-offline-next="${escapar(id)}" data-offline-status="${escapar(["aguardando_pagamento", "pago"].includes(pedido.status) ? "em_preparo" : "pronto")}">${proxima}</button>` : ""}${podeConfirmar ? `<button class="small-button" type="button" data-offline-confirm="${escapar(id)}">Confirmar código</button>` : ""}${podeCancelar ? `<button class="small-button danger" type="button" data-offline-cancel="${escapar(id)}">${aceito ? "Solicitar ocorrência" : "Cancelar pedido"}</button>` : ""}${atribuir}</div></article>`;
+      return `<article class="manager-row offline-order-row" data-pedido-id="${escapar(id)}"><div class="offline-order-copy"><strong>${escapar(pedido.cliente_nome || "Cliente")} · ${reais(pedido.total_centavos)}</strong><small>Pedido: ${escapar(pedido.referencia_externa || id)}</small><small>${escapar(pedido.provedor || "offline")} · ${escapar(pedido.forma_pagamento || "Pagamento não informado")} · ${escapar(pedido.modalidade || "")}${endereco}</small>${renderizarItensPedido(pedido)}${renderizarObservacoesPedido(pedido)}${renderizarContatoCliente(pedido)}${renderizarEstadoEntregador(pedido)}<small>Produtos: ${reais(pedido.subtotal_produtos_centavos)} · Plataforma: ${reais(plataforma)} · Logística: ${reais(motoboy)} · Total taxas: ${reais(totalFee)}</small><small>${escapar(versao)}${snapshotText} · ${escapar(statusPagamento(pedido.status_pagamento))}</small><span class="offline-status" data-status="${escapar(pedido.entrega_status || pedido.status)}">${escapar(statusOffline(pedido.entrega_status || pedido.status))}</span></div><div class="manager-actions offline-order-actions">${aguardandoPix ? `<p class="form-feedback">Aguardando pagamento Pix. O aceite será liberado após a aprovação.</p>` : ""}${proxima ? `<button class="small-button" type="button" data-offline-next="${escapar(id)}" data-offline-status="${escapar(["aguardando_pagamento", "pago"].includes(pedido.status) ? "em_preparo" : "pronto")}">${proxima}</button>` : ""}${podeConfirmar ? `<button class="small-button" type="button" data-offline-confirm="${escapar(id)}">Confirmar código</button>` : ""}${podeCancelar ? `<button class="small-button danger" type="button" data-offline-cancel="${escapar(id)}">${aceito ? "Solicitar ocorrência" : "Cancelar pedido"}</button>` : ""}${atribuir}</div></article>`;
     }).join("");
   }
 

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#194138">
   <title>Gerenciar catálogo — Guia Turístico de Andrelândia</title>
-  <link rel="stylesheet" href="../styles/catalogo-admin.css?v=liberacao-20261007">
+  <link rel="stylesheet" href="../styles/catalogo-admin.css?v=itens-20261007">
   <link rel="stylesheet" href="../styles/design-system.css">
 </head>
 <body class="admin-page">
@@ -60,6 +60,7 @@
       <section class="admin-card offline-orders-card" id="pedidosOfflineCard">
         <div class="section-title"><div><span class="eyebrow">PEDIDOS E ENTREGAS</span><h2>Pedidos, fases e comissões</h2></div><div class="offline-order-actions"><a id="linkGerenciarEntregadores" class="small-button" href="entregadores-admin.html">Gerenciar entregadores</a><a id="linkOperacaoEntregas" class="small-button" href="entregas-operacao.html">Operação da plataforma</a><button id="atualizarPedidosOffline" class="small-button" type="button">Atualizar</button></div></div>
         <p>O cliente guarda o código. Após a entrega e o recebimento do pagamento, o proprietário autenticado usa <strong>Confirmar código</strong> no pedido. O painel nunca revela o código do cliente. A oferta automática ao marcar pronto é decidida pelo backend.</p>
+        <p>Confira <strong>Itens do pedido</strong> em cada card: produto, quantidade, preço unitário e total. Os itens ficam visíveis antes do aceite; telefone e observações do comprador são liberados após aceitar.</p>
         <div class="offline-summary" id="offlineSummary" hidden></div>
         <div id="listaPedidosOffline" class="manager-list"><p class="form-feedback">Carregando pedidos…</p></div>
         <p id="pedidosOfflineFeedback" class="form-feedback" role="status"></p>
@@ -154,7 +155,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="../js/login.js"></script>
   <script src="../js/catalogo-utils.js"></script>
-  <script src="../js/catalogo-admin.js?v=liberacao-20261007"></script>
+  <script src="../js/catalogo-admin.js?v=itens-20261007"></script>
   <script src="../js/catalogo-entregadores-link.js?v=motoboy-20261006"></script>
 </body>
 </html>

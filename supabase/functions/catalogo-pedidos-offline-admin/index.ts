@@ -37,7 +37,8 @@ async function owner(userId: string, comercioId: string) {
   return { admin: false, bloqueado: data.bloqueado };
 }
 async function listOrders(comercioId: string, isPlatformAdmin = false) {
-  const { data, error } = await db.from("catalogo_pedidos").select("id,referencia_externa,status,status_pagamento,provedor,modalidade,forma_pagamento,subtotal_produtos_centavos,entrega_centavos,total_centavos,taxa_plataforma_centavos,taxa_motoboy_centavos,taxa_total_centavos,versao_financeira,aceito_em,entrega_status,motoboy_preferido_id,modo_distribuicao,coletado_em,em_entrega_em,reembolso_pendente,cliente_nome,cliente_telefone,cliente_endereco,cliente_numero,cliente_bairro,observacoes,criado_em,atualizado_em,concluido_em").eq("comercio_id", comercioId).order("criado_em", { ascending: false }).limit(100);
+  // O snapshot da compra permanece igual se o produto for editado ou excluído depois.
+  const { data, error } = await db.from("catalogo_pedidos").select("id,referencia_externa,status,status_pagamento,provedor,modalidade,forma_pagamento,subtotal_produtos_centavos,entrega_centavos,total_centavos,taxa_plataforma_centavos,taxa_motoboy_centavos,taxa_total_centavos,versao_financeira,aceito_em,entrega_status,motoboy_preferido_id,modo_distribuicao,coletado_em,em_entrega_em,reembolso_pendente,cliente_nome,cliente_telefone,cliente_endereco,cliente_numero,cliente_bairro,observacoes,criado_em,atualizado_em,concluido_em,itens:catalogo_pedido_itens(id,produto_id,nome_produto,descricao_produto,preco_unitario_centavos,quantidade,total_item_centavos)").eq("comercio_id", comercioId).order("criado_em", { ascending: false }).limit(100);
   if (error) throw new Error("Falha ao listar pedidos.");
   if (!data?.length) return [];
   const { data: assignments, error: assignmentError } = await db.from("catalogo_entregas_atribuidas")
@@ -45,7 +46,7 @@ async function listOrders(comercioId: string, isPlatformAdmin = false) {
   if (assignmentError) throw new Error("Falha ao consultar os responsáveis pelas entregas.");
   const assigned = new Map((assignments || []).map(row => [row.pedido_id, row.motoboy_id]));
   return data.map(row => {
-    const visible: Record<string, unknown> = { ...row, motoboy_id: assigned.get(row.id) || null };
+    const visible: Record<string, unknown> = { ...row, itens: Array.isArray(row.itens) ? row.itens : [], motoboy_id: assigned.get(row.id) || null };
     if (!isPlatformAdmin && Number(row.versao_financeira) === 2 && !row.aceito_em) {
       // O comércio vê os valores e o bairro, mas não consegue desviar o contato antes de assumir a comissão.
       for (const field of Object.keys(visible)) if (field.startsWith("cliente_") && field !== "cliente_bairro") visible[field] = null;

@@ -26,3 +26,18 @@
 .delivery-responsibility small { line-height: 1.5; }
 .delivery-responsibility[data-delivery-state="selecionado"] { border-color: #e5c997; border-left-color: #bd823b; background: #fff7e8; }
 .delivery-responsibility[data-delivery-state="atribuido"] { border-color: #b8d7c3; border-left-color: #23724c; background: #edf6ef; }
+
+/* Snapshot dos itens: visível antes do aceite, sem liberar os contatos do comprador. */
+.offline-order-copy { flex: 1; }
+.order-items { margin: 10px 0; padding: 12px; border: 1px solid #cfded5; border-radius: 12px; background: #f5f3ef; }
+.order-items summary { color: var(--green); font-size: 13px; font-weight: 800; cursor: pointer; }
+.order-items summary:focus-visible { outline: 2px solid var(--green); outline-offset: 4px; }
+.order-items ul { display: grid; gap: 10px; margin: 12px 0 0; padding: 0; list-style: none; }
+.order-items li { display: flex; justify-content: space-between; align-items: start; gap: 16px; padding: 9px 0; border-top: 1px solid var(--line); }
+.order-item-description { display: grid; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
+.order-item-description strong { color: var(--green); font-size: 14px; }
+.order-item-total { flex-shrink: 0; color: var(--green); font-size: 13px; font-weight: 800; white-space: nowrap; }
+.order-notes { margin: 7px 0!important; padding: 10px 12px; border-left: 3px solid var(--accent); background: #fff8f0; border-radius: 8px; font-size: 13px; overflow-wrap: anywhere; white-space: pre-wrap; }
+.order-notes strong { color: var(--green); }
+.order-items-missing { color: #855631!important; font-size: 13px; }
+@media(max-width:420px) { .order-items li { flex-wrap: wrap; gap: 8px; } .order-item-description { flex: 1 1 160px; } .offline-order-copy { width: 100%; } }
