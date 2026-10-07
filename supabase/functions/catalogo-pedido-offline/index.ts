@@ -1,4 +1,5 @@
-import { createClient } from "npm:@supabase/supabase-js@2.117.2";
+import { createClient, decryptAesGcm, extractPixArtifacts, extractProviderPayment, providerFactsError, sanitizedProviderId } from "../_shared/catalogo-pedido-offline-runtime.ts";
+// O bridge reexporta exclusivamente os helpers de ../_shared/catalogo-pagamentos-v2.ts.
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SECRET_KEYS = Deno.env.get("SUPABASE_SECRET_KEYS") ?? "";
@@ -6,6 +7,7 @@ const LEGACY_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const OFFLINE_CHECKOUT_ENABLED = Deno.env.get("OFFLINE_CHECKOUT_ENABLED") === "true";
 // Compartilhado com o PaymentAgent: chave MP_OAUTH_ENCRYPTION_KEY e AAD por pedido.
 const COMPROVANTE_KEY = Deno.env.get("MP_OAUTH_ENCRYPTION_KEY") || Deno.env.get("CATALOGO_COMPROVANTE_KEY") || Deno.env.get("SUPABASE_COMPROVANTE_KEY") || "";
+const MP_API = "https://api.mercadopago.com";
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "apikey, authorization, content-type, x-client-info",
@@ -27,7 +29,7 @@ const admin = createClient(SUPABASE_URL, serviceKey, { auth: { persistSession: f
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const STATUS_TOKEN_RE = /^[0-9a-f]{64}$/i;
 const OFFLINE_METHODS = new Set(["dinheiro", "cartao_credito", "cartao_debito", "pagamento_entrega", "pagamento_local"]);
-const STATUS_SELECT = "id,comercio_id,provedor,status,status_pagamento,versao_financeira,entrega_status,aceito_em,reembolso_pendente,concluido_em,codigo_entrega_usado_em,codigo_entrega_expira_em,codigo_entrega_tentativas,status_token_hash,codigo_entrega_enc,cliente_email";
+const STATUS_SELECT = "id,comercio_id,referencia_externa,payment_id,order_id,total_centavos,taxa_total_centavos,provedor,status,status_pagamento,forma_pagamento,versao_financeira,entrega_status,aceito_em,reembolso_pendente,concluido_em,codigo_entrega_usado_em,codigo_entrega_expira_em,codigo_entrega_tentativas,status_token_hash,codigo_entrega_enc,cliente_email,pix_codigo,pix_qr_code_base64,pix_expira_em,cancelado_em,pagamento_revisao_pendente,metadata";
 const LEGACY_STATUS_SELECT = "id,comercio_id,provedor,status,status_pagamento,concluido_em,codigo_entrega_usado_em,codigo_entrega_expira_em,codigo_entrega_tentativas,status_token_hash,cliente_email";
 
 class HttpError extends Error {
@@ -261,6 +263,82 @@ async function legacyViewer(request: Request, comercioId: string, order: Record<
   if (ownerError) throw new Error("Falha ao validar identidade do comprador.");
   return buyerEmail || catalog?.proprietario_id === viewer.id || viewer.id === "4b9a0233-6b72-4573-aebd-d596c5b15e1b";
 }
+function orderClosed(order: Record<string, unknown>) {
+  const concluded = order.status === "entregue" || Boolean(order.concluido_em || order.codigo_entrega_usado_em);
+  const physicalClosed = ["cancelado", "expirado", "estornado", "contestado"].includes(String(order.status || "").toLowerCase()) || order.entrega_status === "cancelado";
+  const paymentClosed = ["cancelado", "expirado", "estornado", "contestado"].includes(String(order.status_pagamento || "").toLowerCase());
+  const canceled = Boolean(order.cancelado_em);
+  const expiresAt = String(order.pix_expira_em || order.codigo_entrega_expira_em || "");
+  const expired = !expiresAt || Number.isNaN(Date.parse(expiresAt)) || Date.parse(expiresAt) <= Date.now();
+  return concluded || physicalClosed || paymentClosed || canceled || expired;
+}
+function paymentsPixOrder(order: Record<string, unknown>) {
+  const metadata = record(order.metadata);
+  return order.provedor === "mercadopago"
+    && String(order.forma_pagamento || "").toLowerCase() === "pix"
+    && metadata.api_model === "payments_v1"
+    && Boolean(order.payment_id);
+}
+async function receiverForStatus(comercioId: string) {
+  const { data, error } = await admin.from("catalogo_recebedores")
+    .select("comercio_id,status,conta_externa_id,oauth_access_token_enc")
+    .eq("comercio_id", comercioId).maybeSingle();
+  const receiver = record(data);
+  if (error || receiver.comercio_id !== comercioId || receiver.status !== "ativo" || !receiver.conta_externa_id || !receiver.oauth_access_token_enc) {
+    throw new HttpError("Não foi possível verificar o pagamento no Mercado Pago.", 503);
+  }
+  let token = "";
+  try { token = await decryptAesGcm(String(receiver.oauth_access_token_enc), COMPROVANTE_KEY); }
+  catch { throw new HttpError("Não foi possível verificar o pagamento no Mercado Pago.", 503); }
+  if (!token || token.length > 4096) throw new HttpError("Não foi possível verificar o pagamento no Mercado Pago.", 503);
+  return { token, conta: String(receiver.conta_externa_id) };
+}
+async function providerGetStatus(token: string, paymentId: string) {
+  const response = await fetch(`${MP_API}/v1/payments/${encodeURIComponent(paymentId)}`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+    signal: AbortSignal.timeout(15000),
+  });
+  const data = record(await response.json().catch(() => ({})));
+  if (!response.ok) throw new HttpError("Não foi possível verificar o pagamento no Mercado Pago.", 503);
+  return data;
+}
+function providerRpcStatus(state: string) {
+  if (state === "contestado") return "charged_back";
+  if (state === "estornado") return "estornado";
+  if (state === "expirado") return "cancelado";
+  if (state === "cancelado") return "cancelado";
+  if (state === "revisao_parcial") return "revisao_parcial";
+  return state;
+}
+async function reconcileStatusProvider(order: Record<string, unknown>, provider: Record<string, unknown>, paymentId: string, collector: string) {
+  const facts = extractProviderPayment(provider, "payment");
+  const factsError = providerFactsError(facts, paymentId, String(order.referencia_externa || ""), collector, Number(order.total_centavos));
+  if (factsError) throw new HttpError(factsError, 409);
+  const expectedFee = Number(order.taxa_total_centavos);
+  if (!Number.isSafeInteger(expectedFee) || expectedFee < 0) throw new HttpError("Snapshot financeiro inválido.", 409);
+  const feeMismatch = facts.feeCentavos !== null && facts.feeCentavos !== expectedFee;
+  let rpcResult: Record<string, unknown> = {};
+  if (facts.state !== "pendente" || feeMismatch) {
+    const { data, error } = await admin.rpc("catalogo_aplicar_pagamento_v2", {
+      p_pedido_id: order.id,
+      p_status: feeMismatch ? "revisao_parcial" : providerRpcStatus(facts.state),
+      p_valor_centavos: facts.amountCentavos,
+      p_taxa_centavos: feeMismatch ? null : facts.feeCentavos,
+      p_referencia: facts.id,
+    });
+    if (error) throw new HttpError("Conciliação financeira pendente. Tente novamente.", 503);
+    rpcResult = firstRow(data);
+    if (rpcResult.ok !== true) throw new HttpError(String(rpcResult.mensagem || "Conciliação financeira recusada."), Number(rpcResult.http_status) || 409);
+  }
+  return {
+    facts,
+    artifacts: extractPixArtifacts(provider),
+    feeMismatch,
+    financiamentoComprovado: rpcResult.financiamento_comprovado === true,
+    revisaoFinanceira: feeMismatch || facts.feeCentavos === null && facts.state !== "pendente" || facts.state === "revisao_parcial",
+  };
+}
 async function orderStatus(body: Record<string, unknown>, request: Request, ip: string) {
   const comercioId = text(body.comercio_id, 180); const pedidoId = text(body.pedido_id, 36); const token = text(body.status_token, 80);
   if (!/^[a-z0-9-]{1,180}$/.test(comercioId) || !UUID_RE.test(pedidoId)) throw new HttpError("Pedido inválido.");
@@ -271,21 +349,83 @@ async function orderStatus(body: Record<string, unknown>, request: Request, ip: 
   let allowed = Boolean(order && strongToken && await hash(token).then((digest) => equalHex(digest, String(order.status_token_hash || ""))));
   if (!token && order && Number(order.versao_financeira || 1) === 1 && !order.status_token_hash) allowed = await legacyViewer(request, comercioId, order);
   if (!allowed || !order) throw new HttpError("Consulta não autorizada.", 403);
-  const concluded = order.status === "entregue" || Boolean(order.concluido_em || order.codigo_entrega_usado_em);
-  const accepted = Boolean(order.aceito_em) || ["reservado", "coletado", "em_entrega"].includes(String(order.entrega_status || ""));
-  const expired = !order.codigo_entrega_expira_em || Date.parse(String(order.codigo_entrega_expira_em)) <= Date.now();
-  const attempts = Number(order.codigo_entrega_tentativas || 0);
-  const isOffline = order.provedor === "offline";
-  const paid = ["aprovado", "approved"].includes(String(order.status_pagamento || "").toLowerCase());
-  const active = !concluded && order.status !== "cancelado" && !expired && attempts < 5 && (isOffline || paid);
+  let current = order;
+  let providerState = "";
+  let providerArtifacts = { code: "", qrCodeBase64: "", ticketUrl: "" };
+  let providerReview = false;
+  let providerFeePresent: boolean | null = null;
+  let financingConfirmed = false;
+  let feeMismatchObserved = false;
+  // Somente o token forte autoriza consultar o pagamento. Pedidos legacy/Orders
+  // ficam no estado já atestado pelo banco/webhook e jamais usam GET /payments.
+  if (strongToken && paymentsPixOrder(current) && !orderClosed(current)) {
+    const receiver = await receiverForStatus(comercioId);
+    // A descriptografia é um await: confira cancelamento novamente antes do GET.
+    current = await readOrder(pedidoId, comercioId) || current;
+    if (!orderClosed(current) && paymentsPixOrder(current)) {
+      const paymentId = sanitizedProviderId(current.payment_id);
+      if (!paymentId) throw new HttpError("Identificador do pagamento inválido.", 409);
+      const provider = await providerGetStatus(receiver.token, paymentId);
+      const reconciled = await reconcileStatusProvider(current, provider, paymentId, receiver.conta);
+      providerState = reconciled.facts.state;
+      providerArtifacts = reconciled.artifacts;
+      providerReview = reconciled.revisaoFinanceira;
+      providerFeePresent = reconciled.facts.feeCentavos !== null;
+      financingConfirmed = reconciled.financiamentoComprovado;
+      feeMismatchObserved = reconciled.feeMismatch;
+      // O RPC bloqueia a linha; a resposta deve usar o estado pós-conciliação,
+      // inclusive se cancelamento/aceite físico venceu durante o GET.
+      current = await readOrder(pedidoId, comercioId) || current;
+      if (feeMismatchObserved) throw new HttpError("Taxa divergente; pagamento encaminhado para revisão financeira, sem declarar saldo disponível.", 409);
+    }
+  }
+  const concluded = current.status === "entregue" || Boolean(current.concluido_em || current.codigo_entrega_usado_em);
+  const expiresAt = String(current.codigo_entrega_expira_em || "");
+  const expired = !expiresAt || Number.isNaN(Date.parse(expiresAt)) || Date.parse(expiresAt) <= Date.now();
+  const attempts = Number(current.codigo_entrega_tentativas || 0);
+  const isOffline = current.provedor === "offline";
+  const isPix = current.provedor === "mercadopago" && String(current.forma_pagamento || "").toLowerCase() === "pix";
+  const paid = ["aprovado", "approved"].includes(String(current.status_pagamento || "").toLowerCase());
+  const reviewPending = current.pagamento_revisao_pendente === true || providerReview;
+  const providerApproved = !paymentsPixOrder(current) || providerState === "aprovado";
+  const active = !orderClosed(current) && !concluded && !expired && attempts < 5 && !feeMismatchObserved && providerState !== "revisao_parcial" && (isOffline || paid && providerApproved);
   const response: Record<string, unknown> = {
-    success: true, pedido_id: order.id, provedor: order.provedor, status: order.status, status_pagamento: order.status_pagamento,
-    aceito_em: order.aceito_em || null, reembolso_pendente: order.reembolso_pendente === true, codigo_ativo: active, concluido: concluded, codigo_expira_em: order.codigo_entrega_expira_em || null,
+    success: true, pedido_id: current.id, provedor: current.provedor, status: current.status, status_pagamento: current.status_pagamento,
+    aceito_em: current.aceito_em || null, reembolso_pendente: current.reembolso_pendente === true, codigo_ativo: active, concluido: concluded, codigo_expira_em: current.codigo_entrega_expira_em || null,
   };
-  // O owner/admin pode acompanhar estado legado, mas nunca recebe o código. Só o token forte pode recuperá-lo.
+  if (strongToken && isPix && providerState && ["pendente", "aprovado"].includes(providerState) && !orderClosed(current) && !reviewPending) {
+    const metadata = record(current.metadata);
+    response.pix_codigo = providerArtifacts.code || current.pix_codigo || null;
+    response.pix_qr_code_base64 = providerArtifacts.qrCodeBase64 || current.pix_qr_code_base64 || null;
+    response.ticket_url = providerArtifacts.ticketUrl || metadata.pix_ticket_url || metadata.provider_ticket_url || null;
+    response.pix_expira_em = current.pix_expira_em || current.codigo_entrega_expira_em || null;
+  }
+  if (providerFeePresent !== null) {
+    response.taxa_conferida = providerFeePresent;
+    response.revisao_financeira = reviewPending;
+    response.financiamento_comprovado = financingConfirmed;
+  }
+  // O owner/admin e usuários legados podem acompanhar estado, mas nunca recebem
+  // QR/copia-e-cola/código sem o token forte. O código exige prova de aprovação.
   if (strongToken && active) {
-    const code = await decryptCode(order.codigo_entrega_enc, String(order.id));
-    if (code) response.codigo_entrega = code;
+    const code = await decryptCode(current.codigo_entrega_enc, String(current.id));
+    if (code) {
+      // Uma baixa/cancelamento pode vencer durante a descriptografia. Não use
+      // o snapshot anterior para divulgar o segredo de um pedido encerrado.
+      const latest = await readOrder(pedidoId, comercioId);
+      const stillPaid = latest?.provedor === "offline" || ["aprovado", "approved"].includes(String(latest?.status_pagamento || "").toLowerCase());
+      const sameToken = latest && equalHex(String(latest.status_token_hash || ""), String(current.status_token_hash || ""));
+      if (latest && sameToken && !orderClosed(latest) && stillPaid && Number(latest.codigo_entrega_tentativas || 0) < 5) response.codigo_entrega = code;
+      else {
+        response.codigo_ativo = false;
+        if (latest) {
+          response.status = latest.status;
+          response.status_pagamento = latest.status_pagamento;
+          response.concluido = latest.status === "entregue" || Boolean(latest.concluido_em || latest.codigo_entrega_usado_em);
+          response.reembolso_pendente = latest.reembolso_pendente === true;
+        }
+      }
+    }
   }
   return json(response);
 }

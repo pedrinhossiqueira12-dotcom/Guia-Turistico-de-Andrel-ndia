@@ -235,7 +235,7 @@ test("HTML remove definitivamente o botão de apagar e preserva o contrato míni
   const html = fs.readFileSync("pages/catalogo.html", "utf8");
   assert.doesNotMatch(html, /Remover deste dispositivo|limparPedidoOfflineSalvo/);
   assert.match(html, /data-whatsapp="pedido"/);
-  assert.match(html, /catalogo\.js\?v=motoboy-20261006/);
+  assert.match(html, /catalogo\.js\?v=pix-20261007/);
   assert.match(source, /acao: "consultar_status", pedido_id: salvo\.pedido_id, comercio_id: comercioId/);
   assert.doesNotMatch(source, /window\.open\s*\(/);
 });

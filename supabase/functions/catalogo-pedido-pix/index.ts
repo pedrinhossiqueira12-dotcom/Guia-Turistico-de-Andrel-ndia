@@ -106,7 +106,14 @@ async function validateCatalog(comercioId: string, modalidade: string, ids: stri
     admin.from("catalogo_produtos").select("id,comercio_id,categoria_id,nome,descricao,preco,disponivel,deletado_em,catalogo_categorias!inner(ativa,deletado_em)")
       .eq("comercio_id", comercioId).in("id", ids).eq("disponivel", true).is("deletado_em", null).eq("catalogo_categorias.ativa", true).is("catalogo_categorias.deletado_em", null),
   ]);
-  if (catalogError || publishedError || productError) throw new HttpError("Falha ao validar catálogo e produtos.", 503);
+  if (catalogError || publishedError || productError) {
+    console.error("Pix catalog validation failed", {
+      catalogo: catalogError && { code: catalogError.code, message: catalogError.message },
+      publicado: publishedError && { code: publishedError.code, message: publishedError.message },
+      produtos: productError && { code: productError.code, message: productError.message },
+    });
+    throw new HttpError("Falha ao validar catálogo e produtos.", 503);
+  }
   const c = record(catalog), p = record(published);
   const modes = Array.isArray(c.modalidades) ? c.modalidades : (Array.isArray(p.modalidades) ? p.modalidades : []);
   const methods = Array.isArray(c.metodos_pagamento) ? c.metodos_pagamento : (Array.isArray(p.metodos_pagamento) ? p.metodos_pagamento : []);

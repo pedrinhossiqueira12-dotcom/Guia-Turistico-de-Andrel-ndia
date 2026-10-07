@@ -29,6 +29,8 @@
   let comprovanteOfflineMemoria = null;
   let statusOfflineAviso = false;
   let dialogoSomenteComprovante = false;
+  const PROVEDORES_PIX = new Set(["pix", "mercadopago"]);
+  const STATUS_TERMINAIS_SEM_ACAO = new Set(["cancelado", "canceled", "expirado", "expired", "estornado", "refunded", "charged_back", "contestado", "revisao_parcial"]);
 
   const $ = (id) => document.getElementById(id);
 
@@ -260,10 +262,45 @@
       && String(pedido.modalidade || "").trim());
   }
   function tokenStatusValido(token) { return STATUS_TOKEN_RE.test(String(token || "").trim()); }
+  function comprovanteEhPix(salvo) { return PROVEDORES_PIX.has(String(salvo?.provedor || "").trim().toLowerCase()); }
+  function statusComprovante(salvo) { return String(salvo?.status || "").trim().toLowerCase(); }
+  function statusPagamentoComprovante(salvo) { return String(salvo?.status_pagamento || "").trim().toLowerCase(); }
+  function comprovanteTerminal(salvo) {
+    return STATUS_TERMINAIS_SEM_ACAO.has(statusComprovante(salvo))
+      || STATUS_TERMINAIS_SEM_ACAO.has(statusPagamentoComprovante(salvo));
+  }
+  function pagamentoPixAprovado(salvo) {
+    return comprovanteEhPix(salvo) && ["aprovado", "approved"].includes(statusPagamentoComprovante(salvo));
+  }
+  function normalizarQrPix(valor) {
+    const qr = String(valor || "").trim();
+    if (!qr || qr.length > 100000) return "";
+    if (/^data:image\/(?:png|jpe?g|webp);base64,[a-z0-9+/=_-]+$/i.test(qr)) return qr;
+    return /^[a-z0-9+/=_-]+$/i.test(qr) ? qr : "";
+  }
+  function ticketMercadoPagoValido(valor) {
+    const ticket = String(valor || "").trim();
+    if (!ticket) return "";
+    try {
+      const URLCtor = window.URL || (typeof URL === "function" ? URL : null);
+      if (!URLCtor) return "";
+      const url = new URLCtor(ticket);
+      const host = String(url.hostname || "").toLowerCase();
+      const mercadoPago = host === "mercadopago.com" || host.endsWith(".mercadopago.com")
+        || host === "mercadopago.com.br" || host.endsWith(".mercadopago.com.br");
+      return url.protocol === "https:" && mercadoPago ? url.href : "";
+    } catch {
+      return "";
+    }
+  }
   function normalizarComprovanteSalvo(salvo) {
     if (!salvo || typeof salvo !== "object" || Array.isArray(salvo)) return null;
     if (!salvo.pedido_id || !Number.isFinite(Date.parse(salvo.codigo_expira_em))) return null;
-    const codigo = String(salvo.codigo_entrega || "");
+    const provedorBruto = String(salvo.provedor || "offline").trim().toLowerCase();
+    if (!["offline", ...PROVEDORES_PIX].includes(provedorBruto)) return null;
+    const pixAprovado = PROVEDORES_PIX.has(provedorBruto) && ["aprovado", "approved"].includes(String(salvo.status_pagamento || "").trim().toLowerCase());
+    const codigoBruto = String(salvo.codigo_entrega || "");
+    const codigo = PROVEDORES_PIX.has(provedorBruto) && (!pixAprovado || salvo.codigo_ativo !== true) ? "" : codigoBruto;
     const semCodigoPermitido = salvo.concluido === true || String(salvo.status || "") === "entregue"
       || STATUS_TOKEN_RE.test(String(salvo.status_token || ""));
     if (codigo && !/^\d{6}$/.test(codigo)) return null;
@@ -272,17 +309,26 @@
       pedido_id: String(salvo.pedido_id),
       codigo_entrega: codigo,
       codigo_expira_em: String(salvo.codigo_expira_em),
+      provedor: provedorBruto,
     };
     // Comprovantes antigos não têm status_token. Preserve tokens legados sem
     // permitir que um valor arbitrário seja enviado como token de leitura.
     if (typeof salvo.status_token === "string" && STATUS_TOKEN_RE.test(salvo.status_token.trim())) {
       comprovante.status_token = salvo.status_token.trim();
     }
-    for (const campo of ["provedor", "status", "status_pagamento"]) {
-      if (typeof salvo[campo] === "string" && salvo[campo].trim()) comprovante[campo] = salvo[campo].trim();
+    for (const campo of ["status", "status_pagamento"]) {
+      if (typeof salvo[campo] === "string" && salvo[campo].trim()) comprovante[campo] = salvo[campo].trim().toLowerCase();
     }
-    for (const campo of ["aceito_em", "reembolso_pendente", "codigo_ativo", "concluido"]) {
+    for (const campo of ["aceito_em", "reembolso_pendente", "codigo_ativo", "concluido", "revisao_financeira"]) {
       if (typeof salvo[campo] === "boolean" || (campo === "aceito_em" && salvo[campo])) comprovante[campo] = salvo[campo];
+    }
+    if (comprovanteEhPix(comprovante)) {
+      const pixCodigo = String(salvo.pix_codigo || "").trim();
+      const qr = normalizarQrPix(salvo.pix_qr_code_base64);
+      const ticket = ticketMercadoPagoValido(salvo.ticket_url);
+      if (pixCodigo && pixCodigo.length <= 10000) comprovante.pix_codigo = pixCodigo;
+      if (qr) comprovante.pix_qr_code_base64 = qr;
+      if (ticket) comprovante.ticket_url = ticket;
     }
     return comprovante;
   }
@@ -342,11 +388,76 @@
     if (statusOfflineAviso && $("offlinePedidoStatus")) {
       $("offlinePedidoStatus").textContent = "Não foi possível consultar o status agora. O código continua salvo até a expiração indicada.";
     }
+    if (statusOfflineAviso && $("pixPedidoBox") && !$("pixPedidoBox").hidden && $("pixPedidoStatus")) {
+      $("pixPedidoStatus").textContent = texto || "Não foi possível consultar o status agora. O Pix continua disponível enquanto não expirar.";
+    }
   }
   function comprovantePodeExibirCodigo(salvo) {
-    if (!salvo?.codigo_entrega || salvo.codigo_ativo === false || salvo.concluido === true || ["cancelado", "estornado", "entregue"].includes(String(salvo.status || ""))) return false;
-    if (["pix", "mercadopago"].includes(salvo.provedor)) return String(salvo.status_pagamento || "") === "aprovado";
+    if (!salvo?.codigo_entrega || salvo.codigo_ativo === false || salvo.concluido === true
+      || comprovanteTerminal(salvo) || statusComprovante(salvo) === "entregue" || comprovanteExpirado(salvo)) return false;
+    if (comprovanteEhPix(salvo)) return pagamentoPixAprovado(salvo) && salvo.codigo_ativo === true;
     return true;
+  }
+  function atualizarTextoExpiracao(salvo) {
+    const expiraEm = Date.parse(salvo?.codigo_expira_em || "");
+    const formatado = Number.isFinite(expiraEm)
+      ? new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(new Date(expiraEm))
+      : "";
+    const expirado = comprovanteExpirado(salvo);
+    const offlineExpiracao = $("offlinePedidoExpiracao");
+    if (offlineExpiracao) {
+      offlineExpiracao.textContent = formatado
+        ? `${expirado ? "Código expirado em" : "Código de entrega expira em"} ${formatado}.`
+        : "A validade do código será informada pelo comércio.";
+    }
+    const pixExpiracao = $("pixPedidoExpiracao");
+    if (pixExpiracao) {
+      pixExpiracao.textContent = formatado
+        ? `${expirado ? "Este Pix expirou em" : "Este Pix expira em"} ${formatado}.`
+        : "A validade deste Pix será informada pelo provedor.";
+    }
+  }
+  function atualizarPixComprovante(salvo, exibir) {
+    const box = $("pixPedidoBox");
+    if (!box) return;
+    box.hidden = !exibir;
+    const codigo = String(salvo?.pix_codigo || "").trim();
+    const textarea = $("pixPedidoCodigo");
+    const label = $("pixPedidoCodigoLabel");
+    const copiar = $("copiarPixPedido");
+    if (textarea) {
+      textarea.value = exibir ? codigo : "";
+      textarea.hidden = !exibir || !codigo;
+    }
+    if (label) label.hidden = !exibir || !codigo;
+    if (copiar) {
+      copiar.disabled = !exibir || !codigo;
+      copiar.hidden = !exibir || !codigo;
+    }
+    const qr = $("pixPedidoQr");
+    const qrValue = normalizarQrPix(salvo?.pix_qr_code_base64);
+    if (qr) {
+      if (exibir && qrValue) {
+        qr.src = /^data:image\//i.test(qrValue) ? qrValue : `data:image/png;base64,${qrValue}`;
+        qr.hidden = false;
+      } else {
+        qr.src = "";
+        qr.hidden = true;
+      }
+    }
+    const ticket = $("abrirTicketPix");
+    const ticketUrl = ticketMercadoPagoValido(salvo?.ticket_url);
+    if (ticket) {
+      ticket.href = exibir && ticketUrl ? ticketUrl : "";
+      ticket.hidden = !exibir || !ticketUrl;
+    }
+    if (exibir && $("pixPedidoStatus")) {
+      $("pixPedidoStatus").textContent = statusOfflineAviso
+        ? "Não foi possível consultar o status agora. O Pix continua disponível enquanto não expirar."
+        : codigo || qrValue || ticketUrl
+          ? "Pix gerado. Conclua o pagamento pelo seu banco; a geração não confirma o pagamento."
+          : "Pix registrado. Aguarde os dados do provedor ou tente consultar novamente.";
+    }
   }
   function documentoVisivel() {
     return typeof document.visibilityState !== "string" || document.visibilityState === "visible";
@@ -359,7 +470,7 @@
     contextoConsultaStatusOffline = null;
   }
   function agendarConsultaStatusOffline(salvo, atraso = INTERVALO_STATUS_OFFLINE) {
-    if (!salvo || !documentoVisivel() || consultaStatusOfflineTimer !== null) return;
+    if (!salvo || !documentoVisivel() || consultaStatusOfflineTimer !== null || comprovanteTerminal(salvo) || comprovanteExpirado(salvo)) return;
     consultaStatusOfflineTimer = window.setTimeout(() => {
       consultaStatusOfflineTimer = null;
       consultarStatusOffline(salvo);
@@ -380,19 +491,37 @@
     const apenasComprovante = opcoes.somenteComprovante === true || !pedidoEmRevisaoValido();
     dialogoSomenteComprovante = apenasComprovante;
     const podeExibir = comprovantePodeExibirCodigo(salvo);
-    const status = salvo.status === "cancelado"
-      ? "Pedido cancelado. Se o Pix tiver sido aprovado, o reembolso permanece pendente de confirmação."
-      : salvo.provedor === "pix" && !podeExibir
-        ? "O código ficará disponível somente depois da aprovação real do Pix."
+    const expirado = comprovanteExpirado(salvo);
+    const terminal = comprovanteTerminal(salvo);
+    const pixAprovado = pagamentoPixAprovado(salvo);
+    const exibirPix = comprovanteEhPix(salvo) && !pixAprovado && !terminal && !expirado;
+    const status = expirado || ["expirado", "expired"].includes(statusComprovante(salvo))
+      ? "Este pedido expirou. Não é possível gerar um novo pagamento por este comprovante."
+      : terminal
+        ? "Pedido cancelado. Se o Pix tiver sido aprovado, o reembolso permanece pendente de confirmação."
+        : exibirPix
+          ? "Pix pendente. Conclua o pagamento pelo seu banco; a geração não confirma o pagamento."
+        : pixAprovado && !podeExibir
+          ? (salvo.revisao_financeira === true ? "Pagamento aprovado. O código aguarda a conferência financeira; entre em contato com o comércio." : "Pagamento aprovado. Aguardando a liberação do código de entrega.")
         : salvo.concluido === true
           ? "Pedido concluído. O código foi removido; o comprovante permanece salvo neste dispositivo."
-          : statusOfflineAviso
+            : statusOfflineAviso
             ? "Não foi possível consultar o status agora. O código continua salvo até a expiração indicada."
             : "Mostre este código ao entregador somente no momento da entrega.";
     if ($("offlinePedidoStatus")) $("offlinePedidoStatus").textContent = status;
     if ($("offlinePedidoCodigo")) $("offlinePedidoCodigo").textContent = podeExibir ? salvo.codigo_entrega : "";
-    if ($("offlinePedidoBox")) $("offlinePedidoBox").hidden = false;
-    if ($("pixPedidoBox")) $("pixPedidoBox").hidden = true;
+    if ($("offlinePedidoBox")) $("offlinePedidoBox").hidden = exibirPix;
+    if ($("copiarCodigoOffline")) {
+      $("copiarCodigoOffline").hidden = !podeExibir;
+      $("copiarCodigoOffline").disabled = !podeExibir;
+    }
+    atualizarTextoExpiracao(salvo);
+    atualizarPixComprovante(salvo, exibirPix);
+    if ($("pagarPix")) {
+      // A geração só pertence a uma revisão nova; reabrir um comprovante nunca cria cobrança.
+      $("pagarPix").hidden = true;
+      $("pagarPix").disabled = true;
+    }
     if ($("criarPedidoOffline")) $("criarPedidoOffline").hidden = true;
     atualizarBotoesCancelamento(salvo);
     atualizarAcoesComprovante(apenasComprovante);
@@ -416,17 +545,32 @@
   }
   function mesclarStatusComprovante(salvo, data) {
     const proximo = { ...salvo };
-    const terminalAtual = salvo.concluido === true || ["entregue", "cancelado", "estornado"].includes(String(salvo.status || ""));
-    const respostaTerminal = data.concluido === true || ["entregue", "cancelado", "estornado"].includes(String(data.status || ""));
+    const terminalAtual = salvo.concluido === true || comprovanteTerminal(salvo) || statusComprovante(salvo) === "entregue";
+    const respostaTerminal = data.concluido === true || STATUS_TERMINAIS_SEM_ACAO.has(String(data.status || "").trim().toLowerCase()) || String(data.status || "").trim().toLowerCase() === "entregue";
     if (terminalAtual && !respostaTerminal) return proximo;
-    for (const campo of ["provedor", "status", "status_pagamento", "aceito_em", "codigo_expira_em"]) {
-      if (typeof data[campo] === "string" && data[campo].trim()) proximo[campo] = data[campo].trim();
+    for (const campo of ["status", "status_pagamento", "aceito_em", "codigo_expira_em"]) {
+      if (typeof data[campo] === "string" && data[campo].trim()) proximo[campo] = campo === "aceito_em" || campo === "codigo_expira_em"
+        ? data[campo].trim() : data[campo].trim().toLowerCase();
     }
-    for (const campo of ["reembolso_pendente", "codigo_ativo", "concluido"]) {
-      if (typeof data[campo] === "boolean") proximo[campo] = data[campo];
+    if (typeof data.provedor === "string" && PROVEDORES_PIX.has(data.provedor.trim().toLowerCase())) {
+      proximo.provedor = data.provedor.trim().toLowerCase();
+    }
+    for (const campo of ["reembolso_pendente", "codigo_ativo", "concluido", "revisao_financeira"]) {
+      if (typeof data[campo] === "boolean") {
+        proximo[campo] = data[campo];
+        if (campo === "codigo_ativo" && data[campo] === false) proximo.codigo_entrega = "";
+      }
     }
     if (tokenStatusValido(salvo.status_token) && /^\d{6}$/.test(String(data.codigo_entrega || ""))) {
       proximo.codigo_entrega = String(data.codigo_entrega);
+    }
+    if (comprovanteEhPix(proximo)) {
+      const pixCodigo = String(data.pix_codigo || "").trim();
+      const qr = normalizarQrPix(data.pix_qr_code_base64);
+      const ticket = ticketMercadoPagoValido(data.ticket_url);
+      if (pixCodigo && pixCodigo.length <= 10000) proximo.pix_codigo = pixCodigo;
+      if (qr) proximo.pix_qr_code_base64 = qr;
+      if (ticket) proximo.ticket_url = ticket;
     }
     return proximo;
   }
@@ -456,7 +600,8 @@
     }
   }
   function atualizarBotoesCancelamento(salvo) {
-    const permitido = Boolean(salvo && tokenStatusValido(salvo.status_token) && salvo.concluido !== true && salvo.status !== "cancelado");
+    const permitido = Boolean(salvo && tokenStatusValido(salvo.status_token) && salvo.concluido !== true
+      && !comprovanteTerminal(salvo) && !comprovanteExpirado(salvo));
     for (const id of ["cancelarPedidoOffline", "cancelarPedidoNoDialog"]) {
       const botao = $(id);
       if (botao) botao.hidden = !permitido;
@@ -496,7 +641,7 @@
     }
   }
   async function consultarStatusOffline(salvo) {
-    if (!salvo || !comercioId || !documentoVisivel()) return;
+    if (!salvo || !comercioId || !documentoVisivel() || comprovanteTerminal(salvo) || comprovanteExpirado(salvo)) return;
     const chave = `${salvo.pedido_id}:${salvo.codigo_expira_em}:${salvo.status_token || ""}`;
     if (consultaStatusOfflineEmAndamento && consultaStatusOfflineChave === chave) return consultaStatusOfflineEmAndamento;
     const versao = comprovanteOfflineVersao;
@@ -521,13 +666,17 @@
         }
         const atualizado = mesclarStatusComprovante(salvo, data);
         if (JSON.stringify(atualizado) !== JSON.stringify(salvo)) salvarComprovanteOffline(atualizado);
-        if (data.concluido === true || String(data.status || "") === "entregue") {
-          const atual = lerPedidoOfflineSalvo() || atualizado;
+        const atual = lerPedidoOfflineSalvo() || atualizado;
+        atualizarAvisoStatusOffline(false);
+        if ($("confirmarPedidoDialog")?.open && atual.pedido_id === salvo.pedido_id) {
+          mostrarComprovanteOffline(atual, { somenteComprovante: dialogoSomenteComprovante });
+        }
+        if (data.concluido === true || String(data.status || "").trim().toLowerCase() === "entregue") {
           concluirComprovanteOffline(atual);
           return;
         }
-        atualizarAvisoStatusOffline(false);
-        agendarConsultaStatusOffline(salvo);
+        if (comprovanteTerminal(atual) || comprovanteExpirado(atual)) return;
+        agendarConsultaStatusOffline(atual);
       } catch {
         if (!contextoAindaAtual()) return;
         atualizarAvisoStatusOffline(true);
@@ -572,7 +721,7 @@
     };
     const avisoAnterior = statusOfflineAviso;
     atualizarAvisoStatusOffline(avisoAnterior);
-    consultarStatusOffline(salvo);
+    if (!comprovanteTerminal(salvo) && !comprovanteExpirado(salvo)) consultarStatusOffline(salvo);
   }
 
   async function criarPedidoOffline() {
@@ -602,7 +751,7 @@
   }
 
   async function gerarPixPedido() {
-    if (!pedidoEmRevisao || !comercioId || !clienteSupabase()) return;
+    if (!pedidoEmRevisao || pedidoEmRevisao.pixGerado === true || !comercioId || !clienteSupabase()) return;
     const botao = $("pagarPix");
     const box = $("pixPedidoBox");
     botao.disabled = true;
@@ -621,29 +770,21 @@
         },
       });
       if (error || !data?.success) throw new Error(data?.mensagem || "Não foi possível gerar o Pix.");
-      $("pixPedidoStatus").textContent = "Pix gerado. Conclua o pagamento pelo seu banco.";
-      $("pixPedidoCodigo").value = data.pix_codigo || "";
-      $("copiarPixPedido").disabled = !data.pix_codigo;
-      if (data.pix_qr_code_base64) {
-        $("pixPedidoQr").src = `data:image/png;base64,${data.pix_qr_code_base64}`;
-        $("pixPedidoQr").hidden = false;
-      }
-      if (data.ticket_url) {
-        $("abrirTicketPix").href = data.ticket_url;
-        $("abrirTicketPix").hidden = false;
-      }
       pedidoEmRevisao = { ...pedidoEmRevisao, pixGerado: true };
       const pixReceipt = {
         pedido_id: data.pedido_id,
-        codigo_entrega: /^\d{6}$/.test(String(data.codigo_entrega || "")) ? String(data.codigo_entrega) : "",
+        // A criação do Pix não prova baixa nem libera o segredo de entrega.
+        codigo_entrega: "",
         codigo_expira_em: data.codigo_expira_em || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-        provedor: "pix",
+        provedor: PROVEDORES_PIX.has(String(data.provedor || "").trim().toLowerCase()) ? String(data.provedor).trim().toLowerCase() : "pix",
         status: data.status || "aguardando_pagamento",
-        // A resposta de criação nunca prova baixa; consultar_status consulta o provedor.
-        status_pagamento: "pendente",
+        status_pagamento: data.status_pagamento || "pendente",
         codigo_ativo: false,
         concluido: false,
         reembolso_pendente: false,
+        pix_codigo: String(data.pix_codigo || "").trim(),
+        pix_qr_code_base64: normalizarQrPix(data.pix_qr_code_base64),
+        ticket_url: ticketMercadoPagoValido(data.ticket_url),
       };
       if (tokenStatusValido(data.status_token)) pixReceipt.status_token = String(data.status_token).trim();
       if (pixReceipt.pedido_id && tokenStatusValido(pixReceipt.status_token)) {
@@ -651,7 +792,10 @@
         atualizarPedidoOfflineRecente();
         consultarStatusOffline(pixReceipt);
       }
+      statusOfflineAviso = false;
+      mostrarComprovanteOffline(normalizarComprovanteSalvo(pixReceipt) || pixReceipt);
       botao.hidden = true;
+      botao.disabled = true;
       atualizarAcoesComprovante(false);
     } catch (error) {
       box.hidden = false;
@@ -837,9 +981,15 @@
       if ($("whatsappErro")) $("whatsappErro").hidden = true;
       const offline = cliente.pagamento !== "pix";
       $("pagarPix").hidden = offline;
+      $("pagarPix").disabled = false;
       $("criarPedidoOffline").hidden = !offline;
       $("pixPedidoBox").hidden = true;
       $("offlinePedidoBox").hidden = true;
+      atualizarPixComprovante({}, false);
+      if ($("copiarCodigoOffline")) {
+        $("copiarCodigoOffline").hidden = true;
+        $("copiarCodigoOffline").disabled = true;
+      }
       atualizarAcoesComprovante(false);
       atualizarPedidoOfflineRecente();
     });

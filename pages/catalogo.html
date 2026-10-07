@@ -47,8 +47,8 @@
       </section>
 
       <section id="offlinePedidoRecente" class="payment-notice" role="status" hidden>
-        <strong>Você tem um pedido presencial recente</strong>
-        <p>O código fica salvo somente neste dispositivo até expirar.</p>
+        <strong>Você tem um pedido recente</strong>
+        <p>O comprovante fica salvo somente neste dispositivo até expirar.</p>
         <p id="offlinePedidoStatusAviso" role="alert" hidden>Não foi possível consultar o status agora. O código continua salvo.</p>
         <div class="dialog-actions">
           <button id="abrirPedidoOfflineSalvo" class="secondary-button" type="button">Ver código do pedido</button>
@@ -92,7 +92,7 @@
       <button id="limparCarrinho" class="text-button" type="button" hidden>Limpar sacola</button>
       <div class="total-line"><span>Total dos produtos</span><strong id="cartTotal">R$ 0,00</strong></div>
       <button id="irCheckout" class="primary-button" type="button" disabled>Finalizar pedido</button>
-      <p class="fine-print">Nenhum pagamento é feito pelo site.</p>
+      <p class="fine-print">Pix pago pelo seu banco; dinheiro ou cartão combinados com o comércio.</p>
     </div>
   </aside>
 
@@ -135,32 +135,33 @@
     <p id="whatsappErro" class="inline-message error-message" role="alert" hidden></p>
     <div class="dialog-actions">
       <button id="voltarCheckout" class="secondary-button" type="button">Voltar</button>
-      <button id="pagarPix" class="primary-button" type="button">Gerar Pix e pagar</button>
+      <button id="pagarPix" class="primary-button" type="button">Gerar Pix</button>
       <button id="criarPedidoOffline" class="primary-button" type="button" hidden>Enviar pedido e receber código</button>
       <button id="enviarWhatsApp" class="secondary-button" type="button" data-whatsapp="pedido" hidden>Continuar pelo WhatsApp</button>
     </div>
     <div id="offlinePedidoBox" class="payment-notice" hidden>
-      <strong>Pedido registrado</strong>
-      <p id="offlinePedidoStatus">Mostre este código ao entregador somente no momento da entrega.</p>
-      <p class="delivery-code" id="offlinePedidoCodigo"></p>
-      <button id="copiarCodigoOffline" class="secondary-button" type="button">Copiar código</button><br>
-      <button id="cancelarPedidoNoDialog" class="secondary-button danger-button" type="button" hidden>Cancelar pedido</button>
-      <small>Informe o código somente depois de receber o produto. Somente o comércio ou um entregador autorizado pode dar baixa. O código expira em 48 horas e só pode ser usado uma vez.</small>
-    </div>
-    <div id="pixPedidoBox" class="payment-notice" hidden>
-      <strong>Pix do pedido</strong>
-      <p id="pixPedidoStatus">Preparando o código…</p>
-      <img id="pixPedidoQr" alt="QR Code Pix do pedido" hidden style="max-width:260px">
-      <label for="pixPedidoCodigo">Pix copia e cola</label>
-      <textarea id="pixPedidoCodigo" rows="4" readonly></textarea>
-      <button id="copiarPixPedido" class="secondary-button" type="button" disabled>Copiar Pix</button>
-      <a id="abrirTicketPix" href="#" target="_blank" rel="noopener noreferrer" hidden>Abrir instruções do Mercado Pago</a>
-    </div>
+        <strong>Pedido registrado</strong>
+        <p id="offlinePedidoStatus">Mostre este código ao entregador somente no momento da entrega.</p>
+        <p class="delivery-code" id="offlinePedidoCodigo"></p>
+        <button id="copiarCodigoOffline" class="secondary-button" type="button" hidden>Copiar código</button><br>
+        <button id="cancelarPedidoNoDialog" class="secondary-button danger-button" type="button" hidden>Cancelar pedido</button>
+        <small id="offlinePedidoExpiracao">A validade do código será informada pelo comércio.</small>
+      </div>
+      <div id="pixPedidoBox" class="payment-notice" hidden>
+        <strong>Pix do pedido</strong>
+        <p id="pixPedidoStatus">Preparando o código…</p>
+        <img id="pixPedidoQr" alt="QR Code Pix do pedido" hidden style="max-width:260px">
+        <label id="pixPedidoCodigoLabel" for="pixPedidoCodigo" hidden>Pix copia e cola</label>
+        <textarea id="pixPedidoCodigo" rows="4" readonly hidden></textarea>
+        <button id="copiarPixPedido" class="secondary-button" type="button" disabled hidden>Copiar Pix</button>
+        <a id="abrirTicketPix" href="#" target="_blank" rel="noopener noreferrer" hidden>Abrir instruções do Mercado Pago</a>
+        <small id="pixPedidoExpiracao">A validade deste Pix será informada pelo provedor.</small>
+      </div>
   </dialog>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="../js/login.js"></script>
   <script src="../js/catalogo-utils.js"></script>
-  <script src="../js/catalogo.js?v=motoboy-20261006"></script>
+  <script src="../js/catalogo.js?v=pix-20261007"></script>
 </body>
 </html>
