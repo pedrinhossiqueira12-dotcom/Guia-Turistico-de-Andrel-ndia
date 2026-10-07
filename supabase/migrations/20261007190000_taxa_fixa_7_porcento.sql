@@ -25,8 +25,9 @@ ALTER TABLE public.catalogo_pedidos
   CHECK (
     taxa_plataforma_centavos =
       CASE
-        WHEN modalidade = 'entrega' THEN round(subtotal_produtos_centavos * 0.05)::integer
-        ELSE round(subtotal_produtos_centavos * 0.07)::integer
+        WHEN versao_financeira = 2 AND modalidade = 'entrega' THEN round(subtotal_produtos_centavos * 0.05)::integer
+        WHEN versao_financeira = 2 AND modalidade <> 'entrega' THEN round(subtotal_produtos_centavos * 0.07)::integer
+        ELSE round(subtotal_produtos_centavos * 0.05)::integer
       END
     AND taxa_motoboy_centavos >= 0
     AND taxa_total_centavos = taxa_plataforma_centavos + taxa_motoboy_centavos
