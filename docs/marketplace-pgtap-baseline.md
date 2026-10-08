@@ -29,7 +29,16 @@ No banco descartável que já executa as 28 migrações, foram acrescentados doi
 
 Ambos passaram no workflow das execuções `37717937694` e `37717941007`, commit `d1c1b9535131b75161b798e3e3ebedadbc67b43b`.
 
-**Ainda pendente:** `supabase test db` nativo com todas as dependências gerenciadas, verificação de conexões concorrentes simultâneas, chamadas reais ao provedor de pagamento em sandbox e aceite/autorização de implantação em produção. A proteção contra execução remota permanece obrigatória.
+### Corridas transacionais genuinamente simultâneas (aprovadas)
+
+No job `complete-chain-postgres-isolated`, após o pgTAP e os cenários Pix/offline revertidos, o CI clona `catalogo_ci` para o banco descartável `catalogo_race_ci` e o destrói automaticamente ao final. O script `scripts/validacao-pagamentos/test-courier-concurrency.py` utiliza **três conexões independentes**: a primeira bloqueia a linha do pedido com `SELECT ... FOR UPDATE`; as outras duas chamam as RPCs reais simultaneamente. Somente quando o PostgreSQL confirma **duas sessões esperando um Lock** o controlador libera a linha.
+
+- Duas corridas de motoboys foram aprovadas: **exatamente uma atribuição** e HTTP 409 para o segundo, antes e depois de desistência/reoferta. Somente o motoboy efetivamente atribuído coletou e confirmou a entrega, com **um único crédito de 2% retido**.
+- Duas corridas simultâneas de **cancelamento de comprador x aceite do comércio** foram aprovadas: em uma o comerciante aceitou primeiro, na outra o comprador cancelou primeiro. Em ambos os casos o perdedor recebeu HTTP 409 e o banco confirmou status, ocorrência, marcação de reembolso e comissão da plataforma coerentes, sem duplicatas.
+
+Evidência: commit `0896c858ee42171aa7655c2d2b6f442def5c983e`, execução `37718565249`, job `113120670877` (**SUCCESS**). Essa comprovação é de **concorrência real entre sessões PostgreSQL**, não de usuários reais ou testes de carga do frontend.
+
+**Ainda pendente:** `supabase test db` nativo com todas as dependências gerenciadas, chamadas reais ao provedor de pagamento em sandbox, homologação da interface/aplicativo e aceite/autorização de implantação em produção. A proteção contra execução remota permanece obrigatória.
 
 ## Bloqueios a resolver
 
