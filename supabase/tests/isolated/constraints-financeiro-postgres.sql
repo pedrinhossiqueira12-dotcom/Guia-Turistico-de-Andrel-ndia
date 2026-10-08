@@ -20,7 +20,7 @@ CREATE TABLE public.catalogo_comissoes_offline (
 
 -- __CONSTRAINTS_FROM_REAL_MIGRATION__
 
-DO $$
+DO $fixture$
 DECLARE
   v_subtotal integer;
   v_modalidade text;
@@ -109,9 +109,9 @@ BEGIN
     RAISE EXCEPTION 'ERRO: V1 foi alterada para 7 por cento';
   EXCEPTION WHEN check_violation THEN NULL;
   END;
-END $;
+END $fixture$;
 
-DO $
+DO $verify$
 BEGIN
   IF (SELECT count(*) FROM public.catalogo_pedidos) <> 50002 THEN
     RAISE EXCEPTION 'Quantidade inesperada de pedidos sinteticos';
@@ -128,6 +128,6 @@ BEGIN
   ) THEN
     RAISE EXCEPTION 'Snapshots sinteticos inconsistentes apos testes negativos';
   END IF;
-END $;
+END $verify$;
 
 SELECT 'PASS: restricoes reais de pedidos e comissoes offline (50002 linhas por tabela)' AS resultado;
