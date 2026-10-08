@@ -108,9 +108,9 @@ jobs:
         with:
           deno-version: v2.x
       - name: Type-check sandbox-only payouts adapter
-        run: deno check supabase/functions/_shared/catalogo-payouts-sandbox-v2.ts supabase/functions/_shared/catalogo-payouts-worker-sandbox-v2.ts
+        run: deno check supabase/functions/_shared/catalogo-payouts-sandbox-v2.ts supabase/functions/_shared/catalogo-payouts-worker-sandbox-v2.ts supabase/functions/catalogo-entregas/index.ts
       - name: Test financial snapshots without database access
-        run: deno test --no-check --allow-read=supabase/functions supabase/functions/tests/catalogo-financeiro.test.ts supabase/functions/tests/catalogo-checkouts-contract.test.ts supabase/functions/tests/catalogo-seguranca-pagamentos.test.ts supabase/functions/tests/catalogo-webhook-identificacao.test.ts supabase/functions/tests/catalogo-fatura-provedor.test.ts supabase/functions/tests/catalogo-payouts-sandbox.test.ts supabase/functions/tests/catalogo-payouts-worker-sandbox.test.ts
+        run: deno test --no-check --allow-read=supabase/functions supabase/functions/tests/catalogo-financeiro.test.ts supabase/functions/tests/catalogo-checkouts-contract.test.ts supabase/functions/tests/catalogo-seguranca-pagamentos.test.ts supabase/functions/tests/catalogo-webhook-identificacao.test.ts supabase/functions/tests/catalogo-fatura-provedor.test.ts supabase/functions/tests/catalogo-payouts-sandbox.test.ts supabase/functions/tests/catalogo-payouts-worker-sandbox.test.ts supabase/functions/tests/catalogo-pix-chave-tipado.test.ts
 
   edge-http-mock-tests:
     name: Real Edge HTTP handlers with fake provider and blocked network (Deno)
