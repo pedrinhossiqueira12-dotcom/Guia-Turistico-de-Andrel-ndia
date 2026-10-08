@@ -322,6 +322,73 @@ BEGIN
   END IF;
 END $test_saque_mensal$;
 
+-- Somente no PostgreSQL CI descartável: altera temporariamente a remuneração
+-- fictícia para R$ 12,34 e testa a RESERVA. SAVEPOINT restaura o snapshot original.
+SAVEPOINT payout_reserva_fake;
+UPDATE public.catalogo_remuneracoes_v2 SET valor_centavos=1234
+ WHERE pedido_id='00000000-0000-4000-8000-000000000052';
+UPDATE public.catalogo_solicitacao_saque_itens_v2 SET valor_centavos=1234
+ WHERE remuneracao_id=(SELECT id FROM public.catalogo_remuneracoes_v2
+ WHERE pedido_id='00000000-0000-4000-8000-000000000052');
+UPDATE public.catalogo_solicitacoes_saque_v2 SET valor_centavos=1234
+ WHERE motoboy_id='00000000-0000-4000-8000-000000000042';
+DO $test_payout_reserva$
+DECLARE v jsonb; v_repetido jsonb; v_intent uuid; v_blocked boolean:=false;
+BEGIN
+  IF pg_catalog.has_function_privilege('anon',
+       'public.catalogo_reservar_payout_v2(uuid,text)','EXECUTE')
+     OR pg_catalog.has_function_privilege('authenticated',
+       'public.catalogo_marcar_envio_payout_v2(uuid)','EXECUTE') THEN
+    RAISE EXCEPTION 'RPC privada de transferência exposta na Data API pública';
+  END IF;
+  v := public.catalogo_reservar_payout_v2(
+    (SELECT id FROM public.catalogo_solicitacoes_saque_v2
+       WHERE motoboy_id='00000000-0000-4000-8000-000000000042'),
+    'EMAIL');
+  IF (v->>'ok')::boolean IS DISTINCT FROM true OR
+     (v->>'idempotente')::boolean IS DISTINCT FROM false OR
+     (v->>'valor_centavos')::bigint <> 1234 OR
+     (v->>'reenviar_permitido')::boolean IS DISTINCT FROM false THEN
+     RAISE EXCEPTION 'Reserva inválida em PostgreSQL CI: %', v;
+  END IF;
+  v_intent := (v->>'intent_id')::uuid;
+  v_repetido := public.catalogo_reservar_payout_v2(
+    (SELECT id FROM public.catalogo_solicitacoes_saque_v2
+       WHERE motoboy_id='00000000-0000-4000-8000-000000000042'),
+    'EMAIL');
+  IF (v_repetido->>'idempotente')::boolean IS DISTINCT FROM true OR
+     (v_repetido->>'intent_id')::uuid IS DISTINCT FROM v_intent OR
+     (SELECT count(*) FROM public.catalogo_payout_intents_v2) <> 1 THEN
+    RAISE EXCEPTION 'Retry criou payout duplicado: %', v_repetido;
+  END IF;
+  v := public.catalogo_marcar_envio_payout_v2(v_intent);
+  IF (v->>'ok')::boolean IS DISTINCT FROM true OR
+     (SELECT tentativas FROM public.catalogo_payout_intents_v2 WHERE id=v_intent) <> 1 THEN
+    RAISE EXCEPTION 'Primeira tentativa não gravada antes do envio: %', v;
+  END IF;
+  v := public.catalogo_marcar_envio_payout_v2(v_intent);
+  IF (v->>'http_status')::integer <> 409 THEN
+    RAISE EXCEPTION 'Retry pós-envio não foi bloqueado: %', v;
+  END IF;
+  BEGIN
+    UPDATE public.catalogo_remuneracoes_v2 SET status='pago'
+      WHERE pedido_id='00000000-0000-4000-8000-000000000052';
+  EXCEPTION WHEN OTHERS THEN
+    v_blocked := true;
+  END;
+  IF NOT v_blocked THEN
+    RAISE EXCEPTION 'Crédito reservado foi pago manualmente em duplicidade';
+  END IF;
+  UPDATE public.catalogo_remuneracoes_v2 SET status='estornado'
+    WHERE pedido_id='00000000-0000-4000-8000-000000000052';
+  IF (SELECT status FROM public.catalogo_payout_intents_v2
+      WHERE id=v_intent) <> 'em_analise' THEN
+    RAISE EXCEPTION 'Estorno após reserva não colocou transferência em revisão';
+  END IF;
+END $test_payout_reserva$;
+ROLLBACK TO SAVEPOINT payout_reserva_fake;
+RELEASE SAVEPOINT payout_reserva_fake;
+
 -- Estorno simulado antes do saque impede o crédito anterior de permanecer disponível.
 DO $test_refund$
 DECLARE v jsonb;
