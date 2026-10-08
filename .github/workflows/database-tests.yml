@@ -23,6 +23,27 @@ jobs:
       - name: Test financial snapshots without database access
         run: deno test --no-check --allow-read=supabase/functions supabase/functions/tests/catalogo-financeiro.test.ts supabase/functions/tests/catalogo-checkouts-contract.test.ts supabase/functions/tests/catalogo-seguranca-pagamentos.test.ts supabase/functions/tests/catalogo-webhook-identificacao.test.ts supabase/functions/tests/catalogo-fatura-provedor.test.ts
 
+  edge-http-mock-tests:
+    name: Real Edge HTTP handlers with fake provider and blocked network (Deno)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Verify no production URLs or credentials in environment
+        run: |
+          test -z "${SUPABASE_URL:-}"
+          test -z "${SUPABASE_SERVICE_ROLE_KEY:-}"
+          test -z "${SUPABASE_SECRET_KEYS:-}"
+          test -z "${MP_PLATFORM_ACCESS_TOKEN:-}"
+          test -z "${MP_MARKETPLACE_WEBHOOK_SECRET:-}"
+          test -z "${DATABASE_URL:-}"
+      - name: Exercise Edge functions without listening sockets or network permission
+        run: |
+          deno test --no-check --allow-env --allow-read=supabase/functions \
+            supabase/functions/tests/catalogo-edge-http.test.ts
+
   legacy-baseline-smoke:
     name: Legacy baseline and first migration (disposable PostgreSQL)
     runs-on: ubuntu-latest
