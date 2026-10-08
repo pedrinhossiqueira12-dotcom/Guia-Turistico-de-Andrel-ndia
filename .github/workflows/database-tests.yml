@@ -515,6 +515,24 @@ jobs:
                OR (SELECT count(*) FROM public.catalogo_pagamentos) <> 0 THEN
               RAISE EXCEPTION 'Unexpected real-looking data in disposable test database';
             END IF;
+            -- O CHECK original exigia 5% ate nas retiradas V2; ele deve
+            -- desaparecer APENAS apos a migration pendente substituir as
+            -- garantias por regra diferenciada V1 (5%) / V2 (7%).
+            IF EXISTS (
+                 SELECT 1 FROM pg_constraint
+                  WHERE conrelid='public.catalogo_pedidos'::regclass
+                    AND conname='catalogo_pedidos_check1'
+               )
+               OR NOT EXISTS (
+                 SELECT 1 FROM pg_constraint
+                  WHERE conrelid='public.catalogo_pedidos'::regclass
+                    AND conname='catalogo_pedidos_taxas_v2_check'
+                    AND contype='c'
+                    AND pg_get_constraintdef(oid) LIKE '%0.05%'
+                    AND pg_get_constraintdef(oid) LIKE '%0.07%'
+               ) THEN
+              RAISE EXCEPTION 'CHECK legado 5%% nao foi substituido pela regra V1/V2';
+            END IF;
             IF (SELECT count(*) FROM pg_extension WHERE extname = 'pg_cron') <> 0
                OR to_regclass('cron.job') IS NOT NULL THEN
               RAISE EXCEPTION 'Isolated database must not have scheduled jobs';
