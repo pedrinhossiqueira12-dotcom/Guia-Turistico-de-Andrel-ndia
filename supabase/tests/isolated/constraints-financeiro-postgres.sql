@@ -6,7 +6,7 @@ BEGIN
      OR EXISTS (
        SELECT 1 FROM information_schema.tables
         WHERE table_schema='public'
-          AND table_name IN ('catalogo_pedidos','catalogo_comissoes_offline','catalogo_fluxo_config')
+          AND table_name IN ('catalogo_pedidos','catalogo_comissoes_offline')
      )
   THEN
     RAISE EXCEPTION 'Fixture financeira exige banco catalogo_ci vazio e usuario postgres';
