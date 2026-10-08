@@ -53,7 +53,8 @@
     state.data = null;
     state.availableCredits = [];
     $("operationPanel").hidden = true;
-    $("operationLoginCard").hidden = !state.session;
+    // Sem autorização, o painel fica fechado, mas a entrada nunca desaparece.
+    $("operationLoginCard").hidden = false;
     $("operationLogout").hidden = true;
     $("listaOcorrencias").innerHTML = "";
     $("listaRepasses").innerHTML = "";
