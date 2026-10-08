@@ -94,7 +94,7 @@ GRANT EXECUTE ON FUNCTION public.catalogo_motoboy_saque_mensal_v2(uuid,text) TO 
 -- O repasse administrativo existente é o ÚNICO ponto que comprova um pagamento.
 -- A solicitação acompanha o status sem jamais executar transferência.
 CREATE FUNCTION public.catalogo_conciliar_solicitacao_saque_v2()
-RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
 DECLARE v_solicitacao uuid;
 BEGIN
   IF NEW.status='pago' AND NEW.repasse_id IS NOT NULL
@@ -117,7 +117,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END;
-$;
+$$;
 CREATE TRIGGER catalogo_conciliar_solicitacao_saque_v2
 AFTER UPDATE OF status,repasse_id ON public.catalogo_remuneracoes_v2
 FOR EACH ROW EXECUTE FUNCTION public.catalogo_conciliar_solicitacao_saque_v2();
