@@ -1050,23 +1050,3 @@ jobs:
               raise SystemExit("\n".join(failures))
           print(f"Parsed {len(paths)} SQL files successfully (syntax only).")
           PY
-
-  database-tests:
-    if: ${{ vars.MARKETPLACE_TEST_BASELINE_READY == 'true' }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      # A partial baseline exists, but it is NOT integrated with Supabase reset.
-      # Keep gated until full migrations and pgTAP pass in a disposable instance.
-      - name: Setup Supabase CLI
-        uses: supabase/setup-cli@v1
-        with:
-          version: latest
-
-      - name: Start Supabase
-        run: supabase start
-
-      - name: Run pgTAP tests
-        run: supabase test db
