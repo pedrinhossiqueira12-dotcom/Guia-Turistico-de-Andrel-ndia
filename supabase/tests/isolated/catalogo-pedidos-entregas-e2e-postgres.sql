@@ -286,7 +286,8 @@ BEGIN
     RAISE EXCEPTION 'Saque sem chave Pix protegida deveria ser recusado: %',v;
   END IF;
   UPDATE public.catalogo_motoboy_perfis
-     SET chave_pix_enc='pix-v2:abcdefghijklmnop.AAAAAAAAAAAAAAAAAAAAAAAA'
+     SET chave_pix_enc='pix-v2:abcdefghijklmnop.AAAAAAAAAAAAAAAAAAAAAAAA',
+         chave_pix_tipo='EMAIL'
    WHERE usuario_id='00000000-0000-4000-8000-000000000042';
   -- Mesmo financiado, um crédito do mês EM CURSO não pode ser sacado.
   UPDATE public.catalogo_remuneracoes_v2
@@ -321,6 +322,32 @@ BEGIN
     RAISE EXCEPTION 'Solicitação de outro entregador vazou no extrato';
   END IF;
 END $test_saque_mensal$;
+
+-- Salvar chave e tipo deve ser autenticado por motoboy; bloquear tipo ausente.
+DO $test_pix_tipado$
+DECLARE v jsonb;
+BEGIN
+  IF pg_catalog.has_function_privilege('anon',
+    'public.catalogo_salvar_chave_pix_tipado_v2(uuid,text,text)','EXECUTE')
+    OR pg_catalog.has_function_privilege('authenticated',
+    'public.catalogo_salvar_chave_pix_tipado_v2(uuid,text,text)','EXECUTE') THEN
+    RAISE EXCEPTION 'Cadastro Pix tipado exposto fora do backend';
+  END IF;
+  v := public.catalogo_salvar_chave_pix_tipado_v2(
+    '00000000-0000-4000-8000-000000000042',
+    'pix-v2:abcdefghijklmnop.AAAAAAAAAAAAAAAAAAAAAAAA',NULL);
+  IF (v->>'http_status')::integer <> 400 THEN
+    RAISE EXCEPTION 'Aceitou chave cifrada sem tipo Pix: %',v;
+  END IF;
+  v := public.catalogo_salvar_chave_pix_tipado_v2(
+    '00000000-0000-4000-8000-000000000042',
+    'pix-v2:abcdefghijklmnop.AAAAAAAAAAAAAAAAAAAAAAAA','EMAIL');
+  IF (v->>'ok')::boolean IS DISTINCT FROM true OR
+      (SELECT chave_pix_tipo FROM public.catalogo_motoboy_perfis
+       WHERE usuario_id='00000000-0000-4000-8000-000000000042')<>'EMAIL' THEN
+    RAISE EXCEPTION 'Não atualizou chave protegida e seu tipo: %',v;
+  END IF;
+END $test_pix_tipado$;
 
 -- Somente no PostgreSQL CI descartável: altera temporariamente a remuneração
 -- fictícia para R$ 12,34 e testa a RESERVA. SAVEPOINT restaura o snapshot original.
@@ -361,6 +388,16 @@ BEGIN
      (SELECT count(*) FROM public.catalogo_payout_intents_v2) <> 1 THEN
     RAISE EXCEPTION 'Retry criou payout duplicado: %', v_repetido;
   END IF;
+  -- Não permitir chave diferente enquanto houver intent pendente.
+  BEGIN
+    UPDATE public.catalogo_motoboy_perfis SET chave_pix_tipo='PHONE'
+      WHERE usuario_id='00000000-0000-4000-8000-000000000042';
+    RAISE EXCEPTION 'Troca do tipo Pix foi aceita com payout pendente';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM='Troca do tipo Pix foi aceita com payout pendente' THEN
+      RAISE;
+    END IF;
+  END;
   v := public.catalogo_marcar_envio_payout_v2(v_intent);
   IF (v->>'ok')::boolean IS DISTINCT FROM true OR
      (SELECT tentativas FROM public.catalogo_payout_intents_v2 WHERE id=v_intent) <> 1 THEN
