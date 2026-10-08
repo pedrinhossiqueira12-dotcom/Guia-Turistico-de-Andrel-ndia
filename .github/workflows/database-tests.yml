@@ -189,6 +189,7 @@ jobs:
             bucket_id text NOT NULL REFERENCES storage.buckets(id),
             name text NOT NULL
           );
+          ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
           CREATE FUNCTION storage.extension(p_name text) RETURNS text
           LANGUAGE sql IMMUTABLE AS $ext$ SELECT split_part(p_name,'.',array_length(string_to_array(p_name,'.'),1)) $ext$;
           CREATE FUNCTION storage.foldername(p_name text) RETURNS text[]
