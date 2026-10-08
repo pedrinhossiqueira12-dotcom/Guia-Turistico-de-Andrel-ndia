@@ -3,6 +3,42 @@
 -- Pedidos historicos mantem os snapshots originais, inclusive a regra anterior.
 BEGIN;
 
+-- A tabela original do marketplace preservou um CHECK sem nome explícito:
+--   catalogo_pedidos_check1: plataforma = round(subtotal * 0.05)
+-- Ele conflita com retiradas/consumo local V2 (7%) e também com entregas
+-- cujo arredondamento único de 7% deixa a plataforma 1 centavo diferente
+-- do cálculo isolado de 5%. Não basta substituir catalogo_pedidos_taxas_v2_check.
+--
+-- Remover SOMENTE se a definição for comprovadamente a restrição legada de 5%.
+-- Na ausência dela (ambiente reconstituído), não há nada a remover; se o nome
+-- foi reutilizado para outra regra, falhar sem alterar os dados.
+DO $legacy_5_percent_constraint$
+DECLARE v_definition text;
+BEGIN
+  SELECT pg_catalog.pg_get_constraintdef(oid)
+    INTO v_definition
+    FROM pg_catalog.pg_constraint
+   WHERE conrelid = 'public.catalogo_pedidos'::pg_catalog.regclass
+     AND conname = 'catalogo_pedidos_check1'
+     AND contype = 'c';
+
+  IF FOUND THEN
+    IF v_definition NOT LIKE '%taxa_plataforma_centavos%'
+       OR v_definition NOT LIKE '%subtotal_produtos_centavos%'
+       OR v_definition NOT LIKE '%0.05%'
+       OR v_definition LIKE '%versao_financeira%'
+       OR v_definition LIKE '% AND %'
+    THEN
+      RAISE EXCEPTION 'catalogo_pedidos_check1 nao corresponde ao CHECK legado de 5%%. Revisar antes de prosseguir: %', v_definition;
+    END IF;
+    ALTER TABLE public.catalogo_pedidos
+      DROP CONSTRAINT catalogo_pedidos_check1;
+  END IF;
+END;
+$legacy_5_percent_constraint$;
+
+-- A nova constraint mantém 5% para V1, aceita snapshots V2 históricos
+-- e aplica 7% da plataforma em V2 sem entrega.
 ALTER TABLE public.catalogo_pedidos DROP CONSTRAINT IF EXISTS catalogo_pedidos_taxas_v2_check;
 ALTER TABLE public.catalogo_pedidos ADD CONSTRAINT catalogo_pedidos_taxas_v2_check CHECK (
   taxa_plataforma_centavos >= 0
