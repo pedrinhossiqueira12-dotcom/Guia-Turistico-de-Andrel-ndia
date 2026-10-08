@@ -1,0 +1,55 @@
+{
+  "purpose": "Audited read-only remote migration history at 2026-10-08; never an authorization to deploy.",
+  "audited_utc_date": "2026-10-08",
+  "remote_versions": [
+    "20261002233841",
+    "20261002235010",
+    "20261003013323",
+    "20261003134656",
+    "20261003140000",
+    "20261004003000",
+    "20261004110000",
+    "20261004223000",
+    "20261005010000",
+    "20261005090000",
+    "20261005120000",
+    "20261005123000",
+    "20261005130000",
+    "20261005133000",
+    "20261005150000",
+    "20261005160000",
+    "20261005170000",
+    "20261006111500",
+    "20261006130000",
+    "20261006175809",
+    "20261006184332",
+    "20261007010434",
+    "20261007010439",
+    "20261007015513",
+    "20261007040955",
+    "20261007233513",
+    "20261007233535",
+    "20261007233541"
+  ],
+  "identical_migrations": [
+    {
+      "local": "20261007173000_corrigir_liberacao_motoboy_pos_entrega.sql",
+      "remote": "20261007233513_corrigir_liberacao_motoboy_pos_entrega.sql",
+      "sha256": "cafade91683b8d5ec82fffc084f7bef8468897f697431281a7957c5ac7c94562"
+    },
+    {
+      "local": "20261007190000_taxa_fixa_7_porcento.sql",
+      "remote": "20261007233535_taxa_fixa_7_porcento.sql",
+      "sha256": "3e5c32977e4319a2b3d32d52f431b4b52333a684489f2487b72c8bb4c61e9e61"
+    },
+    {
+      "local": "20261007203000_finalizar_regras_financeiras_e_offline.sql",
+      "remote": "20261007233541_finalizar_regras_financeiras_e_offline.sql",
+      "sha256": "6f2e11d2a9cbac0606264d2699e9d95a0c8df8bb7878502ad3a2f2d1709b7b80"
+    }
+  ],
+  "pending_migration": {
+    "local": "20261007213000_arredondamento_taxa_total_7.sql",
+    "release": "20261008080000_arredondamento_taxa_total_7.sql"
+  }
+}
