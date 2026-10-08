@@ -62,7 +62,7 @@ BEGIN
   END;
   BEGIN
     INSERT INTO public.catalogo_comissoes_offline VALUES(10000,1,'entrega',700,0,700,700);
-    RAISE EXCEPTION 'ERRO: V1 foi alterada para 7%';
+    RAISE EXCEPTION 'ERRO: V1 foi alterada para 7 por cento';
   EXCEPTION WHEN check_violation THEN NULL;
   END;
 END $$;
