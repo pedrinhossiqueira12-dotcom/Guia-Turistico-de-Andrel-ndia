@@ -93,6 +93,37 @@ jobs:
           psql -v ON_ERROR_STOP=1 -Atqc "SELECT COUNT(*) FROM public.cadastros_comercios WHERE local_id = 'pedrox-do-grau' AND status = 'aprovado'" | grep -Fx 1
           psql -v ON_ERROR_STOP=1 -Atqc "SELECT COUNT(*) FROM public.comercios_publicados" | grep -Fx 139
           psql -v ON_ERROR_STOP=1 -Atqc "SELECT COUNT(*) FROM pg_policies WHERE schemaname = 'public' AND tablename = 'mural_cadastros' AND policyname = 'Mural — público vê ativos'" | grep -Fx 1
+      - name: Verify legacy table security and synthetic data
+        run: |
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          DO $verify$
+          BEGIN
+            IF (SELECT count(*) FROM public.cadastros_comercios) <> 1 THEN
+              RAISE EXCEPTION 'Expected exactly one synthetic registration';
+            END IF;
+            IF (SELECT count(*) FROM public.avaliacoes) <> 0
+               OR (SELECT count(*) FROM public.mural_cadastros) <> 0 THEN
+              RAISE EXCEPTION 'Legacy baseline unexpectedly contains personal records';
+            END IF;
+            IF EXISTS (
+              SELECT 1 FROM pg_class
+              WHERE oid IN (
+                'public.avaliacoes'::regclass,
+                'public.cadastros_comercios'::regclass,
+                'public.mural_cadastros'::regclass,
+                'public.comercios_publicados'::regclass
+              )
+              AND NOT relrowsecurity
+            ) THEN
+              RAISE EXCEPTION 'RLS must be enabled on all legacy public tables';
+            END IF;
+            IF (SELECT count(*) FROM pg_policies
+                WHERE schemaname='public' AND tablename='mural_cadastros'
+                  AND policyname='Mural — público vê ativos') <> 1 THEN
+              RAISE EXCEPTION 'Expected exactly one public mural policy';
+            END IF;
+          END $verify$;
+          SQL
       - name: Verify first migration can be reapplied safely
         run: |
           psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261002233841_publication_metadata_reversible_archive_20261002.sql
