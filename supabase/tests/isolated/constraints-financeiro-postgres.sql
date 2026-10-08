@@ -103,4 +103,23 @@ BEGIN
   END;
 END $$;
 
+DO $
+BEGIN
+  IF (SELECT count(*) FROM public.catalogo_pedidos) <> 50000 THEN
+    RAISE EXCEPTION 'Quantidade inesperada de pedidos sinteticos';
+  END IF;
+  IF (SELECT count(*) FROM public.catalogo_comissoes_offline) <> 50000 THEN
+    RAISE EXCEPTION 'Quantidade inesperada de comissoes sinteticas';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM public.catalogo_pedidos
+     WHERE taxa_total_centavos <> taxa_plataforma_centavos + taxa_motoboy_centavos
+  ) OR EXISTS (
+    SELECT 1 FROM public.catalogo_comissoes_offline
+     WHERE valor_total_centavos <> valor_comissao_centavos
+  ) THEN
+    RAISE EXCEPTION 'Snapshots sinteticos inconsistentes apos testes negativos';
+  END IF;
+END $;
+
 SELECT 'PASS: restricoes reais de pedidos e comissoes offline (50000 linhas por tabela)' AS resultado;
