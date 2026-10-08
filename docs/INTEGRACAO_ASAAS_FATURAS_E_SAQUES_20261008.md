@@ -14,6 +14,7 @@
 - `supabase/functions/catalogo-asaas-financeiro/index.ts`: cobrança, consulta, carteira, Pix de saída, webhook.
 - `pages/catalogo-admin.html`, `js/catalogo-admin.js`: cobrança mensal Asaas com cadastro do pagador.
 - `pages/motoboy.html`, `js/motoboy.js`: saldo sacável **efetivamente financiado pelo Asaas**, saque e histórico.
+- `pages/entregas-operacao.html`, `js/entregas-operacao.js`: lista de saques e emissões pendentes, visível apenas ao administrador da plataforma, sem botão de pagamento.
 - `catalogo-fatura-pix` do Mercado Pago fica disponível para **faturas antigas**, mas não gera faturas novas pelo painel atualizado.
 - A confirmação de pedido, entregas, avaliações, mapas, fotos, marketplace online e demais funcionalidades **não foram alteradas**.
 - Sem saldo e sem credenciais, a UI mostra saque desabilitado.
@@ -43,7 +44,7 @@
 - A fatura original é rastreada por `catalogo_fatura_cobrancas`, com `gateway='asaas'`; cobrança vinculada a MP não é reemitida por Asaas.
 - A compensação de um Pix de mensalidade só é marcada após validação por GET autenticado no Asaas, exigindo mesmo ID, cliente, `externalReference`, método Pix e total.
 - Crédito sacável: remuneração `disponivel`, entrega confirmada, fatura mensal **paga no Asaas**, sem revisão financeira e sem reserva de saque ativa.
-- Criação de saque é transacional no banco; cada crédito pode estar em **uma única reserva ativa**.
+- Criação de saque é transacional no banco; cada crédito pode estar em **uma única reserva ativa**. Um trigger impede que o repasse manual antigo consuma esse crédito enquanto estiver reservado. A baixa final exige atualização de todos os créditos, caso contrário a transação é abortada.
 - A chave Pix fica cifrada no Supabase, nunca é retornada em extrato sem autenticação.
 - `POST /transfers` usa `externalReference=saque_id`; mesmo timeout não cria segunda transferência automaticamente. Operador deve conciliar a referência no extrato Asaas.
 - Saque só é marcado como `concluido` depois de `GET /transfers/{id}` com `status=DONE` e verificação de valor, ID e referência.
