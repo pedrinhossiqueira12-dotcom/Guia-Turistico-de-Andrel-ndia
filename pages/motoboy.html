@@ -107,6 +107,22 @@
         </div>
       </section>
 
+      <section id="motoboyWithdrawals" class="motoboy-card motoboy-profile-card" aria-labelledby="motoboyWithdrawalsTitle" hidden>
+        <span class="eyebrow">FECHAMENTO MENSAL</span>
+        <h2 id="motoboyWithdrawalsTitle">Solicitar saque</h2>
+        <p>O saque usa somente entregas já concluídas, com pagamento confirmado, de meses anteriores. O saldo é calculado pelo servidor e será enviado exclusivamente para sua chave Pix cadastrada.</p>
+        <div class="motoboy-balance-grid" aria-label="Saldos de saques">
+          <div class="motoboy-balance-card"><span>Disponível para saque</span><strong id="motoboySaldoSacavel">R$ 0,00</strong></div>
+          <div class="motoboy-balance-card"><span>Solicitações em andamento</span><strong id="motoboySaldoReservado">R$ 0,00</strong></div>
+        </div>
+        <p id="motoboySaqueModo" class="motoboy-feedback">O processamento depende da disponibilidade do provedor bancário.</p>
+        <button id="motoboySolicitarSaque" class="motoboy-button motoboy-button-primary" type="button" disabled>Solicitar saque mensal</button>
+        <p>Valor mínimo: R$ 1,00. Solicitar não significa que o Pix foi enviado: acompanhe abaixo a confirmação bancária.</p>
+        <p id="motoboySaqueFeedback" class="motoboy-feedback" role="status"></p>
+        <h3>Histórico de saques</h3>
+        <ul id="motoboySaquesHistory" class="motoboy-history" aria-live="polite"></ul>
+      </section>
+
       <section class="motoboy-card motoboy-profile-card" aria-labelledby="motoboyProfileTitle">
         <span class="eyebrow">RECEBIMENTO OPCIONAL</span>
         <h2 id="motoboyProfileTitle">Chave Pix própria</h2>
@@ -120,7 +136,7 @@
       </section>
     </section>
 
-    <p class="motoboy-footer-note">Este painel não exibe faturas, catálogo de produtos ou pedidos de outros usuários. Códigos e dados pessoais aparecem apenas na etapa autorizada da entrega. Repasses dependem de baixa e comprovação administrativa.</p>
+    <p class="motoboy-footer-note">Este painel não exibe faturas, catálogo de produtos ou pedidos de outros usuários. Códigos e dados pessoais aparecem apenas na etapa autorizada da entrega. Saques são reservados por solicitação e só constam como pagos após confirmação bancária. Transferência automática depende de habilitação do provedor.</p>
   </main>
 
   <dialog id="motoboyConfirmDialog" class="motoboy-dialog" aria-labelledby="motoboyConfirmTitle">
