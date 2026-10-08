@@ -429,6 +429,27 @@ jobs:
           END $final_chain$;
           SQL
 
+      - name: Install real pgTAP extension only in disposable PostgreSQL service
+        run: |
+          test "$PGHOST" = localhost
+          test "$PGDATABASE" = catalogo_ci
+          docker exec -u root "${{ job.services.postgres.id }}" sh -c 'apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq postgresql-17-pgtap'
+          psql -v ON_ERROR_STOP=1 -c 'CREATE EXTENSION IF NOT EXISTS pgtap'
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT extversion IS NOT NULL FROM pg_extension WHERE extname='pgtap'" | grep -Fx t
+      - name: Run all 23 actual pgTAP assertions against final isolated model
+        run: |
+          set -euo pipefail
+          psql -X -qAt -v ON_ERROR_STOP=1 -f supabase/tests/database/marketplace_financeiro_v2.test.sql | tee /tmp/marketplace-financeiro.tap
+          grep -Fx '1..23' /tmp/marketplace-financeiro.tap
+          if grep -q '^not ok ' /tmp/marketplace-financeiro.tap; then
+            echo 'ERROR: pgTAP reported failed assertions'
+            exit 1
+          fi
+          count=$(grep -Ec '^ok [0-9]+( |$)' /tmp/marketplace-financeiro.tap)
+          test "$count" -eq 23
+          grep -Eq '^ok 23( |$)' /tmp/marketplace-financeiro.tap
+          echo "PASS: $count pgTAP assertions in disposable catalogo_ci (remote cron migration excluded)"
+
   pricing-postgres-isolated:
     name: Real pricing RPC (isolated PostgreSQL)
     runs-on: ubuntu-latest
