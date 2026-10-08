@@ -122,9 +122,20 @@ BEGIN
          );
     END LOOP;
   END IF;
+  -- Estorno ou perda de financiamento após o pedido de saque não pode
+  -- resultar em pagamento automático nem em fila marcada como apta.
+  IF NEW.status IN ('estornado','retido','pendencia_revisao') AND
+     OLD.status IS DISTINCT FROM NEW.status THEN
+    UPDATE public.catalogo_solicitacoes_saque_v2 s
+       SET status='em_analise', observacao='Crédito bloqueado ou revertido após a solicitação'
+     WHERE s.status='solicitado' AND EXISTS (
+       SELECT 1 FROM public.catalogo_solicitacao_saque_itens_v2 i
+        WHERE i.solicitacao_id=s.id AND i.remuneracao_id=NEW.id
+     );
+  END IF;
   RETURN NEW;
 END;
-$$;
+$;
 CREATE TRIGGER catalogo_conciliar_solicitacao_saque_v2
 AFTER UPDATE OF status,repasse_id ON public.catalogo_remuneracoes_v2
 FOR EACH ROW EXECUTE FUNCTION public.catalogo_conciliar_solicitacao_saque_v2();
