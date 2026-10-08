@@ -123,6 +123,14 @@ async function run(userId: string, body: Record<string, unknown>) {
     const statement = await rpc("catalogo_motoboy_extrato_v2", { p_operador_id: userId, p_offset: offset(body.offset) });
     return json({ success: true, ...(await personalStatement(statement, userId)) });
   }
+  // Saque mensal: somente a identidade validada por JWT pode consultar/solicitar.
+  // Valores e beneficiários são obtidos do SQL; nunca confiar em totais enviados pelo browser.
+  if (action === "consultar_saques") {
+    return json({ success: true, ...(await rpc("catalogo_motoboy_listar_saques_v2", { p_operador_id: userId })) });
+  }
+  if (action === "solicitar_saque") {
+    return json({ success: true, ...(await rpc("catalogo_motoboy_solicitar_saque_v2", { p_operador_id: userId })) });
+  }
   if (action === "confirmar_entrega") return json({ success: true, pedido: await confirmDelivery(userId, body) });
 
   const deliveryActions: Record<string, string> = {
