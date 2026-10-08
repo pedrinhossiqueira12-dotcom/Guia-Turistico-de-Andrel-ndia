@@ -18,7 +18,7 @@
     <section class="admin-heading">
       <span class="eyebrow">OPERAÇÃO E AUDITORIA</span>
       <h1>Entregas e repasses</h1>
-      <p>Revisão administrativa de ocorrências e registro de repasses já realizados. Esta página não executa, agenda ou solicita transferência bancária.</p>
+      <p>Revisão administrativa de ocorrências, registros manuais já realizados e auditoria de saques Pix Asaas. Esta página apenas consulta o Asaas; não executa transferências.</p>
     </section>
     <section id="operationNotice" class="admin-notice" role="status" aria-live="polite">
       <strong id="operationNoticeTitle">Entre para continuar</strong>
@@ -68,6 +68,12 @@
             <p id="repasseFeedback" class="form-feedback" role="status"></p>
           </form>
         </section>
+        <section class="admin-card wide" aria-labelledby="saquesAsaasTitulo">
+          <span class="eyebrow">AUDITORIA FINANCEIRA</span><h2 id="saquesAsaasTitulo">Saques Pix — Asaas</h2>
+          <p>Visualização somente para a administração da plataforma. Nenhum botão nesta seção envia dinheiro ou libera um crédito manualmente. Transferências em revisão exigem conciliação bancária antes de qualquer intervenção.</p>
+          <div id="listaSaquesAsaas" class="manager-list" aria-live="polite"></div>
+          <p id="saquesAsaasFeedback" class="form-feedback" role="status"></p>
+        </section>
         <section class="admin-card wide" aria-labelledby="historicoTitulo">
           <span class="eyebrow">HISTÓRICO SEPARADO</span><h2 id="historicoTitulo">Repasses já registrados</h2>
           <div id="historicoRepasses" class="manager-list" aria-live="polite"></div>
@@ -77,6 +83,6 @@
     </section>
   </main>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="../js/entregas-operacao.js?v=operacao-v2-20261006"></script>
+  <script src="../js/entregas-operacao.js?v=operacao-v2-asaas-20261008"></script>
 </body>
 </html>
