@@ -192,6 +192,8 @@ export function classificarTransacaoPayout(
   if (amount.currency !== "BRL" || typeof value !== "number" || !Number.isFinite(value) ||
       !Number.isSafeInteger(expected.valorCentavos) ||
       Math.round(value * 100) !== expected.valorCentavos) return "revisar";
+  // Reembolso total/parcial tem precedência sobre qualquer estado intermediário.
+  if (data.status === "refunded" || data.status_detail === "partially_refunded") return "revisar";
   if (data.status === "success" && data.status_detail === "accredited") return "confirmado";
   // O catálogo oficial também documenta estados transitórios por banco/autorizações.
   // "success" SEM accredited NÃO garante que o destinatário recebeu o valor.
@@ -202,8 +204,7 @@ export function classificarTransacaoPayout(
     return "em_processamento";
   }
   // Reembolso após crédito exige conciliação de estorno, não repetição de saque.
-  if (data.status === "refunded" || data.status_detail === "partially_refunded" ||
-      (data.status === "processed" && data.status_detail === "approved")) return "revisar";
+  if (data.status === "processed" && data.status_detail === "approved") return "revisar";
   if (["error", "canceled", "rejected", "failed"].includes(textField(data.status))) return "falhou";
   return "revisar";
 }
