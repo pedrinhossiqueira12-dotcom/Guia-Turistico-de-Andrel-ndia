@@ -50,7 +50,7 @@ jobs:
       - name: Assemble test using actual migration RPC
         run: python scripts/validacao-pagamentos/build-isolated-pricing-test.py
       - name: Execute PostgreSQL integration checks
-        run: psql -v ON_ERROR_STOP=1 -f /tmp/catalogo-precificacao-ci.sql
+        run: |\n          psql -v ON_ERROR_STOP=1 -f /tmp/catalogo-precificacao-ci.sql\n          psql -v ON_ERROR_STOP=1 -f /tmp/catalogo-constraints-ci.sql
 
   sql-syntax:
     name: SQL syntax (all migrations and pgTAP)
