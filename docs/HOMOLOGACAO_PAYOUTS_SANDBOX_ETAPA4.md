@@ -20,7 +20,7 @@ O valor mínimo oficial por transferência é R$ 1,00. Ganhos inferiores devem a
 2. Na aplicação Payouts, acesse Dados da integração > Testes > Credenciais de teste e ative o Access Token de TESTE, se necessário.
 3. Providencie uma chave Pix cadastrada e controlada para teste. Não usar a conta real de um motoboy.
 4. Instale Deno 2.x e abra o repositório na branch do PR #38. Não aplique migrations ao banco de produção.
-5. Não compartilhe tokens ou chaves Pix em GitHub, commits, chat, URLs públicas ou logs.
+5. Não compartilhe tokens ou chaves Pix em GitHub, commits, chat, URLs públicas ou logs. Nunca use credencial produtiva para homologação, mesmo com X-test-token: true.
 
 ## Teste offline sem rede ou segredos
 
@@ -31,6 +31,29 @@ Na raiz do repositório, execute:
 Resultado esperado: PASS_SIMULACAO: sem rede, sem segredo, sem dinheiro e sem alterações no Supabase.
 
 Este teste simula POST 202 e GET success/accredited, mas NÃO comprova acesso real ao Mercado Pago.
+
+## Nova checagem de prontidão — SEM REDE
+
+Execute na raiz do projeto, mesmo sem nenhuma credencial:
+
+    deno run scripts/validacao-pagamentos/payouts-sandbox-preflight.ts --readiness
+
+O resultado não exibe token, chave Pix nem UUID. Ele somente indica se faltam:
+- Access Token de TESTE e sua origem comprovada;
+- dupla confirmação explícita;
+- UUID do ensaio;
+- destinatário com chave de formato compatível;
+- igualdade indevida entre token de teste e possíveis tokens de produção no ambiente.
+
+Sem permissões ou variáveis configuradas, o resultado será "aptoParaPrepararTesteSandbox": false e "transferenciaExecutada": false. Isso é o resultado esperado: o script **não consulta a conta Mercado Pago nem transfere valores**.
+
+Com variáveis de teste configuradas, execute somente:
+
+    deno run --allow-env scripts/validacao-pagamentos/payouts-sandbox-preflight.ts --readiness
+
+Mesmo que a checagem local indique estar preparado, **o acesso Payouts ao Mercado Pago e a procedência do token precisam ser conferidos pelo proprietário no painel oficial**. Chave Pix com sintaxe correta não comprova titularidade.
+
+**Trava adicional:** se MP_PAYOUTS_TEST_ACCESS_TOKEN for idêntico a MP_PLATFORM_ACCESS_TOKEN, MP_ACCESS_TOKEN, MERCADO_PAGO_ACCESS_TOKEN ou MP_PAYOUTS_PROD_ACCESS_TOKEN presente no ambiente, o envio em modo Sandbox será bloqueado. O script nunca mostra os tokens.
 
 ## Teste HTTP APENAS em Sandbox, após consentimento explícito
 
