@@ -304,8 +304,21 @@ BEGIN
    WHERE pedido_id='00000000-0000-4000-8000-000000000052';
   v := public.catalogo_motoboy_saque_mensal_v2(
     '00000000-0000-4000-8000-000000000042','solicitar');
+  -- Saldo de R$0,02 não pode prender a solicitação do mês;
+  -- os créditos ficam acumulados até atingir o mínimo de R$1,00.
+  IF (v->>'http_status')::integer <> 409
+     OR (v->>'saldo_acumulado_centavos')::bigint <> 2
+     OR (SELECT count(*) FROM public.catalogo_solicitacoes_saque_v2) <> 0 THEN
+    RAISE EXCEPTION 'Saque de R$0,02 deve acumular sem criar pedido: %',v;
+  END IF;
+  -- Simular o acúmulo de novos ganhos no mesmo crédito fictício.
+  UPDATE public.catalogo_remuneracoes_v2
+    SET valor_centavos=100
+    WHERE pedido_id='00000000-0000-4000-8000-000000000052';
+  v := public.catalogo_motoboy_saque_mensal_v2(
+    '00000000-0000-4000-8000-000000000042','solicitar');
   IF (v->>'ok')::boolean IS DISTINCT FROM true
-     OR (v->>'valor_solicitado_centavos')::bigint <> 2
+     OR (v->>'valor_solicitado_centavos')::bigint <> 100
      OR (v->>'transferencia_executada')::boolean IS DISTINCT FROM false THEN
     RAISE EXCEPTION 'Saque mensal fictício sem transferência foi recusado: %',v;
   END IF;
@@ -321,6 +334,15 @@ BEGIN
   IF coalesce(jsonb_array_length(v->'solicitacoes'),0) <> 0 THEN
     RAISE EXCEPTION 'Solicitação de outro entregador vazou no extrato';
   END IF;
+  -- Restaurar fixture pequena usada nos testes posteriores, sem
+  -- tocar em pedido ou conta reais.
+  UPDATE public.catalogo_remuneracoes_v2 SET valor_centavos=2
+    WHERE pedido_id='00000000-0000-4000-8000-000000000052';
+  UPDATE public.catalogo_solicitacao_saque_itens_v2 SET valor_centavos=2
+    WHERE solicitacao_id=(SELECT id FROM public.catalogo_solicitacoes_saque_v2
+      WHERE motoboy_id='00000000-0000-4000-8000-000000000042');
+  UPDATE public.catalogo_solicitacoes_saque_v2 SET valor_centavos=2
+    WHERE motoboy_id='00000000-0000-4000-8000-000000000042';
 END $test_saque_mensal$;
 
 -- Salvar chave e tipo deve ser autenticado por motoboy; bloquear tipo ausente.
