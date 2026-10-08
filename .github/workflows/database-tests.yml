@@ -20,7 +20,7 @@ jobs:
         with:
           deno-version: v2.x
       - name: Test financial snapshots without database access
-        run: deno test --no-check --allow-read=supabase/functions supabase/functions/tests/catalogo-financeiro.test.ts supabase/functions/tests/catalogo-checkouts-contract.test.ts
+        run: deno test --no-check --allow-read=supabase/functions supabase/functions/tests/catalogo-financeiro.test.ts supabase/functions/tests/catalogo-checkouts-contract.test.ts supabase/functions/tests/catalogo-seguranca-pagamentos.test.ts
 
   pricing-postgres-isolated:
     name: Real pricing RPC (isolated PostgreSQL)
