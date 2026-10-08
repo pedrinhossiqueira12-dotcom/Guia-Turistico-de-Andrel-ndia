@@ -589,6 +589,39 @@ jobs:
                 psql -v ON_ERROR_STOP=1 -f "$migration"
                 count=$((count + 1))
                 ;;
+              supabase/migrations/20261007213000_arredondamento_taxa_total_7.sql)
+                # Replica o estado imediatamente anterior à migration pendente
+                # em um SEGUNDO PostgreSQL local descartável. Jamais usa remoto.
+                test "$PGHOST" = localhost
+                test "$PGDATABASE" = catalogo_ci
+                test -z "${DATABASE_URL:-}"
+                test -z "${PGSERVICE:-}"
+                test -z "${PGHOSTADDR:-}"
+                createdb --template=catalogo_ci catalogo_upgrade_ci
+                trap 'dropdb --if-exists --force catalogo_upgrade_ci' EXIT
+                psql -d catalogo_upgrade_ci -v ON_ERROR_STOP=1 -1 \
+                  -c "SET app.marketplace_test_upgrade = 'enabled'" \
+                  -f supabase/tests/isolated/upgrade-pre-final-snapshots-postgres.sql
+                prior=$(psql -d catalogo_upgrade_ci -v ON_ERROR_STOP=1 -At -F '|' \
+                  -f scripts/validacao-pagamentos/preflight-historico-v2-readonly.sql)
+                grep -Fx 'pedidos|2|1|1|0|1' <<< "$prior"
+                grep -Fx 'comissoes|2|1|1|0|1' <<< "$prior"
+                # Aplica APENAS a migration final ao clone com V1/V2 antigos.
+                psql -d catalogo_upgrade_ci -v ON_ERROR_STOP=1 -f "$migration"
+                psql -d catalogo_upgrade_ci -v ON_ERROR_STOP=1 -1 \
+                  -c "SET app.marketplace_test_upgrade = 'enabled'" \
+                  -f supabase/tests/isolated/upgrade-post-final-snapshots-postgres.sql
+                after=$(psql -d catalogo_upgrade_ci -v ON_ERROR_STOP=1 -At -F '|' \
+                  -f scripts/validacao-pagamentos/preflight-historico-v2-readonly.sql)
+                grep -Fx 'pedidos|2|1|1|0|1' <<< "$after"
+                grep -Fx 'comissoes|2|1|1|0|1' <<< "$after"
+                dropdb --if-exists --force catalogo_upgrade_ci
+                trap - EXIT
+                echo "PASS: isolated production-like V1/V2 upgrade preserved historical snapshots"
+                # Depois do ensaio, aplica normalmente na base CI VAZIA.
+                psql -v ON_ERROR_STOP=1 -f "$migration"
+                count=$((count + 1))
+                ;;
               *)
                 echo "Applying isolated: $migration"
                 psql -v ON_ERROR_STOP=1 -f "$migration"
