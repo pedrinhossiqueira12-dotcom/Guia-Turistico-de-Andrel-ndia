@@ -15,3 +15,27 @@ Path("/tmp/catalogo-precificacao-ci.sql").write_text(
     bootstrap + "\n" + function + "\nDO $$" + assertions
 )
 print("SQL de integracao montado com a funcao real da migracao.")
+
+# Extrai as duas restricoes reais da mesma migracao, sem replicar suas regras.
+fixture_constraints = Path("supabase/tests/isolated/constraints-financeiro-postgres.sql").read_text()
+statements = []
+for table, constraint in (
+    ("catalogo_pedidos", "catalogo_pedidos_taxas_v2_check"),
+    ("catalogo_comissoes_offline", "catalogo_comissoes_offline_v2_snapshot_check"),
+):
+    prefix = f"ALTER TABLE public.{table}"
+    marker = f"ADD CONSTRAINT {constraint} CHECK ("
+    candidates = [
+        statement.strip() + ";"
+        for statement in migration.split(";")
+        if prefix in statement and marker in statement
+    ]
+    assert len(candidates) == 1, f"Restricao nao encontrada ou ambigua: {constraint}"
+    statement = candidates[0]
+    statement = statement[statement.index(prefix):]
+    statements.append(statement)
+assert fixture_constraints.count("-- __CONSTRAINTS_FROM_REAL_MIGRATION__") == 1
+Path("/tmp/catalogo-constraints-ci.sql").write_text(
+    fixture_constraints.replace("-- __CONSTRAINTS_FROM_REAL_MIGRATION__", "\n".join(statements))
+)
+print("CHECKs reais de pedidos e comissoes offline preparados para banco isolado.")
