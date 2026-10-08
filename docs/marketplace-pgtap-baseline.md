@@ -41,3 +41,10 @@ Anexar os logs do reset local, execução completa do pgTAP, lista de jobs aprov
 - `20261006130000_catalogo_gratuito_por_conexao.sql` define uma função no schema `catalogo_private` e consulta `public.catalogo_recebedores`, `public.catalogos` e `public.comercios_publicados`. A existência e a ordem de criação desses objetos precisam ser verificadas na reconstrução.
 
 **Implicação:** as migrações versionadas não são, por si só, prova de que um `supabase db reset` vazio funcionará. Não criar tabelas fictícias em produção para contornar essa lacuna.
+
+## Ordem de dependências verificada em mais duas migrações
+
+- `20261004003000_perfil_fotos_e_politicas.sql` pressupõe o esquema gerenciado `storage`, incluindo `storage.buckets`, `storage.objects`, `storage.foldername(text)` e `storage.extension(text)`. Também altera a constraint de `public.storage_cleanup_queue`, criada em migração anterior.
+- `20261004223000_catalogo_marketplace_pedidos.sql` cria `public.catalogo_recebedores` e `public.catalogo_pedidos`, com FKs para `public.catalogos`. Portanto, o recebedor consultado na migração `20261006130000_catalogo_gratuito_por_conexao.sql` tem origem versionada. Isso **não** resolve as tabelas legadas `avaliacoes` e `cadastros_comercios`.
+
+**Conclusão parcial:** um ambiente Supabase local completo (Auth, Storage, Vault e extensões) é necessário; PostgreSQL simples com apenas fixtures financeiros não constitui um baseline pgTAP completo.
