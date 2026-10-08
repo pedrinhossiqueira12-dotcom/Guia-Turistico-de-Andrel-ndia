@@ -7,11 +7,40 @@ on:
       - "supabase/**"
       - "scripts/validacao-pagamentos/**"
       - ".github/workflows/database-tests.yml"
+      - "js/**"
+      - "pages/**"
+      - "styles/**"
+      - "tests/**"
+      - "package.json"
+      - "package-lock.json"
   push:
     branches:
       - "logic/finalizacao-marketplace-2026-10-07"
 
 jobs:
+  frontend-node-regressions:
+    name: Frontend, buyer, merchant and courier regression tests (Node)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Refuse production environment variables
+        run: |
+          test -z "${SUPABASE_ACCESS_TOKEN:-}"
+          test -z "${SUPABASE_DB_PASSWORD:-}"
+          test -z "${DATABASE_URL:-}"
+          test -z "${MP_PLATFORM_ACCESS_TOKEN:-}"
+          test -z "${SUPABASE_SERVICE_ROLE_KEY:-}"
+      - name: Install locked Node dependencies
+        run: npm ci
+      - name: Execute complete frontend and marketplace regression suite
+        run: npm test
+
   financial-unit-tests:
     name: Financial snapshot tests (Deno, isolated)
     runs-on: ubuntu-latest
