@@ -630,6 +630,48 @@ jobs:
           psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM public.catalogo_remuneracoes_v2" | grep -Fx 0
           psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM public.catalogo_fatura_cobrancas" | grep -Fx 0
 
+      - name: Two genuinely concurrent courier acceptances on a disposable database clone
+        run: |
+          set -euo pipefail
+          test "$PGHOST" = localhost
+          test "$PGPORT" = 5432
+          test "$PGUSER" = postgres
+          test "$PGDATABASE" = catalogo_ci
+          test -z "${DATABASE_URL:-}"
+          test -z "${PGSERVICE:-}"
+          test -z "${PGHOSTADDR:-}"
+          test -z "${PGOPTIONS:-}"
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM public.catalogo_pedidos" | grep -Fx 0
+          # Clone ONLY a finished disposable schema; race transactions are committed
+          # in this clone, which is destroyed regardless of success or failure.
+          createdb --template=catalogo_ci catalogo_race_ci
+          trap 'dropdb --if-exists --force catalogo_race_ci' EXIT
+
+          if psql -d catalogo_race_ci -v ON_ERROR_STOP=1 -1 \
+              -f supabase/tests/isolated/catalogo-motoboy-concorrencia-postgres.sql \
+              > /tmp/catalogo-race-no-opt-in.log 2>&1; then
+            echo 'ERROR: concurrency fixture accepted missing opt-in'
+            exit 1
+          fi
+          grep -q 'Fixture de corrida exige catalogo_race_ci' /tmp/catalogo-race-no-opt-in.log
+
+          if psql -d catalogo_ci -v ON_ERROR_STOP=1 -1 \
+              -c "SET app.marketplace_test_race = 'enabled'" \
+              -f supabase/tests/isolated/catalogo-motoboy-concorrencia-postgres.sql \
+              > /tmp/catalogo-race-wrong-db.log 2>&1; then
+            echo 'ERROR: concurrency fixture accepted wrong database'
+            exit 1
+          fi
+          grep -q 'Fixture de corrida exige catalogo_race_ci' /tmp/catalogo-race-wrong-db.log
+
+          psql -d catalogo_race_ci -v ON_ERROR_STOP=1 -1 \
+            -c "SET app.marketplace_test_race = 'enabled'" \
+            -f supabase/tests/isolated/catalogo-motoboy-concorrencia-postgres.sql
+          python3 scripts/validacao-pagamentos/test-courier-concurrency.py
+          psql -d catalogo_race_ci -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM public.catalogo_entregas_atribuidas" | grep -Fx 1
+          psql -d catalogo_race_ci -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM public.catalogo_remuneracoes_v2" | grep -Fx 1
+          echo 'PASS: concurrent acceptance and reoffer on disposable cloned PostgreSQL database'
+
   pricing-postgres-isolated:
     name: Real pricing RPC (isolated PostgreSQL)
     runs-on: ubuntu-latest
