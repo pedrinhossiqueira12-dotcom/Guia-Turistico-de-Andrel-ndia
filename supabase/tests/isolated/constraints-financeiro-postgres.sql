@@ -49,6 +49,27 @@ BEGIN
     INSERT INTO public.catalogo_pedidos VALUES(v_subtotal,1,'entrega',v_plataforma,0,v_plataforma);
     INSERT INTO public.catalogo_comissoes_offline VALUES(v_subtotal,1,'entrega',v_plataforma,0,v_plataforma,v_plataforma);
   END LOOP;
+  -- Valores negativos, totais manipulados e comissoes divergentes devem falhar.
+  BEGIN
+    INSERT INTO public.catalogo_pedidos VALUES(10000,2,'entrega',-1,201,200);
+    RAISE EXCEPTION 'ERRO: parcela negativa aceita em pedido';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
+  BEGIN
+    INSERT INTO public.catalogo_pedidos VALUES(10000,2,'entrega',500,200,701);
+    RAISE EXCEPTION 'ERRO: soma divergente aceita em pedido';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
+  BEGIN
+    INSERT INTO public.catalogo_comissoes_offline VALUES(10000,2,'entrega',500,200,700,699);
+    RAISE EXCEPTION 'ERRO: comissao divergente do total aceita';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
+  BEGIN
+    INSERT INTO public.catalogo_pedidos VALUES(10000,2,'consumo_local',500,200,700);
+    RAISE EXCEPTION 'ERRO: consumo local com motoboy aceito';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
   -- As restricoes precisam rejeitar valores inconsistentes.
   BEGIN
     INSERT INTO public.catalogo_comissoes_offline VALUES(10000,2,'entrega',500,300,800,800);
