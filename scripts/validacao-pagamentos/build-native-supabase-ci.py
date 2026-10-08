@@ -33,7 +33,7 @@ def fail_if_untrusted():
     if STAGING == Path("/") or STAGING.parent != Path("/tmp"):
         raise RuntimeError("Unsafe temporary staging directory")
     migration_files = sorted((SOURCE / "migrations").glob("*.sql"))
-    if len(migration_files) != 29 or migration_files[1].name != ORIGINAL_SCHEDULER:
+    if len(migration_files) != 30 or migration_files[1].name != ORIGINAL_SCHEDULER:
         raise RuntimeError("Migration inventory changed, manual review required")
     if not (SOURCE / "migrations" / ALLOWLIST).is_file():
         raise RuntimeError("Allowlist migration missing")
@@ -125,8 +125,8 @@ def build():
     (tests_dir / NATIVE_TEST).write_text(real_test, encoding="utf-8")
 
     staged = sorted(migration_dir.glob("*.sql"))
-    if len(staged) != 31:
-        raise RuntimeError(f"Expected 31 temporary migrations, got {len(staged)}")
+    if len(staged) != 32:
+        raise RuntimeError(f"Expected 32 temporary migrations, got {len(staged)}")
     assert staged[0].name == BASELINE
     assert staged[-1].name == migrations[-1].name
     assert sorted(migration_dir.glob("*" + "schedule_storage_retention_dry_run_20261002.sql"))
@@ -135,7 +135,7 @@ def build():
     ):
         raise RuntimeError("Real project ref survived in generated migration SQL")
     print(
-        "PASS: 31 temporary migration files in /tmp, 28 untouched real migrations, "
+        "PASS: 32 temporary migration files in /tmp, 29 untouched real migrations, "
         "one safe scheduling placeholder, two synthetic-only fixtures; "
         "local project ID differs from production"
     )
