@@ -41,10 +41,11 @@ jobs:
           target="$RUNNER_TEMP/catalogo-release-offline-$GITHUB_RUN_ID"
           python3 scripts/validacao-pagamentos/build-release-migrations.py --output "$target"
           test -f "$target/release-evidence.json"
-          test "$(find "$target/supabase/migrations" -maxdepth 1 -type f -name '*.sql' | wc -l)" -eq 29
+          test "$(find "$target/supabase/migrations" -maxdepth 1 -type f -name '*.sql' | wc -l)" -eq 30
           ! find "$target/supabase/migrations" -name '20261007213000*' | grep -q .
           test -f "$target/supabase/migrations/20261008120906_arredondamento_taxa_total_7_outubro_2026.sql"
-          echo "PASS: 29 applied migration versions, zero SQL pending; never rerun applied SQL."
+          test -f "$target/supabase/migrations/20261008160000_saques_motoboy_mensais_v2.sql"
+          echo "PASS: 29 previously applied, exactly one withdrawal migration pending. No SQL executed."
 
   browser-marketplace-smoke:
     name: Chromium buyer, merchant, courier and operation UI (offline)
