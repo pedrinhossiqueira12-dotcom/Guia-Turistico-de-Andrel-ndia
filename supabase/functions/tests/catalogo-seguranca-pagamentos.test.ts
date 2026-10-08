@@ -85,7 +85,7 @@ Deno.test("codigos de entrega sao validos e variados", () => {
   const codes=new Set<string>();
   for(let i=0;i<1000;i++) {
     const code=randomDeliveryCode();
-    assert(/^\\d{6}$/.test(code) && Number(code)>=100000, "Codigo de entrega invalido");
+    assert(/^\d{6}$/.test(code) && Number(code)>=100000, "Codigo de entrega invalido");
     codes.add(code);
   }
   assert(codes.size>950, "Entropia insuficiente nos codigos");
