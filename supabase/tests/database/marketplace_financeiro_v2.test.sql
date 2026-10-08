@@ -125,25 +125,25 @@ select ok(
 
 select results_eq(
   $sql$select (catalogo_fluxo_precificar('entrega',101,NULL)->>'taxa_total_centavos')::integer$sql$,
-  $$$values (7)$$$,
+  $$values (7)$$,
   'arredondamento em valores pequenos conserva 7 centavos'
 );
 
 select results_eq(
   $sql$select (catalogo_fluxo_precificar('retirada',10000,NULL)->>'taxa_motoboy_centavos')::integer$sql$,
-  $$$values (0)$$$,
+  $$values (0)$$,
   'retirada nao reserva pagamento para motoboy'
 );
 
 select results_eq(
   $sql$select (catalogo_fluxo_precificar('consumo_local',10000,NULL)->>'taxa_plataforma_centavos')::integer$sql$,
-  $$$values (700)$$$,
+  $$values (700)$$,
   'consumo local entrega integralmente 7% para a plataforma'
 );
 
 select results_eq(
   $sql$select (catalogo_fluxo_precificar('entrega',0,NULL)->>'http_status')::integer$sql$,
-  $$$values (400)$$$,
+  $$values (400)$$,
   'subtotal zero e rejeitado antes de criar cobranca'
 );
 
