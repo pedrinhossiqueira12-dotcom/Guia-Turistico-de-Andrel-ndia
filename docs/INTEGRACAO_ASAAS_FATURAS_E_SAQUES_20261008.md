@@ -46,7 +46,9 @@
 - Crédito sacável: remuneração `disponivel`, entrega confirmada, fatura mensal **paga no Asaas**, sem revisão financeira e sem reserva de saque ativa.
 - Criação de saque é transacional no banco; cada crédito pode estar em **uma única reserva ativa**. Um trigger impede que o repasse manual antigo consuma esse crédito enquanto estiver reservado. A baixa final exige atualização de todos os créditos, caso contrário a transação é abortada.
 - A chave Pix fica cifrada no Supabase, nunca é retornada em extrato sem autenticação.
-- `POST /transfers` usa `externalReference=saque_id`; mesmo timeout não cria segunda transferência automaticamente. Operador deve conciliar a referência no extrato Asaas.
+- `POST /transfers` usa `externalReference=saque_id`; mesmo timeout não cria segunda transferência automaticamente. O administrador poderá informar **somente os identificadores da transferência existente** na área de auditoria de entregas e solicitar um `GET /transfers/{id}`. O servidor valida ID, referência, valor e status antes de reconciliar; esse procedimento **nunca** executa outro POST de transferência.
+- Na emissão da fatura, uma reserva exclusiva bloqueia emissões concorrentes. Caso exista uma reserva sem cobrança interna (timeout), uma nova solicitação consulta o Asaas pela referência externa e só recupera uma cobrança única verificada; **não** envia outro POST. Se não encontrar, mantém a revisão administrativa.
+- O antigo registro de repasse manual é protegido por trigger: não pode baixar um crédito com reserva Asaas ativa.
 - Saque só é marcado como `concluido` depois de `GET /transfers/{id}` com `status=DONE` e verificação de valor, ID e referência.
 - Banco e logs não são carteira de moeda eletrônica; são registro contábil do saldo da plataforma devido ao motoboy.
 - Se faltarem fundos após tarifas ou retenções da conta, o payout pode falhar; definir responsável por tarifas e conta de origem.
@@ -71,3 +73,14 @@ As comissões de compras pagas com checkout Mercado Pago não entram automaticam
 - https://docs.asaas.com/reference/transferir-para-conta-de-outra-instituicao-ou-chave-pix
 - https://docs.asaas.com/docs/criar-novo-webhook-pela-aplicacao-web
 - https://docs.asaas.com/docs/transferencias
+
+## Itens necessários antes de declarar a integração pronta
+
+- [ ] Aprovação da conta Asaas, cadastro de chave Pix da plataforma, saldo/limites/tarifas de transferências e habilitação do API Key.
+- [ ] API sandbox: teste E2E com cobranças, faturas, duplicação de webhook, estorno, bloqueio `CONFIRMED`, status `RECEIVED`, transferência `DONE`, `FAILED`, `CANCELLED`, timeout, recuperação por ID e concorrência real.
+- [ ] Amarrar política financeira das taxas de transferências, prazo de saque e possíveis mínimos/limites.
+- [ ] Revisar se a conta suporta as transferências de saída via API sem intervenção humana; se houver Token APP/SMS ou validação de saque por webhook, adequar o fluxo.
+- [ ] Garantir reserva de saldo para comissões de pedidos recebidos pelo Mercado Pago, se a carteira for futuramente unificada.
+- [ ] Definir retenção de PII (CPF/CNPJ do comércio e chave Pix), texto LGPD e direitos do titular.
+- [ ] Homologar rollback, conciliação e alertas operacionais; migrar SQL pendente ao histórico de produção e implantar Edge com flags desligadas.
+- [ ] Ativar operações separadamente após validação real de webhooks e status; não tratar CI verde como certificação financeira.
