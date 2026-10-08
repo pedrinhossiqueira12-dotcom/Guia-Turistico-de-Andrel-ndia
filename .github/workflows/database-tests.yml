@@ -18,6 +18,34 @@ on:
       - "logic/finalizacao-marketplace-2026-10-07"
 
 jobs:
+  offline-release-preflight:
+    name: Offline release package and migration history validation
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ensure no remote credentials or live database target
+        run: |
+          test -z "${SUPABASE_ACCESS_TOKEN:-}"
+          test -z "${SUPABASE_DB_PASSWORD:-}"
+          test -z "${DATABASE_URL:-}"
+          test -z "${SUPABASE_SERVICE_ROLE_KEY:-}"
+          test -z "${PGHOST:-}"
+      - name: Validate the audited migration mapping and fail-closed scenarios
+        run: |
+          python3 scripts/validacao-pagamentos/test-release-migrations.py
+      - name: Prepare disposable offline migration plan only
+        run: |
+          set -euo pipefail
+          target="$RUNNER_TEMP/catalogo-release-offline-$GITHUB_RUN_ID"
+          python3 scripts/validacao-pagamentos/build-release-migrations.py --output "$target"
+          test -f "$target/release-evidence.json"
+          test "$(find "$target/supabase/migrations" -maxdepth 1 -type f -name '*.sql' | wc -l)" -eq 29
+          ! find "$target/supabase/migrations" -name '20261007213000*' | grep -q .
+          test -f "$target/supabase/migrations/20261008080000_arredondamento_taxa_total_7.sql"
+          echo "PASS: release package is offline; current remote history still requires live read-only recheck, backup and authorization."
+
   frontend-node-regressions:
     name: Frontend, buyer, merchant and courier regression tests (Node)
     runs-on: ubuntu-latest
