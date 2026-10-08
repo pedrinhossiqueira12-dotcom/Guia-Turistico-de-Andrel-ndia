@@ -277,6 +277,9 @@
   function limparDadosPrivados() {
     limparPedidos();
     limparExtrato();
+    if ($("motoboySaquesHistorico")) $("motoboySaquesHistorico").replaceChildren();
+    if ($("motoboySaqueMes")) $("motoboySaqueMes").textContent = "Mês anterior sujeito a créditos financiados.";
+    definirFeedback("motoboySaqueFeedback", "");
     state.actionInFlight.clear();
   }
 
