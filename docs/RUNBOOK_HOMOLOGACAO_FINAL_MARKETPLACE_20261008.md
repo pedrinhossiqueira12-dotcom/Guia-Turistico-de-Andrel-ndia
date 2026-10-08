@@ -34,6 +34,47 @@ As três migrations **já estão executadas** no banco remoto; os timestamps loc
 
 Um teste novo no CI usa um banco `catalogo_upgrade_ci` descartável clonado antes da migration final, com snapshots V1/V2 sintéticos que incluem arredondamento legado de 7% diferente do arredondamento único. Ele aplica só a migration final e exige preservação dos valores de pedidos e comissões. Este ensaio **não é substituto** da restauração dos dados reais.
 
+## 2A. Pacote de versões alinhadas (somente preparo offline)
+
+O projeto conserva os arquivos de migração originais para manter o CI e as
+referências históricas reproduzíveis. **Não utilizar `supabase db push` diretamente
+sobre a pasta `supabase/migrations` da branch:** três timestamps nela divergem
+do histórico aplicado ao banco.
+
+O gerador **não executa SQL, não cria backup e não acessa Supabase**.
+Ele lê um manifesto auditado em 08/10/2026, verifica SHA-256 dos três SQLs
+já aplicados e prepara uma pasta temporária com 29 arquivos:
+28 versões exatas do histórico remoto e uma nova versão
+`20261008080000_arredondamento_taxa_total_7.sql`.
+
+Comandos de preparação local (sem credenciais; escolher destino ainda inexistente,
+fora do repositório):
+
+```bash
+python3 scripts/validacao-pagamentos/test-release-migrations.py
+python3 scripts/validacao-pagamentos/build-release-migrations.py
+python3 scripts/validacao-pagamentos/build-release-migrations.py --output /tmp/catalogo-release-auditado
+```
+
+Arquivos resultantes:
+`/tmp/catalogo-release-auditado/supabase/migrations/`,
+`release-evidence.json` (versões e hashes), `README.txt` (alertas).
+
+**Condição bloqueante:** o manifesto local é um *snapshot histórico*, não
+prova de que o servidor continua igual na data do deploy. Antes de usar o
+pacote em qualquer ambiente conectado, consultar novamente a tabela
+`supabase_migrations.schema_migrations` em modo somente leitura,
+confirmar as 28 versões e os hashes das três migrações equivalentes,
+confirmar que a nova versão ainda não existe, e registrar o resultado.
+Se a configuração ou o histórico remoto mudou, **invalidar o pacote**
+até nova revisão. Não fazer `migration repair` sem autorização.
+
+**Atenção:** o pacote contém migrations legadas já aplicadas em produção,
+inclusive uma com agendamento/URL externa. Ele NÃO é adequado para
+inicializar um projeto vazio ou staging sem sanitização separada.
+O gerador não liga a um banco e não pode habilitar execução automática:
+a implantação real permanece condicionada ao checklist abaixo.
+
 ## 3. Pré-requisitos obrigatórios para GO
 
 - [ ] Criar backup íntegro do **banco real** com hora, tamanho e hash; armazenar fora do projeto.
