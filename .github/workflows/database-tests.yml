@@ -215,6 +215,58 @@ jobs:
           psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM pg_policies WHERE schemaname='storage' AND tablename='objects' AND policyname='catalogos_proprietario_upload_ativo'" | grep -Fx 1
           psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM pg_class WHERE oid IN ('public.catalogos'::regclass,'public.catalogo_assinaturas'::regclass,'public.catalogo_categorias'::regclass,'public.catalogo_produtos'::regclass) AND relrowsecurity" | grep -Fx 4
 
+      - name: Apply real migrations for news, payments, profiles and marketplace (isolated only)
+        run: |
+          test "$PGHOST" = localhost
+          test "$PGDATABASE" = catalogo_ci
+          test -z "${DATABASE_URL:-}"
+          test -z "${PGSERVICE:-}"
+          test -z "${PGHOSTADDR:-}"
+          test -z "${PGOPTIONS:-}"
+          # Cron/Vault scheduling migration is intentionally excluded:
+          # it embeds an endpoint pointing to production. Never execute it here.
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261003134656_editorial_pagamentos_20261003.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261003140000_catalogo_pagamento_producao.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261004003000_perfil_fotos_e_politicas.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261004110000_avaliacoes_avatar_url.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261004223000_catalogo_marketplace_pedidos.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261005010000_catalogo_marketplace_oauth.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261005090000_catalogo_pedidos_email.sql
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          DO $assert_extra_migrations$
+          BEGIN
+            IF (SELECT count(*) FROM storage.buckets WHERE id IN ('catalogos', 'noticias-eventos', 'perfil-fotos')) <> 3 THEN
+              RAISE EXCEPTION 'Expected all three isolated Storage buckets';
+            END IF;
+            IF (SELECT count(*) FROM pg_class
+                WHERE oid IN ('public.conteudos_editoriais'::regclass,
+                              'public.catalogo_pagamentos'::regclass,
+                              'public.catalogo_recebedores'::regclass,
+                              'public.catalogo_pedidos'::regclass,
+                              'public.catalogo_pedido_itens'::regclass,
+                              'public.catalogo_oauth_estados'::regclass)
+                  AND relrowsecurity) <> 6 THEN
+              RAISE EXCEPTION 'Some marketplace or editorial tables have RLS disabled';
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                           WHERE table_schema = 'public' AND table_name = 'avaliacoes'
+                             AND column_name = 'avatar_url')
+               OR NOT EXISTS (SELECT 1 FROM information_schema.columns
+                              WHERE table_schema = 'public' AND table_name = 'catalogo_pedidos'
+                                AND column_name = 'cliente_email') THEN
+              RAISE EXCEPTION 'Expected legacy avatar and order email columns';
+            END IF;
+            IF has_table_privilege('anon','public.catalogo_pedidos','SELECT')
+               OR has_table_privilege('authenticated','public.catalogo_pagamentos','SELECT')
+               OR has_table_privilege('anon','public.catalogo_oauth_estados','SELECT') THEN
+              RAISE EXCEPTION 'Payment, order or OAuth data exposed directly';
+            END IF;
+            IF to_regclass('cron.job') IS NOT NULL THEN
+              RAISE EXCEPTION 'Unexpected cron scheduling in isolated database';
+            END IF;
+          END $assert_extra_migrations$;
+          SQL
+
       - name: Reject RLS scenarios without explicit opt-in
         run: |
           if psql -v ON_ERROR_STOP=1 -f supabase/tests/isolated/catalogo-rls-postgres.sql > /tmp/catalogo-rls-no-opt-in.log 2>&1; then
