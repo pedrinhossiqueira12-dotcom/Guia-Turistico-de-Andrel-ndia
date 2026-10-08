@@ -138,6 +138,29 @@ BEGIN
     RAISE EXCEPTION 'ERRO: troca de entrega para consumo local aceita sem recalculo';
   EXCEPTION WHEN check_violation THEN NULL;
   END;
+  -- A versao financeira nao pode ser trocada mantendo taxas da versao anterior.
+  BEGIN
+    UPDATE public.catalogo_pedidos
+       SET versao_financeira = 2
+     WHERE ctid = (
+       SELECT ctid FROM public.catalogo_pedidos
+        WHERE versao_financeira = 1 AND modalidade = 'entrega'
+        LIMIT 1
+     );
+    RAISE EXCEPTION 'ERRO: pedido V1 convertido em V2 sem recalculo';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
+  BEGIN
+    UPDATE public.catalogo_comissoes_offline
+       SET versao_financeira = 2
+     WHERE ctid = (
+       SELECT ctid FROM public.catalogo_comissoes_offline
+        WHERE versao_financeira = 1 AND modalidade = 'entrega'
+        LIMIT 1
+     );
+    RAISE EXCEPTION 'ERRO: comissao V1 convertida em V2 sem recalculo';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
   -- As restricoes precisam rejeitar valores inconsistentes.
   BEGIN
     INSERT INTO public.catalogo_comissoes_offline VALUES(10000,2,'entrega',500,300,800,800);
