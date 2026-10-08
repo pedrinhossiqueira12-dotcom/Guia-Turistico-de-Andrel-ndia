@@ -45,7 +45,7 @@
     em_entrega: ["pedido_id"],
     desistir_entrega: ["pedido_id", "motivo"],
     registrar_ocorrencia: ["pedido_id", "categoria", "motivo"],
-    salvar_chave_pix: ["chave_pix"],
+    salvar_chave_pix: ["chave_pix", "chave_pix_tipo"],
     confirmar_entrega: ["pedido_id", "comercio_id", "codigo_entrega", "recebimento_confirmado"],
   };
 
@@ -436,6 +436,9 @@
     if (checkbox) { checkbox.checked = disponibilidade; checkbox.disabled = false; }
     const chave = $("motoboyPixKey");
     if (chave && typeof perfil.chave_pix === "string" && document.activeElement !== chave) chave.value = perfil.chave_pix;
+    const tipoPix = $("motoboyPixType");
+    if (tipoPix && typeof perfil.chave_pix_tipo === "string" &&
+        document.activeElement !== tipoPix) tipoPix.value = perfil.chave_pix_tipo;
     const concluidadas = Array.isArray(state.extrato.entregas_concluidas) ? state.extrato.entregas_concluidas : [];
     const pagamentos = Array.isArray(state.extrato.pagamentos) ? state.extrato.pagamentos : [];
     const historico = $("motoboyHistory");
@@ -710,6 +713,14 @@
     event.preventDefault();
     const campo = $("motoboyPixKey");
     const chavePix = textoSeguro(campo?.value, 120);
+    const selectTipo = $("motoboyPixType");
+    const tipoPix = textoSeguro(selectTipo?.value, 16);
+    if ((chavePix && !["EMAIL","PHONE","CPF","CNPJ","PIX_CODE"].includes(tipoPix)) ||
+        (!chavePix && tipoPix)) {
+      definirFeedback("motoboyPixFeedback",
+        "Selecione um tipo ao cadastrar ou deixe ambos os campos vazios para remover.", true);
+      return;
+    }
     if (chavePix && chavePix.length < 3) {
       definirFeedback("motoboyPixFeedback", "Informe uma chave Pix válida ou deixe o campo vazio.", true);
       return;
@@ -719,10 +730,11 @@
     if (botao) botao.disabled = true;
     definirFeedback("motoboyPixFeedback", "Salvando sua chave Pix…");
     try {
-      const resultado = await chamarApi({ acao: "salvar_chave_pix", chave_pix: chavePix }, generation, state.userId);
+      const resultado = await chamarApi({ acao: "salvar_chave_pix", chave_pix: chavePix, chave_pix_tipo: tipoPix }, generation, state.userId);
       validarSessaoAtual(generation, state.userId);
       const perfil = resultado?.perfil || {};
       if (campo && typeof perfil.chave_pix === "string") campo.value = perfil.chave_pix;
+      if (selectTipo) selectTipo.value = perfil.chave_pix_tipo || "";
       definirFeedback("motoboyPixFeedback", chavePix ? "Chave Pix própria salva. O repasse continua sujeito a comprovação administrativa." : "Chave Pix removida do seu perfil.");
     } catch (erro) {
       if (erro.message !== STALE_REQUEST) definirFeedback("motoboyPixFeedback", erro.message || "Não foi possível salvar a chave Pix.", true);
