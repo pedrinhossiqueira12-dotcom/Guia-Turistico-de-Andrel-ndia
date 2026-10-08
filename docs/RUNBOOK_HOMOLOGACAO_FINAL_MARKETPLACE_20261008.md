@@ -88,6 +88,27 @@ a implantação real permanece condicionada ao checklist abaixo.
 - [ ] Obter aprovação explícita do proprietário para cada execução sobre produção, com janela de mudança, plano de rollback e reconciliação financeira.
 - [ ] Somente então considerar merge autorizado do PR, aplicar migrations selecionadas/validadas, publicar funções e frontend na ordem definida e monitorar erros, pagamentos e filas.
 
+## 3A. Auditoria dos bundles Edge e navegação real
+
+Em 08/10/2026, a auditoria `docs/AUDITORIA_EDGE_DEPLOY_PR35_20261008.md`
+comparou o código realmente publicado com a branch: cinco dos nove
+`index.ts` analisados são idênticos; quatro divergem.
+Há ainda três módulos compartilhados com divergências de conteúdo.
+Isso impede supor que produção já está sincronizada com o código validado
+e exige redeploy **atômico por função e respectivos arquivos importados**,
+na janela autorizada.
+
+A suíte Chromium em GitHub Actions executa 12 cenários com rede externa
+bloqueada, em 1280px e 390px, verificando login de operador, comprador,
+proprietário, motoboy e página legada. Encontrou e corrigiu bug em
+`js/entregas-operacao.js`: sem sessão, o login administrativo ficava oculto.
+Esse smoke valida páginas renderizadas sem autenticação real; **não equivale**
+à homologação com contas reais de teste, Mercado Pago sandbox e navegador
+conectado a ambiente isolado.
+
+A suíte Node também contém `tests/catalogo-edge-dependencies.test.cjs`
+para detectar imports relativos ausentes antes de publicar o bundle.
+
 ## 4. Checagens financeiras de aceitação
 
 - V1: manter snapshots antigos a 5% sem regravar valores históricos.
