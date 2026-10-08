@@ -27,6 +27,37 @@ ALTER TABLE public.catalogo_pedidos ADD CONSTRAINT catalogo_pedidos_taxas_v2_che
   )
 );
 
+-- A comissao offline guarda o mesmo snapshot do pedido; sem esta alteracao,
+-- o aceite de uma entrega com arredondamento novo falha no CHECK antigo de 5%.
+ALTER TABLE public.catalogo_comissoes_offline
+  DROP CONSTRAINT IF EXISTS catalogo_comissoes_offline_v2_snapshot_check;
+
+ALTER TABLE public.catalogo_comissoes_offline
+  ADD CONSTRAINT catalogo_comissoes_offline_v2_snapshot_check CHECK (
+    versao_financeira IN (1,2)
+    AND taxa_plataforma_centavos >= 0
+    AND taxa_motoboy_centavos >= 0
+    AND valor_total_centavos = taxa_plataforma_centavos + taxa_motoboy_centavos
+    AND valor_comissao_centavos = valor_total_centavos
+    AND (
+      (versao_financeira = 1 AND taxa_motoboy_centavos = 0
+       AND taxa_plataforma_centavos = round(subtotal_produtos_centavos::numeric * 0.05)::integer)
+      OR
+      (versao_financeira = 2 AND (
+        (modalidade <> 'entrega' AND taxa_motoboy_centavos = 0
+         AND taxa_plataforma_centavos = round(subtotal_produtos_centavos::numeric * 0.07)::integer)
+        OR
+        (modalidade = 'entrega'
+         AND taxa_motoboy_centavos = round(subtotal_produtos_centavos::numeric * 0.02)::integer
+         AND (
+           taxa_plataforma_centavos = round(subtotal_produtos_centavos::numeric * 0.05)::integer
+           OR taxa_plataforma_centavos =
+             round(subtotal_produtos_centavos::numeric * 0.07)::integer - taxa_motoboy_centavos
+         ))
+      ))
+    )
+  );
+
 CREATE OR REPLACE FUNCTION public.catalogo_fluxo_precificar(
   p_modalidade text,
   p_subtotal_centavos integer,
