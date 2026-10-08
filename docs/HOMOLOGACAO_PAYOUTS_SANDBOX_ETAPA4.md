@@ -12,7 +12,7 @@ Data: 08/10/2026. **Estado: preflight offline disponível; ainda não realizado 
 
 Mercado Pago Payouts usa POST /v1/payouts, X-test-token: true e Access Token de TESTE. HTTP 202 é apenas aceito para processamento. O resultado final vem do GET /v1/payouts/{payout_id}/transactions/{transaction_id}; apenas success/accredited é crédito confirmado. Status success/in_progress, transaction_in_process/pending_bank e pending_authorized não autorizam baixa. Reembolsos e rejeições exigem revisão.
 
-O valor mínimo oficial por transferência é R$ 1,00. Ganhos inferiores devem acumular no saldo e não desaparecer. Produção exige assinatura Ed25519 e chave pública cadastrada com o Mercado Pago.
+O valor mínimo oficial por transferência é R$ 1,00. Ganhos inferiores devem acumular no saldo e não desaparecer. A RPC de solicitação mensal agora recusa um lote abaixo de R$ 1,00 sem marcar seus créditos como solicitados, permitindo incluí-los no próximo fechamento. Produção exige assinatura Ed25519 e chave pública cadastrada com o Mercado Pago.
 
 ## Pré-requisitos externos
 
