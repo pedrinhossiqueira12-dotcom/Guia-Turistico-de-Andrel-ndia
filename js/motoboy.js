@@ -4,6 +4,7 @@
   const SUPABASE_URL = "https://xdmbkflufsfqziixzpxc.supabase.co";
   const SUPABASE_KEY = "sb_publishable_dvwNkLDf3oZrCqvZ5uAaRA_VsfiuZFy";
   const API_URL = `${SUPABASE_URL}/functions/v1/catalogo-entregas`;
+  const ASAAS_URL = `${SUPABASE_URL}/functions/v1/catalogo-asaas-financeiro`;
   const STALE_REQUEST = "STALE_SESSION_REQUEST";
   const STATUS_LABELS = {
     nao_atribuido: "Aguardando distribuição",
@@ -37,6 +38,8 @@
   const ACTION_FIELDS = {
     listar_entregas: ["offset"],
     consultar_extrato: ["offset"],
+    consultar_carteira: [],
+    solicitar_saque: [],
     definir_disponibilidade: ["disponivel"],
     aceitar_entrega: ["pedido_id"],
     coletar: ["pedido_id"],
@@ -57,6 +60,8 @@
     offset: 0,
     hasMore: false,
     extrato: null,
+    carteira: null,
+    withdrawalLoading: false,
     timer: null,
     subscription: null,
     destroyed: false,
@@ -220,7 +225,7 @@
     return saida;
   }
 
-  async function chamarApi(body, generation = state.generation, userId = state.userId) {
+  async function chamarApi(body, generation = state.generation, userId = state.userId, endpoint = API_URL) {
     const cliente = obterCliente();
     if (!cliente) throw new Error("O serviço de login não está disponível. Atualize a página e tente novamente.");
     const { data, error } = await cliente.auth.getSession();
@@ -230,7 +235,7 @@
     validarSessaoAtual(generation, userId);
     if (data?.session?.user?.id !== userId) throw new Error(STALE_REQUEST);
 
-    const resposta = await fetch(API_URL, {
+    const resposta = await fetch(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -265,6 +270,10 @@
 
   function limparExtrato() {
     state.extrato = null;
+    state.carteira = null;
+    if ($("motoboyAsaasBalance")) $("motoboyAsaasBalance").textContent = "R$ 0,00";
+    if ($("motoboyWithdrawPix")) $("motoboyWithdrawPix").disabled = true;
+    if ($("motoboyWithdrawHistory")) $("motoboyWithdrawHistory").innerHTML = "";
     state.availability = false;
     const extrato = $("motoboyEarnings");
     if (extrato) extrato.hidden = true;
@@ -408,6 +417,68 @@
     }
   }
 
+  function renderizarCarteira() {
+    const carteira = state.carteira || {};
+    const saldo = Number(carteira.saldo_disponivel_centavos || 0);
+    const saldoValido = Number.isSafeInteger(saldo) && saldo > 0;
+    if ($("motoboyAsaasBalance")) $("motoboyAsaasBalance").textContent = formatarMoeda(saldo);
+    const botao = $("motoboyWithdrawPix");
+    if (botao) botao.disabled = !state.session || state.withdrawalLoading || !carteira.saque_habilitado || !saldoValido;
+    const historico = $("motoboyWithdrawHistory");
+    if (historico) {
+      historico.innerHTML = Array.isArray(carteira.saques) ? carteira.saques.map((saque) => {
+        const status = { reservado: "Em análise", enviado: "Pix solicitado", concluido: "Pix confirmado", falhou: "Falha confirmada", revisao: "Revisão financeira" }[saque.status] || "Em revisão";
+        return `<li><strong>${escapar(status)}</strong><span>${escapar(formatarData(saque.criado_em))}</span><b>${formatarMoeda(saque.valor_centavos)}</b></li>`;
+      }).join("") : "";
+    }
+    definirFeedback("motoboyWithdrawFeedback", carteira.saque_habilitado
+      ? saldoValido ? "Você pode solicitar o Pix diretamente pelo Guia Andrelândia." : "Sem créditos de faturas Asaas liquidadas disponíveis no momento."
+      : "O saque automático ainda não foi habilitado pela plataforma.");
+  }
+
+  async function carregarCarteira() {
+    if (!state.session || !navigator.onLine || state.withdrawalLoading) return;
+    const generation = state.generation;
+    const userId = state.userId;
+    try {
+      const result = await chamarApi({ acao: "consultar_carteira" }, generation, userId, ASAAS_URL);
+      validarSessaoAtual(generation, userId);
+      state.carteira = result;
+      renderizarCarteira();
+    } catch (error) {
+      if (error.message === STALE_REQUEST) return;
+      state.carteira = null;
+      if ($("motoboyWithdrawPix")) $("motoboyWithdrawPix").disabled = true;
+      if ($("motoboyAsaasBalance")) $("motoboyAsaasBalance").textContent = "R$ 0,00";
+      definirFeedback("motoboyWithdrawFeedback", error.message || "Carteira indisponível. Seus créditos históricos permanecem protegidos.", true);
+    }
+  }
+
+  async function solicitarSaque() {
+    if (!state.session || state.withdrawalLoading || !state.carteira?.saque_habilitado ||
+        Number(state.carteira?.saldo_disponivel_centavos || 0) <= 0) return;
+    if (typeof window.confirm === "function" &&
+        !window.confirm("Confirmar saque via Pix para a chave cadastrada no seu perfil?")) return;
+    const generation = state.generation, userId = state.userId;
+    state.withdrawalLoading = true;
+    if ($("motoboyWithdrawPix")) $("motoboyWithdrawPix").disabled = true;
+    definirFeedback("motoboyWithdrawFeedback", "Solicitando transferência Pix ao provedor…");
+    try {
+      const result = await chamarApi({ acao: "solicitar_saque" }, generation, userId, ASAAS_URL);
+      validarSessaoAtual(generation, userId);
+      definirFeedback("motoboyWithdrawFeedback", result.mensagem || "Saque solicitado; acompanhe o status.");
+      await carregarExtrato();
+    } catch (error) {
+      if (error.message !== STALE_REQUEST)
+        definirFeedback("motoboyWithdrawFeedback", error.message || "Não foi possível confirmar o saque. Consulte o histórico antes de tentar novamente.", true);
+    } finally {
+      if (generation === state.generation) {
+        state.withdrawalLoading = false;
+        await carregarCarteira();
+      }
+    }
+  }
+
   function renderizarExtrato() {
     const bloco = $("motoboyEarnings");
     if (!bloco || !state.extrato) return;
@@ -418,6 +489,7 @@
     $("motoboyBalanceAReceber").textContent = formatarMoeda(saldo.a_receber_centavos);
     $("motoboyBalancePago").textContent = formatarMoeda(saldo.pago_centavos);
     $("motoboyBalanceRetido").textContent = formatarMoeda(saldo.retido_centavos);
+    renderizarCarteira();
     const amostra = Number(confiabilidade.amostra);
     const indice = Number(confiabilidade.indice);
     const emFormacao = confiabilidade.situacao === "em_formacao" || !Number.isFinite(indice) || !Number.isFinite(amostra) || amostra <= 0;
@@ -670,7 +742,8 @@
       validarSessaoAtual(generation, state.userId);
       const perfil = resultado?.perfil || {};
       if (campo && typeof perfil.chave_pix === "string") campo.value = perfil.chave_pix;
-      definirFeedback("motoboyPixFeedback", chavePix ? "Chave Pix própria salva. O repasse continua sujeito a comprovação administrativa." : "Chave Pix removida do seu perfil.");
+      definirFeedback("motoboyPixFeedback", chavePix ? "Chave Pix própria salva. Ela será utilizada quando você solicitar um saque habilitado." : "Chave Pix removida do seu perfil.");
+      carregarCarteira();
     } catch (erro) {
       if (erro.message !== STALE_REQUEST) definirFeedback("motoboyPixFeedback", erro.message || "Não foi possível salvar a chave Pix.", true);
     } finally {
@@ -735,7 +808,7 @@
     definirFeedback("motoboyLoginFeedback", "");
     definirAviso("Sessão autenticada", "Consultando ofertas e extrato autorizados para esta conta…");
     iniciarPolling();
-    await Promise.all([carregarEntregas(), carregarExtrato()]);
+    await Promise.all([carregarEntregas(), carregarExtrato(), carregarCarteira()]);
   }
 
   async function fazerLogin(event) {
@@ -806,7 +879,8 @@
     $("motoboyLoginForm")?.addEventListener("submit", fazerLogin);
     $("motoboySignupForm")?.addEventListener("submit", criarConta);
     $("motoboyLogout")?.addEventListener("click", sair);
-    $("motoboyRefresh")?.addEventListener("click", () => { carregarEntregas(); carregarExtrato(); });
+    $("motoboyRefresh")?.addEventListener("click", () => { carregarEntregas(); carregarExtrato(); carregarCarteira(); });
+    $("motoboyWithdrawPix")?.addEventListener("click", solicitarSaque);
     $("motoboyLoadMore")?.addEventListener("click", () => carregarEntregas({ append: true }));
     $("motoboyAvailability")?.addEventListener("change", definirDisponibilidade);
     $("motoboyPixForm")?.addEventListener("submit", salvarChavePix);
