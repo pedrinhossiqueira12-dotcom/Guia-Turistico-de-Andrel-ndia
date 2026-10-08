@@ -102,16 +102,23 @@ BEGIN
     FOR v_solicitacao IN SELECT DISTINCT i.solicitacao_id
       FROM public.catalogo_solicitacao_saque_itens_v2 i
       WHERE i.remuneracao_id=NEW.id LOOP
-      -- Todos os créditos da solicitação devem estar pagos e apontar ao
-      -- MESMO repasse real; do contrário há pendência para revisão manual.
+      -- A operação atual pode efetuar comprovantes separados para cada
+      -- entrega. A solicitação mensal só é paga quando TODOS os seus
+      -- créditos têm comprovante de repasse real, sem exigir o mesmo lote.
       UPDATE public.catalogo_solicitacoes_saque_v2 s
-         SET status='pago', repasse_id=NEW.repasse_id, resolvido_em=pg_catalog.now()
+         SET status='pago',
+             repasse_id=(SELECT CASE WHEN count(DISTINCT r.repasse_id)=1
+                            THEN min(r.repasse_id) ELSE NULL END
+                          FROM public.catalogo_solicitacao_saque_itens_v2 i
+                          JOIN public.catalogo_remuneracoes_v2 r ON r.id=i.remuneracao_id
+                          WHERE i.solicitacao_id=s.id),
+             resolvido_em=pg_catalog.now()
        WHERE s.id=v_solicitacao AND s.status IN ('solicitado','em_analise')
          AND NOT EXISTS (
            SELECT 1 FROM public.catalogo_solicitacao_saque_itens_v2 i
            JOIN public.catalogo_remuneracoes_v2 r ON r.id=i.remuneracao_id
-           WHERE i.solicitacao_id=s.id AND
-             (r.status<>'pago' OR r.repasse_id IS DISTINCT FROM NEW.repasse_id)
+           WHERE i.solicitacao_id=s.id
+             AND (r.status<>'pago' OR r.repasse_id IS NULL)
          );
     END LOOP;
   END IF;
