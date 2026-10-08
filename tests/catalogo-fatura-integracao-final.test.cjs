@@ -238,7 +238,15 @@ test('Order normal não é encaminhada; vínculo de fatura usa somente id/order_
   assert.equal(destination.pathname, '/functions/v1/catalogo-fatura-pix/webhook');
   assert.equal(destination.searchParams.get('type'), 'orders_v2');
   assert.equal(destination.searchParams.get('data.id'), FaturaOrder);
-  assert.equal(call.options.headers['x-signature'], signature(forwarded.helpers, FaturaOrder));
+  // A assinatura do webhook usa o timestamp da requisição. Recalculá-la com
+  // Date.now() aqui gera falha intermitente quando muda o segundo no CI.
+  const forwardedSignature = call.options.headers['x-signature'];
+  const timestampMatch = /^ts=(\\d{10,}),v1=[a-f0-9]{64}$/.exec(forwardedSignature);
+  assert.ok(timestampMatch, 'O proxy deve encaminhar uma assinatura HMAC válida');
+  const forwardedTimestamp = timestampMatch[1];
+  assert.ok(Math.abs(Math.floor(Date.now() / 1000) - Number(forwardedTimestamp)) <= 5,
+    'O timestamp encaminhado deve ser recente');
+  assert.equal(forwardedSignature, signature(forwarded.helpers, FaturaOrder, forwardedTimestamp));
   assert.equal(call.options.headers['x-request-id'], REQUEST_ID);
   assert.equal(call.options.headers.authorization, undefined);
   assert.deepEqual(JSON.parse(call.options.body), { type: 'orders_v2', data: { id: FaturaOrder }, source: 'official-simulation', url: 'https://attacker.invalid' });
