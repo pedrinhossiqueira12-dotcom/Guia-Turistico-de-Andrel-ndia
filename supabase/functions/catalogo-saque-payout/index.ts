@@ -119,7 +119,8 @@ async function execute(requestId: string) {
     await rpc("falha", requestId, payout, transaction, "rejected");
     return { status: "falhou", confirmado: true };
   }
-  // approved / created / pending / success-in_progress / error: NÃO liberar nem pagar.
+  // Estado não final: mover ao fim da fila para não bloquear outros motoboys.
+  await rpc("observado", requestId);
   return { status: "aguardando_confirmacao", confirmado: false };
 }
 Deno.serve(async (request: Request) => {
@@ -133,7 +134,15 @@ Deno.serve(async (request: Request) => {
   }
   try {
     const body = object(await request.json());
-    const requestId = uuid(body.saque_id);
+    let requestId = uuid(body.saque_id);
+    if (body.acao === "varrer") {
+      // Para Cron interno: selecione a próxima solicitação sob controle do banco,
+      // nunca um ID informado por um serviço não confiável.
+      const { data, error } = await db.rpc("catalogo_saque_proximo_v2");
+      if (error || data?.ok !== true) throw new Error("Fila de payout indisponível");
+      if (!data?.saque_id) return result({ ok: true, status: "sem_pendencias" });
+      requestId = uuid(data.saque_id);
+    }
     if (!requestId) return result({ error: "Solicitação inválida." }, 400);
     const output = await execute(requestId);
     return result({ ok: true, ...output });
