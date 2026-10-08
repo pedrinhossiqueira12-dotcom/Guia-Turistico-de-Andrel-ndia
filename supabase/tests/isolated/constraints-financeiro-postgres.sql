@@ -78,6 +78,17 @@ BEGIN
     RAISE EXCEPTION 'ERRO: consumo local com motoboy aceito';
   EXCEPTION WHEN check_violation THEN NULL;
   END;
+  -- Um subtotal adulterado nao pode preservar taxas calculadas para outro valor.
+  BEGIN
+    INSERT INTO public.catalogo_pedidos VALUES(20000,2,'entrega',500,200,700);
+    RAISE EXCEPTION 'ERRO: subtotal adulterado aceito em pedido';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
+  BEGIN
+    INSERT INTO public.catalogo_comissoes_offline VALUES(20000,2,'entrega',500,200,700,700);
+    RAISE EXCEPTION 'ERRO: subtotal adulterado aceito em comissao';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
   -- CHECKs devem ser aplicados tambem a alteracoes de registros existentes.
   BEGIN
     UPDATE public.catalogo_pedidos
