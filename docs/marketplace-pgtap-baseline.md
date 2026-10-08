@@ -48,3 +48,12 @@ Anexar os logs do reset local, execução completa do pgTAP, lista de jobs aprov
 - `20261004223000_catalogo_marketplace_pedidos.sql` cria `public.catalogo_recebedores` e `public.catalogo_pedidos`, com FKs para `public.catalogos`. Portanto, o recebedor consultado na migração `20261006130000_catalogo_gratuito_por_conexao.sql` tem origem versionada. Isso **não** resolve as tabelas legadas `avaliacoes` e `cadastros_comercios`.
 
 **Conclusão parcial:** um ambiente Supabase local completo (Auth, Storage, Vault e extensões) é necessário; PostgreSQL simples com apenas fixtures financeiros não constitui um baseline pgTAP completo.
+
+## Inspeção somente leitura do schema legado (2026-10-07)
+
+A consulta `information_schema.columns` no projeto existente confirmou a estrutura das tabelas legadas, **sem ler nenhuma linha de clientes**:
+
+- `public.avaliacoes`: `id bigint NOT NULL`, `local_id text NOT NULL`, `usuario_id uuid NOT NULL`, `nome_usuario text NOT NULL`, `nota integer NOT NULL`, `comentario text NOT NULL`, `criado_em timestamptz NOT NULL DEFAULT now()` e `avatar_url text NULL`. A coluna `avatar_url` é adicionada por uma migração posterior e, portanto, **não deve constar na definição inicial** do baseline.
+- `public.cadastros_comercios`: `id uuid NOT NULL DEFAULT gen_random_uuid()`, `telefone_usuario text NOT NULL`, `etapa text NOT NULL DEFAULT 'inicio'`, `status text NOT NULL DEFAULT 'em_andamento'`, `criado_em` e `atualizado_em timestamptz NOT NULL DEFAULT now()`, além de `usuario_id uuid NULL`, `tipo text DEFAULT 'novo_comercio'`, `local_id text`, `imagens jsonb DEFAULT '[]'` e campos opcionais de contato, localização e revisão.
+
+**Atenção:** `information_schema.columns` não demonstra PKs, FKs, índices, triggers, policies ou CHECKs. Antes de criar o baseline executável, consultar também `pg_constraint`, `pg_indexes`, `pg_trigger` e `pg_policies` (somente metadados). Não copiar dados reais.
