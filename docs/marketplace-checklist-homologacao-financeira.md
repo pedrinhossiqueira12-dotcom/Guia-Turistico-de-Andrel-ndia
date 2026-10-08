@@ -7,13 +7,14 @@
 - Desenvolvimento isolado na branch `logic/finalizacao-marketplace-2026-10-07` e PR #35; não fazer merge em `main` sem aprovação.
 - A migração `20261007213000_arredondamento_taxa_total_7.sql` **não foi aplicada à produção**.
 - Três migrações anteriores já estão na produção. O novo arredondamento de 7% deve ser implantado somente após autorização explícita.
-- Testes Deno, sintaxe SQL, 28 migrações reais e **23/23 pgTAP** passaram em PostgreSQL isolado. A migração restante de Cron/Vault passou em **cópia sanitizada sem chamadas externas**. O job nativo `supabase test db` continua **SKIPPED** por falta de baseline Supabase completo; não interpretar `skipped` como `passed`.
+- Testes Deno, sintaxe SQL, 28 migrações reais e **23/23 pgTAP** passaram em PostgreSQL isolado. O novo job **Supabase nativo local** também passou (`supabase start`, `db reset --local`, `test db`: **23/23**) num projeto temporário, com migrations legadas sintéticas e agendamento externo substituído apenas na cópia efêmera. O job original `database-tests` permanece **SKIPPED**; não interpretar seu `skipped` como `passed`.
 
 ## Evidências automatizadas validadas (CI — ambiente descartável)
 
 - [x] Migrações financeiras: **28/29** arquivos SQL reais aplicados em ordem a `catalogo_ci` (PostgreSQL 17), com apenas o agendamento de rede excluído.
 - [x] Migração de agendamento: teste de sua lógica em **cópia temporária sanitizada**, com endereço `.invalid`, sem `pg_cron`/`pg_net` reais e com stubs que não executam comandos. Uma nova aplicação mantém um único job inerte e o mesmo token.
 - [x] `pgTAP` real: **23 assertions aprovadas** no esquema financeiro isolado, com verificação posterior de rollback.
+- [x] **Supabase CLI nativo**: stack local iniciada, `supabase db reset --local` concluído e `supabase test db` executado com **23 testes aprovados**. Foram usadas **28 migrações SQL reais inalteradas** e uma substituição local inerte da migração Cron/Vault, mais duas seeds sintéticas; nenhum acesso ao projeto de produção.
 - [x] Pix fictício por RPC: aprovação, divergência de valor, idempotência, cancelamento antes do aceite, bloqueio após aceite, oferta de entrega, disputa sequencial entre motoboys, confirmação por código e estorno de remuneração.
 - [x] Dinheiro e cartão de débito fictícios por RPC: entrega comprovada gera crédito de **2% retido**; fatura de **7%** (5% plataforma + 2% logística) liquida o crédito; divergência não libera fundos; evento duplicado não duplica créditos; estorno volta a reter e bloqueia comércio.
 - [x] Testes de RLS de catálogo e Storage: autorização dos proprietários, bloqueio de terceiros, imagens inválidas, suspensão e assinatura vencida.
@@ -49,6 +50,8 @@ A migração **ainda não aplicada à produção**, `supabase/migrations/2026100
 
 **Não executar SQL em produção sem autorização explícita e backup restaurável.** Nenhum dado real foi modificado nesses testes.
 
+**Evidência nativa Supabase:** commit `d155fe7d1e9e03730e3fa8fbe3eb9660af97ee19`, execução CI [37722544899](https://github.com/pedrinhossiqueira12-dotcom/Guia-Turistico-de-Andrel-ndia/actions/runs/37722544899), job `113133291267` (**SUCCESS**): CLI gerou projeto em `/tmp/guia-supabase-native-ci`, executou `supabase start`, `supabase db reset --local`, `supabase test db` e reportou `Files=1, Tests=23, Result: PASS`. A migração de agendamento perigosa foi neutralizada SOMENTE no diretório temporário. O banco de produção não foi alterado.
+
 ## Critérios obrigatórios antes de qualquer deploy
 
 - [ ] CI verde no commit exato a publicar; verificar todos os jobs, inclusive os pulados.
@@ -83,6 +86,6 @@ A migração **ainda não aplicada à produção**, `supabase/migrations/2026100
 
 ## Bloqueios atuais
 
-1. Execução nativa `supabase db reset --local` e `supabase test db` com **todas** as dependências Supabase e o agendamento externo neutralizado; atualmente só foi executado pgTAP em PostgreSQL isolado.
+1. O **Supabase nativo isolado** já passou com `db reset --local` e 23/23 pgTAP. Ainda falta a reconstrução literalmente idêntica de todas as migrações originais, pois a Cron/Vault original continua **excluída e substituída por NO-OP** no ambiente nativo; sua lógica foi testada separadamente com stubs.
 2. Homologação ponta a ponta com frontend e **provedor de pagamento sandbox** (Pix, webhooks e chargebacks); concorrência real no banco isolado já passou, mas ainda falta verificar o comportamento da UI sob carga.
 3. Backup e restauração verificáveis do banco real, auditoria de deploy e aprovação explícita para migração/implantação em produção.
