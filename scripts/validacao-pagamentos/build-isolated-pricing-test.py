@@ -9,6 +9,8 @@ start = migration.index(signature)
 end = migration.index("$$;", start) + len("$$;")
 function = migration[start:end]
 assert "v_plataforma := round(p_subtotal_centavos::numeric * 0.07)::integer - v_motoboy" in function
+assert "CREATE OR REPLACE FUNCTION public.catalogo_fluxo_precificar(" in function
+assert function.count("$") == 2, "Delimitadores inesperados na RPC extraida"
 assert fixture.count("DO $$") == 1
 bootstrap, assertions = fixture.split("DO $$", 1)
 Path("/tmp/catalogo-precificacao-ci.sql").write_text(
@@ -33,6 +35,8 @@ for table, constraint in (
     assert len(candidates) == 1, f"Restricao nao encontrada ou ambigua: {constraint}"
     statement = candidates[0]
     statement = statement[statement.index(prefix):]
+    assert statement.count("ADD CONSTRAINT") == 1, f"Restricao extraida com estrutura inesperada: {constraint}"
+    assert statement.rstrip().endswith(";"), f"Restricao sem terminador: {constraint}"
     statements.append(statement)
 assert fixture_constraints.count("-- __CONSTRAINTS_FROM_REAL_MIGRATION__") == 1
 Path("/tmp/catalogo-constraints-ci.sql").write_text(
