@@ -70,6 +70,21 @@ BEGIN
     RAISE EXCEPTION 'ERRO: consumo local com motoboy aceito';
   EXCEPTION WHEN check_violation THEN NULL;
   END;
+  -- CHECKs devem ser aplicados tambem a alteracoes de registros existentes.
+  BEGIN
+    UPDATE public.catalogo_pedidos
+       SET taxa_total_centavos = taxa_total_centavos + 1
+     WHERE ctid = (SELECT ctid FROM public.catalogo_pedidos LIMIT 1);
+    RAISE EXCEPTION 'ERRO: UPDATE inconsistente de pedido aceito';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
+  BEGIN
+    UPDATE public.catalogo_comissoes_offline
+       SET valor_comissao_centavos = valor_comissao_centavos + 1
+     WHERE ctid = (SELECT ctid FROM public.catalogo_comissoes_offline LIMIT 1);
+    RAISE EXCEPTION 'ERRO: UPDATE inconsistente de comissao aceito';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
   -- As restricoes precisam rejeitar valores inconsistentes.
   BEGIN
     INSERT INTO public.catalogo_comissoes_offline VALUES(10000,2,'entrega',500,300,800,800);
