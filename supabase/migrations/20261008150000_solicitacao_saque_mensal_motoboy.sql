@@ -45,7 +45,8 @@ BEGIN
   -- Competência de fechamento: inclui créditos de meses já encerrados que
   -- ficaram disponíveis tardiamente, mas nunca os do mês em curso.
   -- Créditos já vinculados a outras solicitações não entram novamente.
-  v_mes := (date_trunc('month',pg_catalog.now()) - interval '1 month')::date;
+  -- O corte do mês respeita America/Sao_Paulo, não o fuso UTC do banco.
+  v_mes := (date_trunc('month',pg_catalog.now() AT TIME ZONE 'America/Sao_Paulo') - interval '1 month')::date;
   IF p_acao='solicitar' THEN
     IF NOT EXISTS (SELECT 1 FROM public.catalogo_motoboy_perfis pf
                    WHERE pf.usuario_id=p_operador_id AND pf.chave_pix_enc IS NOT NULL) THEN
@@ -60,12 +61,12 @@ BEGIN
     -- Bloqueia alterações concorrentes nos créditos enquanto compõe a lista.
     PERFORM 1 FROM public.catalogo_remuneracoes_v2 r
       WHERE r.motoboy_id=p_operador_id
-        AND r.criado_em<v_mes+interval '1 month'
+        AND r.criado_em<((v_mes+interval '1 month') AT TIME ZONE 'America/Sao_Paulo')
       ORDER BY r.id FOR UPDATE;
     SELECT coalesce(sum(r.valor_centavos),0),count(*) INTO v_total,v_itens
       FROM public.catalogo_remuneracoes_v2 r
       WHERE r.motoboy_id=p_operador_id
-        AND r.criado_em<v_mes+interval '1 month'
+        AND r.criado_em<((v_mes+interval '1 month') AT TIME ZONE 'America/Sao_Paulo')
         AND r.status='disponivel' AND r.financiamento_comprovado
         AND r.repasse_id IS NULL AND catalogo_private.catalogo_v2_financiado(r.pedido_id)
         AND NOT EXISTS (SELECT 1 FROM public.catalogo_solicitacao_saque_itens_v2 i WHERE i.remuneracao_id=r.id);
@@ -77,7 +78,7 @@ BEGIN
     INSERT INTO public.catalogo_solicitacao_saque_itens_v2(solicitacao_id,remuneracao_id,valor_centavos)
       SELECT v_request,r.id,r.valor_centavos FROM public.catalogo_remuneracoes_v2 r
       WHERE r.motoboy_id=p_operador_id
-        AND r.criado_em<v_mes+interval '1 month'
+        AND r.criado_em<((v_mes+interval '1 month') AT TIME ZONE 'America/Sao_Paulo')
         AND r.status='disponivel' AND r.financiamento_comprovado
         AND r.repasse_id IS NULL AND catalogo_private.catalogo_v2_financiado(r.pedido_id)
         AND NOT EXISTS (SELECT 1 FROM public.catalogo_solicitacao_saque_itens_v2 i WHERE i.remuneracao_id=r.id);
