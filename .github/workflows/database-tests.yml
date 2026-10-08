@@ -778,6 +778,18 @@ jobs:
           END $final_chain$;
           SQL
 
+      - name: Test monthly courier withdrawals and no-double-payment in disposable database
+        run: |
+          set -euo pipefail
+          test "${PGHOST:-}" = localhost
+          test "${PGDATABASE:-}" = catalogo_ci
+          test -z "${DATABASE_URL:-}"
+          psql -X -v ON_ERROR_STOP=1 -f supabase/tests/isolated/catalogo-saques-mensais-postgres.sql
+          test "$(psql -X -Atqc 'SELECT count(*) FROM public.catalogo_saques_motoboy_v2')" = 0
+          test "$(psql -X -Atqc 'SELECT count(*) FROM public.catalogo_repasses_v2')" = 0
+          test "$(psql -X -Atqc 'SELECT count(*) FROM public.catalogo_pedidos')" = 0
+          echo 'PASS: Pix withdrawal e2e is simulated and fully rolled back.'
+
       - name: Install real pgTAP extension only in disposable PostgreSQL service
         run: |
           test "$PGHOST" = localhost
