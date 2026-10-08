@@ -1,8 +1,8 @@
-# Pré-requisitos para habilitar pgTAP no CI
+# Histórico do baseline e validação nativa Supabase
 
 ## Estado atual (2026-10-07)
 
-O job `database-tests` de `.github/workflows/database-tests.yml` permanece **SKIPPED** até a variável `MARKETPLACE_TEST_BASELINE_READY=true` ser configurada. Os jobs de sintaxe SQL, testes Deno e PostgreSQL isolado não substituem esta suíte.
+O job original `database-tests` de `.github/workflows/database-tests.yml` permanece **SKIPPED** até `MARKETPLACE_TEST_BASELINE_READY=true`. **Entretanto, agora existe um job novo e aprovado de Supabase nativo local** com reset + 23/23 pgTAP; não confundir o `SKIPPED` histórico com falha ou sucesso desse novo job.
 
 O teste `supabase/tests/database/marketplace_financeiro_v2.test.sql` contém 23 assertions e executa `UPDATE public.catalogo_fluxo_config` dentro de uma transação revertida ao final. Ele deve ser executado **somente em um banco descartável**, nunca no projeto de produção.
 
@@ -16,7 +16,7 @@ No mesmo job, a extensão **pgTAP real** (`postgresql-17-pgtap`) executou `supab
 
 Evidência: workflow no commit `5c67941b87fa846016251f0db960e635fbc0b087`, execução `37716952226`, job `113115498377`. O reforço de verificação após rollback foi adicionado em commit posterior.
 
-**Limite crucial:** isso **não equivale** a `supabase test db` com Supabase local completo e todas as 29 migrações. O job original `database-tests` continua **SKIPPED** até a migração de agendamento ser isolada sem acesso ao projeto remoto, ser possível reconstruir o ambiente Supabase completo e o reset + pgTAP nativos passarem sem exceções.
+**Atualização:** o teste PostgreSQL isolado descrito acima continua distinto do teste **Supabase nativo** realizado posteriormente. O job original `database-tests` permanece **SKIPPED**; o novo job nativo aprovado usa cópia temporária com 28 migrações originais + placeholder inerte no lugar do agendamento externo, não as 29 migrações literais.
 
 ## Avanço posterior: migração Cron/Vault e cenários end-to-end isolados
 
@@ -38,7 +38,17 @@ No job `complete-chain-postgres-isolated`, após o pgTAP e os cenários Pix/offl
 
 Evidência: commit `0896c858ee42171aa7655c2d2b6f442def5c983e`, execução `37718565249`, job `113120670877` (**SUCCESS**). Essa comprovação é de **concorrência real entre sessões PostgreSQL**, não de usuários reais ou testes de carga do frontend.
 
-**Ainda pendente:** `supabase test db` nativo com todas as dependências gerenciadas, chamadas reais ao provedor de pagamento em sandbox, homologação da interface/aplicativo e aceite/autorização de implantação em produção. A proteção contra execução remota permanece obrigatória.
+**Atualização dos pendentes:** o **teste nativo Supabase com pgTAP passou** usando cópia sanitizada do agendamento; continua pendente executar todas as migrações literais sem efeitos externos, testar Mercado Pago em sandbox e homologar o aplicativo/frontend e o deploy autorizado. A proteção contra execução remota permanece obrigatória.
+
+## Resultado confirmado do novo Supabase CLI nativo — 8 de outubro de 2026
+
+O job `supabase-native-local-pgtap` passou no GitHub Actions: [execução 37722544899](https://github.com/pedrinhossiqueira12-dotcom/Guia-Turistico-de-Andrel-ndia/actions/runs/37722544899), job `113133291267`, commit `d155fe7d1e9e03730e3fa8fbe3eb9660af97ee19`.
+
+O script `scripts/validacao-pagamentos/build-native-supabase-ci.py` cria em `/tmp/guia-supabase-native-ci` um projeto com `project_id` isolado, sem copiar o `config.toml` original, tokens, URLs ou quaisquer registros reais. O baseline pré-migrações tem apenas cadastros sintéticos. O histórico é reconstruído com **28 arquivos de migração SQL reais intactos**, **um placeholder inerte no lugar da migração Cron/Vault com endpoint de produção** e duas migrations temporárias de teste para suprir as tabelas legadas e a FK de allowlist.
+
+No projeto isolado, o CI executou com sucesso `supabase start`, `supabase db reset --local` e `supabase test db`. Log: **`All tests successful. Files=1, Tests=23. Result: PASS`**.
+
+**Limitações:** não se pode concluir que as 29 migrações originais foram reproduzidas literalmente num Supabase local, já que a de agendamento foi neutralizada. A lógica de agendamento foi verificada separadamente com cópia sanitizada + stubs. Também não comprova backup restaurável do projeto real ou pagamentos reais/sandbox do Mercado Pago. O job original `database-tests` continua **SKIPPED**, enquanto este novo teste nativo é efetivamente **SUCCESS**.
 
 ## Bloqueios a resolver
 
@@ -122,4 +132,4 @@ Consulta de metadados confirmou `public.mural_cadastros`: `id text` PK, `usuario
 
 O arquivo de baseline inclui uma linha **sintética** de `cadastros_comercios` para satisfazer a verificação de nome/estado da primeira migração. Não reproduz dados pessoais de produção. A constraint de status final do mural é adicionada pela própria primeira migração, depois da conversão de valores legados.
 
-**Ainda não validado por execução integral:** dependências restantes, configuração do Supabase local e aplicação ordenada das 29 migrações. Não habilitar pgTAP antes dessa verificação.
+**Situação posterior:** as 28 migrações literais restantes e o teste nativo local foram validados; a 29ª migração só foi verificada separadamente com stubs e omitida do reset nativo. Não habilitar o job original com migração externa intacta enquanto houver risco de chamada para produção.
