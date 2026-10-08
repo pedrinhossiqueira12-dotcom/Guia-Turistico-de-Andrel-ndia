@@ -126,10 +126,35 @@ async function run(userId: string, body: Record<string, unknown>) {
   // Saque mensal: somente a identidade validada por JWT pode consultar/solicitar.
   // Valores e beneficiários são obtidos do SQL; nunca confiar em totais enviados pelo browser.
   if (action === "consultar_saques") {
-    return json({ success: true, ...(await rpc("catalogo_motoboy_listar_saques_v2", { p_operador_id: userId })) });
+    const payload = await rpc("catalogo_motoboy_listar_saques_v2", { p_operador_id: userId });
+    // O botão jamais diz que a transferência é automática sem worker habilitado.
+    const automatico = Deno.env.get("CATALOGO_SAQUE_AUTOMATICO") === "true" &&
+      Boolean(Deno.env.get("CATALOGO_SAQUE_WORKER_SECRET"));
+    return json({ success: true, ...payload, transferencia_automatizada_ativa: automatico });
   }
   if (action === "solicitar_saque") {
-    return json({ success: true, ...(await rpc("catalogo_motoboy_solicitar_saque_v2", { p_operador_id: userId })) });
+    const payload = await rpc("catalogo_motoboy_solicitar_saque_v2", { p_operador_id: userId });
+    // O valor/beneficiário nunca vem do navegador. Depois de reservar o crédito,
+    // dispara Payouts apenas quando a operação estiver explicitamente homologada.
+    if (Deno.env.get("CATALOGO_SAQUE_AUTOMATICO") === "true" &&
+        Deno.env.get("CATALOGO_SAQUE_WORKER_SECRET") && payload.saque_id) {
+      try {
+        await fetch(SUPABASE_URL + "/functions/v1/catalogo-saque-payout", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "authorization": "Bearer " + serviceKey,
+            "apikey": serviceKey,
+            "x-worker-secret": Deno.env.get("CATALOGO_SAQUE_WORKER_SECRET") || "",
+          },
+          body: JSON.stringify({ saque_id: payload.saque_id }),
+          signal: AbortSignal.timeout(22000),
+        });
+      } catch {
+        // Reserva permanece pendente; uma nova tentativa usa a mesma chave idempotente.
+      }
+    }
+    return json({ success: true, ...payload });
   }
   if (action === "confirmar_entrega") return json({ success: true, pedido: await confirmDelivery(userId, body) });
 
