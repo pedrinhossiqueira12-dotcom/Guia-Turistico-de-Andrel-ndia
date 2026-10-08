@@ -44,6 +44,57 @@ jobs:
           deno test --no-check --node-modules-dir=auto --allow-env --allow-read=supabase/functions \
             supabase/functions/tests/catalogo-edge-http.test.ts
 
+  supabase-native-local-pgtap:
+    name: Supabase native local reset and 23 pgTAP (temporary project, no external schedule)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Refuse production secrets and remote DB targets
+        run: |
+          set -euo pipefail
+          test -z "${SUPABASE_ACCESS_TOKEN:-}"
+          test -z "${SUPABASE_DB_PASSWORD:-}"
+          test -z "${DATABASE_URL:-}"
+          test -z "${PGSERVICE:-}"
+          test -z "${PGHOSTADDR:-}"
+          test -z "${PGOPTIONS:-}"
+          test -z "${SUPABASE_PROJECT_ID:-}"
+          test -z "${SUPABASE_URL:-}"
+      - name: Generate isolated Supabase project with synthetic historical data
+        run: |
+          python3 scripts/validacao-pagamentos/build-native-supabase-ci.py
+          test -f /tmp/guia-supabase-native-ci/supabase/config.toml
+          ! grep -R -F 'xdmbkflufsfqziixzpxc' \
+            /tmp/guia-supabase-native-ci/supabase/config.toml \
+            /tmp/guia-supabase-native-ci/supabase/migrations
+      - name: Verify available local CLI commands
+        run: |
+          supabase --version
+          supabase start --help > /tmp/native-cli-start-help.txt
+          supabase db reset --help > /tmp/native-cli-reset-help.txt
+          supabase test db --help > /tmp/native-cli-test-help.txt
+          grep -q '\-\-local' /tmp/native-cli-reset-help.txt
+      - name: Boot local Supabase and verify 23 native pgTAP tests
+        working-directory: /tmp/guia-supabase-native-ci
+        run: |
+          set -euo pipefail
+          trap 'supabase stop --no-backup >/dev/null 2>&1 || true' EXIT
+          # Deliberately NO --linked, --project-ref or cloud credentials.
+          # The original project config and production endpoint were never copied.
+          supabase start
+          supabase db reset --local
+          supabase test db supabase/tests/database/marketplace_financeiro_v2.test.sql \
+            | tee /tmp/guia-native-pgtap.log
+          grep -q 'All tests successful' /tmp/guia-native-pgtap.log
+          grep -q 'Result: PASS' /tmp/guia-native-pgtap.log
+          echo 'PASS: pgTAP ran natively against completely isolated Supabase local stack'
+
   legacy-baseline-smoke:
     name: Legacy baseline and first migration (disposable PostgreSQL)
     runs-on: ubuntu-latest
