@@ -74,9 +74,12 @@ VALUES ('vagao-lanches', 'Bebidas do proprietário');
 -- O upload válido é permitido SOMENTE ao proprietário com assinatura ativa.
 INSERT INTO storage.objects(bucket_id, name)
 VALUES ('catalogos', 'vagao-lanches/produtos/lanche.webp');
+INSERT INTO public.catalogo_produtos(comercio_id, categoria_id, nome, preco)
+VALUES ('vagao-lanches', '00000000-0000-4000-8000-000000000011', 'Suco do proprietário', 6.50);
 
 DO $check_owner$
 DECLARE denied boolean := false;
+        affected integer := -1;
 BEGIN
   IF (SELECT count(*) FROM public.catalogos WHERE comercio_id = 'vagao-lanches') <> 1
      OR (SELECT count(*) FROM public.catalogo_categorias
@@ -93,6 +96,25 @@ BEGIN
   END;
   IF NOT denied THEN
     RAISE EXCEPTION 'Proprietário editou o catálogo de outro comércio';
+  END IF;
+
+  UPDATE public.catalogos SET modalidades = ARRAY['retirada']::text[]
+    WHERE comercio_id = 'mega-lanches';
+  GET DIAGNOSTICS affected = ROW_COUNT;
+  IF affected <> 0 THEN
+    RAISE EXCEPTION 'Proprietário atualizou as modalidades de outro comércio';
+  END IF;
+
+  denied := false;
+  BEGIN
+    INSERT INTO public.catalogo_produtos(comercio_id, categoria_id, nome, preco)
+      VALUES ('mega-lanches', '00000000-0000-4000-8000-000000000012',
+              'Produto invasor', 1.00);
+  EXCEPTION WHEN insufficient_privilege THEN
+    denied := true;
+  END;
+  IF NOT denied THEN
+    RAISE EXCEPTION 'Proprietário inseriu produto no catálogo alheio';
   END IF;
 
   denied := false;
@@ -128,6 +150,34 @@ BEGIN
   END IF;
 END $check_owner$;
 RESET ROLE;
+
+-- Uma categoria inativa não pode deixar seus produtos na vitrine.
+UPDATE public.catalogo_categorias SET ativa = false
+WHERE id = '00000000-0000-4000-8000-000000000011';
+SET ROLE anon;
+DO $hidden_category$
+BEGIN
+  IF (SELECT count(*) FROM public.catalogo_produtos) <> 1 THEN
+    RAISE EXCEPTION 'Produtos de categoria inativa ficaram visíveis';
+  END IF;
+END $hidden_category$;
+RESET ROLE;
+UPDATE public.catalogo_categorias SET ativa = true
+WHERE id = '00000000-0000-4000-8000-000000000011';
+
+-- Produto indisponível nunca deve ser exposto no catálogo público.
+UPDATE public.catalogo_produtos SET disponivel = false
+WHERE id = '00000000-0000-4000-8000-000000000021';
+SET ROLE anon;
+DO $hidden_product$
+BEGIN
+  IF (SELECT count(*) FROM public.catalogo_produtos) <> 2 THEN
+    RAISE EXCEPTION 'Produto indisponível ficou visível';
+  END IF;
+END $hidden_product$;
+RESET ROLE;
+UPDATE public.catalogo_produtos SET disponivel = true
+WHERE id = '00000000-0000-4000-8000-000000000021';
 
 -- Usuário autenticado sem vínculos não pode criar categorias em outro comércio.
 SET request.jwt.claim.sub = '00000000-0000-4000-8000-000000000003';
@@ -213,6 +263,23 @@ BEGIN
     RAISE EXCEPTION 'Assinatura vencida permaneceu publicada';
   END IF;
 END $check_expired$;
+RESET ROLE;
+
+SET request.jwt.claim.sub = '00000000-0000-4000-8000-000000000001';
+SET ROLE authenticated;
+DO $check_expired_owner$
+DECLARE denied boolean := false;
+BEGIN
+  BEGIN
+    INSERT INTO storage.objects(bucket_id, name)
+      VALUES ('catalogos', 'vagao-lanches/produtos/expirado.webp');
+  EXCEPTION WHEN insufficient_privilege THEN
+    denied := true;
+  END;
+  IF NOT denied THEN
+    RAISE EXCEPTION 'Assinatura vencida permitiu envio de imagem';
+  END IF;
+END $check_expired_owner$;
 RESET ROLE;
 
 DO $uploads$
