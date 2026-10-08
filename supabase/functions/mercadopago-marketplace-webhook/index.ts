@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
-import { decryptAesGcm, extractProviderPayment, providerFactsError, sanitizedProviderId, parseWebhookSignature, verifyWebhookSignature } from "../_shared/catalogo-pagamentos-v2.ts";
+import { decryptAesGcm, extractProviderPayment, providerFactsError, parseWebhookSignature, verifyWebhookSignature } from "../_shared/catalogo-pagamentos-v2.ts";
+import { eventKind, eventId, canonicalOrderType } from "../_shared/catalogo-webhook-events.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const MP_OAUTH_ENCRYPTION_KEY = Deno.env.get("MP_OAUTH_ENCRYPTION_KEY") ?? "";
@@ -16,26 +17,6 @@ if (!serviceKey) serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const admin = createClient(SUPABASE_URL, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
 function json(data: unknown, status = 200): Response { return new Response(JSON.stringify(data), { status, headers: CORS_HEADERS }); }
 function record(value: unknown): Record<string, unknown> { return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {}; }
-function eventKind(type: string, body: Record<string, unknown>): "payment" | "order" | null {
-  const normalized = type.toLowerCase();
-  if (normalized === "payment" || normalized === "payments" || normalized.startsWith("payment.")) return "payment";
-  if (["order", "orders", "orders_v2"].includes(normalized) || normalized.startsWith("order.")) return "order";
-  // Eventos desconhecidos não viram pagamento apenas por um status enviado pelo caller.
-  if (normalized) return null;
-  const resource = String(body.resource || "").toLowerCase();
-  if (/\/v1\/payments\//.test(resource)) return "payment";
-  if (/\/v1\/orders\//.test(resource)) return "order";
-  return null;
-}
-function eventId(url: URL, body: Record<string, unknown>): string {
-  const bodyData = record(body.data);
-  // body.id é o ID da NOTIFICAÇÃO, não o payment_id, quando data.id existe.
-  const authoritative = [url.searchParams.get("data.id"), bodyData.id].filter((v) => v !== null && v !== undefined && String(v).trim() !== "");
-  const candidates = authoritative.length ? authoritative : [url.searchParams.get("id"), body.id].filter((v) => v !== null && v !== undefined && String(v).trim() !== "");
-  const ids = candidates.map(sanitizedProviderId);
-  if (!ids.length || ids.some((id) => !id || id !== ids[0])) return "";
-  return ids[0];
-}
 async function providerGet(token: string, kind: "payment" | "order", id: string) {
   const resource = kind === "payment" ? `/v1/payments/${encodeURIComponent(id)}` : `/v1/orders/${encodeURIComponent(id)}`;
   const response = await fetch(`${MP_API}${resource}`, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, signal: AbortSignal.timeout(12000) });
@@ -55,10 +36,6 @@ async function lookupFaturaCobranca(orderId: string) {
     .select("id,order_id").eq("order_id", orderId).maybeSingle();
   if (error) throw new Error("Falha ao localizar o vínculo da cobrança da fatura.");
   return data ? record(data) : null;
-}
-function canonicalOrderType(url: URL, body: Record<string, unknown>): "order" | "orders_v2" {
-  const type = String(url.searchParams.get("type") || body.type || "").toLowerCase();
-  return type === "orders_v2" || type === "orders" ? "orders_v2" : "order";
 }
 async function forwardFaturaWebhook(request: Request, url: URL, body: Record<string, unknown>, orderId: string): Promise<Response> {
   if (!SUPABASE_URL) throw new Error("SUPABASE_URL ausente para encaminhar o webhook da fatura.");
