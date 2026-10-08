@@ -271,6 +271,22 @@ async function withdraw(uid:string){
  return respond({success:true,saque_id:saqueId,
   mensagem:"Solicitação enviada ao Asaas. Consulte a carteira para acompanhar a confirmação."});
 }
+const ADMIN_USER_ID = "4b9a0233-6b72-4573-aebd-d596c5b15e1b";
+// Somente leitura: operações em revisão não podem disparar transferências
+// ou desbloquear créditos através deste endpoint administrativo.
+async function listAdminPayouts(uid:string){
+ if(uid!==ADMIN_USER_ID)throw new Failure("Acesso exclusivo do administrador da plataforma.",403);
+ const [{data:saques,error:saquesError},{data:emissoes,error:emissoesError}] = await Promise.all([
+  db.from("catalogo_asaas_saques")
+   .select("id,motoboy_id,status,valor_centavos,transferencia_id,mensagem,criado_em,atualizado_em,concluido_em")
+   .order("criado_em",{ascending:false}).limit(100),
+  db.from("catalogo_asaas_emissoes")
+   .select("fechamento_id,estado,criado_em,atualizado_em")
+   .neq("estado","registrado").order("criado_em",{ascending:false}).limit(50),
+ ]);
+ if(saquesError||emissoesError)throw new Failure("Consulta da auditoria financeira indisponível.",503);
+ return respond({success:true,saques:saques||[],emissoes_pendentes:emissoes||[]});
+}
 async function webhook(request:Request){
  if(!WEBHOOK_TOKEN)throw new Failure("Webhook não configurado.",503);
  const actual=request.headers.get("asaas-access-token")||"";
@@ -311,6 +327,7 @@ Deno.serve(async (request:Request)=>{
    case "consultar_cobranca":return await reconcileInvoice(user.id,body);
    case "consultar_carteira":return await wallet(user.id,true);
    case "solicitar_saque":return await withdraw(user.id);
+   case "listar_saques_admin":return await listAdminPayouts(user.id);
    default:throw new Failure("Ação inválida.",400);
   }
  }catch(e){
