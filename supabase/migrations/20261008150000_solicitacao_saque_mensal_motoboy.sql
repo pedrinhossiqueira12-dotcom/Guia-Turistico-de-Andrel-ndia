@@ -108,7 +108,7 @@ BEGIN
       UPDATE public.catalogo_solicitacoes_saque_v2 s
          SET status='pago',
              repasse_id=(SELECT CASE WHEN count(DISTINCT r.repasse_id)=1
-                            THEN min(r.repasse_id) ELSE NULL END
+                            THEN (array_agg(DISTINCT r.repasse_id))[1] ELSE NULL END
                           FROM public.catalogo_solicitacao_saque_itens_v2 i
                           JOIN public.catalogo_remuneracoes_v2 r ON r.id=i.remuneracao_id
                           WHERE i.solicitacao_id=s.id),
