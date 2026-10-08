@@ -233,4 +233,26 @@ REVOKE ALL ON FUNCTION public.catalogo_asaas_registrar_fatura(uuid,text,integer,
 GRANT EXECUTE ON FUNCTION public.catalogo_asaas_registrar_fatura(uuid,text,integer,text,text,text,timestamptz),
  public.catalogo_asaas_reservar_saque(uuid),
  public.catalogo_asaas_atualizar_saque(uuid,text,text,text) TO service_role;
+
+CREATE OR REPLACE FUNCTION public.catalogo_asaas_saldo_sacavel(p_motoboy uuid)
+RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path='' AS $
+ SELECT jsonb_build_object(
+  'disponivel_centavos',coalesce(sum(r.valor_centavos),0)::integer,
+  'creditos',count(*)::integer
+ ) FROM public.catalogo_remuneracoes_v2 r
+ JOIN public.catalogo_pedidos p ON p.id=r.pedido_id
+ JOIN public.catalogo_comissoes_offline c ON c.pedido_id=p.id
+ JOIN public.catalogo_fechamentos_offline f ON f.comercio_id=c.comercio_id AND f.competencia=c.competencia
+ JOIN public.catalogo_fatura_cobrancas b ON b.fechamento_id=f.id
+ WHERE r.motoboy_id=p_motoboy AND catalogo_private.catalogo_v2_autorizado(p_motoboy)
+  AND r.status='disponivel' AND r.financiamento_comprovado AND r.repasse_id IS NULL
+  AND p.provedor='offline' AND p.entrega_status='entregue'
+  AND NOT p.reembolso_pendente AND NOT p.pagamento_revisao_pendente
+  AND c.status='paga' AND f.status='pago'
+  AND b.gateway='asaas' AND b.status='pago' AND b.pago_em IS NOT NULL
+  AND NOT EXISTS(SELECT 1 FROM public.catalogo_asaas_saque_itens i WHERE i.remuneracao_id=r.id AND i.ativo);
+$;
+REVOKE ALL ON FUNCTION public.catalogo_asaas_saldo_sacavel(uuid) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.catalogo_asaas_saldo_sacavel(uuid) TO service_role;
+
 COMMIT;
