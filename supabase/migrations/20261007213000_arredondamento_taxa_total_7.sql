@@ -9,7 +9,8 @@ ALTER TABLE public.catalogo_pedidos ADD CONSTRAINT catalogo_pedidos_taxas_v2_che
   AND taxa_motoboy_centavos >= 0
   AND taxa_total_centavos = taxa_plataforma_centavos + taxa_motoboy_centavos
   AND (
-    versao_financeira <> 2
+    (versao_financeira = 1 AND taxa_motoboy_centavos = 0
+     AND taxa_plataforma_centavos = round(subtotal_produtos_centavos::numeric * 0.05)::integer)
     OR (
       (modalidade <> 'entrega' AND taxa_motoboy_centavos = 0
        AND taxa_plataforma_centavos = round(subtotal_produtos_centavos::numeric * 0.07)::integer)
