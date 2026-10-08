@@ -160,11 +160,11 @@ async function createInvoice(uid:string,body:Record<string,unknown>,email:string
   if(charge.gateway==="asaas")return await reconcileInvoice(uid,body);
   throw new Failure("Cobrança Mercado Pago existente. Não é seguro emitir outra.",409);
  }
+ const customerId=await loadOrCreateCustomer(store,body,email);
  const {data:claim,error:claimError}=await db.from("catalogo_asaas_emissoes")
   .insert({fechamento_id:f.id}).select("operacao_id").single();
  // Claim único impede duas cobranças durante chamadas concorrentes ou timeout.
  if(claimError||!claim)throw new Failure("A emissão está reservada. Consulte antes de criar outra cobrança.",409);
- const customerId=await loadOrCreateCustomer(store,body,email);
  const ref=reference(store,month);
  const list=await asaas("/payments?externalReference="+encodeURIComponent(ref)+"&limit=100");
  let payment=Array.isArray(list.data)?list.data.find((p:Record<string,unknown>)=>p.externalReference===ref):null;
@@ -228,7 +228,7 @@ async function wallet(uid:string,withReconcile=false){
 }
 async function reconcileTransfer(saqueId:string,transferId:string){
  const transfer=await asaas("/transfers/"+encodeURIComponent(transferId));
- check(transfer.id===transferId,"Transferência de outro identificador.",409);
+ check(transfer.id===transferId&&transfer.externalReference===saqueId,"Transferência de outro identificador.",409);
  const {data:row,error}=await db.from("catalogo_asaas_saques")
   .select("id,valor_centavos,transferencia_id,status").eq("id",saqueId).maybeSingle();
  if(error||!row||row.transferencia_id!==transferId)throw new Failure("Transferência não vinculada.",409);
@@ -252,7 +252,7 @@ async function withdraw(uid:string){
  try {
   transfer=await asaas("/transfers","POST",{
    value:money(amount),pixAddressKey:pix.pixAddressKey,pixAddressKeyType:pix.pixAddressKeyType,
-   description:"Comissões Guia Andrelândia",
+   description:"Comissões Guia Andrelândia",externalReference:saqueId,
   });
  } catch(e) {
   await rpc("catalogo_asaas_atualizar_saque",{p_saque:saqueId,p_estado:"revisao",
@@ -260,7 +260,7 @@ async function withdraw(uid:string){
   throw e;
  }
  const tid=value(transfer.id,120);
- if(!tid||cents(transfer.value)!==amount){
+ if(!tid||cents(transfer.value)!==amount||transfer.externalReference!==saqueId){
   await rpc("catalogo_asaas_atualizar_saque",{p_saque:saqueId,p_estado:"revisao",
    p_transferencia:tid||null,p_mensagem:"Resposta de transferência divergente."});
   throw new Failure("Transferência em revisão. Não solicite outro saque.",409);
