@@ -161,6 +161,32 @@ Deno.test("estorno parcial de fatura fica em contestacao e nunca vira devolucao 
     assert(estadoCobrancaDaOrder(result.state) === "contestado", "Contestado nao propagado para a RPC segura da fatura");
   }
 
+  // Em revisao parcial/pendente o MP pode devolver apenas o estado da order.
+  // So admitimos transacao ausente em estado terminal/contestacao quando
+  // o payment ID esperado ja esta vinculado, alem de conferir seller/valor/ref.
+  const orderWithoutPayments = orderFixture();
+  orderWithoutPayments.status = "processed";
+  orderWithoutPayments.status_detail = "refund_pending";
+  orderWithoutPayments.transactions.payments = [];
+  const pending = assessFaturaOrder(orderWithoutPayments, { ...expected, requirePixArtifacts: false });
+  assert(pending.valid && pending.state === "contestado",
+    `Refund pendente sem dados da transacao nao foi bloqueado para revisao: ${JSON.stringify(pending)}`);
+  const noKnownPayment = assessFaturaOrder(orderWithoutPayments, {
+    ...expected, paymentId: "", requirePixArtifacts: false,
+  });
+  assert(!noKnownPayment.valid,
+    "Refund sem transacao nem identificador financeiro previo foi aceito");
+
+  const detailOmitted = orderFixture();
+  detailOmitted.status_detail = "partially_refunded";
+  detailOmitted.transactions.payments = [{
+    id: "pay_ci_123", amount: "0.14", status: "processed", status_detail: "accredited",
+    payment_method: {} as { id: string; type: string },
+  }];
+  const missingMethod = assessFaturaOrder(detailOmitted, { ...expected, requirePixArtifacts: false });
+  assert(missingMethod.valid && missingMethod.state === "contestado",
+    "Pagamento conhecido com metodo Pix omitido em estorno parcial perdeu bloqueio seguro");
+
   const full = orderFixture();
   full.status = "refunded";
   full.status_detail = "refunded";
