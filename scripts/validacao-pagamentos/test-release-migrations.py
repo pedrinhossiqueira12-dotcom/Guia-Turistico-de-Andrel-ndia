@@ -63,7 +63,9 @@ class TestReleaseMigrations(unittest.TestCase):
             source = Path(td) / "migrations"
             shutil.copytree(MIGRATIONS, source)
             p = source / "20261007213000_arredondamento_taxa_total_7.sql"
-            p.write_bytes(p.read_bytes() + b"\n-- changed\n")
+            original = p.read_bytes()
+            self.assertIn(b"\nCOMMIT;\n", original)
+            p.write_bytes(original.replace(b"\nCOMMIT;\n", b"\n-- changed\nCOMMIT;\n"))
             with self.assertRaisesRegex(PreflightError, "Applied final SQL changed"):
                 validate(source=source)
 
