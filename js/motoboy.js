@@ -277,7 +277,7 @@
   function limparDadosPrivados() {
     limparPedidos();
     limparExtrato();
-    if ($("motoboySaquesHistorico")) $("motoboySaquesHistorico").replaceChildren();
+    if ($("motoboySaquesHistorico")) $("motoboySaquesHistorico").textContent = "";
     if ($("motoboySaqueMes")) $("motoboySaqueMes").textContent = "Mês anterior sujeito a créditos financiados.";
     definirFeedback("motoboySaqueFeedback", "");
     state.actionInFlight.clear();
@@ -460,7 +460,7 @@
       const lista = $("motoboySaquesHistorico");
       if (lista) {
         const items = Array.isArray(data.solicitacoes) ? data.solicitacoes : [];
-        lista.replaceChildren();
+        lista.textContent = "";
         for (const item of items) {
           const linha = document.createElement("li");
           linha.textContent = String(item.mes_referencia || "") + " — " +
