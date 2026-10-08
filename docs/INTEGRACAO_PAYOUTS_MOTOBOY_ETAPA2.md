@@ -55,3 +55,23 @@ A migration ainda NÃO aplicada em produção, 20261008150000_solicitacao_saque_
 
 A rotina de reserva ainda precisa de revisão final, homologação sandbox e controle de credenciais antes de liberar qualquer operação real. Não fazer merge do PR #38 para produção por considerar estes testes equivalentes a repasse de dinheiro.
 
+
+
+## Etapa 3B — conciliação bancária e orquestração Sandbox (sem publicação)
+
+- A mesma migration do PR adiciona auditoria em catalogo_repasses_v2: origem_registro=admin_manual com registrado_por obrigatório ou origem_registro=payout_provedor com registrado_por NULL. Isso evita atribuir ao administrador transferências efetivadas pelo sistema.
+- Intenções possuem repasse_id, confirmado_em e ultima_consulta_em.
+- RPC privada catalogo_registrar_criacao_payout_v2(uuid,text,text) recebe IDs POP/TOP da resposta 202, armazena os IDs e mantém aguardando_confirmacao; IDs repetidos iguais são idempotentes e divergências retornam 409.
+- RPC privada catalogo_conciliar_payout_v2(uuid,text,text,text,text,bigint,text,text) confere IDs, duas referências, valor, estados e lastro. Pendente nunca gera repasse; erro não comprovado vai para análise; somente success/accredited recebido pelo backend a partir de GET autenticado aciona baixa.
+- Com sucesso confirmado e lastro íntegro, a RPC cria **um** repasse com prova do provedor e autoria de sistema, atualiza a intenção, os créditos e os lançamentos financeiros **na mesma transação**. A confirmação repetida retorna idempotente=true e não cria outro repasse.
+- A trigger que bloqueia baixa manual agora aceita status pago apenas para a intenção confirmada e vinculada ao **mesmo** repasse criado pelo fluxo do provedor. Tentativas concorrentes sem essa confirmação continuam bloqueadas.
+- Módulo interno catalogo-payouts-worker-sandbox-v2.ts (não importado em rotas públicas) encadeia a marcação de tentativa, a criação de payout e o registro dos IDs, ou consulta o GET e invoca a RPC de conciliação, sempre com transporte injetado e autorização de teste.
+- Em timeout depois de marcar envio, o processo **não repete o POST**. Sem IDs do provedor para GET, fica pendente de busca por referência e investigação administrativa; não é seguro assumir nem falha nem sucesso.
+- Testes com respostas simuladas, Postgres descartável e rollback: HTTP 202 ≠ pago; GET pending ≠ pago; prova divergente ≠ pago; sucesso autenticado simulado → baixa atômica, histórico íntegro; confirmação repetida → mesmo repasse.
+- **Não foi feita verificação HTTP de um Payouts real**. Os fatos success/accredited nos testes são sintéticos. O backend de produção que obterá a prova deve ser mantido com credencial service_role isolada e conexão segura, nunca exposto ao navegador.
+- **Não foi ativado em produção**: falta configuração do tipo da chave Pix no perfil, API Payouts habilitada para esta conta, credenciais e assinatura de produção, assinatura/revisão de webhooks, teste sandbox real, observabilidade e validação operacional.
+
+### Alerta de segurança
+
+A RPC financeira aceita fatos recebidos por um serviço com service_role. Ela não faz uma consulta independente ao Mercado Pago por SQL, portanto a sua segurança depende de o worker privado executar o GET e comparar os fatos antes de chamá-la. O código do worker é uma biblioteca não implantada, não um servidor de pagamentos ativo. **Não publicar uma rota que simplesmente retransmita parâmetros do usuário a essa RPC.**
+
