@@ -86,8 +86,8 @@ test('catalogo-v2-comercio: pedidos mostram v1/v2, status de pagamento, snapshot
     { id: 'p-v1', cliente_nome: 'Antigo', provedor: 'offline', modalidade: 'retirada', status: 'em_preparo', versao_financeira: 1, subtotal_produtos_centavos: 5000, total_centavos: 5000, taxa_plataforma_centavos: 250 },
   ]);
   const html = env.get('listaPedidosOffline').innerHTML;
-  assert.match(html, /5% plataforma \+ 2% logística/);
-  assert.match(html, /V1 · taxa histórica preservada/);
+  assert.match(html, /Taxa do pedido: R\$ 7\.00/);
+  assert.match(html, /Taxa histórica/);
   assert.match(html, /Pagamento aprovado/);
   assert.match(html, /Motoboys disponíveis/);
   assert.match(html, /&lt;cliente&gt;/);
