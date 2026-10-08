@@ -71,3 +71,13 @@ A consulta `information_schema.columns` no projeto existente confirmou a estrutu
 O arquivo `supabase/tests/baseline/legacy-public-tables.sql` cria exclusivamente em ambiente descartável as tabelas legadas `avaliacoes` e `cadastros_comercios`. Inclui guarda que exige banco local `postgres`, `auth.users` presente e tabelas legadas ausentes. Não é uma migration e **não deve** ser aplicado à produção.
 
 **Pendências antes da execução completa:** conferir sequência/identity de `avaliacoes.id` (metadados atuais não expõem default), reconstruir a evolução da constraint `cadastros_comercios_etapa_check` (o default histórico `inicio` diverge da lista atual), confirmar que a infraestrutura Supabase local suporta as extensões e jobs agendados, e testar aplicação integral das migrations. As policies administrativas com identidade real não foram copiadas.
+
+## Bloqueio adicional crítico: migração inicial dependente de dados
+
+A migração `20261002233841_publication_metadata_reversible_archive_20261002.sql` não é apenas DDL:
+
+1. Exige **exatamente um** registro em `public.cadastros_comercios` com `status='aprovado'`, nome normalizado `pedrox do grau` e `local_id` nulo ou igual ao slug esperado. Sem essa linha, lança exceção e interrompe a reconstrução.
+2. Faz `ALTER TABLE`, `UPDATE` e `CREATE POLICY` em `public.mural_cadastros`, outra tabela legada ainda ausente do baseline.
+3. Insere IDs públicos predefinidos em `public.comercios_publicados`; isso **não** representa restauração de registros privados, mas exige avaliar os efeitos das migrações subsequentes.
+
+**Plano seguro:** inspecionar somente metadados de `mural_cadastros`; construir seed sintética mínima de `cadastros_comercios` apenas no banco descartável, sem copiar dados de clientes; verificar toda dependência de dados das 29 migrações antes de ativar `database-tests`. Não executar a migração inicial em produção como tentativa de reconstrução.
