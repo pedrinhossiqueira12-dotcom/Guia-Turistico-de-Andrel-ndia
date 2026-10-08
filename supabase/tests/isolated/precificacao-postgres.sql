@@ -43,6 +43,25 @@ BEGIN
   IF (public.catalogo_fluxo_precificar('entrega',0,NULL)->>'http_status')::integer <> 400 THEN
     RAISE EXCEPTION 'Subtotal zero aceito';
   END IF;
+  -- Entrada invalida nao deve gerar precificacao nem excecao de SQL.
+  FOREACH v_result IN ARRAY ARRAY[
+    public.catalogo_fluxo_precificar(NULL,100,NULL),
+    public.catalogo_fluxo_precificar('entrega',NULL,NULL),
+    public.catalogo_fluxo_precificar('entrega',-1,NULL),
+    public.catalogo_fluxo_precificar('modalidade-inexistente',100,NULL)
+  ] LOOP
+    IF (v_result->>'ok')::boolean IS DISTINCT FROM false
+       OR (v_result->>'http_status')::integer <> 400 THEN
+      RAISE EXCEPTION 'Entrada invalida aceita: %',v_result;
+    END IF;
+  END LOOP;
+  -- O modo somente Pix deve aparecer apenas para o fluxo V2.
+  UPDATE public.catalogo_fluxo_config SET somente_pix=true WHERE id=true;
+  v_result := public.catalogo_fluxo_precificar('entrega',10000,NULL);
+  IF (v_result->>'somente_pix')::boolean IS DISTINCT FROM true THEN
+    RAISE EXCEPTION 'Restricao somente Pix nao propagada no V2';
+  END IF;
+  UPDATE public.catalogo_fluxo_config SET somente_pix=false WHERE id=true;
   -- A configuracao piloto deve ativar V2 somente para comercios autorizados.
   UPDATE public.catalogo_fluxo_config SET comercios_piloto=ARRAY['loja-piloto'] WHERE id=true;
   v_result := public.catalogo_fluxo_precificar('entrega',101,'loja-externa');
