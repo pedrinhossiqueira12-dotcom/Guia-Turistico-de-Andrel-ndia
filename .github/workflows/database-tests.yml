@@ -289,6 +289,127 @@ jobs:
         run: |
           psql -v ON_ERROR_STOP=1 -1 -c "SET app.marketplace_test_payments = 'enabled'" -f supabase/tests/isolated/catalogo-assinaturas-pagamentos-postgres.sql
 
+  scheduler-inert-migration-test:
+    name: Legacy Cron/Vault migration (sanitized, no network or real schedules)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: local-ci-only
+          POSTGRES_DB: catalogo_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d catalogo_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: local-ci-only
+      PGDATABASE: catalogo_ci
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify disposable database without real Cron or network extensions
+        run: |
+          test "$PGHOST" = localhost
+          test "$PGPORT" = 5432
+          test "$PGUSER" = postgres
+          test "$PGDATABASE" = catalogo_ci
+          test -z "${DATABASE_URL:-}"
+          test -z "${PGSERVICE:-}"
+          test -z "${PGHOSTADDR:-}"
+          test -z "${PGOPTIONS:-}"
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT current_database()" | grep -Fx catalogo_ci
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM pg_available_extensions WHERE name IN ('pg_cron','pg_net')" | grep -Fx 0
+      - name: Build safe SQL copy and reject original production URL
+        run: |
+          set -euo pipefail
+          python scripts/validacao-pagamentos/build-isolated-scheduler-test.py
+          if grep -Fq 'xdmbkflufsfqziixzpxc.supabase.co' /tmp/catalogo-scheduler-no-network-ci.sql; then
+            echo "ERROR: production Supabase URL found in scheduler CI copy"
+            exit 1
+          fi
+          grep -Fq 'ci-no-network.invalid/storage-cleanup' /tmp/catalogo-scheduler-no-network-ci.sql
+          if grep -Eq '^CREATE EXTENSION|^CREATE\\s+EXTENSION' /tmp/catalogo-scheduler-no-network-ci.sql; then
+            echo "ERROR: scheduler CI copy attempts installing a real extension"
+            exit 1
+          fi
+      - name: Refuse inert scheduler stubs without explicit opt-in
+        run: |
+          if psql -v ON_ERROR_STOP=1 -f supabase/tests/baseline/catalogo-ci-scheduler-stubs.sql > /tmp/scheduler-stubs-no-opt-in.log 2>&1; then
+            echo "ERROR: scheduler stub opt-in bypass"
+            exit 1
+          fi
+          grep -q 'Mocks Cron/Vault exigem catalogo_ci isolado' /tmp/scheduler-stubs-no-opt-in.log
+      - name: Create inert Cron and synthetic Vault stubs
+        run: |
+          psql -v ON_ERROR_STOP=1 -1 -c "SET app.marketplace_test_scheduler = 'enabled'" -f supabase/tests/baseline/catalogo-ci-scheduler-stubs.sql
+      - name: Refuse scheduler fixture without explicit opt-in
+        run: |
+          if psql -v ON_ERROR_STOP=1 -f /tmp/catalogo-scheduler-no-network-ci.sql > /tmp/scheduler-migration-no-opt-in.log 2>&1; then
+            echo "ERROR: migration copy executed without opt-in"
+            exit 1
+          fi
+          grep -q 'Scheduler fixture exige catalogo_ci' /tmp/scheduler-migration-no-opt-in.log
+      - name: Apply sanitized real scheduler logic and verify inert job
+        run: |
+          psql -v ON_ERROR_STOP=1 -1 -c "SET app.marketplace_test_scheduler = 'enabled'" -f /tmp/catalogo-scheduler-no-network-ci.sql
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          DO $check_scheduler$
+          DECLARE v_secret text;
+          BEGIN
+            IF (SELECT count(*) FROM vault.secrets WHERE name='andrelandia_storage_cleanup_token') <> 1
+               OR (SELECT count(*) FROM cron.job WHERE jobname='andrelandia-storage-retention-dry-run') <> 1
+               OR EXISTS (SELECT 1 FROM pg_extension WHERE extname IN ('pg_cron','pg_net'))
+               OR to_regnamespace('net') IS NOT NULL
+            THEN
+              RAISE EXCEPTION 'Unexpected real cron/net extension or missing inert job/secret';
+            END IF;
+            IF NOT EXISTS (
+              SELECT 1 FROM cron.job
+              WHERE jobname='andrelandia-storage-retention-dry-run'
+                AND schedule='0 * * * *'
+                AND command LIKE '%ci-no-network.invalid/storage-cleanup%'
+                AND command LIKE '%"mode":"dry-run"%'
+                AND command LIKE '%x-cleanup-token%'
+                AND command NOT LIKE '%supabase.co%'
+            ) THEN
+              RAISE EXCEPTION 'Inert scheduled command was not sanitized to dry-run';
+            END IF;
+            IF has_function_privilege('anon','public.is_storage_cleanup_authorized(text)','EXECUTE')
+               OR has_function_privilege('authenticated','public.is_storage_cleanup_authorized(text)','EXECUTE')
+               OR NOT has_function_privilege('service_role','public.is_storage_cleanup_authorized(text)','EXECUTE')
+            THEN
+              RAISE EXCEPTION 'Cleanup token function exposed to unauthorized roles';
+            END IF;
+            SELECT secret INTO v_secret FROM vault.secrets
+              WHERE name='andrelandia_storage_cleanup_token';
+            IF v_secret IS NULL OR char_length(v_secret) < 60
+               OR NOT public.is_storage_cleanup_authorized(v_secret)
+               OR public.is_storage_cleanup_authorized('invalid-test-token')
+               OR public.is_storage_cleanup_authorized(NULL)
+            THEN
+              RAISE EXCEPTION 'Cleanup token validation is not secure';
+            END IF;
+          END $check_scheduler$;
+          SQL
+      - name: Reapply safely without duplicating job or changing secret
+        run: |
+          set -euo pipefail
+          token_hash_before=$(psql -v ON_ERROR_STOP=1 -Atqc "SELECT md5(secret) FROM vault.secrets WHERE name='andrelandia_storage_cleanup_token'")
+          psql -v ON_ERROR_STOP=1 -1 -c "SET app.marketplace_test_scheduler = 'enabled'" -f /tmp/catalogo-scheduler-no-network-ci.sql
+          token_hash_after=$(psql -v ON_ERROR_STOP=1 -Atqc "SELECT md5(secret) FROM vault.secrets WHERE name='andrelandia_storage_cleanup_token'")
+          test -n "$token_hash_before"
+          test "$token_hash_before" = "$token_hash_after"
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM cron.job" | grep -Fx 1
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM vault.secrets" | grep -Fx 1
+          echo "PASS: Cron/Vault migration verified with inert jobs, no production URL and no network requests"
+
   complete-chain-postgres-isolated:
     name: All financial migrations except remote scheduling (disposable PostgreSQL)
     runs-on: ubuntu-latest
