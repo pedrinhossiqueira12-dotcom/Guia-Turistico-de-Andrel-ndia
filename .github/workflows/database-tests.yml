@@ -278,6 +278,17 @@ jobs:
         run: |
           psql -v ON_ERROR_STOP=1 -1 -c "SET app.marketplace_test_scenario = 'enabled'" -f supabase/tests/isolated/catalogo-rls-postgres.sql
 
+      - name: Reject payment regression fixture without explicit opt-in
+        run: |
+          if psql -v ON_ERROR_STOP=1 -f supabase/tests/isolated/catalogo-assinaturas-pagamentos-postgres.sql > /tmp/catalogo-payments-no-opt-in.log 2>&1; then
+            echo "ERROR: payments fixture accepted missing opt-in"
+            exit 1
+          fi
+          grep -q "Fixture de pagamentos exige catalogo_ci descartavel" /tmp/catalogo-payments-no-opt-in.log
+      - name: Test real subscription-payment RPC and delayed/refunded events
+        run: |
+          psql -v ON_ERROR_STOP=1 -1 -c "SET app.marketplace_test_payments = 'enabled'" -f supabase/tests/isolated/catalogo-assinaturas-pagamentos-postgres.sql
+
   pricing-postgres-isolated:
     name: Real pricing RPC (isolated PostgreSQL)
     runs-on: ubuntu-latest
