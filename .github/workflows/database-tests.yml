@@ -762,14 +762,20 @@ jobs:
           psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM public.catalogo_pedidos" | grep -Fx 0
           psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM public.catalogo_pagamentos_v2" | grep -Fx 0
           # This dump is built ONLY from the CI PostgreSQL service, NEVER from Supabase.
-          pg_dump -Fc --no-owner --no-acl -d catalogo_ci -f /tmp/catalogo-ci-only.dump
+          # GitHub runner may ship pg_dump 16; the server is PostgreSQL 17.
+          # Always use matching dump/restore binaries INSIDE the disposable service.
+          service_container="${{ job.services.postgres.id }}"
+          test -n "$service_container"
+          docker exec "$service_container" pg_dump -U postgres -Fc --no-owner --no-acl \
+            -d catalogo_ci -f /tmp/catalogo-ci-only.dump
+          docker cp "$service_container:/tmp/catalogo-ci-only.dump" /tmp/catalogo-ci-only.dump
           test -s /tmp/catalogo-ci-only.dump
           sha256sum /tmp/catalogo-ci-only.dump
-          pg_restore --list /tmp/catalogo-ci-only.dump | grep -F 'catalogo_pedidos'
+          docker exec "$service_container" pg_restore --list /tmp/catalogo-ci-only.dump | grep -F 'catalogo_pedidos'
 
           createdb catalogo_restore_ci
           trap 'dropdb --if-exists --force catalogo_restore_ci; rm -f /tmp/catalogo-ci-only.dump' EXIT
-          pg_restore --exit-on-error --no-owner --no-acl \
+          docker exec "$service_container" pg_restore -U postgres --exit-on-error --no-owner --no-acl \
             -d catalogo_restore_ci /tmp/catalogo-ci-only.dump
           psql -v ON_ERROR_STOP=1 -d catalogo_restore_ci <<'SQL'
           DO $restore_ci$
