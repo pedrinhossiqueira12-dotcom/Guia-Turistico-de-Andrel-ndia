@@ -33,6 +33,10 @@ A migração **ainda não aplicada à produção**, `supabase/migrations/2026100
 
 **Prova automatizada:** commit `26d88c3340c972b8a8259b18c70a8f7578a93bf1`, execução CI `37719415442` aprovada. A suíte real `catalogo-pix-revisao-e-chargeback-postgres.sql` agora consegue inserir um pedido V2 de retirada a 7% e testa cobrança duplicada, taxa do provedor informada depois, estorno parcial, estorno integral e chargeback sem liberar dinheiro de motoboy antes da entrega. O CI também aprovou o fluxo offline de contestação de fatura: após a contestação os créditos voltam a ficar retidos e o comércio é bloqueado.
 
+**Regressão adicional de modalidades:** `supabase/tests/isolated/catalogo-modalidades-e-constraints-postgres.sql` insere pedidos sintéticos V1 (5%), V2 entrega de **R$ 0,33** (taxa total 2 centavos, com diferença do arredondamento antigo de 5% para plataforma), V2 retirada e consumo local a 7%. Rejeita um V2 de retirada com apenas 5% e um V1 com 7%. Resultado no job PostgreSQL descartável `113123865572` (execução `37719569034`): **PASS**, com rollback final. O teste SQL anterior de chargeback também passou no mesmo job, assim como as 23 assertions pgTAP.
+
+**Auditoria Supabase Auth (somente leitura):** o verificador de segurança informou que **Leaked Password Protection** está desativado (`WARN`). Avaliar ativação em [Supabase Auth — proteção de senhas](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection) antes da publicação; esta configuração **não foi alterada**. Os outros avisos `INFO` de RLS ativo sem política recaem sobre 28 tabelas financeiras/internas de acesso restrito; confirmar concessões `GRANT` e RPCs antes de tratar isso como vulnerabilidade ou abrir políticas públicas.
+
 **Não executar SQL em produção sem autorização explícita e backup restaurável.** Nenhum dado real foi modificado nesses testes.
 
 ## Critérios obrigatórios antes de qualquer deploy
