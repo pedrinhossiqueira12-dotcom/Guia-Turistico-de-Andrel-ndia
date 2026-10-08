@@ -272,6 +272,11 @@
     if (extrato) extrato.hidden = true;
     const perfil = $("motoboyProfileForm");
     if (perfil) perfil.reset();
+    const pixForm = $("motoboyPixForm");
+    if (pixForm) pixForm.reset();
+    if ($("motoboyPixKey")) $("motoboyPixKey").value = "";
+    if ($("motoboyPixType")) $("motoboyPixType").value = "";
+    definirFeedback("motoboyPixFeedback", "");
   }
 
   function limparDadosPrivados() {
@@ -437,8 +442,8 @@
     const chave = $("motoboyPixKey");
     if (chave && typeof perfil.chave_pix === "string" && document.activeElement !== chave) chave.value = perfil.chave_pix;
     const tipoPix = $("motoboyPixType");
-    if (tipoPix && typeof perfil.chave_pix_tipo === "string" &&
-        document.activeElement !== tipoPix) tipoPix.value = perfil.chave_pix_tipo;
+    if (tipoPix && document.activeElement !== tipoPix)
+      tipoPix.value = typeof perfil.chave_pix_tipo === "string" ? perfil.chave_pix_tipo : "";
     const concluidadas = Array.isArray(state.extrato.entregas_concluidas) ? state.extrato.entregas_concluidas : [];
     const pagamentos = Array.isArray(state.extrato.pagamentos) ? state.extrato.pagamentos : [];
     const historico = $("motoboyHistory");
