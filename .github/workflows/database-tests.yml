@@ -747,6 +747,66 @@ jobs:
           SQL
           psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM public.catalogo_pedidos" | grep -Fx 0
 
+      - name: Practice full pg_dump and pg_restore on synthetic disposable database
+        run: |
+          set -euo pipefail
+          test "$PGHOST" = localhost
+          test "$PGPORT" = 5432
+          test "$PGUSER" = postgres
+          test "$PGDATABASE" = catalogo_ci
+          test -z "${DATABASE_URL:-}"
+          test -z "${PGSERVICE:-}"
+          test -z "${PGHOSTADDR:-}"
+          test -z "${PGOPTIONS:-}"
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT current_database()" | grep -Fx catalogo_ci
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM public.catalogo_pedidos" | grep -Fx 0
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM public.catalogo_pagamentos_v2" | grep -Fx 0
+          # This dump is built ONLY from the CI PostgreSQL service, NEVER from Supabase.
+          pg_dump -Fc --no-owner --no-acl -d catalogo_ci -f /tmp/catalogo-ci-only.dump
+          test -s /tmp/catalogo-ci-only.dump
+          sha256sum /tmp/catalogo-ci-only.dump
+          pg_restore --list /tmp/catalogo-ci-only.dump | grep -F 'catalogo_pedidos'
+
+          createdb catalogo_restore_ci
+          trap 'dropdb --if-exists --force catalogo_restore_ci; rm -f /tmp/catalogo-ci-only.dump' EXIT
+          pg_restore --exit-on-error --no-owner --no-acl \
+            -d catalogo_restore_ci /tmp/catalogo-ci-only.dump
+          psql -v ON_ERROR_STOP=1 -d catalogo_restore_ci <<'SQL'
+          DO $restore_ci$
+          DECLARE priced jsonb;
+          BEGIN
+            IF current_database() <> 'catalogo_restore_ci'
+               OR (SELECT count(*) FROM public.comercios_publicados) <> 140
+               OR (SELECT count(*) FROM public.catalogos) <> 1
+               OR (SELECT count(*) FROM public.cadastros_comercios) <> 1
+               OR (SELECT count(*) FROM public.avaliacoes) <> 0
+               OR (SELECT count(*) FROM public.catalogo_pedidos) <> 0
+               OR (SELECT count(*) FROM public.catalogo_remuneracoes_v2) <> 0
+               OR (SELECT count(*) FROM public.catalogo_lancamentos_financeiros_v2) <> 0
+               OR EXISTS (SELECT 1 FROM pg_constraint
+                          WHERE conrelid = 'public.catalogo_pedidos'::regclass
+                            AND conname = 'catalogo_pedidos_check1')
+               OR NOT EXISTS (SELECT 1 FROM pg_constraint
+                              WHERE conrelid = 'public.catalogo_pedidos'::regclass
+                                AND conname = 'catalogo_pedidos_taxas_v2_check')
+               OR (SELECT count(*) FROM pg_class
+                   WHERE oid IN ('public.catalogo_pedidos'::regclass,
+                                 'public.catalogo_remuneracoes_v2'::regclass,
+                                 'public.catalogo_pagamentos_v2'::regclass)
+                         AND relrowsecurity) <> 3
+            THEN
+              RAISE EXCEPTION 'Synthetic restored database differs from isolated source';
+            END IF;
+            SELECT public.catalogo_fluxo_precificar('entrega', 33, NULL) INTO priced;
+            IF (priced->>'taxa_total_centavos')::integer <> 2
+               OR (priced->>'taxa_motoboy_centavos')::integer <> 1
+               OR (priced->>'taxa_plataforma_centavos')::integer <> 1 THEN
+              RAISE EXCEPTION 'Restored financial RPC was not executable or mispriced';
+            END IF;
+          END $restore_ci$;
+          SQL
+          echo "PASS: pg_dump and pg_restore restored full isolated schema, RLS, constraints, synthetic records and 7-percent pricing"
+
   pricing-postgres-isolated:
     name: Real pricing RPC (isolated PostgreSQL)
     runs-on: ubuntu-latest
