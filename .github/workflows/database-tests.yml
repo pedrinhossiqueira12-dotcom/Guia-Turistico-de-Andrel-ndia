@@ -68,6 +68,7 @@ jobs:
           from pglast import parse_sql
           paths = sorted(Path("supabase/migrations").glob("*.sql"))
           paths += sorted(Path("supabase/tests/database").glob("*.sql"))
+          paths += sorted(Path("supabase/tests/isolated").glob("*.sql"))
           assert paths, "No SQL files found"
           failures = []
           for path in paths:
