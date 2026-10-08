@@ -40,8 +40,13 @@ def validate_plan(source=MIGRATIONS, manifest_path=MANIFEST):
     versions = plan["remote_versions"]
     aliases = plan["identical_migrations"]
     applied = plan["applied_adjusted_migration"]
-    if "pending_migration" in plan:
-        raise PreflightError("Stale manifest still contains pending migration")
+    pending = plan.get("pending_migration")
+    if pending is None or pending.get("local") != "20261008160000_saques_motoboy_mensais_v2.sql":
+        raise PreflightError("Exactly one new courier withdrawal migration is expected.")
+    if pending.get("release") != pending["local"] or not VALID_NAME.fullmatch(pending["local"]):
+        raise PreflightError("Invalid release name for pending migration.")
+    if pending["local"][:14] <= versions[-1] or pending["local"][:14] in versions:
+        raise PreflightError("Pending version must be newer than production history.")
     if len(versions) != 29 or len(set(versions)) != 29 or versions != sorted(versions):
         raise PreflightError("Audited remote history must contain 29 distinct, ordered versions.")
     if not all(re.fullmatch(r"[0-9]{14}", v) for v in versions):
@@ -81,8 +86,10 @@ def validate_plan(source=MIGRATIONS, manifest_path=MANIFEST):
                      "sha256": applied["sha256"], "remote_applied": True})
 
     files = sorted(x for x in source.glob("*.sql") if x.is_file())
-    if len(files) != 29:
-        raise PreflightError(f"Expected 29 SQL files, found {len(files)}.")
+    if len(files) != 30:
+        raise PreflightError(f"Expected 30 SQL files (29 applied, one pending), found {len(files)}.")
+    if not (source / pending["local"]).is_file():
+        raise PreflightError("Pending courier withdrawal SQL not found.")
     mappings, release_versions = {}, []
     for file in files:
         name = file.name
@@ -93,25 +100,26 @@ def validate_plan(source=MIGRATIONS, manifest_path=MANIFEST):
         else:
             output_name = name
             evidence.append({"source": name, "release": name,
-                             "sha256": digest(file.read_bytes()), "remote_applied": True})
+                             "sha256": digest(file.read_bytes()),
+                             "remote_applied": name != pending["local"]})
         mappings[name] = output_name
         release_versions.append(output_name[:14])
 
     if len(set(mappings.values())) != len(mappings):
         raise PreflightError("Migration filename collision.")
-    if sorted(release_versions) != versions:
-        raise PreflightError("Release versions do not match all 29 APPLIED database versions.")
-    if len(evidence) != 29 or any(not e["remote_applied"] for e in evidence):
-        raise PreflightError("Must contain exactly 29 already-applied migrations and ZERO pending.")
+    if sorted(release_versions) != sorted(versions + [pending["local"][:14]]):
+        raise PreflightError("Release versions differ from 29 applied + one pending.")
+    if len(evidence) != 30 or sum(not e["remote_applied"] for e in evidence) != 1:
+        raise PreflightError("Must contain 29 applied migrations and exactly ONE pending.")
 
     return {
         "audited_date": plan["audited_utc_date"],
         "remote_history_versions": versions,
-        "pending_release_version": None,
-        "pending_release_name": None,
-        "file_count": 29,
+        "pending_release_version": pending["local"][:14],
+        "pending_release_name": pending["local"],
+        "file_count": 30,
         "already_applied_count": 29,
-        "pending_count": 0,
+        "pending_count": 1,
         "migrations": sorted(evidence, key=lambda e: e["release"]),
         "mappings": mappings,
         "normalized_local": local,
@@ -137,8 +145,8 @@ def prepare(target, evidence):
         json.dumps(release_metadata, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
     )
     (target / "README.txt").write_text(
-        "HISTORICO DE 29 MIGRATIONS JA APLICADAS; ZERO SQL PENDENTE.\n"
-        "NUNCA executar estas migrations novamente em producao.\n"
+        "HISTORICO DE 29 MIGRATIONS JA APLICADAS; UMA MIGRATION DE SAQUE PENDENTE.\n"
+        "NUNCA executar estas 29 migrations novamente em producao.\n"
         "Para migrations futuras: revalidar banco atual, ambiente, hash e nova versao.\n"
         "O pacote e somente para conferir a identidade do historico remoto.\n",
         encoding="utf-8",
@@ -157,7 +165,7 @@ def main():
             "audited_date": result["audited_date"],
             "remote_history_count": result["already_applied_count"],
             "pending_count": result["pending_count"],
-            "pending_filename": None,
+            "pending_filename": result["pending_release_name"],
             "version_alignments": len([k for k, v in result["mappings"].items() if k != v]),
             "output": str(args.output) if args.output is not None else None,
             "safe_to_deploy": False,

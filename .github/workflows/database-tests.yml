@@ -41,10 +41,11 @@ jobs:
           target="$RUNNER_TEMP/catalogo-release-offline-$GITHUB_RUN_ID"
           python3 scripts/validacao-pagamentos/build-release-migrations.py --output "$target"
           test -f "$target/release-evidence.json"
-          test "$(find "$target/supabase/migrations" -maxdepth 1 -type f -name '*.sql' | wc -l)" -eq 29
+          test "$(find "$target/supabase/migrations" -maxdepth 1 -type f -name '*.sql' | wc -l)" -eq 30
           ! find "$target/supabase/migrations" -name '20261007213000*' | grep -q .
           test -f "$target/supabase/migrations/20261008120906_arredondamento_taxa_total_7_outubro_2026.sql"
-          echo "PASS: 29 applied migration versions, zero SQL pending; never rerun applied SQL."
+          test -f "$target/supabase/migrations/20261008160000_saques_motoboy_mensais_v2.sql"
+          echo "PASS: 29 previously applied, exactly one withdrawal migration pending. No SQL executed."
 
   browser-marketplace-smoke:
     name: Chromium buyer, merchant, courier and operation UI (offline)
@@ -108,7 +109,7 @@ jobs:
         with:
           deno-version: v2.x
       - name: Test financial snapshots without database access
-        run: deno test --no-check --allow-read=supabase/functions supabase/functions/tests/catalogo-financeiro.test.ts supabase/functions/tests/catalogo-checkouts-contract.test.ts supabase/functions/tests/catalogo-seguranca-pagamentos.test.ts supabase/functions/tests/catalogo-webhook-identificacao.test.ts supabase/functions/tests/catalogo-fatura-provedor.test.ts
+        run: deno test --no-check --allow-read=supabase/functions supabase/functions/tests/catalogo-financeiro.test.ts supabase/functions/tests/catalogo-checkouts-contract.test.ts supabase/functions/tests/catalogo-seguranca-pagamentos.test.ts supabase/functions/tests/catalogo-webhook-identificacao.test.ts supabase/functions/tests/catalogo-fatura-provedor.test.ts supabase/functions/tests/catalogo-saques-payout.test.ts
 
   edge-http-mock-tests:
     name: Real Edge HTTP handlers with fake provider and blocked network (Deno)
@@ -130,6 +131,8 @@ jobs:
         run: |
           deno test --no-check --node-modules-dir=auto --allow-env --allow-read=supabase/functions \
             supabase/functions/tests/catalogo-edge-http.test.ts
+          deno test --no-check --node-modules-dir=auto --allow-env --allow-read=supabase/functions \
+            supabase/functions/tests/catalogo-saque-worker-http.test.ts
 
   supabase-native-local-pgtap:
     name: Supabase native local reset and 23 pgTAP (temporary project, no external schedule)
@@ -776,6 +779,18 @@ jobs:
             END IF;
           END $final_chain$;
           SQL
+
+      - name: Test monthly courier withdrawals and no-double-payment in disposable database
+        run: |
+          set -euo pipefail
+          test "${PGHOST:-}" = localhost
+          test "${PGDATABASE:-}" = catalogo_ci
+          test -z "${DATABASE_URL:-}"
+          psql -X -v ON_ERROR_STOP=1 -f supabase/tests/isolated/catalogo-saques-mensais-postgres.sql
+          test "$(psql -X -Atqc 'SELECT count(*) FROM public.catalogo_saques_motoboy_v2')" = 0
+          test "$(psql -X -Atqc 'SELECT count(*) FROM public.catalogo_repasses_v2')" = 0
+          test "$(psql -X -Atqc 'SELECT count(*) FROM public.catalogo_pedidos')" = 0
+          echo 'PASS: Pix withdrawal e2e is simulated and fully rolled back.'
 
       - name: Install real pgTAP extension only in disposable PostgreSQL service
         run: |

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail-closed tests for 29 applied migrations and zero SQL pending."""
+"""Fail-closed tests for 29 remote migrations and one new courier withdrawal proposal."""
 import copy
 import json
 import runpy
@@ -19,14 +19,14 @@ MANIFEST = PLAN["MANIFEST"]
 
 
 class TestReleaseMigrations(unittest.TestCase):
-    def test_remote_history_has_no_pending_migrations(self):
+    def test_remote_history_has_exactly_one_new_withdrawal_migration(self):
         result = validate()
-        self.assertEqual(result["file_count"], 29)
+        self.assertEqual(result["file_count"], 30)
         self.assertEqual(result["already_applied_count"], 29)
-        self.assertEqual(result["pending_count"], 0)
-        self.assertIsNone(result["pending_release_version"])
+        self.assertEqual(result["pending_count"], 1)
+        self.assertEqual(result["pending_release_version"], "20261008160000")
         self.assertEqual(sum(e["source"] != e["release"] for e in result["migrations"]), 4)
-        self.assertTrue(all(e["remote_applied"] for e in result["migrations"]))
+        self.assertEqual(sum(not e["remote_applied"] for e in result["migrations"]), 1)
 
     def test_package_uses_real_remote_versions_and_correct_final_sql(self):
         with tempfile.TemporaryDirectory(prefix="catalogo-release-test-") as td:
@@ -35,7 +35,8 @@ class TestReleaseMigrations(unittest.TestCase):
             prepare(target, evidence)
             remote = target / "supabase" / "migrations"
             names = {p.name for p in remote.glob("*.sql")}
-            self.assertEqual(len(names), 29)
+            self.assertEqual(len(names), 30)
+            self.assertIn("20261008160000_saques_motoboy_mensais_v2.sql", names)
             final_name = "20261008120906_arredondamento_taxa_total_7_outubro_2026.sql"
             self.assertIn(final_name, names)
             self.assertNotIn("20261007213000_arredondamento_taxa_total_7.sql", names)
@@ -45,9 +46,9 @@ class TestReleaseMigrations(unittest.TestCase):
                     expected = applied_sql_bytes(expected)
                 self.assertEqual(expected, (remote / dst).read_bytes())
             out = json.loads((target / "release-evidence.json").read_text("utf-8"))
-            self.assertEqual(out["pending_count"], 0)
+            self.assertEqual(out["pending_count"], 1)
             self.assertNotIn("normalized_local", out)
-            self.assertIn("ZERO SQL PENDENTE", (target / "README.txt").read_text("utf-8"))
+            self.assertIn("UMA MIGRATION DE SAQUE PENDENTE", (target / "README.txt").read_text("utf-8"))
 
     def test_applied_sql_tampering_fails_closed(self):
         with tempfile.TemporaryDirectory(prefix="catalogo-release-tamper-") as td:
@@ -95,7 +96,7 @@ class TestReleaseMigrations(unittest.TestCase):
             }
             path = Path(td) / "manifest.json"
             path.write_text(json.dumps(modified), encoding="utf-8")
-            with self.assertRaisesRegex(PreflightError, "Stale manifest"):
+            with self.assertRaisesRegex(PreflightError, "Exactly one new courier withdrawal"):
                 validate(manifest_path=path)
 
     def test_refuses_overwriting_release_directory(self):

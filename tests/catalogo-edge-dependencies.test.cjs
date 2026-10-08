@@ -11,6 +11,7 @@ const ENTRYPOINTS = [
   "catalogo-pedido-pix/index.ts",
   "catalogo-pedido-offline/index.ts",
   "catalogo-entregas/index.ts",
+  "catalogo-saque-payout/index.ts",
   "catalogo-pedidos-offline-admin/index.ts",
   "catalogo-fatura-pix/index.ts",
   "mercadopago-marketplace-webhook/index.ts",
@@ -54,6 +55,7 @@ test("all financial Edge entrypoints include resolvable bundled relative depende
     "_shared/catalogo-webhook-events.ts",
     "_shared/catalogo-pedido-offline-runtime.ts",
     "_shared/catalogo-entregas-crypto-v2.ts",
+    "_shared/catalogo-saques-payout.ts",
     "catalogo-fatura-pix/fatura-utils.mjs",
     "catalogo-pix-producao/mercadopago-utils.mjs",
   ]) {

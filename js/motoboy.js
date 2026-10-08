@@ -37,6 +37,8 @@
   const ACTION_FIELDS = {
     listar_entregas: ["offset"],
     consultar_extrato: ["offset"],
+    consultar_saques: [],
+    solicitar_saque: [],
     definir_disponibilidade: ["disponivel"],
     aceitar_entrega: ["pedido_id"],
     coletar: ["pedido_id"],
@@ -63,6 +65,8 @@
     lockedAfterLogout: false,
     loading: false,
     extractLoading: false,
+    saquesLoading: false,
+    saques: null,
     actionInFlight: new Set(),
     availability: false,
     availabilityLoading: false,
@@ -265,6 +269,11 @@
 
   function limparExtrato() {
     state.extrato = null;
+    state.saques = null;
+    state.saquesLoading = false;
+    if ($("motoboyWithdrawals")) $("motoboyWithdrawals").hidden = true;
+    if ($("motoboySaquesHistory")) $("motoboySaquesHistory").innerHTML = "";
+    if ($("motoboySolicitarSaque")) $("motoboySolicitarSaque").disabled = true;
     state.availability = false;
     const extrato = $("motoboyEarnings");
     if (extrato) extrato.hidden = true;
@@ -463,6 +472,94 @@
       definirFeedback("motoboyEarningsFeedback", erro.message || "Não foi possível consultar o extrato.", true);
     } finally {
       if (generation === state.generation) state.extractLoading = false;
+    }
+  }
+
+
+  // Os centavos e a elegibilidade são calculados pelo servidor, nunca pelo browser.
+  function renderizarSaques() {
+    const dados = state.saques;
+    const card = $("motoboyWithdrawals");
+    if (!dados || !card) return;
+    card.hidden = false;
+    const disponivel = Number(dados.disponivel_para_saque_centavos || 0);
+    const reservado = Number(dados.reservado_centavos || 0);
+    $("motoboySaldoSacavel").textContent = formatarMoeda(disponivel);
+    $("motoboySaldoReservado").textContent = formatarMoeda(reservado);
+    const ativos = Array.isArray(dados.saques) && dados.saques.some(s =>
+      ["solicitado", "processando", "aguardando_confirmacao", "revisao"].includes(s.estado));
+    const botao = $("motoboySolicitarSaque");
+    if (botao) botao.disabled = state.saquesLoading || ativos || disponivel < 100;
+    const estados = {
+      solicitado: "Solicitado",
+      processando: "Enviado para processamento",
+      aguardando_confirmacao: "Aguardando confirmação do banco",
+      pago: "Pago e confirmado",
+      falhou: "Transferência não concluída",
+      revisao: "Em revisão financeira"
+    };
+    const lista = $("motoboySaquesHistory");
+    const saques = Array.isArray(dados.saques) ? dados.saques : [];
+    if (lista) lista.innerHTML = saques.length ? saques.map(s =>
+      '<li><strong>' + escapar(formatarMoeda(s.valor_centavos)) +
+      '</strong><span>' + escapar(estados[s.estado] || "Em análise") +
+      ' · ' + escapar(formatarData(s.criado_em)) + '</span></li>'
+    ).join("") : '<li>Nenhum saque solicitado.</li>';
+    const modo = dados.transferencia_automatizada_ativa === true
+      ? "Saques processados automaticamente pelo provedor quando disponível. Crédito sujeito à confirmação bancária."
+      : "Solicitação disponível. Transferências automáticas ainda não habilitadas; o saldo permanecerá reservado até processamento.";
+    if ($("motoboySaqueModo")) $("motoboySaqueModo").textContent = modo;
+  }
+
+  async function carregarSaques() {
+    if (!state.session || state.saquesLoading || !navigator.onLine) return;
+    const generation = state.generation;
+    const userId = state.userId;
+    state.saquesLoading = true;
+    try {
+      const dados = await chamarApi({ acao: "consultar_saques" }, generation, userId);
+      validarSessaoAtual(generation, userId);
+      state.saques = dados;
+      renderizarSaques();
+    } catch (erro) {
+      if (erro.message === STALE_REQUEST) return;
+      if (erro.status === 401 || erro.status === 403) {
+        state.saques = null;
+        if ($("motoboyWithdrawals")) $("motoboyWithdrawals").hidden = true;
+      }
+      definirFeedback("motoboySaqueFeedback",
+        erro.message || "Não foi possível consultar os saques.", true);
+    } finally {
+      if (generation === state.generation) state.saquesLoading = false;
+      if (generation === state.generation && state.saques) renderizarSaques();
+    }
+  }
+
+  async function solicitarSaque() {
+    if (!state.session || state.saquesLoading ||
+        Number(state.saques?.disponivel_para_saque_centavos || 0) < 100 ||
+        (state.saques?.saques || []).some(s =>
+          ["solicitado","processando","aguardando_confirmacao","revisao"].includes(s.estado))) return;
+    if (!window.confirm("Solicitar o saque do saldo elegível de meses já encerrados para a chave Pix cadastrada? O pedido não significa que o dinheiro foi enviado.")) return;
+    const generation = state.generation;
+    const userId = state.userId;
+    const botao = $("motoboySolicitarSaque");
+    if (botao) botao.disabled = true;
+    definirFeedback("motoboySaqueFeedback", "Reservando créditos no servidor…");
+    try {
+      const resposta = await chamarApi({ acao: "solicitar_saque" }, generation, userId);
+      validarSessaoAtual(generation, userId);
+      definirFeedback("motoboySaqueFeedback",
+        "Solicitação " + textoSeguro(resposta.saque_id, 36) +
+        " registrada. Pagamento aguardando confirmação do provedor.");
+      await carregarSaques();
+      await carregarExtrato();
+    } catch (erro) {
+      if (erro.message !== STALE_REQUEST)
+        definirFeedback("motoboySaqueFeedback", erro.message || "Não foi possível solicitar o saque.", true);
+      await carregarSaques();
+    } finally {
+      if (generation === state.generation && state.saques) renderizarSaques();
     }
   }
 
@@ -690,6 +787,7 @@
       if (document.visibilityState === "visible" && navigator.onLine && !$("motoboyConfirmDialog")?.open && !$("motoboyOccurrenceDialog")?.open) {
         carregarEntregas();
         carregarExtrato();
+        carregarSaques();
       }
     }, 30000);
   }
@@ -735,7 +833,7 @@
     definirFeedback("motoboyLoginFeedback", "");
     definirAviso("Sessão autenticada", "Consultando ofertas e extrato autorizados para esta conta…");
     iniciarPolling();
-    await Promise.all([carregarEntregas(), carregarExtrato()]);
+    await Promise.all([carregarEntregas(), carregarExtrato(), carregarSaques()]);
   }
 
   async function fazerLogin(event) {
@@ -806,7 +904,8 @@
     $("motoboyLoginForm")?.addEventListener("submit", fazerLogin);
     $("motoboySignupForm")?.addEventListener("submit", criarConta);
     $("motoboyLogout")?.addEventListener("click", sair);
-    $("motoboyRefresh")?.addEventListener("click", () => { carregarEntregas(); carregarExtrato(); });
+    $("motoboyRefresh")?.addEventListener("click", () => { carregarEntregas(); carregarExtrato(); carregarSaques(); });
+    $("motoboySolicitarSaque")?.addEventListener("click", solicitarSaque);
     $("motoboyLoadMore")?.addEventListener("click", () => carregarEntregas({ append: true }));
     $("motoboyAvailability")?.addEventListener("change", definirDisponibilidade);
     $("motoboyPixForm")?.addEventListener("submit", salvarChavePix);
@@ -829,11 +928,12 @@
         if (!$('motoboyConfirmDialog')?.open && !$('motoboyOccurrenceDialog')?.open && navigator.onLine) {
           carregarEntregas();
           carregarExtrato();
+          carregarSaques();
         }
       }
     });
     window.addEventListener("online", () => {
-      if (state.session && document.visibilityState === "visible") { carregarEntregas(); carregarExtrato(); }
+      if (state.session && document.visibilityState === "visible") { carregarEntregas(); carregarExtrato(); carregarSaques(); }
     });
     window.addEventListener("pagehide", () => {
       state.destroyed = true;
