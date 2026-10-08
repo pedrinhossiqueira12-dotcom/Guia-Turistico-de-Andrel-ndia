@@ -1,7 +1,7 @@
 import {
   amountToCents, centsToMoney, translateProviderStatus,
   extractProviderPayment, providerFactsError, verifyWebhookSignature,
-  buildWebhookManifest, encryptAesGcm, decryptAesGcm, uuidFromParts, randomDeliveryCode,
+  buildWebhookManifest, encryptAesGcm, decryptAesGcm, uuidFromParts, randomDeliveryCode,\n  constantTimeEqual, parseWebhookSignature, sanitizedProviderId,
 } from "../_shared/catalogo-pagamentos-v2.ts";
 
 function assert(condition: unknown, message: string) {
@@ -89,4 +89,21 @@ Deno.test("codigos de entrega sao validos e variados", () => {
     codes.add(code);
   }
   assert(codes.size>950, "Entropia insuficiente nos codigos");
+});
+
+Deno.test("assinaturas malformadas e IDs externos perigosos sao recusados", () => {
+  const valid="a".repeat(64);
+  assert(parseWebhookSignature(`ts=1760000000,v1=${valid}`)?.v1===valid,"Assinatura valida nao interpretada");
+  for(const header of [null,"","ts=0,v1="+valid,"ts=1760000000,v1=abc","ts=1760000000","v1="+valid]) {
+    assert(parseWebhookSignature(header)===null,"Assinatura malformada aceita");
+  }
+  for(const id of ["","../payments","foo/bar","id?x=1"," id with spaces ","a".repeat(121),null]) {
+    assert(sanitizedProviderId(id)==="","Identificador inseguro aceito");
+  }
+  for(const id of ["123","pay_123","order:abc-12"]) {
+    assert(sanitizedProviderId(id)===id,"Identificador valido recusado");
+  }
+  assert(constantTimeEqual("abc","abc"),"Igualdade recusada");
+  assert(!constantTimeEqual("abc","abd"),"Valores divergentes aceitos");
+  assert(!constantTimeEqual("abc","abcd"),"Comprimentos divergentes aceitos");
 });
