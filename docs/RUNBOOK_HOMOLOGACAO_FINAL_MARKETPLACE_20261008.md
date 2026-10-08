@@ -2,7 +2,8 @@
 
 **Data da auditoria:** 8 de outubro de 2026.
 **Escopo:** PR #35 (`logic/finalizacao-marketplace-2026-10-07`), sem merge.
-**Status:** testes técnicos aprovados no workflow #327; **produção NÃO autorizada neste runbook**. Os números abaixo são fotografia do momento da auditoria, não uma confirmação em tempo real futura.
+**Status:** testes técnicos aprovados no workflow #327; **produção NÃO autorizada neste runbook**.
+**Atenção ao destino:** PR #35 tem base `backup/pre-financeiro-2026-10-07`, **não** `main`. Um merge nesse PR não substitui a revisão de uma promoção posterior para `main`/Cloudflare Pages; confirmar explicitamente a branch-alvo e as diferenças antes de qualquer publicação. Os números abaixo são fotografia do momento da auditoria, não uma confirmação em tempo real futura.
 
 ## 1. Evidências já confirmadas
 
