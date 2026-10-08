@@ -1,3 +1,18 @@
+-- Protecao contra execucao acidental fora do banco descartavel de CI.
+DO $isolated_guard$
+BEGIN
+  IF current_database() <> 'catalogo_ci'
+     OR session_user <> 'postgres'
+     OR EXISTS (
+       SELECT 1 FROM information_schema.tables
+        WHERE table_schema='public'
+          AND table_name IN ('catalogo_pedidos','catalogo_comissoes_offline','catalogo_fluxo_config')
+     )
+  THEN
+    RAISE EXCEPTION 'Fixture financeira exige banco catalogo_ci vazio e usuario postgres';
+  END IF;
+END $isolated_guard$;
+
 -- As restricoes reais da migracao sao montadas pelo script de CI.
 -- O banco e efemero; estas tabelas NAO sao as tabelas reais de producao.
 CREATE TABLE public.catalogo_pedidos (
