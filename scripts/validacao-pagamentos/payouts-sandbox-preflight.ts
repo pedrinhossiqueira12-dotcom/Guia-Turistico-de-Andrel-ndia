@@ -154,7 +154,7 @@ async function executeSandbox() {
     maskedReport({modo:"sandbox",resultado:"INDETERMINADO",
       referencia:prepared.externalReference,
       proximo:"Investigar referência no provedor; não repetir POST"});
-    Deno.exitCode=2;
+    Deno.exit(2);
   }
 }
 async function checkStatus() {
@@ -192,6 +192,6 @@ if(import.meta.main){
   catch(e){
     // NUNCA imprimir corpo da API, chave Pix ou credencial.
     console.error(e instanceof Error?e.message:"Pré-requisito de homologação indisponível.");
-    Deno.exitCode=1;
+    Deno.exit(1);
   }
 }
