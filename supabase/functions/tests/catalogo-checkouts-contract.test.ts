@@ -45,3 +45,32 @@ Deno.test("Confirmacao de entrega exige autenticacao e RPC transacional", async 
     if(!admin.includes(contract)) throw new Error(`Contrato do painel ausente: ${contract}`);
   }
 });
+
+Deno.test("Fatura Pix exige prova do provedor antes de liberar creditos", async () => {
+  const source=await Deno.readTextFile(new URL("../catalogo-fatura-pix/index.ts",import.meta.url));
+  for(const contract of [
+    'verifyWebhookSignature(',
+    'catalogo_confirmar_cobranca_fatura',
+    'X-Idempotency-Key',
+    'MP_PLATFORM_ACCESS_TOKEN',
+    'MP_PLATFORM_WEBHOOK_SECRET',
+  ]) {
+    if(!source.includes(contract)) throw new Error(`Contrato financeiro de fatura ausente: ${contract}`);
+  }
+  const admin=await Deno.readTextFile(new URL("../catalogo-pedidos-offline-admin/index.ts",import.meta.url));
+  if(!admin.includes('A baixa manual por referência foi desativada')) {
+    throw new Error("Baixa manual de fatura nao pode ser reativada sem conciliacao");
+  }
+});
+
+Deno.test("Webhook de pedidos valida assinatura e reconcilia pela RPC", async () => {
+  const source=await Deno.readTextFile(new URL("../mercadopago-marketplace-webhook/index.ts",import.meta.url));
+  for(const contract of [
+    'verifyWebhookSignature(',
+    'catalogo_aplicar_pagamento_v2',
+    'providerFactsError(',
+    'extractProviderPayment(',
+  ]) {
+    if(!source.includes(contract)) throw new Error(`Contrato de webhook ausente: ${contract}`);
+  }
+});
