@@ -16,7 +16,16 @@ function cryptoModule() {
 }
 function delivery(actor, result={ok:true}, key=KEY) {
   let handler;const calls=[];const c=cryptoModule();
-  const db={auth:{getUser:async()=>({data:{user:{id:actor}},error:null})},rpc:async(name,args)=>{calls.push({name,args});return{data:result,error:null};}};
+  const db={
+    auth:{getUser:async()=>({data:{user:{id:actor}},error:null})},
+    rpc:async(name,args)=>{calls.push({name,args});return{data:result,error:null};},
+    from(table){
+      if (table !== 'catalogo_solicitacoes_saque_v2') throw new Error('unexpected table '+table);
+      const query={select(){return this;},in(){return this;},order(){return this;},
+        limit:async()=>({data:[],error:null})};
+      return query;
+    }
+  };
   const context={...c,Request,Response,createClient:()=>db,console:{error(){}},Deno:{env:{get:name=>name==='MP_OAUTH_ENCRYPTION_KEY'?key:''},serve:fn=>{handler=fn;}}};
   vm.runInNewContext(stripTypeScriptTypes(fs.readFileSync('supabase/functions/catalogo-entregas/index.ts','utf8').replace(/^import[^;]+;\s*/gm,'')),context);
   return {handler,calls};
