@@ -23,7 +23,11 @@ BEGIN
     OR EXISTS(SELECT 1 FROM pg_extension WHERE extname IN ('pg_cron','pg_net'))
  THEN RAISE EXCEPTION 'Withdrawals test requires empty disposable catalogo_ci without cron/net'; END IF;
 
- INSERT INTO auth.users(id,email_confirmed_at) VALUES(v_actor,now());
+ -- O registro automático do repasse mantém a FK de operador administrativo.
+ -- Em produção esta conta existe; a fixture local cria identidade sintética.
+ INSERT INTO auth.users(id,email_confirmed_at) VALUES
+   (v_actor,now()),
+   ('4b9a0233-6b72-4573-aebd-d596c5b15e1b',now());
  INSERT INTO public.catalogo_motoboys(comercio_id,usuario_id,nome,email,autorizado_por)
  VALUES ('comercio-de-exemplo',v_actor,'Motoboy Saque CI','saque-ci@example.invalid',
          '00000000-0000-4000-8000-000000000099');
