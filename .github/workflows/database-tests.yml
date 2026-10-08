@@ -289,6 +289,130 @@ jobs:
         run: |
           psql -v ON_ERROR_STOP=1 -1 -c "SET app.marketplace_test_payments = 'enabled'" -f supabase/tests/isolated/catalogo-assinaturas-pagamentos-postgres.sql
 
+  complete-chain-postgres-isolated:
+    name: All financial migrations except remote scheduling (disposable PostgreSQL)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: local-ci-only
+          POSTGRES_DB: catalogo_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d catalogo_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: local-ci-only
+      PGDATABASE: catalogo_ci
+    steps:
+      - uses: actions/checkout@v4
+      - name: Enforce ephemeral target without external cron extensions
+        run: |
+          test "$PGHOST" = localhost
+          test "$PGPORT" = 5432
+          test "$PGUSER" = postgres
+          test "$PGDATABASE" = catalogo_ci
+          test -z "${DATABASE_URL:-}"
+          test -z "${PGSERVICE:-}"
+          test -z "${PGHOSTADDR:-}"
+          test -z "${PGOPTIONS:-}"
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT current_database(), inet_server_addr() IS NOT NULL" | grep -Fx 'catalogo_ci|t'
+          # Scheduled jobs must be unavailable in this isolated database;
+          # the second migration embeds a PRODUCTION URL and is NEVER run here.
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM pg_available_extensions WHERE name IN ('pg_cron','pg_net')" | grep -Fx 0
+      - name: Refuse unsafe Auth/Storage bootstrap without opt-in
+        run: |
+          if psql -v ON_ERROR_STOP=1 -f supabase/tests/baseline/catalogo-ci-auth-storage.sql > /tmp/auth-no-opt-in.log 2>&1; then
+            echo 'ERROR: mock bootstrap ignored guard'
+            exit 1
+          fi
+          grep -q 'Mocks Auth/Storage exigem catalogo_ci vazio' /tmp/auth-no-opt-in.log
+      - name: Build synthetic legacy baseline in empty local database
+        run: |
+          psql -v ON_ERROR_STOP=1 -1 -c "SET app.marketplace_test_auth_storage = 'enabled'" -f supabase/tests/baseline/catalogo-ci-auth-storage.sql
+          psql -v ON_ERROR_STOP=1 -1 -c "SET app.marketplace_test_baseline = 'enabled'" -f supabase/tests/baseline/legacy-public-tables.sql
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM public.cadastros_comercios" | grep -Fx 1
+      - name: Apply ordered real SQL migrations without remote scheduler
+        run: |
+          set -euo pipefail
+          count=0
+          for migration in supabase/migrations/*.sql; do
+            case "$migration" in
+              supabase/migrations/20261002235010_schedule_storage_retention_dry_run_20261002.sql)
+                echo "SKIPPED intentionally: $migration (contains production URL and schedules remote HTTP)"
+                ;;
+              *)
+                echo "Applying isolated: $migration"
+                psql -v ON_ERROR_STOP=1 -f "$migration"
+                count=$((count + 1))
+                ;;
+            esac
+          done
+          total=$(find supabase/migrations -maxdepth 1 -name '*.sql' | wc -l)
+          test "$count" -eq "$((total - 1))"
+          echo "Applied $count of $total real migrations to disposable catalogo_ci."
+      - name: Assert final V2 model and 7-percent rounding in actual schema
+        run: |
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          DO $final_chain$
+          DECLARE v_total integer; v_motoboy integer; v_plataforma integer;
+          BEGIN
+            IF to_regclass('public.catalogo_fluxo_config') IS NULL
+               OR to_regclass('public.catalogo_pedidos') IS NULL
+               OR to_regclass('public.catalogo_remuneracoes_v2') IS NULL
+               OR to_regclass('public.catalogo_lancamentos_financeiros_v2') IS NULL
+               OR to_regclass('public.catalogo_fatura_cobrancas') IS NULL
+               OR to_regclass('public.catalogo_comissoes_offline') IS NULL THEN
+              RAISE EXCEPTION 'Full financial schema was not created by actual migrations';
+            END IF;
+            IF (SELECT count(*) FROM public.comercios_publicados) < 139
+               OR (SELECT count(*) FROM public.catalogo_pedidos) <> 0
+               OR (SELECT count(*) FROM public.catalogo_pagamentos) <> 0 THEN
+              RAISE EXCEPTION 'Unexpected real-looking data in disposable test database';
+            END IF;
+            IF (SELECT count(*) FROM pg_extension WHERE extname = 'pg_cron') <> 0
+               OR to_regclass('cron.job') IS NOT NULL THEN
+              RAISE EXCEPTION 'Isolated database must not have scheduled jobs';
+            END IF;
+            IF (SELECT count(*) FROM pg_class
+                WHERE oid IN ('public.catalogo_pedidos'::regclass,
+                              'public.catalogo_remuneracoes_v2'::regclass,
+                              'public.catalogo_lancamentos_financeiros_v2'::regclass,
+                              'public.catalogo_fatura_cobrancas'::regclass)
+                  AND relrowsecurity) <> 4 THEN
+              RAISE EXCEPTION 'RLS missing on financial or delivery tables';
+            END IF;
+
+            UPDATE public.catalogo_fluxo_config
+               SET ativo = true, comercios_piloto = NULL WHERE id = true;
+            SELECT (r->>'taxa_total_centavos')::integer,
+                   (r->>'taxa_motoboy_centavos')::integer,
+                   (r->>'taxa_plataforma_centavos')::integer
+            INTO v_total, v_motoboy, v_plataforma
+            FROM (SELECT public.catalogo_fluxo_precificar('entrega',101,NULL) AS r) x;
+            IF v_total IS DISTINCT FROM 7 OR v_motoboy IS DISTINCT FROM 2
+               OR v_plataforma IS DISTINCT FROM 5
+               OR v_total <> v_motoboy + v_plataforma THEN
+              RAISE EXCEPTION 'Final 7-percent pricing RPC failed for 101 cents';
+            END IF;
+            IF has_function_privilege('anon',
+                'public.catalogo_confirmar_entrega_motoboy(uuid,text,uuid,text)', 'EXECUTE')
+               OR has_function_privilege('authenticated',
+                'public.catalogo_confirmar_cobranca_fatura(text,text,text,integer,text)', 'EXECUTE')
+               THEN
+              RAISE EXCEPTION 'Direct payment/delivery access was exposed';
+            END IF;
+          END $final_chain$;
+          SQL
+
   pricing-postgres-isolated:
     name: Real pricing RPC (isolated PostgreSQL)
     runs-on: ubuntu-latest
