@@ -559,6 +559,18 @@ BEGIN
     RETURN pg_catalog.jsonb_build_object('ok',false,'http_status',409,
       'mensagem','Prova divergente: IDs, moeda BRL, referência ou valor não coincidem.');
   END IF;
+  -- Em caso de reembolso posterior não declarar falso sucesso idempotente.
+  -- A compensação contábil exige um fluxo separado de estorno auditado.
+  IF v_p.status='confirmado' AND
+     (p_status IN ('refunded','rejected','error') OR
+      p_status_detail IN ('refunded','partially_refunded')) THEN
+    UPDATE public.catalogo_payout_intents_v2 SET
+      revisao_motivo='Possível reversão posterior de payout pago: verificar extrato e ajustar créditos',
+      ultima_consulta_em=pg_catalog.now(),atualizado_em=pg_catalog.now()
+    WHERE id=v_p.id;
+    RETURN pg_catalog.jsonb_build_object('ok',false,'http_status',409,
+      'mensagem','Transferência previamente confirmada sofreu reversão; conciliação humana obrigatória.');
+  END IF;
   IF v_p.status='confirmado' THEN
     RETURN pg_catalog.jsonb_build_object('ok',true,'idempotente',true,
       'estado','confirmado','repasse_id',v_p.repasse_id,
@@ -570,7 +582,10 @@ BEGIN
       'mensagem','Tentativa em revisão, encerrada ou ainda não enviada.');
   END IF;
   -- Nenhuma baixa enquanto o provedor não atestar sucesso efetivo.
-  IF p_status IN ('created','approved','pending','in_process','processing') THEN
+  IF p_status IN ('created','approved','pending','in_process','processing')
+     OR (p_status='success' AND p_status_detail='in_progress')
+     OR (p_status='transaction_in_process'
+         AND p_status_detail IN ('pending_authorized','pending_bank')) THEN
     UPDATE public.catalogo_payout_intents_v2 SET
       status='aguardando_confirmacao',ultima_consulta_em=pg_catalog.now(),
       atualizado_em=pg_catalog.now() WHERE id=v_p.id;
