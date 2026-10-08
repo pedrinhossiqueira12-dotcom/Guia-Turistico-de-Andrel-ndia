@@ -151,6 +151,18 @@ Deno.test("só sucesso acreditado e comprovado autoriza classificar como confirm
   check(classificarTransacaoPayout(original,expected)==="confirmado","Pagamento válido");
   check(classificarTransacaoPayout({...original,status:"approved"},expected)==="em_processamento","approved não credita");
   check(classificarTransacaoPayout({...original,status:"pending"},expected)==="em_processamento","pending não credita");
+  check(classificarTransacaoPayout({...original,status:"success",status_detail:"in_progress"},expected)==="em_processamento",
+    "success/in_progress ainda não foi creditado");
+  check(classificarTransacaoPayout({...original,status:"transaction_in_process",status_detail:"pending_bank"},expected)==="em_processamento",
+    "banco não respondeu; mantém payout reservado");
+  check(classificarTransacaoPayout({...original,status:"transaction_in_process",status_detail:"pending_authorized"},expected)==="em_processamento",
+    "aguardando autorização, não pago");
+  check(classificarTransacaoPayout({...original,status:"processed",status_detail:"approved"},expected)==="revisar",
+    "status processed sem prova accredited exige revisão conservadora");
+  check(classificarTransacaoPayout({...original,status:"refunded",status_detail:"refunded"},expected)==="revisar",
+    "reembolso não pode gerar segunda transferência");
+  check(classificarTransacaoPayout({...original,status:"approved",status_detail:"partially_refunded"},expected)==="revisar",
+    "reembolso parcial prevalece sobre status approved");
   check(classificarTransacaoPayout({...original,status:"error"},expected)==="falhou","erro não credita");
   check(classificarTransacaoPayout({...original,external_reference:"outro"},expected)==="revisar","referência errada");
   check(classificarTransacaoPayout({...original,amount:{currency:"BRL",value:12.35}},expected)==="revisar","valor errado");
