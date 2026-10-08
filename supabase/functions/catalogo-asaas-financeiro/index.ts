@@ -3,11 +3,11 @@
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import { decryptCourierPix } from "../_shared/catalogo-entregas-crypto-v2.ts";
 
-const URL = Deno.env.get("SUPABASE_URL") || "";
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const BUNDLE = Deno.env.get("SUPABASE_SECRET_KEYS") || "";
 let serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 try { const keys = BUNDLE ? JSON.parse(BUNDLE) : null; serviceKey = keys?.default || keys?.service_role || serviceKey; } catch { /* fallback */ }
-const db = createClient(URL, serviceKey, {auth:{persistSession:false,autoRefreshToken:false}});
+const db = createClient(SUPABASE_URL, serviceKey, {auth:{persistSession:false,autoRefreshToken:false}});
 const ASAAS_TOKEN = Deno.env.get("ASAAS_API_KEY") || "";
 const WEBHOOK_TOKEN = Deno.env.get("ASAAS_WEBHOOK_TOKEN") || "";
 const ENCRYPTION_KEY = Deno.env.get("CATALOGO_DATA_ENCRYPTION_KEY") || Deno.env.get("MP_OAUTH_ENCRYPTION_KEY") || "";
