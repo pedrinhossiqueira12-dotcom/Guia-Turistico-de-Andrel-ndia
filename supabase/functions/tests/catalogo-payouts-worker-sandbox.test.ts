@@ -157,7 +157,8 @@ Deno.test("GET com valor, moeda, referência ou transação alterada nunca grava
       id:fact.id,external_reference:fact.ref,status:"success",status_detail:"accredited",
       amount:{currency:fact.currency,value:fact.value},
     },200));
-    await rejects(()=>conciliarPayoutSandbox(INTENT,database,worker),"divergente");
+    await rejects(()=>conciliarPayoutSandbox(INTENT,database,worker),
+      fact.id===TOP ? "divergente" : "Transação diferente");
   }
   assert(!calls.includes("catalogo_conciliar_payout_v2"),"GET falso chegou à baixa SQL");
 });
