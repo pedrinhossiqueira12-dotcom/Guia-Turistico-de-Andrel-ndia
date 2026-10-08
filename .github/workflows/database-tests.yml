@@ -11,6 +11,17 @@ on:
       - "logic/finalizacao-marketplace-2026-10-07"
 
 jobs:
+  financial-unit-tests:
+    name: Financial snapshot tests (Deno, isolated)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Test financial snapshots without database access
+        run: deno test --no-check --allow-none supabase/functions/tests/catalogo-financeiro.test.ts
+
   sql-syntax:
     name: SQL syntax (all migrations and pgTAP)
     runs-on: ubuntu-latest
