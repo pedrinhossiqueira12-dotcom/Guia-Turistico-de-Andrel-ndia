@@ -22,6 +22,36 @@ jobs:
       - name: Test financial snapshots without database access
         run: deno test --no-check --allow-read=supabase/functions supabase/functions/tests/catalogo-financeiro.test.ts supabase/functions/tests/catalogo-checkouts-contract.test.ts
 
+  pricing-postgres-isolated:
+    name: Real pricing RPC (isolated PostgreSQL)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: local-ci-only
+          POSTGRES_DB: catalogo_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d catalogo_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: local-ci-only
+      PGDATABASE: catalogo_ci
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assemble test using actual migration RPC
+        run: python scripts/validacao-pagamentos/build-isolated-pricing-test.py
+      - name: Execute PostgreSQL integration checks
+        run: psql -v ON_ERROR_STOP=1 -f /tmp/catalogo-precificacao-ci.sql
+
   sql-syntax:
     name: SQL syntax (all migrations and pgTAP)
     runs-on: ubuntu-latest
