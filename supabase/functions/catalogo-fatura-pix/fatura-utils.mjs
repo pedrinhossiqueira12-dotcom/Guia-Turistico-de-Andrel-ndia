@@ -121,8 +121,9 @@ export function assessFaturaOrder(order, expected) {
   const matchedStatus = String((pixPayment || matchedPayment)?.status ?? "");
   const matchedStatusDetail = String((pixPayment || matchedPayment)?.status_detail ?? "");
   const rawStatuses = `${orderStatus} ${orderStatusDetail} ${matchedStatus} ${matchedStatusDetail}`.toLowerCase();
+  const partialRefund = /\b(?:partially[_ -]?refunded|partial[_ -]?refund(?:ed)?|refund[_ -]?pending|refund[_ -]?in[_ -]?process)\b/.test(rawStatuses);
   const terminalState = orderStatus === "charged_back" || rawStatuses.includes("charged_back")
-    || ["refunded", "partially_refunded"].some((value) => rawStatuses.includes(value))
+    || partialRefund || ["refunded"].some((value) => rawStatuses.includes(value))
     || ["expired", "canceled", "cancelled", "failed"].some((value) => rawStatuses.split(/\s+/).includes(value));
   const matchedMethod = matchedPayment?.payment_method;
   const matchedMethodOmitted = !matchedMethod || (matchedMethod.id == null && matchedMethod.type == null);
@@ -162,7 +163,6 @@ export function assessFaturaOrder(order, expected) {
   // Estorno parcial ou em processamento exige revisão: nao existe evidência de
   // devolução INTEGRAL. A RPC de fatura trata "contestado" como bloqueio/retenção
   // de crédito até conferência, preservando o lastro e a dívida auditáveis.
-  const partialRefund = /\b(?:partially[_ -]?refunded|partial[_ -]?refund(?:ed)?|refund[_ -]?pending|refund[_ -]?in[_ -]?process)\b/.test(allStatus);
   let state = "desconhecido";
   if (status === "charged_back" || allStatus.includes("charged_back") || partialRefund) {
     state = "contestado";
