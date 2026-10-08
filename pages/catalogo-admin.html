@@ -70,7 +70,11 @@
           <div id="extratoOffline" class="offline-statement-result"><p class="form-feedback">Escolha um mês para consultar o extrato.</p></div>
           <div class="offline-invoice" id="faturaPixBloco">
             <div class="section-title"><div><span class="eyebrow">PAGAMENTO DA FATURA</span><h3>Pagar fatura</h3></div></div>
-            <p>No fim de cada período, a plataforma reúne suas vendas e calcula o valor da fatura. O pagamento é feito por Pix. A quitação só é registrada depois da confirmação do pagamento.</p>
+            <p>No fim de cada período, a plataforma reúne suas vendas e calcula o valor da fatura. O pagamento mensal é feito via Pix pelo Asaas. No primeiro pagamento, informe nome e CPF/CNPJ do pagador. A quitação ocorre somente após confirmação do recebimento.</p>
+            <div class="statement-controls">
+              <label>Nome do pagador / razão social <input id="faturaAsaasNomePagador" maxlength="120" autocomplete="name" placeholder="Primeiro pagamento"></label>
+              <label>CPF ou CNPJ <input id="faturaAsaasDocumento" maxlength="20" inputmode="numeric" placeholder="Primeiro pagamento"></label>
+            </div>
             <div class="statement-controls">
               <button id="gerarPixFatura" class="button button-primary" type="button">Gerar Pix para pagamento</button>
               <button id="consultarPixFatura" class="button button-secondary" type="button">Verificar pagamento</button>
