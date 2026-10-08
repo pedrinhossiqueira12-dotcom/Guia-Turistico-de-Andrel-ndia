@@ -288,6 +288,19 @@ BEGIN
   UPDATE public.catalogo_motoboy_perfis
      SET chave_pix_enc='pix-v2:abcdefghijklmnop.AAAAAAAAAAAAAAAAAAAAAAAA'
    WHERE usuario_id='00000000-0000-4000-8000-000000000042';
+  -- Mesmo financiado, um crédito do mês EM CURSO não pode ser sacado.
+  UPDATE public.catalogo_remuneracoes_v2
+     SET criado_em=pg_catalog.now()
+   WHERE pedido_id='00000000-0000-4000-8000-000000000052';
+  v := public.catalogo_motoboy_saque_mensal_v2(
+    '00000000-0000-4000-8000-000000000042','solicitar');
+  IF (v->>'http_status')::integer <> 409 THEN
+    RAISE EXCEPTION 'Crédito do mês em curso não pode ser solicitado: %',v;
+  END IF;
+  -- Crédito acumulado de dois meses atrás CONTINUA sacável.
+  UPDATE public.catalogo_remuneracoes_v2
+     SET criado_em=date_trunc('month',pg_catalog.now())-interval '2 months'
+   WHERE pedido_id='00000000-0000-4000-8000-000000000052';
   v := public.catalogo_motoboy_saque_mensal_v2(
     '00000000-0000-4000-8000-000000000042','solicitar');
   IF (v->>'ok')::boolean IS DISTINCT FROM true
