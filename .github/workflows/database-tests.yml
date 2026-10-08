@@ -599,6 +599,21 @@ jobs:
           total=$(find supabase/migrations -maxdepth 1 -name '*.sql' | wc -l)
           test "$count" -eq "$((total - 1))"
           echo "Applied $count of $total real migrations to disposable catalogo_ci."
+      - name: Read-only historical pricing preflight on disposable database
+        run: |
+          set -euo pipefail
+          test "$PGHOST" = localhost
+          test "$PGDATABASE" = catalogo_ci
+          test -z "${DATABASE_URL:-}"
+          test -z "${PGSERVICE:-}"
+          test -z "${PGHOSTADDR:-}"
+          test -z "${PGOPTIONS:-}"
+          report=$(psql -X -v ON_ERROR_STOP=1 -At -F '|' \
+            -f scripts/validacao-pagamentos/preflight-historico-v2-readonly.sql)
+          printf '%s\n' "$report"
+          grep -Fx 'pedidos|0|0|0|0|0' <<< "$report"
+          grep -Fx 'comissoes|0|0|0|0|0' <<< "$report"
+
       - name: Assert final V2 model and 7-percent rounding in actual schema
         run: |
           psql -v ON_ERROR_STOP=1 <<'SQL'
