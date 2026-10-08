@@ -21,6 +21,15 @@ function helper() {
   return context.helper;
 }
 const h = helper();
+function loadWebhookEvents() {
+  const raw=read('supabase/functions/_shared/catalogo-webhook-events.ts');
+  const src=raw.replace(/^import .*?;\s*$/gm, '').replace(/^export /gm, '');
+  const ctx=vm.createContext(baseContext({...h}));
+  vm.runInContext(stripTypeScriptTypes(src,{mode:'strip'})+
+    '\n'+'globalThis.events={eventKind,eventId,canonicalOrderType};',ctx);
+  return ctx.events;
+}
+const webhookEvents=loadWebhookEvents();
 
 // Colunas vêm do DDL REAL (marketplace, offline, email, OAuth, status-token, v2).
 // Os checks financeiros/itens abaixo reproduzem seus invariantes e limites integer.
@@ -61,7 +70,12 @@ function checkRow(table, r) {
     assert.ok(['entrega', 'retirada', 'consumo_local'].includes(r.modalidade)); assert.equal(r.provedor, 'mercadopago'); assert.equal(r.forma_pagamento, 'pix');
     for (const col of ['subtotal_produtos_centavos', 'entrega_centavos', 'total_centavos', 'taxa_plataforma_centavos', 'taxa_motoboy_centavos', 'taxa_total_centavos', 'repasse_bruto_comercio_centavos']) int(r[col], col.includes('subtotal') || col === 'total_centavos' ? 1 : 0);
     assert.equal(r.total_centavos, r.subtotal_produtos_centavos + r.entrega_centavos);
-    assert.equal(r.taxa_plataforma_centavos, Math.round(r.subtotal_produtos_centavos * .05));
+    const subtotal = r.subtotal_produtos_centavos;
+    const expectedMoto = r.versao_financeira === 2 && r.modalidade === 'entrega'
+      ? Math.round(subtotal * .02) : 0;
+    const expectedPlatform = r.versao_financeira === 1 ? Math.round(subtotal * .05)
+      : Math.round(subtotal * .07) - expectedMoto;
+    assert.equal(r.taxa_plataforma_centavos, expectedPlatform);
     assert.equal(r.taxa_motoboy_centavos, r.versao_financeira === 2 && r.modalidade === 'entrega' ? Math.round(r.subtotal_produtos_centavos * .02) : 0);
     assert.equal(r.taxa_total_centavos, r.taxa_plataforma_centavos + r.taxa_motoboy_centavos);
     assert.equal(r.repasse_bruto_comercio_centavos, r.subtotal_produtos_centavos - r.taxa_total_centavos + r.entrega_centavos);
@@ -140,7 +154,9 @@ async function fixture(options={}) {
     if(name==='catalogo_fluxo_precificar') {
       assert.ok(args.p_comercio_id,'precificação inclui comércio do piloto');
       const active=db.active&&(!db.pilots||db.pilots.includes(args.p_comercio_id));
-      const platform=Math.round(args.p_subtotal_centavos*.05), moto=active&&args.p_modalidade==='entrega'?Math.round(args.p_subtotal_centavos*.02):0;
+      const subtotal=args.p_subtotal_centavos;
+      const moto=active&&args.p_modalidade==='entrega'?Math.round(subtotal*.02):0;
+      const platform=active?Math.round(subtotal*.07)-moto:Math.round(subtotal*.05);
       return {data:{ok:true,versao_financeira:active?2:1,taxa_plataforma_centavos:platform,taxa_motoboy_centavos:moto,taxa_total_centavos:platform+moto,somente_pix:false,ativo:active},error:null};
     }
     assert.equal(name,'catalogo_aplicar_pagamento_v2');
@@ -182,7 +198,7 @@ async function fixture(options={}) {
   function loadEndpoint(rel) {
     let handler;
     const env={SUPABASE_URL:'https://db.invalid',SUPABASE_SERVICE_ROLE_KEY:'local-service',MP_OAUTH_ENCRYPTION_KEY:key,MP_MARKETPLACE_WEBHOOK_SECRET:options.webhookSecret ?? secret,MARKETPLACE_CHECKOUT_ENABLED:'true'};
-    const context=vm.createContext(baseContext({...h,console:{error(...args){ diagnostics.push(args.join(" ")); }},createClient:()=>db,fetch:fetchFake,Deno:{env:{get:n=>env[n]},serve:fn=>{handler=fn;}}}));
+    const context=vm.createContext(baseContext({...h,...webhookEvents,console:{error(...args){ diagnostics.push(args.join(" ")); }},createClient:()=>db,fetch:fetchFake,Deno:{env:{get:n=>env[n]},serve:fn=>{handler=fn;}}}));
     const src=read(rel).replace(/^import[\s\S]*?;\s*$/gm,'');
     vm.runInContext(stripTypeScriptTypes(src,{mode:'strip'}),context,{filename:rel}); assert.equal(typeof handler,'function'); return handler;
   }
@@ -207,8 +223,8 @@ test('catalogo-v2-pix-endpoints criação entrega: código6/hash/token forte/AAD
   assert.equal(result.body.versao_financeira,2); assert.equal(f.provider.posts[0].payload.application_fee,7); assert.equal(result.body.taxa_motoboy_centavos,200);
   assert.equal(f.db.tables.catalogo_pedido_itens.length,1); assert.ok(result.body.pix_codigo); assert.equal(result.body.metadata,undefined);
 });
-test('catalogo-v2-pix-endpoints retirada/consumo são v2 com 5%, zero motoboy; desativado mantém v1',async()=>{
-  for(const mode of ['retirada','consumo_local']) { const f=await fixture(); f.body.modalidade=mode; const r=await f.call(); assert.equal(r.status,200); assert.equal(r.body.versao_financeira,2); assert.equal(r.body.taxa_motoboy_centavos,0); assert.equal(f.provider.posts[0].payload.application_fee,5); }
+test('catalogo-v2-pix-endpoints retirada/consumo são v2 com 7%, zero motoboy; desativado mantém v1',async()=>{
+  for(const mode of ['retirada','consumo_local']) { const f=await fixture(); f.body.modalidade=mode; const r=await f.call(); assert.equal(r.status,200); assert.equal(r.body.versao_financeira,2); assert.equal(r.body.taxa_motoboy_centavos,0); assert.equal(f.provider.posts[0].payload.application_fee,7); }
   const f=await fixture({active:false}); const r=await f.call(); assert.equal(r.status,200); assert.equal(r.body.versao_financeira,1); assert.equal(f.provider.posts[0].payload.application_fee,5);
 });
 test('catalogo-v2-pix-endpoints retry recupera mesma prova, preços/snapshot congelados e só um POST',async()=>{

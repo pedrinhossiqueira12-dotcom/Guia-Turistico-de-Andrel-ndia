@@ -1,4 +1,5 @@
 import { createClient, decryptAesGcm, extractPixArtifacts, extractProviderPayment, providerFactsError, sanitizedProviderId } from "../_shared/catalogo-pedido-offline-runtime.ts";
+import { randomDeliveryCode } from "../_shared/catalogo-pagamentos-v2.ts";
 // O bridge reexporta exclusivamente os helpers de ../_shared/catalogo-pagamentos-v2.ts.
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
@@ -80,11 +81,7 @@ async function assertOfflineCommerceAuthorized(comercioId: string) {
   if (!receiver) throw new HttpError("Conecte a conta Mercado Pago do comércio antes de aceitar pedidos.", 403);
   if (!catalog || catalog.bloqueado || !published) throw new HttpError("Este catálogo não está ativo para receber pedidos.", 403);
 }
-function randomDigits() {
-  const bytes = new Uint32Array(1);
-  crypto.getRandomValues(bytes);
-  return String(100000 + (bytes[0] % 900000));
-}
+
 function randomStatusToken() {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
@@ -215,7 +212,7 @@ async function createOfflineOrder(body: Record<string, unknown>, rateKey: string
   // Compatibilidade v1 quando a configuração v2 está desligada: const fee = Math.round(subtotal * 0.05);
   const pricing = await priceOrder(modalidade, subtotal, comercioId);
   if (pricing.somente_pix && method !== "pix") throw new HttpError("Este fluxo está configurado para aceitar somente Pix.", 409);
-  const code = randomDigits();
+  const code = randomDeliveryCode();
   const codeHash = await hash(code);
   const statusToken = randomStatusToken();
   const statusTokenHash = await hash(statusToken);

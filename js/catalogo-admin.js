@@ -297,14 +297,14 @@
       const podeConfirmar = podeCancelar && (!pix || pixAprovado);
       const aceito = Boolean(pedido.aceito_em) || ["reservado", "coletado", "em_entrega", "entregue", "cancelamento_solicitado"].includes(pedido.entrega_status);
       const endereco = pedido.modalidade === "entrega" && pedido.cliente_endereco ? ` · ${escapar(pedido.cliente_endereco)}${pedido.cliente_numero ? `, ${escapar(pedido.cliente_numero)}` : ""}` : "";
-      const versao = Number(pedido.versao_financeira) === 2 ? (Number(pedido.taxa_motoboy_centavos || 0) > 0 ? "V2 · 5% plataforma + 2% logística" : "V2 · 5% plataforma, sem taxa de motoboy") : "V1 · taxa histórica preservada";
+      const versao = Number(pedido.versao_financeira) === 2 ? "Taxa atual" : "Taxa histórica";
       const plataforma = Number(pedido.taxa_plataforma_centavos ?? pedido.taxa_plataforma ?? 0);
       const motoboy = Number(pedido.taxa_motoboy_centavos ?? 0);
       const totalFee = Number(pedido.taxa_total_centavos ?? plataforma + motoboy);
       const snapshots = pedido.feeSnapshots || pedido.fee_snapshots || pedido.metadata?.feeSnapshots;
       const snapshotText = snapshots ? ` · snapshot ${escapar(typeof snapshots === "string" ? snapshots : "registrado")}` : "";
       const atribuir = pedido.modalidade === "entrega" && !["entregue", "cancelado"].includes(pedido.status) ? renderizarMotoboysLinha(pedido) : "";
-      return `<article class="manager-row offline-order-row" data-pedido-id="${escapar(id)}"><div class="offline-order-copy"><strong>${escapar(pedido.cliente_nome || "Cliente")} · ${reais(pedido.total_centavos)}</strong><small>Pedido: ${escapar(pedido.referencia_externa || id)}</small><small>${escapar(pedido.provedor || "offline")} · ${escapar(pedido.forma_pagamento || "Pagamento não informado")} · ${escapar(pedido.modalidade || "")}${endereco}</small>${renderizarItensPedido(pedido)}${renderizarObservacoesPedido(pedido)}${renderizarContatoCliente(pedido)}${renderizarEstadoEntregador(pedido)}<small>Produtos: ${reais(pedido.subtotal_produtos_centavos)} · Plataforma: ${reais(plataforma)} · Logística: ${reais(motoboy)} · Total taxas: ${reais(totalFee)}</small><small>${escapar(versao)}${snapshotText} · ${escapar(statusPagamento(pedido.status_pagamento))}</small><span class="offline-status" data-status="${escapar(pedido.entrega_status || pedido.status)}">${escapar(statusOffline(pedido.entrega_status || pedido.status))}</span></div><div class="manager-actions offline-order-actions">${aguardandoPix ? `<p class="form-feedback">Aguardando pagamento Pix. O aceite será liberado após a aprovação.</p>` : ""}${proxima ? `<button class="small-button" type="button" data-offline-next="${escapar(id)}" data-offline-status="${escapar(["aguardando_pagamento", "pago"].includes(pedido.status) ? "em_preparo" : "pronto")}">${proxima}</button>` : ""}${podeConfirmar ? `<button class="small-button" type="button" data-offline-confirm="${escapar(id)}">Confirmar código</button>` : ""}${podeCancelar ? `<button class="small-button danger" type="button" data-offline-cancel="${escapar(id)}">${aceito ? "Solicitar ocorrência" : "Cancelar pedido"}</button>` : ""}${atribuir}</div></article>`;
+      return `<article class="manager-row offline-order-row" data-pedido-id="${escapar(id)}"><div class="offline-order-copy"><strong>${escapar(pedido.cliente_nome || "Cliente")} · ${reais(pedido.total_centavos)}</strong><small>Pedido: ${escapar(pedido.referencia_externa || id)}</small><small>${escapar(pedido.provedor || "offline")} · ${escapar(pedido.forma_pagamento || "Pagamento não informado")} · ${escapar(pedido.modalidade || "")}${endereco}</small>${renderizarItensPedido(pedido)}${renderizarObservacoesPedido(pedido)}${renderizarContatoCliente(pedido)}${renderizarEstadoEntregador(pedido)}<small>Produtos: ${reais(pedido.subtotal_produtos_centavos)} · Taxa do pedido: ${reais(totalFee)}</small><small>${escapar(versao)}${snapshotText} · ${escapar(statusPagamento(pedido.status_pagamento))}</small><span class="offline-status" data-status="${escapar(pedido.entrega_status || pedido.status)}">${escapar(statusOffline(pedido.entrega_status || pedido.status))}</span></div><div class="manager-actions offline-order-actions">${aguardandoPix ? `<p class="form-feedback">Aguardando pagamento Pix. O aceite será liberado após a aprovação.</p>` : ""}${proxima ? `<button class="small-button" type="button" data-offline-next="${escapar(id)}" data-offline-status="${escapar(["aguardando_pagamento", "pago"].includes(pedido.status) ? "em_preparo" : "pronto")}">${proxima}</button>` : ""}${podeConfirmar ? `<button class="small-button" type="button" data-offline-confirm="${escapar(id)}">Confirmar código</button>` : ""}${podeCancelar ? `<button class="small-button danger" type="button" data-offline-cancel="${escapar(id)}">${aceito ? "Solicitar ocorrência" : "Cancelar pedido"}</button>` : ""}${atribuir}</div></article>`;
     }).join("");
   }
 
@@ -438,7 +438,7 @@
 
   async function chamarFaturaPix(body) {
     const { data, error } = await getClient().functions.invoke("catalogo-fatura-pix", { body: { ...body, comercio_id: comercioId } });
-    if (error || !data?.success) throw new Error(data?.mensagem || error?.message || "Não foi possível processar a cobrança da fatura.");
+    if (error || !data?.success) throw new Error(data?.mensagem || error?.message || "Não foi possível processar o pagamento da fatura.");
     return data;
   }
 
@@ -454,7 +454,7 @@
     const total = Number(data.valor_centavos ?? fatura.total_comissao_centavos ?? 0);
     const situacao = data.cobranca_status || fatura.status || "";
     const partes = [
-      `<p><strong>Comissão da competência:</strong> ${reais(total)}</p>`,
+      `<p><strong>Total a pagar:</strong> ${reais(total)}</p>`,
       `<p><strong>Situação:</strong> ${escapar(traducaoCobranca(situacao))}${fatura.vencimento_em ? ` · vencimento ${escapar(fatura.vencimento_em)}` : ""}</p>`,
     ];
     if (data.mensagem) partes.push(`<p class="form-feedback">${escapar(data.mensagem)}</p>`);

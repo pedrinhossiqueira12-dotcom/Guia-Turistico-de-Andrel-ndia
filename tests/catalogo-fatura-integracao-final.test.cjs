@@ -13,11 +13,11 @@ const MARKET_SECRET = 'marketplace-secret-local';
 const REQUEST_ID = 'request-final-local';
 const FaturaOrder = 'ORDER_FATURA_181813979953';
 
-function helpers(sourceFile) {
+function helpers(sourceFile, injected = {}) {
   const source = read(sourceFile);
   const names = [...source.matchAll(/export (?:async )?function (\w+)/g)].map((match) => match[1]);
-  const context = vm.createContext({ crypto: webcrypto, TextEncoder, TextDecoder, URL, console: { error() {} } });
-  const code = stripTypeScriptTypes(source.replace(/^export\s+/gm, ''), { mode: 'strip' });
+  const context = vm.createContext({ crypto: webcrypto, TextEncoder, TextDecoder, URL, console: { error() {} }, ...injected });
+  const code = stripTypeScriptTypes(source.replace(/^import .*?;\s*$/gm, '').replace(/^export\s+/gm, ''), { mode: 'strip' });
   vm.runInContext(`${code}\nglobalThis.__helpers={${names.join(',')}};`, context);
   return context.__helpers;
 }
@@ -100,6 +100,7 @@ function loadMarketplace({ db, downstreamStatus = 200, onForward } = {}) {
   let handler;
   const fetchCalls = [];
   const helpersObject = helpers('supabase/functions/_shared/catalogo-pagamentos-v2.ts');
+  const eventHelpers = helpers('supabase/functions/_shared/catalogo-webhook-events.ts', helpersObject);
   const env = {
     SUPABASE_URL: 'https://supabase.example.invalid',
     SUPABASE_SERVICE_ROLE_KEY: 'service-local-only',
@@ -116,6 +117,7 @@ function loadMarketplace({ db, downstreamStatus = 200, onForward } = {}) {
   };
   const context = vm.createContext(baseContext({
     ...helpersObject,
+    ...eventHelpers,
     createClient: () => db,
     fetch: fetchMock,
     Deno: { env: { get: (name) => env[name] || '' }, serve: (fn) => { handler = fn; } },
@@ -236,7 +238,15 @@ test('Order normal não é encaminhada; vínculo de fatura usa somente id/order_
   assert.equal(destination.pathname, '/functions/v1/catalogo-fatura-pix/webhook');
   assert.equal(destination.searchParams.get('type'), 'orders_v2');
   assert.equal(destination.searchParams.get('data.id'), FaturaOrder);
-  assert.equal(call.options.headers['x-signature'], signature(forwarded.helpers, FaturaOrder));
+  // A assinatura do webhook usa o timestamp da requisição. Recalculá-la com
+  // Date.now() aqui gera falha intermitente quando muda o segundo no CI.
+  const forwardedSignature = call.options.headers['x-signature'];
+  const timestampMatch = /^ts=(\d{10,}),v1=[a-f0-9]{64}$/.exec(forwardedSignature);
+  assert.ok(timestampMatch, 'O proxy deve encaminhar uma assinatura HMAC válida');
+  const forwardedTimestamp = timestampMatch[1];
+  assert.ok(Math.abs(Math.floor(Date.now() / 1000) - Number(forwardedTimestamp)) <= 5,
+    'O timestamp encaminhado deve ser recente');
+  assert.equal(forwardedSignature, signature(forwarded.helpers, FaturaOrder, forwardedTimestamp));
   assert.equal(call.options.headers['x-request-id'], REQUEST_ID);
   assert.equal(call.options.headers.authorization, undefined);
   assert.deepEqual(JSON.parse(call.options.body), { type: 'orders_v2', data: { id: FaturaOrder }, source: 'official-simulation', url: 'https://attacker.invalid' });

@@ -115,13 +115,13 @@ function savedReceipt(id = ORDER, status = "aguardando_pagamento") {
 
 async function endpointHandler() {
   const { stripTypeScriptTypes } = require("node:module");
-  const js = stripTypeScriptTypes(endpointSource);
+  const js = stripTypeScriptTypes(endpointSource.replace(/^import .*?;\s*$/gm, ""));
   let handler;
   const context = {
     Deno: { env: { get: () => "" }, serve: fn => { handler = fn; } },
     crypto: webcrypto, TextEncoder, TextDecoder, Response, Request, console: { error() {} }, atob, btoa,
   };
-  vm.runInNewContext(js.replace(/import .*?;\n/, "const createClient = () => ({});\n"), context, { filename: "catalogo-pedido-offline.ts" });
+  vm.runInNewContext("const createClient = () => ({});\n" + js, context, { filename: "catalogo-pedido-offline.ts" });
   return handler;
 }
 

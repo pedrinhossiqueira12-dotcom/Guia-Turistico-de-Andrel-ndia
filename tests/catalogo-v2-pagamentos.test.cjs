@@ -21,11 +21,15 @@ test('catalogo-v2-pagamentos valores monetários exatos, sem arredondar entrada 
   for(const input of ['1.234','NaN',Infinity,-1,'1e3',null])assert.equal(helper.amountToCents(input),null);
   assert.equal(helper.centsToMoney(107), '1.07'); assert.throws(()=>helper.centsToMoney(-1),/centavos inválido/);
 });
-test('catalogo-v2-pagamentos snapshots v1/5%, v2 entrega7%, retirada/consumo5%',()=>{
+test('catalogo-v2-pagamentos snapshots v1/5%, v2 entrega7%, retirada/consumo7%',()=>{
   const legacy={versao_financeira:1,taxa_plataforma_centavos:500,taxa_motoboy_centavos:0,taxa_total_centavos:500,ativo:false};
   assert.deepEqual(plain(helper.normalizeFinancialSnapshot(legacy,'retirada',10000)),{...legacy,somente_pix:false});
   assert.equal(helper.normalizeFinancialSnapshot({...legacy,versao_financeira:2,ativo:true,taxa_motoboy_centavos:200,taxa_total_centavos:700},'entrega',10000).taxa_total_centavos,700);
-  for(const mode of ['retirada','consumo_local'])assert.equal(helper.normalizeFinancialSnapshot({...legacy,versao_financeira:2,ativo:true},mode,10000).versao_financeira,2);
+  for(const mode of ['retirada','consumo_local']){
+    const snapshot={...legacy,versao_financeira:2,ativo:true,taxa_plataforma_centavos:700,taxa_total_centavos:700};
+    assert.equal(helper.normalizeFinancialSnapshot(snapshot,mode,10000).versao_financeira,2);
+    assert.throws(()=>helper.normalizeFinancialSnapshot({...legacy,versao_financeira:2},mode,10000),/sem entrega v2/);
+  }
   assert.throws(()=>helper.normalizeFinancialSnapshot({...legacy,versao_financeira:2},'entrega',10000),/entrega v2/);
   assert.throws(()=>helper.normalizeFinancialSnapshot({...legacy,taxa_motoboy_centavos:200,taxa_total_centavos:700},'retirada',10000),/motoboy inválida/);
 });

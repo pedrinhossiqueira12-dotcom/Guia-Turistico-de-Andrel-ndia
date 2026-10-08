@@ -23,7 +23,7 @@
 
     <section id="adminNotice" class="admin-notice" role="status" aria-live="polite">
       <strong id="noticeTitle">Verificando acesso…</strong>
-      <p id="noticeText">A administração é exclusiva do proprietário e depende da conexão ativa do Mercado Pago.</p>
+      <p id="noticeText">A gestão é exclusiva do proprietário. Para receber pagamentos online pelo catálogo, mantenha a conta de pagamento do comércio conectada.</p>
     </section>
 
     <section id="loginCard" class="admin-card login-card" hidden>
@@ -58,21 +58,21 @@
       </section>
 
       <section class="admin-card offline-orders-card" id="pedidosOfflineCard">
-        <div class="section-title"><div><span class="eyebrow">PEDIDOS E ENTREGAS</span><h2>Pedidos, fases e comissões</h2></div><div class="offline-order-actions"><a id="linkGerenciarEntregadores" class="small-button" href="entregadores-admin.html">Gerenciar entregadores</a><a id="linkOperacaoEntregas" class="small-button" href="entregas-operacao.html">Operação da plataforma</a><button id="atualizarPedidosOffline" class="small-button" type="button">Atualizar</button></div></div>
-        <p>O cliente guarda o código. Após a entrega e o recebimento do pagamento, o proprietário autenticado usa <strong>Confirmar código</strong> no pedido. O painel nunca revela o código do cliente. A oferta automática ao marcar pronto é decidida pelo backend.</p>
+        <div class="section-title"><div><span class="eyebrow">PEDIDOS E ENTREGAS</span><h2>Pedidos e entregas</h2></div><div class="offline-order-actions"><a id="linkGerenciarEntregadores" class="small-button" href="entregadores-admin.html">Gerenciar entregadores</a><a id="linkOperacaoEntregas" class="small-button" href="entregas-operacao.html">Operação da plataforma</a><button id="atualizarPedidosOffline" class="small-button" type="button">Atualizar</button></div></div>
+        <p>O cliente informa o código somente no momento da entrega. Depois de entregar o pedido e receber o pagamento, use <strong>Confirmar código</strong>. O painel nunca mostra o código antes da confirmação. Quando o pedido fica pronto, a plataforma pode oferecê-lo aos entregadores disponíveis.</p>
         <p>Confira <strong>Itens do pedido</strong> em cada card: produto, quantidade, preço unitário e total. Os itens ficam visíveis antes do aceite; telefone e observações do comprador são liberados após aceitar.</p>
         <div class="offline-summary" id="offlineSummary" hidden></div>
         <div id="listaPedidosOffline" class="manager-list"><p class="form-feedback">Carregando pedidos…</p></div>
         <p id="pedidosOfflineFeedback" class="form-feedback" role="status"></p>
         <div class="offline-statement">
-          <div class="section-title"><div><span class="eyebrow">EXTRATO</span><h3>Competência mensal</h3></div></div>
+          <div class="section-title"><div><span class="eyebrow">EXTRATO</span><h3>Resumo mensal</h3></div></div>
           <div class="statement-controls"><label>Mês <input id="competenciaOffline" type="month"></label><button id="consultarExtratoOffline" class="button button-secondary" type="button">Consultar extrato</button></div>
           <div id="extratoOffline" class="offline-statement-result"><p class="form-feedback">Escolha um mês para consultar o extrato.</p></div>
           <div class="offline-invoice" id="faturaPixBloco">
-            <div class="section-title"><div><span class="eyebrow">PAGAMENTO DA COMISSÃO</span><h3>Pix da fatura</h3></div></div>
-            <p>O Pix é emitido pela plataforma <strong>com o valor exato da comissão fechada</strong>. A quitação só é registrada depois que o Mercado Pago confirma o pagamento; a conferência manual continua disponível para a administração.</p>
+            <div class="section-title"><div><span class="eyebrow">PAGAMENTO DA FATURA</span><h3>Pagar fatura</h3></div></div>
+            <p>No fim de cada período, a plataforma reúne suas vendas e calcula o valor da fatura. O pagamento é feito por Pix. A quitação só é registrada depois da confirmação do pagamento.</p>
             <div class="statement-controls">
-              <button id="gerarPixFatura" class="button button-primary" type="button">Gerar Pix da fatura</button>
+              <button id="gerarPixFatura" class="button button-primary" type="button">Gerar Pix para pagamento</button>
               <button id="consultarPixFatura" class="button button-secondary" type="button">Verificar pagamento</button>
             </div>
             <div id="faturaPixResultado" class="offline-statement-result"><p class="form-feedback">Consulte o extrato do mês para carregar a fatura.</p></div>
@@ -113,7 +113,7 @@
 
       <section class="admin-footer-note">
         <p>Fotos removidas da vitrine entram na rotina de retenção de sete dias. Nenhuma imagem é apagada imediatamente.</p>
-        <p>Pedidos antigos permanecem em V1 com a taxa histórica. Em V2, quando habilitado pelo administrador, os valores exibidos separam 5% plataforma e 2% logística; a configuração nova começa desligada.</p>
+        <p>A taxa exibida ao comércio é única: 7% sobre cada venda. Os detalhes internos de repasse são tratados pela plataforma e não precisam ser acompanhados pelo comércio.</p>
       </section>
     </div>
   </main>

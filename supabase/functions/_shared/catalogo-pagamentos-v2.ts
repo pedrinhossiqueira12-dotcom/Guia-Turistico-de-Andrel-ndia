@@ -51,12 +51,20 @@ export function normalizeFinancialSnapshot(value: unknown, modalidade: string, s
     || !Number.isSafeInteger(subtotalCentavos) || subtotalCentavos <= 0 || subtotalCentavos > 2147483647) {
     throw new Error("Snapshot financeiro inválido.");
   }
-  if (plataforma !== Math.round(subtotalCentavos * 0.05)) throw new Error("Snapshot financeiro divergente da taxa de plataforma.");
+  const taxaLegada = Math.round(subtotalCentavos * 0.05);
+  const taxaMotoboy = Math.round(subtotalCentavos * 0.02);
+  const taxaV2 = Math.round(subtotalCentavos * 0.07);
   if (modalidade !== "entrega" && motoboy !== 0) throw new Error("Taxa de motoboy inválida para esta modalidade.");
   if (total !== plataforma + motoboy) throw new Error("Snapshot financeiro não fecha.");
-  if (versao === 1 && motoboy !== 0) throw new Error("Pedido legado não pode conter taxa de motoboy.");
-  if (versao === 2 && modalidade === "entrega" && motoboy !== Math.round(subtotalCentavos * 0.02)) {
-    throw new Error("Snapshot de entrega v2 divergente.");
+  if (versao === 1) {
+    if (plataforma !== taxaLegada || motoboy !== 0) throw new Error("Snapshot legado inválido.");
+  } else if (modalidade === "entrega") {
+    // Aceita snapshots historicos (5% + 2% separados) e os novos (7% arredondados uma vez).
+    if (motoboy !== taxaMotoboy || (plataforma !== taxaLegada && plataforma !== taxaV2 - motoboy)) {
+      throw new Error("Snapshot de entrega v2 divergente.");
+    }
+  } else if (plataforma !== taxaV2) {
+    throw new Error("Snapshot sem entrega v2 divergente.");
   }
   return {
     versao_financeira: versao,
