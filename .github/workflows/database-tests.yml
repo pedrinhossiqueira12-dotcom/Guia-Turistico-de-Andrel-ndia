@@ -672,6 +672,25 @@ jobs:
           psql -d catalogo_race_ci -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM public.catalogo_remuneracoes_v2" | grep -Fx 1
           echo 'PASS: concurrent acceptance and reoffer on disposable cloned PostgreSQL database'
 
+      - name: Reject partial-refund and chargeback fixture without opt-in
+        run: |
+          if psql -v ON_ERROR_STOP=1 -f supabase/tests/isolated/catalogo-pix-revisao-e-chargeback-postgres.sql > /tmp/catalogo-webhook-finance-no-opt-in.log 2>&1; then
+            echo 'ERROR: financial webhook fixture accepted missing opt-in'
+            exit 1
+          fi
+          grep -q 'Revisao de Pix exige catalogo_ci isolado' /tmp/catalogo-webhook-finance-no-opt-in.log
+      - name: Test late fee proof, partial refund, chargeback and idempotence on real RPC
+        run: |
+          psql -X -v ON_ERROR_STOP=1 <<'SQL'
+          BEGIN;
+          SET app.marketplace_test_webhook_finance = 'enabled';
+          \i supabase/tests/isolated/catalogo-pix-revisao-e-chargeback-postgres.sql
+          ROLLBACK;
+          SQL
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM public.catalogo_pedidos" | grep -Fx 0
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM public.catalogo_pagamentos_v2" | grep -Fx 0
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM public.catalogo_ocorrencias_v2" | grep -Fx 0
+
   pricing-postgres-isolated:
     name: Real pricing RPC (isolated PostgreSQL)
     runs-on: ubuntu-latest
