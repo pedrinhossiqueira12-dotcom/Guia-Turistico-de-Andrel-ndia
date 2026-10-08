@@ -85,6 +85,12 @@ jobs:
           psql -v ON_ERROR_STOP=1 -Atqc "SELECT COUNT(*) FROM public.cadastros_comercios WHERE local_id = 'pedrox-do-grau' AND status = 'aprovado'" | grep -Fx 1
           psql -v ON_ERROR_STOP=1 -Atqc "SELECT COUNT(*) FROM public.comercios_publicados" | grep -Fx 139
           psql -v ON_ERROR_STOP=1 -Atqc "SELECT COUNT(*) FROM pg_policies WHERE schemaname = 'public' AND tablename = 'mural_cadastros' AND policyname = 'Mural — público vê ativos'" | grep -Fx 1
+      - name: Verify first migration can be reapplied safely
+        run: |
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261002233841_publication_metadata_reversible_archive_20261002.sql
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT COUNT(*) FROM public.comercios_publicados" | grep -Fx 139
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT COUNT(*) FROM public.cadastros_comercios WHERE local_id = 'pedrox-do-grau' AND status = 'aprovado'" | grep -Fx 1
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT COUNT(*) FROM pg_policies WHERE schemaname = 'public' AND tablename = 'mural_cadastros' AND policyname = 'Mural — público vê ativos'" | grep -Fx 1
 
   pricing-postgres-isolated:
     name: Real pricing RPC (isolated PostgreSQL)
