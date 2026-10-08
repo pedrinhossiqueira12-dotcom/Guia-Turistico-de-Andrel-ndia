@@ -25,6 +25,16 @@
 
 **Evidência de concorrência:** commit `0896c858ee42171aa7655c2d2b6f442def5c983e`, execução GitHub Actions `37718565249`, job `113120670877` (**SUCCESS**), com duas sessões esperando simultaneamente no banco `catalogo_race_ci`, cópia descartável do schema. O CI destrói a cópia ao final. Isso não é prova de concorrência sob tráfego de produção, mas confirma o bloqueio atômico da RPC em PostgreSQL real.
 
+## Bloqueio comprovado na produção: CHECK legado de taxa fixa em 5%
+
+Na auditoria **somente leitura**, o schema do projeto de produção ainda possui `catalogo_pedidos_check1` com a fórmula `taxa_plataforma_centavos = round(subtotal_produtos_centavos * 0.05)`. Essa constraint contraria a regra de V2 sem entrega, em que a plataforma deve receber **7%**. Consequência: pedidos novos de retirada/consumo local podem falhar ao gravar, mesmo se a precificação da RPC estiver correta. Também pode impedir a divisão por arredondamento único em certas entregas V2.
+
+A migração **ainda não aplicada à produção**, `supabase/migrations/20261007213000_arredondamento_taxa_total_7.sql`, passou a remover **exclusivamente** o CHECK legado quando sua definição realmente corresponde à fórmula de 5%. A nova `catalogo_pedidos_taxas_v2_check` continua exigindo 5% em V1 e aceita snapshots V2 antigos e novos. Se o CHECK antigo tiver sido reaproveitado para outra regra, a migração **interrompe** em vez de removê-lo.
+
+**Prova automatizada:** commit `26d88c3340c972b8a8259b18c70a8f7578a93bf1`, execução CI `37719415442` aprovada. A suíte real `catalogo-pix-revisao-e-chargeback-postgres.sql` agora consegue inserir um pedido V2 de retirada a 7% e testa cobrança duplicada, taxa do provedor informada depois, estorno parcial, estorno integral e chargeback sem liberar dinheiro de motoboy antes da entrega. O CI também aprovou o fluxo offline de contestação de fatura: após a contestação os créditos voltam a ficar retidos e o comércio é bloqueado.
+
+**Não executar SQL em produção sem autorização explícita e backup restaurável.** Nenhum dado real foi modificado nesses testes.
+
 ## Critérios obrigatórios antes de qualquer deploy
 
 - [ ] CI verde no commit exato a publicar; verificar todos os jobs, inclusive os pulados.
