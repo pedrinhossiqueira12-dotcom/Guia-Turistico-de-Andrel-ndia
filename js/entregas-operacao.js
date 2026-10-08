@@ -58,6 +58,7 @@
     $("operationLogout").hidden = true;
     $("listaOcorrencias").innerHTML = "";
     $("listaRepasses").innerHTML = "";
+    if ($("solicitacoesSaque")) $("solicitacoesSaque").textContent = "";
     $("historicoRepasses").innerHTML = "";
     $("repassePreview").innerHTML = '<p class="empty-state">Selecione um crédito disponível para revisar as provas antes de registrar o repasse.</p>';
   }
@@ -105,6 +106,17 @@
     const occurrences = getArray(result, ["ocorrencias", "ocorrencias_pendentes"]);
     const credits = getArray(result, ["remuneracoes", "repasses_disponiveis", "creditos"]);
     const history = getArray(result, ["historico_repasses", "repasses_historico", "repasses"]).filter((item) => String(item.status || "").toLowerCase() !== "a_receber");
+    const solicita = getArray(result, ["solicitacoes_saque"]);
+    const queue = $("solicitacoesSaque");
+    if (queue) {
+      queue.innerHTML = solicita.length ? solicita.map(item =>
+        '<article class="manager-row"><div class="manager-copy">' +
+        '<strong>Motoboy: ' + escapar(item.motoboy_id) + ' · ' + reais(item.valor_centavos) + '</strong>' +
+        '<small>Mês: ' + escapar(item.mes_referencia) + ' · Status: ' + escapar(item.status) + '</small>' +
+        '<small>Solicitado em: ' + escapar(data(item.solicitado_em)) + '</small>' +
+        '<small>Solicitação: ' + escapar(item.id) + '</small>' +
+        '</div></article>').join("") : '<p class="empty-state">Nenhuma solicitação de saque pendente.</p>';
+    }
     renderizarOcorrencias(occurrences);
     renderizarCreditos(credits);
     renderizarHistorico(history);
