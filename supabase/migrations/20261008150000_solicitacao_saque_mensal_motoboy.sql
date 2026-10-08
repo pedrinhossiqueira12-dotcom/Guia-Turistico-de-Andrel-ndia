@@ -72,7 +72,16 @@ BEGIN
         AND r.repasse_id IS NULL AND catalogo_private.catalogo_v2_financiado(r.pedido_id)
         AND NOT EXISTS (SELECT 1 FROM public.catalogo_solicitacao_saque_itens_v2 i WHERE i.remuneracao_id=r.id);
     IF v_itens=0 OR v_total<=0 THEN
-      RETURN jsonb_build_object('ok',false,'http_status',409,'mensagem','Sem créditos liberados e financiados para o mês anterior.');
+      RETURN jsonb_build_object('ok',false,'http_status',409,
+        'mensagem','Ainda não há créditos financiados de meses encerrados.');
+    END IF;
+    -- Não criar saque sem valor mínimo: o Payouts rejeitaria, deixando
+    -- os créditos presos na solicitação, sem poder acumular no mês seguinte.
+    IF v_total<100 THEN
+      RETURN jsonb_build_object('ok',false,'http_status',409,
+        'saldo_acumulado_centavos',v_total,
+        'valor_minimo_centavos',100,
+        'mensagem','Seus ganhos continuam acumulados. Saque Pix disponível ao atingir R$ 1,00.');
     END IF;
     INSERT INTO public.catalogo_solicitacoes_saque_v2(motoboy_id,mes_referencia,valor_centavos)
       VALUES(p_operador_id,v_mes,v_total) RETURNING id INTO v_request;
