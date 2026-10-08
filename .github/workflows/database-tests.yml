@@ -201,7 +201,14 @@ jobs:
       - name: Apply real catalogo digital migration (without scheduling migration)
         run: |
           psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261003013323_catalogo_digital_20261003000000.sql
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT public, file_size_limit, array_to_string(allowed_mime_types, ',') FROM storage.buckets WHERE id='catalogos'" | grep -Fx 't|5242880|image/webp,image/jpeg,image/png'
+          psql -v ON_ERROR_STOP=1 -c "UPDATE storage.buckets SET file_size_limit = 4194304 WHERE id = 'catalogos'"
           psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261003013323_catalogo_digital_20261003000000.sql
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT file_size_limit FROM storage.buckets WHERE id='catalogos'" | grep -Fx 4194304
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT reloptions @> ARRAY['security_invoker=true']::text[] FROM pg_class WHERE oid='public.catalogo_publicado'::regclass" | grep -Fx t
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT has_table_privilege('anon','public.catalogo_assinaturas','SELECT')" | grep -Fx f
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT has_table_privilege('authenticated','public.catalogo_assinaturas','SELECT')" | grep -Fx f
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT has_table_privilege('anon','public.catalogo_produtos','INSERT')" | grep -Fx f
           psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM pg_trigger WHERE tgname IN ('catalogos_atualizado_em','catalogo_categorias_atualizado_em','catalogo_produtos_atualizado_em') AND NOT tgisinternal" | grep -Fx 3
           psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM storage.buckets WHERE id='catalogos'" | grep -Fx 1
           psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM pg_policies WHERE schemaname='storage' AND tablename='objects' AND policyname='catalogos_proprietario_upload_ativo'" | grep -Fx 1
