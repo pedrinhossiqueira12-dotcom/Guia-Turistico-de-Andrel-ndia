@@ -7,7 +7,21 @@
 - Desenvolvimento isolado na branch `logic/finalizacao-marketplace-2026-10-07` e PR #35; não fazer merge em `main` sem aprovação.
 - A migração `20261007213000_arredondamento_taxa_total_7.sql` **não foi aplicada à produção**.
 - Três migrações anteriores já estão na produção. O novo arredondamento de 7% deve ser implantado somente após autorização explícita.
-- Testes Deno, sintaxe SQL e PostgreSQL isolado existem. O pgTAP completo está **desabilitado**, aguardando baseline reprodutível; não interpretar `skipped` como `passed`.
+- Testes Deno, sintaxe SQL, 28 migrações reais e **23/23 pgTAP** passaram em PostgreSQL isolado. A migração restante de Cron/Vault passou em **cópia sanitizada sem chamadas externas**. O job nativo `supabase test db` continua **SKIPPED** por falta de baseline Supabase completo; não interpretar `skipped` como `passed`.
+
+## Evidências automatizadas validadas (CI — ambiente descartável)
+
+- [x] Migrações financeiras: **28/29** arquivos SQL reais aplicados em ordem a `catalogo_ci` (PostgreSQL 17), com apenas o agendamento de rede excluído.
+- [x] Migração de agendamento: teste de sua lógica em **cópia temporária sanitizada**, com endereço `.invalid`, sem `pg_cron`/`pg_net` reais e com stubs que não executam comandos. Uma nova aplicação mantém um único job inerte e o mesmo token.
+- [x] `pgTAP` real: **23 assertions aprovadas** no esquema financeiro isolado, com verificação posterior de rollback.
+- [x] Pix fictício por RPC: aprovação, divergência de valor, idempotência, cancelamento antes do aceite, bloqueio após aceite, oferta de entrega, disputa sequencial entre motoboys, confirmação por código e estorno de remuneração.
+- [x] Dinheiro e cartão de débito fictícios por RPC: entrega comprovada gera crédito de **2% retido**; fatura de **7%** (5% plataforma + 2% logística) liquida o crédito; divergência não libera fundos; evento duplicado não duplica créditos; estorno volta a reter e bloqueia comércio.
+- [x] Testes de RLS de catálogo e Storage: autorização dos proprietários, bloqueio de terceiros, imagens inválidas, suspensão e assinatura vencida.
+- [x] Cenários Pix/offline executados dentro de **transações revertidas**, sem pedidos, pagamentos ou comissões de teste persistentes.
+
+**Evidência:** workflow `Database tests` no ramo de desenvolvimento, commit `d1c1b9535131b75161b798e3e3ebedadbc67b43b`, execuções `37717937694` e `37717941007` (sucesso). Os resultados validam o comportamento das RPCs com dados sintéticos, **não** a comunicação com o Mercado Pago, o frontend ou o Supabase completo.
+
+**Limite do teste de motoboys:** foi comprovado que o segundo entregador é rejeitado após o primeiro aceitar; ainda falta simular tentativas *verdadeiramente simultâneas* de conexão independentes e verificar esse caso sob concorrência.
 
 ## Critérios obrigatórios antes de qualquer deploy
 
@@ -43,6 +57,6 @@
 
 ## Bloqueios atuais
 
-1. Baseline isolado para executar pgTAP completo.
-2. Testes ponta a ponta com provedor de pagamento em ambiente de testes.
-3. Aprovação explícita para migração e deploy de produção.
+1. Execução nativa `supabase db reset --local` e `supabase test db` com **todas** as dependências Supabase e o agendamento externo neutralizado; atualmente só foi executado pgTAP em PostgreSQL isolado.
+2. Homologação ponta a ponta com frontend e **provedor de pagamento sandbox** (Pix, webhooks, chargebacks), além de concorrência real entre motoboys.
+3. Backup e restauração verificáveis do banco real, auditoria de deploy e aprovação explícita para migração/implantação em produção.
