@@ -32,11 +32,11 @@ jobs:
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: local-ci-only
-          POSTGRES_DB: postgres
+          POSTGRES_DB: catalogo_ci
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-cmd "pg_isready -U postgres -d catalogo_ci"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -45,20 +45,20 @@ jobs:
       PGPORT: 5432
       PGUSER: postgres
       PGPASSWORD: local-ci-only
-      PGDATABASE: postgres
+      PGDATABASE: catalogo_ci
     steps:
       - uses: actions/checkout@v4
       - name: Verify disposable database connection
         run: |
           test "$PGHOST" = localhost
           test "$PGPORT" = 5432
-          test "$PGDATABASE" = postgres
+          test "$PGDATABASE" = catalogo_ci
           test "$PGUSER" = postgres
           test -z "${DATABASE_URL:-}"
           test -z "${PGSERVICE:-}"
           test -z "${PGHOSTADDR:-}"
           test -z "${PGOPTIONS:-}"
-          psql -v ON_ERROR_STOP=1 -Atqc "SELECT current_database(), inet_server_addr() IS NOT NULL" | grep -Fx 'postgres|t'
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT current_database(), inet_server_addr() IS NOT NULL" | grep -Fx 'catalogo_ci|t'
       - name: Create minimal Supabase Auth test doubles
         run: |
           psql -v ON_ERROR_STOP=1 <<'SQL'
