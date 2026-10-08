@@ -37,13 +37,17 @@ for (const { remoteVersion, localFile, sha256 } of applied) {
   });
 }
 
-test('arredondamento pendente é migration distinta, sem reaplicar SQL remoto', () => {
-  const pending = path.join(ROOT, 'supabase/migrations/20261007213000_arredondamento_taxa_total_7.sql');
-  const sql = fs.readFileSync(pending, 'utf8');
-  assert.match(sql, /catalogo_pedidos_check1/);
-  assert.match(sql, /round\(subtotal_produtos_centavos::numeric \* 0\.07\)/);
-  const sha256 = createHash('sha256').update(sql).digest('hex');
-  assert.ok(applied.every(entry => entry.sha256 !== sha256));
-  // NÃO autoriza deploy: versão pendente 20261007213000 é anterior ao
-  // último remoto 20261007233541, e exige plano explícito de reconciliação.
+test('arredondamento aplicado coincide com a migration remota 20261008120906', () => {
+  const source = fs.readFileSync(
+    path.join(ROOT, 'supabase/migrations/20261007213000_arredondamento_taxa_total_7.sql'),
+    'utf8',
+  );
+  const deployed = source.replace(/\nBEGIN;\s*\n/, '\n').replace(/\nCOMMIT;\s*$/, '\n');
+  assert.notEqual(deployed, source);
+  assert.match(deployed, /catalogo_pedidos_check1/);
+  assert.equal(
+    createHash('sha256').update(deployed).digest('hex'),
+    '40e7ecd1759e1d6eb4cb438bb6cd1e6cdec8fc878513e135d92e83f80ffd1155',
+    'O SQL final difere do que foi realmente aplicado ao Supabase',
+  );
 });

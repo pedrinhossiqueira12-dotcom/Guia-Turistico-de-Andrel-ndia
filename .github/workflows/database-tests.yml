@@ -43,8 +43,8 @@ jobs:
           test -f "$target/release-evidence.json"
           test "$(find "$target/supabase/migrations" -maxdepth 1 -type f -name '*.sql' | wc -l)" -eq 29
           ! find "$target/supabase/migrations" -name '20261007213000*' | grep -q .
-          test -f "$target/supabase/migrations/20261008080000_arredondamento_taxa_total_7.sql"
-          echo "PASS: release package is offline; current remote history still requires live read-only recheck, backup and authorization."
+          test -f "$target/supabase/migrations/20261008120906_arredondamento_taxa_total_7_outubro_2026.sql"
+          echo "PASS: 29 applied migration versions, zero SQL pending; never rerun applied SQL."
 
   browser-marketplace-smoke:
     name: Chromium buyer, merchant, courier and operation UI (offline)
