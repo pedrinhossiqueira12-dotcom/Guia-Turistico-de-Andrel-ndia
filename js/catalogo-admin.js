@@ -437,7 +437,7 @@
   }
 
   async function chamarFaturaPix(body) {
-    const { data, error } = await getClient().functions.invoke("catalogo-fatura-pix", { body: { ...body, comercio_id: comercioId } });
+    const { data, error } = await getClient().functions.invoke("catalogo-asaas-financeiro", { body: { ...body, comercio_id: comercioId } });
     if (error || !data?.success) throw new Error(data?.mensagem || error?.message || "Não foi possível processar o pagamento da fatura.");
     return data;
   }
@@ -462,7 +462,7 @@
       if (pix.imageBase64) partes.push(`<img class="pix-qr" alt="QR Code Pix da fatura" src="data:image/png;base64,${pix.imageBase64}">`);
       partes.push(`<label class="pix-copy">Pix copia e cola<textarea readonly rows="3">${escapar(pix.code)}</textarea></label>`);
       partes.push('<button id="copiarPixFatura" class="small-button" type="button">Copiar código Pix</button>');
-      if (/^https:\/\//.test(pix.ticketUrl || "")) partes.push(`<p><a class="button button-secondary" href="${escapar(pix.ticketUrl)}" target="_blank" rel="noopener">Abrir no Mercado Pago</a></p>`);
+      if (/^https:\/\//.test(pix.ticketUrl || "")) partes.push(`<p><a class="button button-secondary" href="${escapar(pix.ticketUrl)}" target="_blank" rel="noopener">Abrir cobrança no provedor</a></p>`);
     }
     $("faturaPixResultado").innerHTML = partes.join("");
     const copiar = $("copiarPixFatura");
@@ -474,7 +474,7 @@
 
   async function gerarPixFatura() {
     $("faturaPixResultado").innerHTML = '<p class="form-feedback">Solicitando o Pix da fatura…</p>';
-    try { renderizarPixFatura(await chamarFaturaPix({ acao: "criar_cobranca", competencia: competenciaDaFatura() })); }
+    try { renderizarPixFatura(await chamarFaturaPix({ acao: "criar_cobranca", competencia: competenciaDaFatura(), nome_pagador: $("faturaAsaasNomePagador")?.value || "", documento: $("faturaAsaasDocumento")?.value || "" })); }
     catch (error) { $("faturaPixResultado").innerHTML = `<p class="form-feedback">${escapar(error.message || "Não foi possível gerar o Pix da fatura.")}</p>`; }
   }
 
