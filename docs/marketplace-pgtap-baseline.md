@@ -81,3 +81,11 @@ A migração `20261002233841_publication_metadata_reversible_archive_20261002.sq
 3. Insere IDs públicos predefinidos em `public.comercios_publicados`; isso **não** representa restauração de registros privados, mas exige avaliar os efeitos das migrações subsequentes.
 
 **Plano seguro:** inspecionar somente metadados de `mural_cadastros`; construir seed sintética mínima de `cadastros_comercios` apenas no banco descartável, sem copiar dados de clientes; verificar toda dependência de dados das 29 migrações antes de ativar `database-tests`. Não executar a migração inicial em produção como tentativa de reconstrução.
+
+## Mural legado e seed sintética
+
+Consulta de metadados confirmou `public.mural_cadastros`: `id text` PK, `usuario_id uuid NOT NULL` FK `auth.users(id) ON DELETE CASCADE`, `nome` e `categoria` obrigatórios, textos opcionais `descricao`, `sobre`, `instagram`, `imagem`, `motivo_recusa`, `imagens jsonb DEFAULT '[]'`, `status text DEFAULT 'pendente'` e timestamps. Índices em `status` e `usuario_id`. O baseline agora inclui essa tabela sem dados de usuários.
+
+O arquivo de baseline inclui uma linha **sintética** de `cadastros_comercios` para satisfazer a verificação de nome/estado da primeira migração. Não reproduz dados pessoais de produção. A constraint de status final do mural é adicionada pela própria primeira migração, depois da conversão de valores legados.
+
+**Ainda não validado por execução integral:** dependências restantes, configuração do Supabase local e aplicação ordenada das 29 migrações. Não habilitar pgTAP antes dessa verificação.
