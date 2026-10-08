@@ -76,6 +76,11 @@ async function personalStatement(payload: Record<string, unknown>, userId: strin
   return { ...payload, perfil: { ...publicProfile, chave_pix: key, chave_pix_indisponivel: unavailable } };
 }
 async function administrativeStatement(payload: Record<string, unknown>) {
+  // Evita que o admin efetue um Pix manual para crédito já solicitado ao Payouts.
+  // Fail-closed: se a lista de reservas não puder ser consultada, não oferecer baixa.
+  const { data: blockedIds, error: blockedError } = await db.rpc("catalogo_saque_creditos_reservados_v2");
+  if (blockedError || !Array.isArray(blockedIds)) throw new HttpError("Reserva financeira não disponível. Não é seguro registrar repasses.", 503);
+  const blocked = new Set(blockedIds.map(String));
   const credits = Array.isArray(payload.remuneracoes) ? payload.remuneracoes : [];
   const normalized = await Promise.all(credits.map(async (value) => {
     const item = record(value);
@@ -85,8 +90,9 @@ async function administrativeStatement(payload: Record<string, unknown>) {
       try { key = await decryptCourierPix(cipher, DATA_KEY, String(item.motoboy_id || item.beneficiario_id || "")); }
       catch { /* A prova de crédito continua visível, mas nunca se expõe ciphertext ou chave em claro indevida. */ }
     }
-    return { ...safe, status: item.status === "disponivel" ? "a_receber" : item.status,
-      financiado: item.financiamento_comprovado === true, chave_pix: key,
+    const reservado = blocked.has(String(item.id || ""));
+    return { ...safe, status: reservado ? "saque_em_andamento" : (item.status === "disponivel" ? "a_receber" : item.status),
+      financiado: !reservado && item.financiamento_comprovado === true, chave_pix: key,
       pedido_ids: item.pedido_id ? [item.pedido_id] : item.pedido_ids,
       provas: Array.isArray(item.provas) ? item.provas : (item.financiamento_comprovado === true ? ["Financiamento comprovado registrado pelo backend"] : []) };
   }));
