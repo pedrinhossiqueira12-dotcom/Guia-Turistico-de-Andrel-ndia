@@ -135,7 +135,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END;
-$;
+$$;
 CREATE TRIGGER catalogo_conciliar_solicitacao_saque_v2
 AFTER UPDATE OF status,repasse_id ON public.catalogo_remuneracoes_v2
 FOR EACH ROW EXECUTE FUNCTION public.catalogo_conciliar_solicitacao_saque_v2();
