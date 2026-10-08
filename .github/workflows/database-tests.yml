@@ -20,7 +20,7 @@ jobs:
         with:
           deno-version: v2.x
       - name: Test financial snapshots without database access
-        run: deno test --no-check --allow-none supabase/functions/tests/catalogo-financeiro.test.ts
+        run: deno test --no-check supabase/functions/tests/catalogo-financeiro.test.ts
 
   sql-syntax:
     name: SQL syntax (all migrations and pgTAP)
