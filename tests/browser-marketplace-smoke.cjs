@@ -179,7 +179,7 @@ async function main() {
       }
       const externalApiCalls = externalRequests.filter(request =>
         /supabase\.co|mercadopago\./i.test(request.url) ||
-        request.method() !== "GET",
+        request.method !== "GET",
       );
       assert.deepEqual(externalApiCalls, [],
         "Forbidden real backend/payment calls attempted from guest browser");
