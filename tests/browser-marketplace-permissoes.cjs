@@ -11,6 +11,7 @@ const { chromium } = require("playwright");
 const ROOT = resolve(__dirname, "..");
 const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json" };
 const api = "https://xdmbkflufsfqziixzpxc.supabase.co/functions/v1/catalogo-entregas";
+const asaasApi = "https://xdmbkflufsfqziixzpxc.supabase.co/functions/v1/catalogo-asaas-financeiro";
 const tests = [
   {
     id: "admin_sem_permissao", path: "/pages/entregas-operacao.html",
@@ -75,7 +76,7 @@ async function run() {
       await context.route("**/*", route => {
         const url = route.request().url();
         if (url.startsWith(origin + "/")) return route.continue();
-        if (url === api) {
+        if (url === api || url === asaasApi) {
           mockCalls++;
           return route.fulfill({
             status: 403, contentType: "application/json",
