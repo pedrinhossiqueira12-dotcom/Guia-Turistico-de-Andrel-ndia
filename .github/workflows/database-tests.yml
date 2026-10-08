@@ -46,6 +46,34 @@ jobs:
           test -f "$target/supabase/migrations/20261008080000_arredondamento_taxa_total_7.sql"
           echo "PASS: release package is offline; current remote history still requires live read-only recheck, backup and authorization."
 
+  browser-marketplace-smoke:
+    name: Chromium buyer, merchant, courier and operation UI (offline)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Refuse all production and payment credentials
+        run: |
+          test -z "${SUPABASE_ACCESS_TOKEN:-}"
+          test -z "${SUPABASE_URL:-}"
+          test -z "${SUPABASE_SERVICE_ROLE_KEY:-}"
+          test -z "${DATABASE_URL:-}"
+          test -z "${MP_PLATFORM_ACCESS_TOKEN:-}"
+      - name: Install locked project dependencies and pinned temporary browser driver
+        run: |
+          npm ci
+          npm install --no-save --package-lock=false --ignore-scripts playwright@1.56.1
+      - name: Install sandboxed Chromium browser dependencies
+        run: npx playwright install --with-deps chromium
+      - name: Run local browser smoke with every external request blocked
+        run: node tests/browser-marketplace-smoke.cjs
+
   frontend-node-regressions:
     name: Frontend, buyer, merchant and courier regression tests (Node)
     runs-on: ubuntu-latest
