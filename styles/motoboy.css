@@ -226,6 +226,7 @@
 }
 
 .motoboy-form input,
+.motoboy-form select,
 .motoboy-dialog input[type="text"],
 .motoboy-dialog select {
   width: 100%;
@@ -238,6 +239,7 @@
 }
 
 .motoboy-form input:focus,
+.motoboy-form select:focus,
 .motoboy-dialog input:focus {
   border-color: var(--motoboy-accent);
 }
