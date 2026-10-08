@@ -590,6 +590,26 @@ jobs:
           END $pg_tap_rollback$;
           SQL
 
+      - name: Reject order and delivery scenario without opt-in
+        run: |
+          if psql -v ON_ERROR_STOP=1 -f supabase/tests/isolated/catalogo-pedidos-entregas-e2e-postgres.sql > /tmp/catalogo-orders-no-opt-in.log 2>&1; then
+            echo 'ERROR: order scenario accepted missing opt-in'
+            exit 1
+          fi
+          grep -q 'Cenario de pedidos exige catalogo_ci isolado' /tmp/catalogo-orders-no-opt-in.log
+      - name: Exercise real Pix order, buyer cancellation, courier race and delivery
+        run: |
+          psql -X -v ON_ERROR_STOP=1 <<'SQL'
+          BEGIN;
+          SET app.marketplace_test_orders = 'enabled';
+          \i supabase/tests/isolated/catalogo-pedidos-entregas-e2e-postgres.sql
+          ROLLBACK;
+          SQL
+          # Transaction rollback means test money/orders never persist.
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM public.catalogo_pedidos" | grep -Fx 0
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM public.catalogo_remuneracoes_v2" | grep -Fx 0
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM public.catalogo_pagamentos_v2" | grep -Fx 0
+
   pricing-postgres-isolated:
     name: Real pricing RPC (isolated PostgreSQL)
     runs-on: ubuntu-latest
