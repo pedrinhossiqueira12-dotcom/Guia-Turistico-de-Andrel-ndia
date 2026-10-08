@@ -73,6 +73,8 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Run local browser smoke with every external request blocked
         run: node tests/browser-marketplace-smoke.cjs
+      - name: Reject fake authenticated users without owner or courier permissions
+        run: node tests/browser-marketplace-permissoes.cjs
 
   frontend-node-regressions:
     name: Frontend, buyer, merchant and courier regression tests (Node)
