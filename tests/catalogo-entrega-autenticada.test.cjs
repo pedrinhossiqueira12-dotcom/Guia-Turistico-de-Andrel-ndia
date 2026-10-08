@@ -21,7 +21,7 @@ function loadEndpoint(path, userId = OWNER, rpcResult = { ok: true, status: 'ent
     },
     rpc: async (name, body) => { calls.push({ name, body }); return { data: rpcResult, error: null }; },
   };
-  const src = fs.readFileSync(path, 'utf8').replace(/^import .*createClient.*;\s*/m, '');
+  const src = fs.readFileSync(path, 'utf8').replace(/^import .*?;\s*$/gm, '');
   const code = stripTypeScriptTypes(src);
   vm.runInNewContext(code, {
     createClient: () => db,

@@ -1,0 +1,1082 @@
+name: Database tests
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "supabase/**"
+      - "scripts/validacao-pagamentos/**"
+      - ".github/workflows/database-tests.yml"
+      - "js/**"
+      - "pages/**"
+      - "styles/**"
+      - "tests/**"
+      - "package.json"
+      - "package-lock.json"
+  push:
+    branches:
+      - "logic/finalizacao-marketplace-2026-10-07"
+
+jobs:
+  offline-release-preflight:
+    name: Offline release package and migration history validation
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ensure no remote credentials or live database target
+        run: |
+          test -z "${SUPABASE_ACCESS_TOKEN:-}"
+          test -z "${SUPABASE_DB_PASSWORD:-}"
+          test -z "${DATABASE_URL:-}"
+          test -z "${SUPABASE_SERVICE_ROLE_KEY:-}"
+          test -z "${PGHOST:-}"
+      - name: Validate the audited migration mapping and fail-closed scenarios
+        run: |
+          python3 scripts/validacao-pagamentos/test-release-migrations.py
+      - name: Prepare disposable offline migration plan only
+        run: |
+          set -euo pipefail
+          target="$RUNNER_TEMP/catalogo-release-offline-$GITHUB_RUN_ID"
+          python3 scripts/validacao-pagamentos/build-release-migrations.py --output "$target"
+          test -f "$target/release-evidence.json"
+          test "$(find "$target/supabase/migrations" -maxdepth 1 -type f -name '*.sql' | wc -l)" -eq 29
+          ! find "$target/supabase/migrations" -name '20261007213000*' | grep -q .
+          test -f "$target/supabase/migrations/20261008120906_arredondamento_taxa_total_7_outubro_2026.sql"
+          echo "PASS: 29 applied migration versions, zero SQL pending; never rerun applied SQL."
+
+  browser-marketplace-smoke:
+    name: Chromium buyer, merchant, courier and operation UI (offline)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Refuse all production and payment credentials
+        run: |
+          test -z "${SUPABASE_ACCESS_TOKEN:-}"
+          test -z "${SUPABASE_URL:-}"
+          test -z "${SUPABASE_SERVICE_ROLE_KEY:-}"
+          test -z "${DATABASE_URL:-}"
+          test -z "${MP_PLATFORM_ACCESS_TOKEN:-}"
+      - name: Install locked project dependencies and pinned temporary browser driver
+        run: |
+          npm ci
+          npm install --no-save --package-lock=false --ignore-scripts playwright@1.56.1
+      - name: Install sandboxed Chromium browser dependencies
+        run: npx playwright install --with-deps chromium
+      - name: Run local browser smoke with every external request blocked
+        run: node tests/browser-marketplace-smoke.cjs
+      - name: Reject fake authenticated users without owner or courier permissions
+        run: node tests/browser-marketplace-permissoes.cjs
+
+  frontend-node-regressions:
+    name: Frontend, buyer, merchant and courier regression tests (Node)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Refuse production environment variables
+        run: |
+          test -z "${SUPABASE_ACCESS_TOKEN:-}"
+          test -z "${SUPABASE_DB_PASSWORD:-}"
+          test -z "${DATABASE_URL:-}"
+          test -z "${MP_PLATFORM_ACCESS_TOKEN:-}"
+          test -z "${SUPABASE_SERVICE_ROLE_KEY:-}"
+      - name: Install locked Node dependencies
+        run: npm ci
+      - name: Execute complete frontend and marketplace regression suite
+        run: npm test
+
+  financial-unit-tests:
+    name: Financial snapshot tests (Deno, isolated)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Test financial snapshots without database access
+        run: deno test --no-check --allow-read=supabase/functions supabase/functions/tests/catalogo-financeiro.test.ts supabase/functions/tests/catalogo-checkouts-contract.test.ts supabase/functions/tests/catalogo-seguranca-pagamentos.test.ts supabase/functions/tests/catalogo-webhook-identificacao.test.ts supabase/functions/tests/catalogo-fatura-provedor.test.ts
+
+  edge-http-mock-tests:
+    name: Real Edge HTTP handlers with fake provider and blocked network (Deno)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Verify no production URLs or credentials in environment
+        run: |
+          test -z "${SUPABASE_URL:-}"
+          test -z "${SUPABASE_SERVICE_ROLE_KEY:-}"
+          test -z "${SUPABASE_SECRET_KEYS:-}"
+          test -z "${MP_PLATFORM_ACCESS_TOKEN:-}"
+          test -z "${MP_MARKETPLACE_WEBHOOK_SECRET:-}"
+          test -z "${DATABASE_URL:-}"
+      - name: Exercise Edge functions without listening sockets or network permission
+        run: |
+          deno test --no-check --node-modules-dir=auto --allow-env --allow-read=supabase/functions \
+            supabase/functions/tests/catalogo-edge-http.test.ts
+
+  supabase-native-local-pgtap:
+    name: Supabase native local reset and 23 pgTAP (temporary project, no external schedule)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          # Versão exata comprovada no job nativo CI 37722544899.
+          # Evita GitHub API rate limit na resolução de "latest".
+          version: 2.120.0
+      - name: Refuse production secrets and remote DB targets
+        run: |
+          set -euo pipefail
+          test -z "${SUPABASE_ACCESS_TOKEN:-}"
+          test -z "${SUPABASE_DB_PASSWORD:-}"
+          test -z "${DATABASE_URL:-}"
+          test -z "${PGSERVICE:-}"
+          test -z "${PGHOSTADDR:-}"
+          test -z "${PGOPTIONS:-}"
+          test -z "${SUPABASE_PROJECT_ID:-}"
+          test -z "${SUPABASE_URL:-}"
+      - name: Generate isolated Supabase project with synthetic historical data
+        run: |
+          python3 scripts/validacao-pagamentos/build-native-supabase-ci.py
+          test -f /tmp/guia-supabase-native-ci/supabase/config.toml
+          ! grep -R -F 'xdmbkflufsfqziixzpxc' \
+            /tmp/guia-supabase-native-ci/supabase/config.toml \
+            /tmp/guia-supabase-native-ci/supabase/migrations
+      - name: Verify available local CLI commands
+        run: |
+          supabase --version
+          supabase start --help > /tmp/native-cli-start-help.txt
+          supabase db reset --help > /tmp/native-cli-reset-help.txt
+          supabase test db --help > /tmp/native-cli-test-help.txt
+          grep -q '\-\-local' /tmp/native-cli-reset-help.txt
+      - name: Boot local Supabase and verify 23 native pgTAP tests
+        working-directory: /tmp/guia-supabase-native-ci
+        run: |
+          set -euo pipefail
+          trap 'supabase stop --no-backup >/dev/null 2>&1 || true' EXIT
+          # Deliberately NO --linked, --project-ref or cloud credentials.
+          # The original project config and production endpoint were never copied.
+          supabase start
+          supabase db reset --local
+          supabase test db supabase/tests/database/marketplace_financeiro_v2.test.sql \
+            | tee /tmp/guia-native-pgtap.log
+          grep -q 'All tests successful' /tmp/guia-native-pgtap.log
+          grep -q 'Result: PASS' /tmp/guia-native-pgtap.log
+          echo 'PASS: pgTAP ran natively against completely isolated Supabase local stack'
+
+  legacy-baseline-smoke:
+    name: Legacy baseline and first migration (disposable PostgreSQL)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: local-ci-only
+          POSTGRES_DB: catalogo_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d catalogo_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: local-ci-only
+      PGDATABASE: catalogo_ci
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify disposable database connection
+        run: |
+          test "$PGHOST" = localhost
+          test "$PGPORT" = 5432
+          test "$PGDATABASE" = catalogo_ci
+          test "$PGUSER" = postgres
+          test -z "${DATABASE_URL:-}"
+          test -z "${PGSERVICE:-}"
+          test -z "${PGHOSTADDR:-}"
+          test -z "${PGOPTIONS:-}"
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT current_database(), inet_server_addr() IS NOT NULL" | grep -Fx 'catalogo_ci|t'
+      - name: Create minimal Supabase Auth test doubles
+        run: |
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE anon NOLOGIN;
+          CREATE ROLE authenticated NOLOGIN;
+          CREATE ROLE service_role NOLOGIN;
+          CREATE SCHEMA auth;
+          CREATE TABLE auth.users (id uuid PRIMARY KEY);
+          CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $auth_test$
+            SELECT NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid
+          $auth_test$;
+          SQL
+      - name: Ensure baseline rejects missing opt-in
+        run: |
+          if psql -v ON_ERROR_STOP=1 -f supabase/tests/baseline/legacy-public-tables.sql > /tmp/baseline-no-opt-in.log 2>&1; then
+            echo "ERROR: baseline accepted missing opt-in"
+            exit 1
+          fi
+          grep -q "Baseline legado exige Supabase local descartavel" /tmp/baseline-no-opt-in.log
+      - name: Ensure baseline rejects wrong database even with opt-in
+        run: |
+          if psql -d postgres -v ON_ERROR_STOP=1 -1 -c "SET app.marketplace_test_baseline = 'enabled'" -f supabase/tests/baseline/legacy-public-tables.sql > /tmp/baseline-wrong-db.log 2>&1; then
+            echo "ERROR: baseline accepted wrong database"
+            exit 1
+          fi
+          grep -q "Baseline legado exige Supabase local descartavel" /tmp/baseline-wrong-db.log
+          psql -d postgres -v ON_ERROR_STOP=1 -Atqc "SELECT to_regclass('public.avaliacoes') IS NULL AND to_regclass('public.cadastros_comercios') IS NULL AND to_regclass('public.mural_cadastros') IS NULL" | grep -Fx t
+      - name: Apply baseline and actual first migration
+        run: |
+          psql -v ON_ERROR_STOP=1 -1 -c "SET app.marketplace_test_baseline = 'enabled'" -f supabase/tests/baseline/legacy-public-tables.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261002233841_publication_metadata_reversible_archive_20261002.sql
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT COUNT(*) FROM public.cadastros_comercios WHERE local_id = 'pedrox-do-grau' AND status = 'aprovado'" | grep -Fx 1
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT COUNT(*) FROM public.comercios_publicados" | grep -Fx 139
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT COUNT(*) FROM pg_policies WHERE schemaname = 'public' AND tablename = 'mural_cadastros' AND policyname = 'Mural — público vê ativos'" | grep -Fx 1
+      - name: Verify legacy table security and synthetic data
+        run: |
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          DO $verify$
+          BEGIN
+            IF (SELECT count(*) FROM public.cadastros_comercios) <> 1 THEN
+              RAISE EXCEPTION 'Expected exactly one synthetic registration';
+            END IF;
+            IF (SELECT count(*) FROM public.avaliacoes) <> 0
+               OR (SELECT count(*) FROM public.mural_cadastros) <> 0 THEN
+              RAISE EXCEPTION 'Legacy baseline unexpectedly contains personal records';
+            END IF;
+            IF EXISTS (
+              SELECT 1 FROM pg_class
+              WHERE oid IN (
+                'public.avaliacoes'::regclass,
+                'public.cadastros_comercios'::regclass,
+                'public.mural_cadastros'::regclass,
+                'public.comercios_publicados'::regclass
+              )
+              AND NOT relrowsecurity
+            ) THEN
+              RAISE EXCEPTION 'RLS must be enabled on all legacy public tables';
+            END IF;
+            IF (SELECT count(*) FROM pg_policies
+                WHERE schemaname='public' AND tablename='mural_cadastros'
+                  AND policyname='Mural — público vê ativos') <> 1 THEN
+              RAISE EXCEPTION 'Expected exactly one public mural policy';
+            END IF;
+          END $verify$;
+          SQL
+      - name: Verify first migration can be reapplied safely
+        run: |
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261002233841_publication_metadata_reversible_archive_20261002.sql
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT COUNT(*) FROM public.comercios_publicados" | grep -Fx 139
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT COUNT(*) FROM public.cadastros_comercios WHERE local_id = 'pedrox-do-grau' AND status = 'aprovado'" | grep -Fx 1
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT COUNT(*) FROM pg_policies WHERE schemaname = 'public' AND tablename = 'mural_cadastros' AND policyname = 'Mural — público vê ativos'" | grep -Fx 1
+
+  catalogo-initial-migration-smoke:
+    name: Catalogo migration with isolated Storage stubs
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: local-ci-only
+          POSTGRES_DB: catalogo_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d catalogo_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: local-ci-only
+      PGDATABASE: catalogo_ci
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check disposable target
+        run: |
+          test "$PGHOST" = localhost
+          test "$PGDATABASE" = catalogo_ci
+          test -z "${DATABASE_URL:-}"
+          test -z "${PGSERVICE:-}"
+          test -z "${PGHOSTADDR:-}"
+          test -z "${PGOPTIONS:-}"
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT current_database()" | grep -Fx catalogo_ci
+      - name: Prepare minimal Auth and Storage doubles
+        run: |
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE anon NOLOGIN;
+          CREATE ROLE authenticated NOLOGIN;
+          CREATE ROLE service_role NOLOGIN;
+          CREATE SCHEMA auth;
+          CREATE TABLE auth.users(id uuid PRIMARY KEY);
+          CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $auth_test$
+            SELECT NULLIF(current_setting('request.jwt.claim.sub',true),'')::uuid
+          $auth_test$;
+          CREATE SCHEMA storage;
+          CREATE TABLE storage.buckets (
+            id text PRIMARY KEY,
+            name text NOT NULL,
+            public boolean NOT NULL DEFAULT false,
+            file_size_limit bigint,
+            allowed_mime_types text[]
+          );
+          CREATE TABLE storage.objects (
+            id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+            bucket_id text NOT NULL REFERENCES storage.buckets(id),
+            name text NOT NULL
+          );
+          ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
+          CREATE FUNCTION storage.extension(p_name text) RETURNS text
+          LANGUAGE sql IMMUTABLE AS $ext$ SELECT split_part(p_name,'.',array_length(string_to_array(p_name,'.'),1)) $ext$;
+          CREATE FUNCTION storage.foldername(p_name text) RETURNS text[]
+          LANGUAGE sql IMMUTABLE AS $folder$ SELECT (string_to_array(p_name,'/'))[1:greatest(array_length(string_to_array(p_name,'/'),1)-1,0)] $folder$;
+          SQL
+      - name: Apply legacy baseline and first real migration
+        run: |
+          psql -v ON_ERROR_STOP=1 -1 -c "SET app.marketplace_test_baseline = 'enabled'" -f supabase/tests/baseline/legacy-public-tables.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261002233841_publication_metadata_reversible_archive_20261002.sql
+      - name: Apply real catalogo digital migration (without scheduling migration)
+        run: |
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261003013323_catalogo_digital_20261003000000.sql
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT public, file_size_limit, array_to_string(allowed_mime_types, ',') FROM storage.buckets WHERE id='catalogos'" | grep -Fx 't|5242880|image/webp,image/jpeg,image/png'
+          psql -v ON_ERROR_STOP=1 -c "UPDATE storage.buckets SET file_size_limit = 4194304 WHERE id = 'catalogos'"
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261003013323_catalogo_digital_20261003000000.sql
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT file_size_limit FROM storage.buckets WHERE id='catalogos'" | grep -Fx 4194304
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT reloptions @> ARRAY['security_invoker=true']::text[] FROM pg_class WHERE oid='public.catalogo_publicado'::regclass" | grep -Fx t
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT has_table_privilege('anon','public.catalogo_assinaturas','SELECT')" | grep -Fx f
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT has_table_privilege('authenticated','public.catalogo_assinaturas','SELECT')" | grep -Fx f
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT has_table_privilege('anon','public.catalogo_produtos','INSERT')" | grep -Fx f
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM pg_trigger WHERE tgname IN ('catalogos_atualizado_em','catalogo_categorias_atualizado_em','catalogo_produtos_atualizado_em') AND NOT tgisinternal" | grep -Fx 3
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM storage.buckets WHERE id='catalogos'" | grep -Fx 1
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM pg_policies WHERE schemaname='storage' AND tablename='objects' AND policyname='catalogos_proprietario_upload_ativo'" | grep -Fx 1
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM pg_class WHERE oid IN ('public.catalogos'::regclass,'public.catalogo_assinaturas'::regclass,'public.catalogo_categorias'::regclass,'public.catalogo_produtos'::regclass) AND relrowsecurity" | grep -Fx 4
+
+      - name: Apply real migrations for news, payments, profiles and marketplace (isolated only)
+        run: |
+          test "$PGHOST" = localhost
+          test "$PGDATABASE" = catalogo_ci
+          test -z "${DATABASE_URL:-}"
+          test -z "${PGSERVICE:-}"
+          test -z "${PGHOSTADDR:-}"
+          test -z "${PGOPTIONS:-}"
+          # Cron/Vault scheduling migration is intentionally excluded:
+          # it embeds an endpoint pointing to production. Never execute it here.
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261003134656_editorial_pagamentos_20261003.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261003140000_catalogo_pagamento_producao.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261004003000_perfil_fotos_e_politicas.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261004110000_avaliacoes_avatar_url.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261004223000_catalogo_marketplace_pedidos.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261005010000_catalogo_marketplace_oauth.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261005090000_catalogo_pedidos_email.sql
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          DO $assert_extra_migrations$
+          BEGIN
+            IF (SELECT count(*) FROM storage.buckets WHERE id IN ('catalogos', 'noticias-eventos', 'perfil-fotos')) <> 3 THEN
+              RAISE EXCEPTION 'Expected all three isolated Storage buckets';
+            END IF;
+            IF (SELECT count(*) FROM pg_class
+                WHERE oid IN ('public.conteudos_editoriais'::regclass,
+                              'public.catalogo_pagamentos'::regclass,
+                              'public.catalogo_recebedores'::regclass,
+                              'public.catalogo_pedidos'::regclass,
+                              'public.catalogo_pedido_itens'::regclass,
+                              'public.catalogo_oauth_estados'::regclass)
+                  AND relrowsecurity) <> 6 THEN
+              RAISE EXCEPTION 'Some marketplace or editorial tables have RLS disabled';
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                           WHERE table_schema = 'public' AND table_name = 'avaliacoes'
+                             AND column_name = 'avatar_url')
+               OR NOT EXISTS (SELECT 1 FROM information_schema.columns
+                              WHERE table_schema = 'public' AND table_name = 'catalogo_pedidos'
+                                AND column_name = 'cliente_email') THEN
+              RAISE EXCEPTION 'Expected legacy avatar and order email columns';
+            END IF;
+            IF has_table_privilege('anon','public.catalogo_pedidos','SELECT')
+               OR has_table_privilege('authenticated','public.catalogo_pagamentos','SELECT')
+               OR has_table_privilege('anon','public.catalogo_oauth_estados','SELECT') THEN
+              RAISE EXCEPTION 'Payment, order or OAuth data exposed directly';
+            END IF;
+            IF to_regclass('cron.job') IS NOT NULL THEN
+              RAISE EXCEPTION 'Unexpected cron scheduling in isolated database';
+            END IF;
+          END $assert_extra_migrations$;
+          SQL
+
+      - name: Reject RLS scenarios without explicit opt-in
+        run: |
+          if psql -v ON_ERROR_STOP=1 -f supabase/tests/isolated/catalogo-rls-postgres.sql > /tmp/catalogo-rls-no-opt-in.log 2>&1; then
+            echo "ERROR: behavioral security fixture accepted missing opt-in"
+            exit 1
+          fi
+          grep -q "Teste RLS do catálogo permitido somente no catalogo_ci" /tmp/catalogo-rls-no-opt-in.log
+      - name: Exercise real catalog permissions for owner, stranger and anonymous visitor
+        run: |
+          psql -v ON_ERROR_STOP=1 -1 -c "SET app.marketplace_test_scenario = 'enabled'" -f supabase/tests/isolated/catalogo-rls-postgres.sql
+
+      - name: Reject payment regression fixture without explicit opt-in
+        run: |
+          if psql -v ON_ERROR_STOP=1 -f supabase/tests/isolated/catalogo-assinaturas-pagamentos-postgres.sql > /tmp/catalogo-payments-no-opt-in.log 2>&1; then
+            echo "ERROR: payments fixture accepted missing opt-in"
+            exit 1
+          fi
+          grep -q "Fixture de pagamentos exige catalogo_ci descartavel" /tmp/catalogo-payments-no-opt-in.log
+      - name: Test real subscription-payment RPC and delayed/refunded events
+        run: |
+          psql -v ON_ERROR_STOP=1 -1 -c "SET app.marketplace_test_payments = 'enabled'" -f supabase/tests/isolated/catalogo-assinaturas-pagamentos-postgres.sql
+
+  scheduler-inert-migration-test:
+    name: Legacy Cron/Vault migration (sanitized, no network or real schedules)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: local-ci-only
+          POSTGRES_DB: catalogo_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d catalogo_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: local-ci-only
+      PGDATABASE: catalogo_ci
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify disposable database without real Cron or network extensions
+        run: |
+          test "$PGHOST" = localhost
+          test "$PGPORT" = 5432
+          test "$PGUSER" = postgres
+          test "$PGDATABASE" = catalogo_ci
+          test -z "${DATABASE_URL:-}"
+          test -z "${PGSERVICE:-}"
+          test -z "${PGHOSTADDR:-}"
+          test -z "${PGOPTIONS:-}"
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT current_database()" | grep -Fx catalogo_ci
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM pg_available_extensions WHERE name IN ('pg_cron','pg_net')" | grep -Fx 0
+      - name: Build safe SQL copy and reject original production URL
+        run: |
+          set -euo pipefail
+          python scripts/validacao-pagamentos/build-isolated-scheduler-test.py
+          if grep -Fq 'xdmbkflufsfqziixzpxc.supabase.co' /tmp/catalogo-scheduler-no-network-ci.sql; then
+            echo "ERROR: production Supabase URL found in scheduler CI copy"
+            exit 1
+          fi
+          grep -Fq 'ci-no-network.invalid/storage-cleanup' /tmp/catalogo-scheduler-no-network-ci.sql
+          if grep -Eq '^CREATE EXTENSION|^CREATE\\s+EXTENSION' /tmp/catalogo-scheduler-no-network-ci.sql; then
+            echo "ERROR: scheduler CI copy attempts installing a real extension"
+            exit 1
+          fi
+      - name: Refuse inert scheduler stubs without explicit opt-in
+        run: |
+          if psql -v ON_ERROR_STOP=1 -f supabase/tests/baseline/catalogo-ci-scheduler-stubs.sql > /tmp/scheduler-stubs-no-opt-in.log 2>&1; then
+            echo "ERROR: scheduler stub opt-in bypass"
+            exit 1
+          fi
+          grep -q 'Mocks Cron/Vault exigem catalogo_ci isolado' /tmp/scheduler-stubs-no-opt-in.log
+      - name: Create inert Cron and synthetic Vault stubs
+        run: |
+          psql -v ON_ERROR_STOP=1 -1 -c "SET app.marketplace_test_scheduler = 'enabled'" -f supabase/tests/baseline/catalogo-ci-scheduler-stubs.sql
+      - name: Refuse scheduler fixture without explicit opt-in
+        run: |
+          if psql -v ON_ERROR_STOP=1 -f /tmp/catalogo-scheduler-no-network-ci.sql > /tmp/scheduler-migration-no-opt-in.log 2>&1; then
+            echo "ERROR: migration copy executed without opt-in"
+            exit 1
+          fi
+          grep -q 'Scheduler fixture exige catalogo_ci' /tmp/scheduler-migration-no-opt-in.log
+      - name: Apply sanitized real scheduler logic and verify inert job
+        run: |
+          psql -v ON_ERROR_STOP=1 -1 -c "SET app.marketplace_test_scheduler = 'enabled'" -f /tmp/catalogo-scheduler-no-network-ci.sql
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          DO $check_scheduler$
+          DECLARE v_secret text;
+          BEGIN
+            IF (SELECT count(*) FROM vault.secrets WHERE name='andrelandia_storage_cleanup_token') <> 1
+               OR (SELECT count(*) FROM cron.job WHERE jobname='andrelandia-storage-retention-dry-run') <> 1
+               OR EXISTS (SELECT 1 FROM pg_extension WHERE extname IN ('pg_cron','pg_net'))
+               OR to_regnamespace('net') IS NOT NULL
+            THEN
+              RAISE EXCEPTION 'Unexpected real cron/net extension or missing inert job/secret';
+            END IF;
+            IF NOT EXISTS (
+              SELECT 1 FROM cron.job
+              WHERE jobname='andrelandia-storage-retention-dry-run'
+                AND schedule='0 * * * *'
+                AND command LIKE '%ci-no-network.invalid/storage-cleanup%'
+                AND command LIKE '%"mode":"dry-run"%'
+                AND command LIKE '%x-cleanup-token%'
+                AND command NOT LIKE '%supabase.co%'
+            ) THEN
+              RAISE EXCEPTION 'Inert scheduled command was not sanitized to dry-run';
+            END IF;
+            IF has_function_privilege('anon','public.is_storage_cleanup_authorized(text)','EXECUTE')
+               OR has_function_privilege('authenticated','public.is_storage_cleanup_authorized(text)','EXECUTE')
+               OR NOT has_function_privilege('service_role','public.is_storage_cleanup_authorized(text)','EXECUTE')
+            THEN
+              RAISE EXCEPTION 'Cleanup token function exposed to unauthorized roles';
+            END IF;
+            SELECT secret INTO v_secret FROM vault.secrets
+              WHERE name='andrelandia_storage_cleanup_token';
+            IF v_secret IS NULL OR char_length(v_secret) < 60
+               OR NOT public.is_storage_cleanup_authorized(v_secret)
+               OR public.is_storage_cleanup_authorized('invalid-test-token')
+               OR public.is_storage_cleanup_authorized(NULL)
+            THEN
+              RAISE EXCEPTION 'Cleanup token validation is not secure';
+            END IF;
+          END $check_scheduler$;
+          SQL
+      - name: Reapply safely without duplicating job or changing secret
+        run: |
+          set -euo pipefail
+          token_hash_before=$(psql -v ON_ERROR_STOP=1 -Atqc "SELECT md5(secret) FROM vault.secrets WHERE name='andrelandia_storage_cleanup_token'")
+          psql -v ON_ERROR_STOP=1 -1 -c "SET app.marketplace_test_scheduler = 'enabled'" -f /tmp/catalogo-scheduler-no-network-ci.sql
+          token_hash_after=$(psql -v ON_ERROR_STOP=1 -Atqc "SELECT md5(secret) FROM vault.secrets WHERE name='andrelandia_storage_cleanup_token'")
+          test -n "$token_hash_before"
+          test "$token_hash_before" = "$token_hash_after"
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM cron.job" | grep -Fx 1
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM vault.secrets" | grep -Fx 1
+          echo "PASS: Cron/Vault migration verified with inert jobs, no production URL and no network requests"
+
+  complete-chain-postgres-isolated:
+    name: All financial migrations except remote scheduling (disposable PostgreSQL)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: local-ci-only
+          POSTGRES_DB: catalogo_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d catalogo_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: local-ci-only
+      PGDATABASE: catalogo_ci
+    steps:
+      - uses: actions/checkout@v4
+      - name: Enforce ephemeral target without external cron extensions
+        run: |
+          test "$PGHOST" = localhost
+          test "$PGPORT" = 5432
+          test "$PGUSER" = postgres
+          test "$PGDATABASE" = catalogo_ci
+          test -z "${DATABASE_URL:-}"
+          test -z "${PGSERVICE:-}"
+          test -z "${PGHOSTADDR:-}"
+          test -z "${PGOPTIONS:-}"
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT current_database(), inet_server_addr() IS NOT NULL" | grep -Fx 'catalogo_ci|t'
+          # Scheduled jobs must be unavailable in this isolated database;
+          # the second migration embeds a PRODUCTION URL and is NEVER run here.
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM pg_available_extensions WHERE name IN ('pg_cron','pg_net')" | grep -Fx 0
+      - name: Refuse unsafe Auth/Storage bootstrap without opt-in
+        run: |
+          if psql -v ON_ERROR_STOP=1 -f supabase/tests/baseline/catalogo-ci-auth-storage.sql > /tmp/auth-no-opt-in.log 2>&1; then
+            echo 'ERROR: mock bootstrap ignored guard'
+            exit 1
+          fi
+          grep -q 'Mocks Auth/Storage exigem catalogo_ci vazio' /tmp/auth-no-opt-in.log
+      - name: Build synthetic legacy baseline in empty local database
+        run: |
+          psql -v ON_ERROR_STOP=1 -1 -c "SET app.marketplace_test_auth_storage = 'enabled'" -f supabase/tests/baseline/catalogo-ci-auth-storage.sql
+          psql -v ON_ERROR_STOP=1 -1 -c "SET app.marketplace_test_baseline = 'enabled'" -f supabase/tests/baseline/legacy-public-tables.sql
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM public.cadastros_comercios" | grep -Fx 1
+      - name: Apply ordered real SQL migrations without remote scheduler
+        run: |
+          set -euo pipefail
+          count=0
+          for migration in supabase/migrations/*.sql; do
+            case "$migration" in
+              supabase/migrations/20261002235010_schedule_storage_retention_dry_run_20261002.sql)
+                echo "SKIPPED intentionally: $migration (contains production URL and schedules remote HTTP)"
+                ;;
+              supabase/migrations/20261005133000_catalogo_marketplace_test_allowlist.sql)
+                # This historical migration INSERTs 'comercio-de-exemplo' and requires
+                # an existing catalog. Neither is in the public 139-ID baseline.
+                # Supply only synthetic FK data in this isolated service database.
+                psql -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO auth.users(id)
+          VALUES ('00000000-0000-4000-8000-000000000099');
+          INSERT INTO public.comercios_publicados(local_id,status,destaque)
+          VALUES ('comercio-de-exemplo','ativo',false);
+          INSERT INTO public.catalogos(comercio_id,proprietario_id)
+          VALUES ('comercio-de-exemplo','00000000-0000-4000-8000-000000000099');
+          SQL
+                echo "Applying isolated with synthetic marketplace allowlist seed: $migration"
+                psql -v ON_ERROR_STOP=1 -f "$migration"
+                count=$((count + 1))
+                ;;
+              supabase/migrations/20261007213000_arredondamento_taxa_total_7.sql)
+                # Replica o estado imediatamente anterior à migration pendente
+                # em um SEGUNDO PostgreSQL local descartável. Jamais usa remoto.
+                test "$PGHOST" = localhost
+                test "$PGDATABASE" = catalogo_ci
+                test -z "${DATABASE_URL:-}"
+                test -z "${PGSERVICE:-}"
+                test -z "${PGHOSTADDR:-}"
+                createdb --template=catalogo_ci catalogo_upgrade_ci
+                trap 'dropdb --if-exists --force catalogo_upgrade_ci' EXIT
+                psql -d catalogo_upgrade_ci -v ON_ERROR_STOP=1 -1 \
+                  -c "SET app.marketplace_test_upgrade = 'enabled'" \
+                  -f supabase/tests/isolated/upgrade-pre-final-snapshots-postgres.sql
+                prior=$(psql -d catalogo_upgrade_ci -v ON_ERROR_STOP=1 -At -F '|' \
+                  -f scripts/validacao-pagamentos/preflight-historico-v2-readonly.sql)
+                grep -Fx 'pedidos|2|1|1|0|1' <<< "$prior"
+                grep -Fx 'comissoes|2|1|1|0|1' <<< "$prior"
+                # Aplica APENAS a migration final ao clone com V1/V2 antigos.
+                psql -d catalogo_upgrade_ci -v ON_ERROR_STOP=1 -f "$migration"
+                psql -d catalogo_upgrade_ci -v ON_ERROR_STOP=1 -1 \
+                  -c "SET app.marketplace_test_upgrade = 'enabled'" \
+                  -f supabase/tests/isolated/upgrade-post-final-snapshots-postgres.sql
+                after=$(psql -d catalogo_upgrade_ci -v ON_ERROR_STOP=1 -At -F '|' \
+                  -f scripts/validacao-pagamentos/preflight-historico-v2-readonly.sql)
+                grep -Fx 'pedidos|2|1|1|0|1' <<< "$after"
+                grep -Fx 'comissoes|2|1|1|0|1' <<< "$after"
+                dropdb --if-exists --force catalogo_upgrade_ci
+                trap - EXIT
+                echo "PASS: isolated production-like V1/V2 upgrade preserved historical snapshots"
+                # Depois do ensaio, aplica normalmente na base CI VAZIA.
+                psql -v ON_ERROR_STOP=1 -f "$migration"
+                count=$((count + 1))
+                ;;
+              *)
+                echo "Applying isolated: $migration"
+                psql -v ON_ERROR_STOP=1 -f "$migration"
+                count=$((count + 1))
+                ;;
+            esac
+          done
+          total=$(find supabase/migrations -maxdepth 1 -name '*.sql' | wc -l)
+          test "$count" -eq "$((total - 1))"
+          echo "Applied $count of $total real migrations to disposable catalogo_ci."
+      - name: Read-only historical pricing preflight on disposable database
+        run: |
+          set -euo pipefail
+          test "$PGHOST" = localhost
+          test "$PGDATABASE" = catalogo_ci
+          test -z "${DATABASE_URL:-}"
+          test -z "${PGSERVICE:-}"
+          test -z "${PGHOSTADDR:-}"
+          test -z "${PGOPTIONS:-}"
+          report=$(psql -X -v ON_ERROR_STOP=1 -At -F '|' \
+            -f scripts/validacao-pagamentos/preflight-historico-v2-readonly.sql)
+          printf '%s\n' "$report"
+          grep -Fx 'pedidos|0|0|0|0|0' <<< "$report"
+          grep -Fx 'comissoes|0|0|0|0|0' <<< "$report"
+
+      - name: Assert final V2 model and 7-percent rounding in actual schema
+        run: |
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          DO $final_chain$
+          DECLARE v_total integer; v_motoboy integer; v_plataforma integer;
+          BEGIN
+            IF to_regclass('public.catalogo_fluxo_config') IS NULL
+               OR to_regclass('public.catalogo_pedidos') IS NULL
+               OR to_regclass('public.catalogo_remuneracoes_v2') IS NULL
+               OR to_regclass('public.catalogo_lancamentos_financeiros_v2') IS NULL
+               OR to_regclass('public.catalogo_fatura_cobrancas') IS NULL
+               OR to_regclass('public.catalogo_comissoes_offline') IS NULL THEN
+              RAISE EXCEPTION 'Full financial schema was not created by actual migrations';
+            END IF;
+            IF (SELECT count(*) FROM public.comercios_publicados) < 139
+               OR (SELECT count(*) FROM public.catalogo_pedidos) <> 0
+               OR (SELECT count(*) FROM public.catalogo_pagamentos) <> 0 THEN
+              RAISE EXCEPTION 'Unexpected real-looking data in disposable test database';
+            END IF;
+            -- O CHECK original exigia 5% ate nas retiradas V2; ele deve
+            -- desaparecer APENAS apos a migration pendente substituir as
+            -- garantias por regra diferenciada V1 (5%) / V2 (7%).
+            IF EXISTS (
+                 SELECT 1 FROM pg_constraint
+                  WHERE conrelid='public.catalogo_pedidos'::regclass
+                    AND conname='catalogo_pedidos_check1'
+               )
+               OR NOT EXISTS (
+                 SELECT 1 FROM pg_constraint
+                  WHERE conrelid='public.catalogo_pedidos'::regclass
+                    AND conname='catalogo_pedidos_taxas_v2_check'
+                    AND contype='c'
+                    AND pg_get_constraintdef(oid) LIKE '%0.05%'
+                    AND pg_get_constraintdef(oid) LIKE '%0.07%'
+               ) THEN
+              RAISE EXCEPTION 'CHECK legado 5%% nao foi substituido pela regra V1/V2';
+            END IF;
+            IF (SELECT count(*) FROM pg_extension WHERE extname = 'pg_cron') <> 0
+               OR to_regclass('cron.job') IS NOT NULL THEN
+              RAISE EXCEPTION 'Isolated database must not have scheduled jobs';
+            END IF;
+            IF (SELECT count(*) FROM pg_class
+                WHERE oid IN ('public.catalogo_pedidos'::regclass,
+                              'public.catalogo_remuneracoes_v2'::regclass,
+                              'public.catalogo_lancamentos_financeiros_v2'::regclass,
+                              'public.catalogo_fatura_cobrancas'::regclass)
+                  AND relrowsecurity) <> 4 THEN
+              RAISE EXCEPTION 'RLS missing on financial or delivery tables';
+            END IF;
+
+            UPDATE public.catalogo_fluxo_config
+               SET ativo = true, comercios_piloto = NULL WHERE id = true;
+            SELECT (r->>'taxa_total_centavos')::integer,
+                   (r->>'taxa_motoboy_centavos')::integer,
+                   (r->>'taxa_plataforma_centavos')::integer
+            INTO v_total, v_motoboy, v_plataforma
+            FROM (SELECT public.catalogo_fluxo_precificar('entrega',101,NULL) AS r) x;
+            IF v_total IS DISTINCT FROM 7 OR v_motoboy IS DISTINCT FROM 2
+               OR v_plataforma IS DISTINCT FROM 5
+               OR v_total <> v_motoboy + v_plataforma THEN
+              RAISE EXCEPTION 'Final 7-percent pricing RPC failed for 101 cents';
+            END IF;
+            IF has_function_privilege('anon',
+                'public.catalogo_confirmar_entrega_motoboy(uuid,text,uuid,text)', 'EXECUTE')
+               OR has_function_privilege('authenticated',
+                'public.catalogo_confirmar_cobranca_fatura(text,text,text,integer,text)', 'EXECUTE')
+               THEN
+              RAISE EXCEPTION 'Direct payment/delivery access was exposed';
+            END IF;
+          END $final_chain$;
+          SQL
+
+      - name: Install real pgTAP extension only in disposable PostgreSQL service
+        run: |
+          test "$PGHOST" = localhost
+          test "$PGDATABASE" = catalogo_ci
+          docker exec -u root "${{ job.services.postgres.id }}" sh -c 'apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq postgresql-17-pgtap'
+          psql -v ON_ERROR_STOP=1 -c 'CREATE EXTENSION IF NOT EXISTS pgtap'
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT extversion IS NOT NULL FROM pg_extension WHERE extname='pgtap'" | grep -Fx t
+      - name: Run all 23 actual pgTAP assertions against final isolated model
+        run: |
+          set -euo pipefail
+          psql -X -qAt -v ON_ERROR_STOP=1 -f supabase/tests/database/marketplace_financeiro_v2.test.sql | tee /tmp/marketplace-financeiro.tap
+          grep -Fx '1..23' /tmp/marketplace-financeiro.tap
+          if grep -q '^not ok ' /tmp/marketplace-financeiro.tap; then
+            echo 'ERROR: pgTAP reported failed assertions'
+            exit 1
+          fi
+          count=$(grep -Ec '^ok [0-9]+( |$)' /tmp/marketplace-financeiro.tap)
+          test "$count" -eq 23
+          grep -Eq '^ok 23( |$)' /tmp/marketplace-financeiro.tap
+          echo "PASS: $count pgTAP assertions in disposable catalogo_ci (remote cron migration excluded)"
+
+      - name: Confirm pgTAP rolled back and created no payment or delivery records
+        run: |
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          DO $pg_tap_rollback$
+          BEGIN
+            IF current_database() <> 'catalogo_ci'
+               OR (SELECT count(*) FROM public.catalogo_pedidos) <> 0
+               OR (SELECT count(*) FROM public.catalogo_pagamentos) <> 0
+               OR (SELECT count(*) FROM public.catalogo_comissoes_offline) <> 0
+               OR (SELECT count(*) FROM public.catalogo_remuneracoes_v2) <> 0
+               OR (SELECT count(*) FROM public.catalogo_lancamentos_financeiros_v2) <> 0
+               OR (SELECT count(*) FROM public.catalogos) <> 1
+               OR (SELECT count(*) FROM public.comercios_publicados) <> 140
+            THEN
+              RAISE EXCEPTION 'pgTAP left unexpected records in isolated database';
+            END IF;
+          END $pg_tap_rollback$;
+          SQL
+
+      - name: Reject order and delivery scenario without opt-in
+        run: |
+          if psql -v ON_ERROR_STOP=1 -f supabase/tests/isolated/catalogo-pedidos-entregas-e2e-postgres.sql > /tmp/catalogo-orders-no-opt-in.log 2>&1; then
+            echo 'ERROR: order scenario accepted missing opt-in'
+            exit 1
+          fi
+          grep -q 'Cenario de pedidos exige catalogo_ci isolado' /tmp/catalogo-orders-no-opt-in.log
+      - name: Exercise real Pix order, buyer cancellation, courier race and delivery
+        run: |
+          psql -X -v ON_ERROR_STOP=1 <<'SQL'
+          BEGIN;
+          SET app.marketplace_test_orders = 'enabled';
+          \i supabase/tests/isolated/catalogo-pedidos-entregas-e2e-postgres.sql
+          ROLLBACK;
+          SQL
+          # Transaction rollback means test money/orders never persist.
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM public.catalogo_pedidos" | grep -Fx 0
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM public.catalogo_remuneracoes_v2" | grep -Fx 0
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM public.catalogo_pagamentos_v2" | grep -Fx 0
+
+      - name: Reject cash-and-card invoice scenarios without opt-in
+        run: |
+          if psql -v ON_ERROR_STOP=1 -f supabase/tests/isolated/catalogo-offline-fatura-e2e-postgres.sql > /tmp/catalogo-offline-no-opt-in.log 2>&1; then
+            echo 'ERROR: offline invoice scenario accepted missing opt-in'
+            exit 1
+          fi
+          grep -q 'Cenario offline exige catalogo_ci vazio e opt-in' /tmp/catalogo-offline-no-opt-in.log
+      - name: Exercise real cash and card deliveries, invoice payment and refund
+        run: |
+          psql -X -v ON_ERROR_STOP=1 <<'SQL'
+          BEGIN;
+          SET app.marketplace_test_offline = 'enabled';
+          \i supabase/tests/isolated/catalogo-offline-fatura-e2e-postgres.sql
+          ROLLBACK;
+          SQL
+          # Every financial state change above is rolled back on the disposable DB.
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM public.catalogo_pedidos" | grep -Fx 0
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM public.catalogo_remuneracoes_v2" | grep -Fx 0
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM public.catalogo_fatura_cobrancas" | grep -Fx 0
+
+      - name: Two genuinely concurrent courier acceptances on a disposable database clone
+        run: |
+          set -euo pipefail
+          test "$PGHOST" = localhost
+          test "$PGPORT" = 5432
+          test "$PGUSER" = postgres
+          test "$PGDATABASE" = catalogo_ci
+          test -z "${DATABASE_URL:-}"
+          test -z "${PGSERVICE:-}"
+          test -z "${PGHOSTADDR:-}"
+          test -z "${PGOPTIONS:-}"
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM public.catalogo_pedidos" | grep -Fx 0
+          # Clone ONLY a finished disposable schema; race transactions are committed
+          # in this clone, which is destroyed regardless of success or failure.
+          createdb --template=catalogo_ci catalogo_race_ci
+          trap 'dropdb --if-exists --force catalogo_race_ci' EXIT
+
+          if psql -d catalogo_race_ci -v ON_ERROR_STOP=1 -1 \
+              -f supabase/tests/isolated/catalogo-motoboy-concorrencia-postgres.sql \
+              > /tmp/catalogo-race-no-opt-in.log 2>&1; then
+            echo 'ERROR: concurrency fixture accepted missing opt-in'
+            exit 1
+          fi
+          grep -q 'Fixture de corrida exige catalogo_race_ci' /tmp/catalogo-race-no-opt-in.log
+
+          if psql -d catalogo_ci -v ON_ERROR_STOP=1 -1 \
+              -c "SET app.marketplace_test_race = 'enabled'" \
+              -f supabase/tests/isolated/catalogo-motoboy-concorrencia-postgres.sql \
+              > /tmp/catalogo-race-wrong-db.log 2>&1; then
+            echo 'ERROR: concurrency fixture accepted wrong database'
+            exit 1
+          fi
+          grep -q 'Fixture de corrida exige catalogo_race_ci' /tmp/catalogo-race-wrong-db.log
+
+          psql -d catalogo_race_ci -v ON_ERROR_STOP=1 -1 \
+            -c "SET app.marketplace_test_race = 'enabled'" \
+            -f supabase/tests/isolated/catalogo-motoboy-concorrencia-postgres.sql
+          python3 scripts/validacao-pagamentos/test-courier-concurrency.py
+          psql -d catalogo_race_ci -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM public.catalogo_entregas_atribuidas" | grep -Fx 1
+          psql -d catalogo_race_ci -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM public.catalogo_remuneracoes_v2" | grep -Fx 1
+          echo 'PASS: concurrent acceptance and reoffer on disposable cloned PostgreSQL database'
+
+      - name: Reject partial-refund and chargeback fixture without opt-in
+        run: |
+          if psql -v ON_ERROR_STOP=1 -f supabase/tests/isolated/catalogo-pix-revisao-e-chargeback-postgres.sql > /tmp/catalogo-webhook-finance-no-opt-in.log 2>&1; then
+            echo 'ERROR: financial webhook fixture accepted missing opt-in'
+            exit 1
+          fi
+          grep -q 'Revisao de Pix exige catalogo_ci isolado' /tmp/catalogo-webhook-finance-no-opt-in.log
+      - name: Test late fee proof, partial refund, chargeback and idempotence on real RPC
+        run: |
+          psql -X -v ON_ERROR_STOP=1 <<'SQL'
+          BEGIN;
+          SET app.marketplace_test_webhook_finance = 'enabled';
+          \i supabase/tests/isolated/catalogo-pix-revisao-e-chargeback-postgres.sql
+          ROLLBACK;
+          SQL
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM public.catalogo_pedidos" | grep -Fx 0
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM public.catalogo_pagamentos_v2" | grep -Fx 0
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM public.catalogo_ocorrencias_v2" | grep -Fx 0
+
+      - name: Reject modality constraints fixture outside explicit isolated test
+        run: |
+          if psql -v ON_ERROR_STOP=1 -f supabase/tests/isolated/catalogo-modalidades-e-constraints-postgres.sql > /tmp/catalogo-modality-no-opt-in.log 2>&1; then
+            echo 'ERROR: modality test fixture accepted missing opt-in'
+            exit 1
+          fi
+          grep -q 'Cenario de constraints exige catalogo_ci isolado' /tmp/catalogo-modality-no-opt-in.log
+      - name: Validate V1 historical fee and V2 real inserts in delivery pickup and dine-in
+        run: |
+          psql -X -v ON_ERROR_STOP=1 <<'SQL'
+          BEGIN;
+          SET app.marketplace_test_modalities = 'enabled';
+          \i supabase/tests/isolated/catalogo-modalidades-e-constraints-postgres.sql
+          ROLLBACK;
+          SQL
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM public.catalogo_pedidos" | grep -Fx 0
+
+      - name: Practice full pg_dump and pg_restore on synthetic disposable database
+        run: |
+          set -euo pipefail
+          test "$PGHOST" = localhost
+          test "$PGPORT" = 5432
+          test "$PGUSER" = postgres
+          test "$PGDATABASE" = catalogo_ci
+          test -z "${DATABASE_URL:-}"
+          test -z "${PGSERVICE:-}"
+          test -z "${PGHOSTADDR:-}"
+          test -z "${PGOPTIONS:-}"
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT current_database()" | grep -Fx catalogo_ci
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM public.catalogo_pedidos" | grep -Fx 0
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM public.catalogo_pagamentos_v2" | grep -Fx 0
+          # This dump is built ONLY from the CI PostgreSQL service, NEVER from Supabase.
+          # GitHub runner may ship pg_dump 16; the server is PostgreSQL 17.
+          # Always use matching dump/restore binaries INSIDE the disposable service.
+          service_container="${{ job.services.postgres.id }}"
+          test -n "$service_container"
+          docker exec "$service_container" pg_dump -U postgres -Fc --no-owner --no-acl \
+            -d catalogo_ci -f /tmp/catalogo-ci-only.dump
+          docker cp "$service_container:/tmp/catalogo-ci-only.dump" /tmp/catalogo-ci-only.dump
+          test -s /tmp/catalogo-ci-only.dump
+          sha256sum /tmp/catalogo-ci-only.dump
+          docker exec "$service_container" pg_restore --list /tmp/catalogo-ci-only.dump | grep -F 'catalogo_pedidos'
+
+          createdb catalogo_restore_ci
+          trap 'dropdb --if-exists --force catalogo_restore_ci; rm -f /tmp/catalogo-ci-only.dump' EXIT
+          docker exec "$service_container" pg_restore -U postgres --exit-on-error --no-owner --no-acl \
+            -d catalogo_restore_ci /tmp/catalogo-ci-only.dump
+          psql -v ON_ERROR_STOP=1 -d catalogo_restore_ci <<'SQL'
+          DO $restore_ci$
+          DECLARE priced jsonb;
+          BEGIN
+            IF current_database() <> 'catalogo_restore_ci'
+               OR (SELECT count(*) FROM public.comercios_publicados) <> 140
+               OR (SELECT count(*) FROM public.catalogos) <> 1
+               OR (SELECT count(*) FROM public.cadastros_comercios) <> 1
+               OR (SELECT count(*) FROM public.avaliacoes) <> 0
+               OR (SELECT count(*) FROM public.catalogo_pedidos) <> 0
+               OR (SELECT count(*) FROM public.catalogo_remuneracoes_v2) <> 0
+               OR (SELECT count(*) FROM public.catalogo_lancamentos_financeiros_v2) <> 0
+               OR EXISTS (SELECT 1 FROM pg_constraint
+                          WHERE conrelid = 'public.catalogo_pedidos'::regclass
+                            AND conname = 'catalogo_pedidos_check1')
+               OR NOT EXISTS (SELECT 1 FROM pg_constraint
+                              WHERE conrelid = 'public.catalogo_pedidos'::regclass
+                                AND conname = 'catalogo_pedidos_taxas_v2_check')
+               OR (SELECT count(*) FROM pg_class
+                   WHERE oid IN ('public.catalogo_pedidos'::regclass,
+                                 'public.catalogo_remuneracoes_v2'::regclass,
+                                 'public.catalogo_pagamentos_v2'::regclass)
+                         AND relrowsecurity) <> 3
+            THEN
+              RAISE EXCEPTION 'Synthetic restored database differs from isolated source';
+            END IF;
+            SELECT public.catalogo_fluxo_precificar('entrega', 33, NULL) INTO priced;
+            IF (priced->>'taxa_total_centavos')::integer <> 2
+               OR (priced->>'taxa_motoboy_centavos')::integer <> 1
+               OR (priced->>'taxa_plataforma_centavos')::integer <> 1 THEN
+              RAISE EXCEPTION 'Restored financial RPC was not executable or mispriced';
+            END IF;
+          END $restore_ci$;
+          SQL
+          echo "PASS: pg_dump and pg_restore restored full isolated schema, RLS, constraints, synthetic records and 7-percent pricing"
+
+  pricing-postgres-isolated:
+    name: Real pricing RPC (isolated PostgreSQL)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: local-ci-only
+          POSTGRES_DB: catalogo_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d catalogo_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: local-ci-only
+      PGDATABASE: catalogo_ci
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assert isolated PostgreSQL target
+        run: |
+          test "$PGHOST" = "localhost"
+          test "$PGDATABASE" = "catalogo_ci"
+          test "$PGUSER" = "postgres"
+          test "$PGPORT" = "5432"
+          test -z "${DATABASE_URL:-}"
+          test -z "${PGSERVICE:-}"
+          test -z "${PGHOSTADDR:-}"
+          test -z "${PGOPTIONS:-}"
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT current_database(), inet_server_addr() IS NOT NULL" | grep -Fx 'catalogo_ci|t'
+      - name: Assemble test using actual migration RPC
+        run: python scripts/validacao-pagamentos/build-isolated-pricing-test.py
+      - name: Verify fixture rejects a wrong database
+        run: |
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE TABLE IF NOT EXISTS public.catalogo_fluxo_config (id integer)"
+          if psql -v ON_ERROR_STOP=1 -d postgres -f /tmp/catalogo-precificacao-ci.sql > /tmp/fixture-guard.log 2>&1; then
+            echo "ERROR: fixture executed outside catalogo_ci"
+            exit 1
+          fi
+          grep -q "Fixture financeira exige banco catalogo_ci vazio" /tmp/fixture-guard.log
+      - name: Execute PostgreSQL integration checks
+        run: |
+          psql -v ON_ERROR_STOP=1 -f /tmp/catalogo-precificacao-ci.sql
+          psql -v ON_ERROR_STOP=1 -f /tmp/catalogo-constraints-ci.sql
+
+  sql-syntax:
+    name: SQL syntax (all migrations and pgTAP)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL parser
+        run: python -m pip install --disable-pip-version-check pglast==7.10
+      - name: Parse SQL
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from pglast import parse_sql
+          paths = sorted(Path("supabase/migrations").glob("*.sql"))
+          paths += sorted(Path("supabase/tests/database").glob("*.sql"))
+          paths += sorted(Path("supabase/tests/baseline").glob("*.sql"))
+          paths += sorted(Path("supabase/tests/isolated").glob("*.sql"))
+          assert paths, "No SQL files found"
+          failures = []
+          for path in paths:
+              try:
+                  parse_sql(path.read_text(encoding="utf-8"))
+                  print(f"PASS: {path}")
+              except Exception as error:
+                  failures.append(f"{path}: {error}")
+          if failures:
+              raise SystemExit("\n".join(failures))
+          print(f"Parsed {len(paths)} SQL files successfully (syntax only).")
+          PY

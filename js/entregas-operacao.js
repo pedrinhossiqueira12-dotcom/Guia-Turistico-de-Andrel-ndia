@@ -53,7 +53,8 @@
     state.data = null;
     state.availableCredits = [];
     $("operationPanel").hidden = true;
-    $("operationLoginCard").hidden = !state.session;
+    // Sem autorização, o painel fica fechado, mas a entrada nunca desaparece.
+    $("operationLoginCard").hidden = false;
     $("operationLogout").hidden = true;
     $("listaOcorrencias").innerHTML = "";
     $("listaRepasses").innerHTML = "";
@@ -131,6 +132,10 @@
       if (error.message === STALE_SESSION_REQUEST) return;
       state.authorized = false;
       $("operationPanel").hidden = true;
+      // Mesmo autenticado, um usuário não autorizado precisa poder entrar com outra conta.
+      // Não exibir dados privados nem depender de recarregar a página.
+      $("operationLoginCard").hidden = false;
+      $("operationLogout").hidden = false;
       feedback("operationLoginFeedback", error.message || "Não foi possível autorizar a operação.", true);
       aviso("Acesso não confirmado", error.message || "O backend não autorizou esta conta.", "erro");
     } finally { if (generation === state.generation) state.loading = false; }

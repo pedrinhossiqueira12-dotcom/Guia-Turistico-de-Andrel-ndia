@@ -133,7 +133,8 @@ async function fixture(options = {}) {
     Deno: { env: { get: name => env[name] || "" }, serve: fn => { handler = fn; } },
   });
   const injected = "const createClient = () => db; const { decryptAesGcm, extractPixArtifacts, extractProviderPayment, providerFactsError, sanitizedProviderId } = h;\n";
-  const source = endpointSource.replace(/^import .*?;\n/, injected);
+  const source = injected + "const randomDeliveryCode = h.randomDeliveryCode;\n" +
+    endpointSource.replace(/^import .*?;\s*$/gm, "");
   vm.runInContext(stripTypeScriptTypes(source, { mode: "strip" }), context, { filename: "catalogo-pedido-offline.ts" });
   const call = async (body = {}) => {
     const response = await handler(new Request("https://local.invalid/status", {

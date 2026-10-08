@@ -8,14 +8,14 @@ BEGIN;
 ALTER TABLE public.catalogo_fluxo_config
   DROP CONSTRAINT IF EXISTS catalogo_fluxo_config_taxa_sem_entrega_percentual_check;
 
-ALTER TABLE public.catalogo_fluxo_config
-  ADD CONSTRAINT catalogo_fluxo_config_taxa_sem_entrega_percentual_check
-  CHECK (taxa_sem_entrega_percentual = 7.00);
-
 UPDATE public.catalogo_fluxo_config
    SET taxa_sem_entrega_percentual = 7.00,
        atualizado_em = pg_catalog.now()
  WHERE id = true;
+
+ALTER TABLE public.catalogo_fluxo_config
+  ADD CONSTRAINT catalogo_fluxo_config_taxa_sem_entrega_percentual_check
+  CHECK (taxa_sem_entrega_percentual = 7.00);
 
 ALTER TABLE public.catalogo_pedidos
   DROP CONSTRAINT IF EXISTS catalogo_pedidos_taxas_v2_check;
@@ -25,8 +25,9 @@ ALTER TABLE public.catalogo_pedidos
   CHECK (
     taxa_plataforma_centavos =
       CASE
-        WHEN modalidade = 'entrega' THEN round(subtotal_produtos_centavos * 0.05)::integer
-        ELSE round(subtotal_produtos_centavos * 0.07)::integer
+        WHEN versao_financeira = 2 AND modalidade = 'entrega' THEN round(subtotal_produtos_centavos * 0.05)::integer
+        WHEN versao_financeira = 2 AND modalidade <> 'entrega' THEN round(subtotal_produtos_centavos * 0.07)::integer
+        ELSE round(subtotal_produtos_centavos * 0.05)::integer
       END
     AND taxa_motoboy_centavos >= 0
     AND taxa_total_centavos = taxa_plataforma_centavos + taxa_motoboy_centavos

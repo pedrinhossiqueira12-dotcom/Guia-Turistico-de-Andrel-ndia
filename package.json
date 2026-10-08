@@ -5,7 +5,7 @@
   "description": "Testes e validação do marketplace estático, Edge Functions e entregas antifraude.",
   "engines": { "node": ">=22.13.0" },
   "scripts": {
-    "test": "node --test --test-concurrency=4",
+    "test": "node --test --test-concurrency=4 tests/*.test.cjs tests/*.test.mjs",
     "test:finance": "node --test tests/catalogo-v2-sql.test.cjs tests/catalogo-v2-pagamentos.test.cjs tests/catalogo-v2-pix-endpoints.test.cjs",
     "check:edge": "npx --yes deno check --node-modules-dir=auto supabase/functions/catalogo-entregas/index.ts supabase/functions/catalogo-pedidos-offline-admin/index.ts supabase/functions/catalogo-pedido-offline/index.ts supabase/functions/catalogo-pedido-pix/index.ts supabase/functions/mercadopago-marketplace-webhook/index.ts supabase/functions/catalogo-fatura-pix/index.ts"
   },

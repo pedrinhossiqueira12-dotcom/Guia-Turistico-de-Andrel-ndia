@@ -59,6 +59,7 @@ ALTER TABLE public.mural_cadastros ADD CONSTRAINT mural_cadastros_status_check
   CHECK (status IN ('pendente','ativo','rejeitado','deletado'));
 
 DROP POLICY IF EXISTS "Mural — público vê aprovados" ON public.mural_cadastros;
+DROP POLICY IF EXISTS "Mural — público vê ativos" ON public.mural_cadastros;
 CREATE POLICY "Mural — público vê ativos" ON public.mural_cadastros
   FOR SELECT TO anon USING (status = 'ativo');
 DROP POLICY IF EXISTS "Mural — usuário vê próprio cadastro" ON public.mural_cadastros;
