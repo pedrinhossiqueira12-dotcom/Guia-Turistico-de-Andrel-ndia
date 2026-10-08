@@ -389,6 +389,95 @@ END $test_payout_reserva$;
 ROLLBACK TO SAVEPOINT payout_reserva_fake;
 RELEASE SAVEPOINT payout_reserva_fake;
 
+-- ETAPA 3B: teste de confirmação real simulada, auditável e atômica.
+-- O cenário é inteiramente descartado com SAVEPOINT/ROLLBACK.
+SAVEPOINT payout_conciliacao_fake;
+UPDATE public.catalogo_remuneracoes_v2 SET valor_centavos=1234
+ WHERE pedido_id='00000000-0000-4000-8000-000000000052';
+UPDATE public.catalogo_solicitacao_saque_itens_v2 SET valor_centavos=1234
+ WHERE remuneracao_id=(SELECT id FROM public.catalogo_remuneracoes_v2
+ WHERE pedido_id='00000000-0000-4000-8000-000000000052');
+UPDATE public.catalogo_solicitacoes_saque_v2 SET valor_centavos=1234
+ WHERE motoboy_id='00000000-0000-4000-8000-000000000042';
+DO $test_payout_conciliacao$
+DECLARE
+  v jsonb;
+  v_intent uuid;
+  v_solicitacao uuid;
+  v_ref text;
+  v_tx_ref text;
+  v_payout text := 'POP01KV681P6SJ38NQHWX3XK162SS';
+  v_tx text := 'TOP01KV681P6SJ38NQHWX3SF2WM22';
+BEGIN
+  IF pg_catalog.has_function_privilege('anon',
+       'public.catalogo_conciliar_payout_v2(uuid,text,text,text,text,bigint,text,text)',
+       'EXECUTE') OR pg_catalog.has_function_privilege('authenticated',
+       'public.catalogo_registrar_criacao_payout_v2(uuid,text,text)','EXECUTE') THEN
+    RAISE EXCEPTION 'Rotina de confirmação de dinheiro exposta ao público';
+  END IF;
+  SELECT id INTO v_solicitacao FROM public.catalogo_solicitacoes_saque_v2
+    WHERE motoboy_id='00000000-0000-4000-8000-000000000042';
+  v := public.catalogo_reservar_payout_v2(v_solicitacao,'EMAIL');
+  IF (v->>'ok')::boolean IS DISTINCT FROM true THEN
+    RAISE EXCEPTION 'Não reservou segunda prova financeira fictícia: %',v;
+  END IF;
+  v_intent := (v->>'intent_id')::uuid;
+  v_ref := 'saque_'||pg_catalog.replace(v_solicitacao::text,'-','');
+  v_tx_ref := 'motoboy_'||pg_catalog.replace(v_solicitacao::text,'-','');
+  -- Sem POST ou confirmação do provedor, não se pode associar IDs.
+  v := public.catalogo_registrar_criacao_payout_v2(v_intent,v_payout,v_tx);
+  IF (v->>'http_status')::integer <> 409 THEN
+    RAISE EXCEPTION 'Vinculou provedor antes de iniciar tentativa: %',v;
+  END IF;
+  v := public.catalogo_marcar_envio_payout_v2(v_intent);
+  IF (v->>'ok')::boolean IS DISTINCT FROM true THEN
+    RAISE EXCEPTION 'Não registrou tentativa de envio: %',v;
+  END IF;
+  v := public.catalogo_registrar_criacao_payout_v2(v_intent,v_payout,v_tx);
+  IF (v->>'ok')::boolean IS DISTINCT FROM true OR
+     (v->>'transferencia_confirmada')::boolean IS DISTINCT FROM false THEN
+    RAISE EXCEPTION 'HTTP 202 indevidamente considerado pago: %',v;
+  END IF;
+  v := public.catalogo_registrar_criacao_payout_v2(v_intent,v_payout,v_tx);
+  IF (v->>'idempotente')::boolean IS DISTINCT FROM true THEN
+    RAISE EXCEPTION 'POST duplicado deveria ser idempotente: %',v;
+  END IF;
+  v := public.catalogo_conciliar_payout_v2(
+    v_intent,v_payout,v_tx,v_ref,v_tx_ref,1234,'pending','not_accredited');
+  IF (v->>'transferencia_confirmada')::boolean IS DISTINCT FROM false OR
+      (SELECT count(*) FROM public.catalogo_repasses_v2)<>0 THEN
+    RAISE EXCEPTION 'Payout pendente foi considerado pago: %',v;
+  END IF;
+  v := public.catalogo_conciliar_payout_v2(
+    v_intent,v_payout,v_tx,v_ref,v_tx_ref,1235,'success','accredited');
+  IF (v->>'http_status')::integer <> 409 OR
+      (SELECT count(*) FROM public.catalogo_repasses_v2)<>0 THEN
+    RAISE EXCEPTION 'Valor divergente autorizou saída financeira: %',v;
+  END IF;
+  v := public.catalogo_conciliar_payout_v2(
+    v_intent,v_payout,v_tx,v_ref,v_tx_ref,1234,'success','accredited');
+  IF (v->>'ok')::boolean IS DISTINCT FROM true OR
+      (v->>'transferencia_confirmada')::boolean IS DISTINCT FROM true OR
+      (SELECT status FROM public.catalogo_payout_intents_v2 WHERE id=v_intent)<>'confirmado' OR
+      (SELECT status FROM public.catalogo_solicitacoes_saque_v2
+       WHERE id=v_solicitacao)<>'pago' OR
+      (SELECT status FROM public.catalogo_remuneracoes_v2
+       WHERE pedido_id='00000000-0000-4000-8000-000000000052')<>'pago' OR
+      (SELECT count(*) FROM public.catalogo_repasses_v2
+       WHERE origem_registro='payout_provedor' AND registrado_por IS NULL
+         AND referencia='mp-payout:'||v_tx AND valor_centavos=1234)<>1 THEN
+    RAISE EXCEPTION 'Pagamento comprovado não gerou baixa transacional: %',v;
+  END IF;
+  v := public.catalogo_conciliar_payout_v2(
+    v_intent,v_payout,v_tx,v_ref,v_tx_ref,1234,'success','accredited');
+  IF (v->>'idempotente')::boolean IS DISTINCT FROM true OR
+      (SELECT count(*) FROM public.catalogo_repasses_v2)<>1 THEN
+    RAISE EXCEPTION 'Callback repetido criou repasse duplicado: %',v;
+  END IF;
+END $test_payout_conciliacao$;
+ROLLBACK TO SAVEPOINT payout_conciliacao_fake;
+RELEASE SAVEPOINT payout_conciliacao_fake;
+
 -- Estorno simulado antes do saque impede o crédito anterior de permanecer disponível.
 DO $test_refund$
 DECLARE v jsonb;
