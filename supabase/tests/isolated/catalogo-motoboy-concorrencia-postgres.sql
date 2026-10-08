@@ -81,4 +81,30 @@ BEGIN
   END IF;
 END $prepare$;
 
-SELECT 'PASS: dois motoboys autorizados, mesmo pedido V2 ofertado e nao atribuido' AS result;
+-- Dois pedidos extras para corrida comprador CANCELAR x comercio ACEITAR.
+-- O vencedor e nao deterministico, mas a transicao deve ser serializavel.
+INSERT INTO public.catalogo_pedidos(
+ id, comercio_id, referencia_externa, idempotency_key, modalidade, forma_pagamento,
+ subtotal_produtos_centavos, entrega_centavos, total_centavos,
+ taxa_plataforma_centavos, taxa_motoboy_centavos, taxa_total_centavos,
+ repasse_bruto_comercio_centavos, versao_financeira,
+ cliente_nome, cliente_telefone, status_token_hash,
+ codigo_entrega_hash, codigo_entrega_expira_em,
+ status, status_pagamento
+) VALUES
+(
+ '00000000-0000-4000-8000-000000000252', 'comercio-de-exemplo',
+ 'ci-concorrencia-cancel-1', '00000000-0000-4000-8000-000000000262',
+ 'entrega', 'pix', 101, 0, 101, 5, 2, 7, 94, 2,
+ 'Cliente Cancelamento Ficticio A', '00000000001', repeat('1',64),
+ repeat('a',64), now() + interval '1 hour', 'pago', 'aprovado'
+),
+(
+ '00000000-0000-4000-8000-000000000253', 'comercio-de-exemplo',
+ 'ci-concorrencia-cancel-2', '00000000-0000-4000-8000-000000000263',
+ 'entrega', 'pix', 101, 0, 101, 5, 2, 7, 94, 2,
+ 'Cliente Cancelamento Ficticio B', '00000000002', repeat('2',64),
+ repeat('b',64), now() + interval '1 hour', 'pago', 'aprovado'
+);
+
+SELECT 'PASS: dois motoboys e tres pedidos V2 sinteticos para corridas concorrentes' AS result;
