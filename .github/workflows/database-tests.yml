@@ -349,6 +349,22 @@ jobs:
               supabase/migrations/20261002235010_schedule_storage_retention_dry_run_20261002.sql)
                 echo "SKIPPED intentionally: $migration (contains production URL and schedules remote HTTP)"
                 ;;
+              supabase/migrations/20261005133000_catalogo_marketplace_test_allowlist.sql)
+                # This historical migration INSERTs 'comercio-de-exemplo' and requires
+                # an existing catalog. Neither is in the public 139-ID baseline.
+                # Supply only synthetic FK data in this isolated service database.
+                psql -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO auth.users(id)
+          VALUES ('00000000-0000-4000-8000-000000000099');
+          INSERT INTO public.comercios_publicados(local_id,status,destaque)
+          VALUES ('comercio-de-exemplo','ativo',false);
+          INSERT INTO public.catalogos(comercio_id,proprietario_id)
+          VALUES ('comercio-de-exemplo','00000000-0000-4000-8000-000000000099');
+          SQL
+                echo "Applying isolated with synthetic marketplace allowlist seed: $migration"
+                psql -v ON_ERROR_STOP=1 -f "$migration"
+                count=$((count + 1))
+                ;;
               *)
                 echo "Applying isolated: $migration"
                 psql -v ON_ERROR_STOP=1 -f "$migration"
