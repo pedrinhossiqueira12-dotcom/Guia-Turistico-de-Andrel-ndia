@@ -344,4 +344,203 @@ FOR EACH ROW EXECUTE FUNCTION public.catalogo_revisar_payout_apos_estorno_v2();
 REVOKE ALL ON FUNCTION public.catalogo_revisar_payout_apos_estorno_v2()
   FROM PUBLIC,anon,authenticated;
 
+
+-- ETAPA 3B — o HTTP 202 guarda IDs, mas NUNCA confirma pagamento.
+-- Esta RPC só pode ser chamada pelo backend service_role com resposta do provedor.
+CREATE FUNCTION public.catalogo_registrar_criacao_payout_v2(
+  p_intent_id uuid, p_payout_id text, p_transacao_id text
+) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $payout_criacao$
+DECLARE v_p public.catalogo_payout_intents_v2%ROWTYPE;
+BEGIN
+  IF p_intent_id IS NULL OR p_payout_id IS NULL OR
+      p_payout_id !~ '^POP[A-Za-z0-9]{8,60}$' OR
+      p_transacao_id IS NULL OR p_transacao_id !~ '^TOP[A-Za-z0-9]{8,60}$' THEN
+    RETURN pg_catalog.jsonb_build_object('ok',false,'http_status',400,'mensagem','IDs de provedor inválidos.');
+  END IF;
+  SELECT * INTO v_p FROM public.catalogo_payout_intents_v2
+    WHERE id=p_intent_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RETURN pg_catalog.jsonb_build_object('ok',false,'http_status',404,'mensagem','Intenção inexistente.');
+  END IF;
+  IF v_p.payout_id IS NOT NULL AND
+      v_p.payout_id=p_payout_id AND v_p.transacao_id=p_transacao_id THEN
+    RETURN pg_catalog.jsonb_build_object('ok',true,'idempotente',true,
+      'intent_id',v_p.id,'estado',v_p.status,'transferencia_confirmada',
+      v_p.status='confirmado');
+  END IF;
+  IF v_p.status<>'em_envio' OR v_p.tentativas<>1 OR
+     v_p.payout_id IS NOT NULL OR v_p.transacao_id IS NOT NULL THEN
+    RETURN pg_catalog.jsonb_build_object('ok',false,'http_status',409,
+      'mensagem','Payout não pode ser vinculado a uma tentativa nova.');
+  END IF;
+  UPDATE public.catalogo_payout_intents_v2
+    SET payout_id=p_payout_id,transacao_id=p_transacao_id,
+        status='aguardando_confirmacao',atualizado_em=pg_catalog.now()
+    WHERE id=v_p.id;
+  RETURN pg_catalog.jsonb_build_object('ok',true,'idempotente',false,
+    'intent_id',v_p.id,'estado','aguardando_confirmacao',
+    'transferencia_confirmada',false);
+END;
+$payout_criacao$;
+REVOKE ALL ON FUNCTION public.catalogo_registrar_criacao_payout_v2(uuid,text,text)
+  FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.catalogo_registrar_criacao_payout_v2(uuid,text,text)
+  TO service_role;
+
+-- Somente fatos obtidos de GET autenticado do provedor devem chegar aqui.
+-- O chamador deve usar consultarTransacaoSandbox + classificarTransacaoPayout,
+-- jamais um webhook/JSON fornecido pelo browser. Não expor rota web.
+CREATE FUNCTION public.catalogo_conciliar_payout_v2(
+  p_intent_id uuid,
+  p_payout_id text,
+  p_transacao_id text,
+  p_referencia_externa text,
+  p_referencia_transacao text,
+  p_valor_centavos bigint,
+  p_status text,
+  p_status_detail text
+) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $payout_conciliacao$
+DECLARE
+  v_p public.catalogo_payout_intents_v2%ROWTYPE;
+  v_s public.catalogo_solicitacoes_saque_v2%ROWTYPE;
+  v_total bigint;
+  v_count bigint;
+  v_valid bigint;
+  v_updated integer;
+  v_repasse_id uuid;
+BEGIN
+  IF p_intent_id IS NULL THEN
+    RETURN pg_catalog.jsonb_build_object('ok',false,'http_status',400,'mensagem','Intenção obrigatória.');
+  END IF;
+  SELECT * INTO v_p FROM public.catalogo_payout_intents_v2
+    WHERE id=p_intent_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RETURN pg_catalog.jsonb_build_object('ok',false,'http_status',404,'mensagem','Intenção inexistente.');
+  END IF;
+  IF p_payout_id IS DISTINCT FROM v_p.payout_id OR
+     p_transacao_id IS DISTINCT FROM v_p.transacao_id OR
+     v_p.payout_id IS NULL OR v_p.transacao_id IS NULL OR
+     p_referencia_externa IS DISTINCT FROM v_p.referencia_externa OR
+     p_referencia_transacao IS DISTINCT FROM
+       ('motoboy_'||pg_catalog.replace(v_p.solicitacao_id::text,'-','')) OR
+     p_valor_centavos IS DISTINCT FROM v_p.valor_centavos THEN
+    RETURN pg_catalog.jsonb_build_object('ok',false,'http_status',409,
+      'mensagem','Prova divergente: IDs, moeda BRL, referência ou valor não coincidem.');
+  END IF;
+  IF v_p.status='confirmado' THEN
+    RETURN pg_catalog.jsonb_build_object('ok',true,'idempotente',true,
+      'estado','confirmado','repasse_id',v_p.repasse_id,
+      'transferencia_confirmada',true);
+  END IF;
+  IF v_p.status NOT IN ('aguardando_confirmacao','em_envio') OR
+     v_p.tentativas<>1 THEN
+    RETURN pg_catalog.jsonb_build_object('ok',false,'http_status',409,
+      'mensagem','Tentativa em revisão, encerrada ou ainda não enviada.');
+  END IF;
+  -- Nenhuma baixa enquanto o provedor não atestar sucesso efetivo.
+  IF p_status IN ('created','approved','pending','in_process','processing') THEN
+    UPDATE public.catalogo_payout_intents_v2 SET
+      status='aguardando_confirmacao',ultima_consulta_em=pg_catalog.now(),
+      atualizado_em=pg_catalog.now() WHERE id=v_p.id;
+    RETURN pg_catalog.jsonb_build_object('ok',true,'estado','aguardando_confirmacao',
+      'transferencia_confirmada',false);
+  END IF;
+  IF p_status IS DISTINCT FROM 'success' OR
+     p_status_detail IS DISTINCT FROM 'accredited' THEN
+    UPDATE public.catalogo_payout_intents_v2 SET
+      status='em_analise',revisao_motivo='Payout não comprovado pelo provedor',
+      ultima_consulta_em=pg_catalog.now(),atualizado_em=pg_catalog.now()
+    WHERE id=v_p.id;
+    RETURN pg_catalog.jsonb_build_object('ok',true,'estado','em_analise',
+      'transferencia_confirmada',false);
+  END IF;
+
+  SELECT * INTO v_s FROM public.catalogo_solicitacoes_saque_v2
+    WHERE id=v_p.solicitacao_id FOR UPDATE;
+  IF NOT FOUND OR v_s.status<>'solicitado' OR
+    v_s.motoboy_id<>v_p.motoboy_id OR
+    v_s.valor_centavos<>v_p.valor_centavos THEN
+    UPDATE public.catalogo_payout_intents_v2 SET
+      status='em_analise',revisao_motivo='Divergência na solicitação de saque',
+      atualizado_em=pg_catalog.now() WHERE id=v_p.id;
+    RETURN pg_catalog.jsonb_build_object('ok',false,'http_status',409,
+      'mensagem','Solicitação incompatível: conciliação manual necessária.');
+  END IF;
+
+  -- Mesma ordem de bloqueio dos fluxos de pedido: pedido, depois remuneração.
+  PERFORM 1 FROM public.catalogo_pedidos o
+    JOIN public.catalogo_remuneracoes_v2 r ON r.pedido_id=o.id
+    JOIN public.catalogo_solicitacao_saque_itens_v2 i ON i.remuneracao_id=r.id
+    WHERE i.solicitacao_id=v_s.id ORDER BY o.id FOR UPDATE OF o;
+  PERFORM 1 FROM public.catalogo_remuneracoes_v2 r
+    JOIN public.catalogo_solicitacao_saque_itens_v2 i ON i.remuneracao_id=r.id
+    WHERE i.solicitacao_id=v_s.id ORDER BY r.id FOR UPDATE OF r;
+  SELECT count(*),coalesce(sum(i.valor_centavos),0),
+      count(*) FILTER (WHERE r.motoboy_id=v_p.motoboy_id
+        AND r.valor_centavos=i.valor_centavos AND r.status='disponivel'
+        AND r.financiamento_comprovado AND r.repasse_id IS NULL
+        AND catalogo_private.catalogo_v2_financiado(r.pedido_id))
+    INTO v_count,v_total,v_valid
+    FROM public.catalogo_solicitacao_saque_itens_v2 i
+    JOIN public.catalogo_remuneracoes_v2 r ON r.id=i.remuneracao_id
+    WHERE i.solicitacao_id=v_s.id;
+  IF v_count=0 OR v_valid<>v_count OR v_total<>v_p.valor_centavos THEN
+    UPDATE public.catalogo_payout_intents_v2 SET
+      status='em_analise',revisao_motivo='Pagamento no provedor confirmado, mas créditos alterados',
+      atualizado_em=pg_catalog.now() WHERE id=v_p.id;
+    RETURN pg_catalog.jsonb_build_object('ok',false,'http_status',409,
+      'mensagem','Pagamento confirmado, mas lastro divergente: conciliar manualmente.');
+  END IF;
+
+  -- Prova do provedor auditável: não atribuir a execução ao administrador.
+  INSERT INTO public.catalogo_repasses_v2(
+    motoboy_id,valor_centavos,referencia,comprovante,
+    registrado_por,origem_registro,metadata
+  ) VALUES (
+    v_p.motoboy_id,v_p.valor_centavos,
+    'mp-payout:'||v_p.transacao_id,
+    'Mercado Pago Payouts: confirmação via consulta autenticada '||v_p.transacao_id,
+    NULL,'payout_provedor',
+    pg_catalog.jsonb_build_object('origem','mp_payouts',
+      'payout_id',v_p.payout_id,'transacao_id',v_p.transacao_id,
+      'intencao_id',v_p.id,'saque_id',v_s.id,
+      'status','success','status_detail','accredited','consulta_verificada_em',pg_catalog.now())
+  ) RETURNING id INTO v_repasse_id;
+
+  -- A trava de crédito só permite status pago com intenção confirmada
+  -- e o MESMO repasse_id criado dentro desta transação.
+  UPDATE public.catalogo_payout_intents_v2 SET
+    status='confirmado',repasse_id=v_repasse_id,confirmado_em=pg_catalog.now(),
+    ultima_consulta_em=pg_catalog.now(),atualizado_em=pg_catalog.now()
+    WHERE id=v_p.id;
+  UPDATE public.catalogo_remuneracoes_v2 r
+    SET status='pago',repasse_id=v_repasse_id,pago_em=pg_catalog.now()
+    WHERE EXISTS (SELECT 1 FROM public.catalogo_solicitacao_saque_itens_v2 i
+      WHERE i.remuneracao_id=r.id AND i.solicitacao_id=v_s.id)
+    AND r.status='disponivel' AND r.repasse_id IS NULL;
+  GET DIAGNOSTICS v_updated=ROW_COUNT;
+  IF v_updated<>v_count THEN
+    RAISE EXCEPTION 'Payout revertido: alteração concorrente na remuneração';
+  END IF;
+  UPDATE public.catalogo_lancamentos_financeiros_v2
+    SET status='pago',referencia='mp-payout:'||v_p.transacao_id,
+      atualizado_em=pg_catalog.now()
+    WHERE remuneracao_id IN (SELECT i.remuneracao_id
+      FROM public.catalogo_solicitacao_saque_itens_v2 i
+      WHERE i.solicitacao_id=v_s.id)
+      AND tipo='remuneracao_motoboy';
+  IF (SELECT status FROM public.catalogo_solicitacoes_saque_v2
+      WHERE id=v_s.id) IS DISTINCT FROM 'pago' THEN
+    RAISE EXCEPTION 'Payout revertido: solicitação não foi conciliada integralmente';
+  END IF;
+  RETURN pg_catalog.jsonb_build_object('ok',true,'estado','confirmado',
+    'transferencia_confirmada',true,'idempotente',false,
+    'repasse_id',v_repasse_id,'valor_centavos',v_p.valor_centavos);
+END;
+$payout_conciliacao$;
+REVOKE ALL ON FUNCTION public.catalogo_conciliar_payout_v2(
+  uuid,text,text,text,text,bigint,text,text) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.catalogo_conciliar_payout_v2(
+  uuid,text,text,text,text,bigint,text,text) TO service_role;
+
 COMMIT;
