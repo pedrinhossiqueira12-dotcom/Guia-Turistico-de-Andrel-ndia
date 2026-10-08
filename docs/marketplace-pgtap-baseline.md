@@ -57,3 +57,11 @@ A consulta `information_schema.columns` no projeto existente confirmou a estrutu
 - `public.cadastros_comercios`: `id uuid NOT NULL DEFAULT gen_random_uuid()`, `telefone_usuario text NOT NULL`, `etapa text NOT NULL DEFAULT 'inicio'`, `status text NOT NULL DEFAULT 'em_andamento'`, `criado_em` e `atualizado_em timestamptz NOT NULL DEFAULT now()`, além de `usuario_id uuid NULL`, `tipo text DEFAULT 'novo_comercio'`, `local_id text`, `imagens jsonb DEFAULT '[]'` e campos opcionais de contato, localização e revisão.
 
 **Atenção:** `information_schema.columns` não demonstra PKs, FKs, índices, triggers, policies ou CHECKs. Antes de criar o baseline executável, consultar também `pg_constraint`, `pg_indexes`, `pg_trigger` e `pg_policies` (somente metadados). Não copiar dados reais.
+
+## Constraints, índices e RLS verificados (somente metadados)
+
+- `avaliacoes`: PK `(id)`; FK `usuario_id -> auth.users(id) ON DELETE CASCADE`; CHECK `nota BETWEEN 1 AND 5`; CHECK `char_length(comentario) BETWEEN 1 AND 500`; índices em `local_id` e `usuario_id`. RLS habilitado, com SELECT público e INSERT/UPDATE/DELETE do autor autenticado.
+- `cadastros_comercios`: PK `(id)`; FK `usuario_id -> auth.users(id)`; CHECK para estados `em_andamento`, `pendente`, `aprovado`, `rejeitado`; CHECK de etapas predefinidas. Índices em `status`, `telefone_usuario`, `local_id`, `tipo` e `usuario_id`. RLS habilitado; políticas de leitura/alteração administrativa e políticas de cadastro/leitura pelo usuário. Existem duas políticas INSERT de proprietário, que devem ser analisadas por possível redundância.
+- A consulta de metadados de triggers não retornou gatilhos nessas duas tabelas. Isso não prova ausência de funções associadas em outros objetos.
+
+**Proteção de privacidade:** não transportar identificadores reais de administradores ou usuários para o baseline. Políticas dependentes de identidade administrativa devem usar uma identidade sintética exclusiva do ambiente de testes. O baseline executável ainda precisa preservar o comportamento de autorização sem usar dados reais.
