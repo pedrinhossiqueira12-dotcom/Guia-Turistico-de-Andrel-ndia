@@ -27,13 +27,13 @@ test('servidor impede pedir saques sem lastro ou duplicar crédito', () => {
   assert.match(sql, /REVOKE ALL ON FUNCTION public\.catalogo_motoboy_saque_mensal_v2/);
 });
 test('saldos de meses antigos não expiram; créditos do mês atual ficam fora', () => {
-  assert.doesNotMatch(sql, /r\\.criado_em\s*>=\s*v_mes/,
+  assert.doesNotMatch(sql, /r\.criado_em\s*>=\s*v_mes/,
     'Limitar ao mês anterior faz remunerações antigas ficarem esquecidas');
-  assert.match(sql, /r\\.criado_em<v_mes\\+interval '1 month'/);
-  assert.match(sql, /NOT EXISTS \\(SELECT 1 FROM public\\.catalogo_solicitacao_saque_itens_v2/,
+  assert.match(sql, /r\.criado_em<v_mes\+interval '1 month'/);
+  assert.match(sql, /NOT EXISTS \(SELECT 1 FROM public\.catalogo_solicitacao_saque_itens_v2/,
     'Créditos já incluídos em outra solicitação não podem ser repetidos');
   const scenario = read('supabase/tests/isolated/catalogo-pedidos-entregas-e2e-postgres.sql');
-  assert.match(scenario, /SET criado_em=date_trunc\\('month',pg_catalog\\.now\\(\\)\\)-interval '2 months'/);
+  assert.match(scenario, /SET criado_em=date_trunc\('month',pg_catalog\.now\(\)\)-interval '2 months'/);
   assert.match(scenario, /Saque mensal fictício sem transferência/);
 });
 
