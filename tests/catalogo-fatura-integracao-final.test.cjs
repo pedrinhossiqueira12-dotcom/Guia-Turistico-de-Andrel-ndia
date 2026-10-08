@@ -241,7 +241,7 @@ test('Order normal não é encaminhada; vínculo de fatura usa somente id/order_
   // A assinatura do webhook usa o timestamp da requisição. Recalculá-la com
   // Date.now() aqui gera falha intermitente quando muda o segundo no CI.
   const forwardedSignature = call.options.headers['x-signature'];
-  const timestampMatch = /^ts=(\\d{10,}),v1=[a-f0-9]{64}$/.exec(forwardedSignature);
+  const timestampMatch = /^ts=(\d{10,}),v1=[a-f0-9]{64}$/.exec(forwardedSignature);
   assert.ok(timestampMatch, 'O proxy deve encaminhar uma assinatura HMAC válida');
   const forwardedTimestamp = timestampMatch[1];
   assert.ok(Math.abs(Math.floor(Date.now() / 1000) - Number(forwardedTimestamp)) <= 5,
