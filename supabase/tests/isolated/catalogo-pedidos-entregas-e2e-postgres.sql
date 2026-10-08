@@ -273,6 +273,292 @@ BEGIN
   END IF;
 END $test_delivery$;
 
+-- Self-service de saque: só mês anterior, lastro válido e chave Pix protegida.
+DO $test_saque_mensal$
+DECLARE v jsonb; v_again jsonb; v_count integer;
+BEGIN
+  UPDATE public.catalogo_remuneracoes_v2
+     SET criado_em=date_trunc('month',pg_catalog.now())-interval '2 months'
+   WHERE pedido_id='00000000-0000-4000-8000-000000000052';
+  v := public.catalogo_motoboy_saque_mensal_v2(
+    '00000000-0000-4000-8000-000000000042','solicitar');
+  IF (v->>'http_status')::integer <> 409 THEN
+    RAISE EXCEPTION 'Saque sem chave Pix protegida deveria ser recusado: %',v;
+  END IF;
+  UPDATE public.catalogo_motoboy_perfis
+     SET chave_pix_enc='pix-v2:abcdefghijklmnop.AAAAAAAAAAAAAAAAAAAAAAAA',
+         chave_pix_tipo='EMAIL'
+   WHERE usuario_id='00000000-0000-4000-8000-000000000042';
+  -- Mesmo financiado, um crédito do mês EM CURSO não pode ser sacado.
+  UPDATE public.catalogo_remuneracoes_v2
+     SET criado_em=pg_catalog.now()
+   WHERE pedido_id='00000000-0000-4000-8000-000000000052';
+  v := public.catalogo_motoboy_saque_mensal_v2(
+    '00000000-0000-4000-8000-000000000042','solicitar');
+  IF (v->>'http_status')::integer <> 409 THEN
+    RAISE EXCEPTION 'Crédito do mês em curso não pode ser solicitado: %',v;
+  END IF;
+  -- Crédito acumulado de dois meses atrás CONTINUA sacável.
+  UPDATE public.catalogo_remuneracoes_v2
+     SET criado_em=date_trunc('month',pg_catalog.now())-interval '2 months'
+   WHERE pedido_id='00000000-0000-4000-8000-000000000052';
+  v := public.catalogo_motoboy_saque_mensal_v2(
+    '00000000-0000-4000-8000-000000000042','solicitar');
+  -- Saldo de R$0,02 não pode prender a solicitação do mês;
+  -- os créditos ficam acumulados até atingir o mínimo de R$1,00.
+  IF (v->>'http_status')::integer <> 409
+     OR (v->>'saldo_acumulado_centavos')::bigint <> 2
+     OR (SELECT count(*) FROM public.catalogo_solicitacoes_saque_v2) <> 0 THEN
+    RAISE EXCEPTION 'Saque de R$0,02 deve acumular sem criar pedido: %',v;
+  END IF;
+  -- Simular o acúmulo de novos ganhos no mesmo crédito fictício.
+  UPDATE public.catalogo_remuneracoes_v2
+    SET valor_centavos=100
+    WHERE pedido_id='00000000-0000-4000-8000-000000000052';
+  v := public.catalogo_motoboy_saque_mensal_v2(
+    '00000000-0000-4000-8000-000000000042','solicitar');
+  IF (v->>'ok')::boolean IS DISTINCT FROM true
+     OR (v->>'valor_solicitado_centavos')::bigint <> 100
+     OR (v->>'transferencia_executada')::boolean IS DISTINCT FROM false THEN
+    RAISE EXCEPTION 'Saque mensal fictício sem transferência foi recusado: %',v;
+  END IF;
+  v_again := public.catalogo_motoboy_saque_mensal_v2(
+    '00000000-0000-4000-8000-000000000042','solicitar');
+  IF (v_again->>'http_status')::integer <> 409 THEN
+    RAISE EXCEPTION 'Solicitação mensal duplicada deveria retornar 409: %',v_again;
+  END IF;
+  SELECT count(*) INTO v_count FROM public.catalogo_solicitacao_saque_itens_v2;
+  IF v_count <> 1 THEN RAISE EXCEPTION 'Crédito do pedido foi contabilizado mais de uma vez'; END IF;
+  v := public.catalogo_motoboy_saque_mensal_v2(
+    '00000000-0000-4000-8000-000000000041','listar');
+  IF coalesce(jsonb_array_length(v->'solicitacoes'),0) <> 0 THEN
+    RAISE EXCEPTION 'Solicitação de outro entregador vazou no extrato';
+  END IF;
+  -- Restaurar fixture pequena usada nos testes posteriores, sem
+  -- tocar em pedido ou conta reais.
+  UPDATE public.catalogo_remuneracoes_v2 SET valor_centavos=2
+    WHERE pedido_id='00000000-0000-4000-8000-000000000052';
+  UPDATE public.catalogo_solicitacao_saque_itens_v2 SET valor_centavos=2
+    WHERE solicitacao_id=(SELECT id FROM public.catalogo_solicitacoes_saque_v2
+      WHERE motoboy_id='00000000-0000-4000-8000-000000000042');
+  UPDATE public.catalogo_solicitacoes_saque_v2 SET valor_centavos=2
+    WHERE motoboy_id='00000000-0000-4000-8000-000000000042';
+END $test_saque_mensal$;
+
+-- Salvar chave e tipo deve ser autenticado por motoboy; bloquear tipo ausente.
+DO $test_pix_tipado$
+DECLARE v jsonb;
+BEGIN
+  IF pg_catalog.has_function_privilege('anon',
+    'public.catalogo_salvar_chave_pix_tipado_v2(uuid,text,text)','EXECUTE')
+    OR pg_catalog.has_function_privilege('authenticated',
+    'public.catalogo_salvar_chave_pix_tipado_v2(uuid,text,text)','EXECUTE') THEN
+    RAISE EXCEPTION 'Cadastro Pix tipado exposto fora do backend';
+  END IF;
+  v := public.catalogo_salvar_chave_pix_tipado_v2(
+    '00000000-0000-4000-8000-000000000042',
+    'pix-v2:abcdefghijklmnop.AAAAAAAAAAAAAAAAAAAAAAAA',NULL);
+  IF (v->>'http_status')::integer <> 400 THEN
+    RAISE EXCEPTION 'Aceitou chave cifrada sem tipo Pix: %',v;
+  END IF;
+  v := public.catalogo_salvar_chave_pix_tipado_v2(
+    '00000000-0000-4000-8000-000000000042',
+    'pix-v2:abcdefghijklmnop.AAAAAAAAAAAAAAAAAAAAAAAA','EMAIL');
+  IF (v->>'ok')::boolean IS DISTINCT FROM true OR
+      (SELECT chave_pix_tipo FROM public.catalogo_motoboy_perfis
+       WHERE usuario_id='00000000-0000-4000-8000-000000000042')<>'EMAIL' THEN
+    RAISE EXCEPTION 'Não atualizou chave protegida e seu tipo: %',v;
+  END IF;
+END $test_pix_tipado$;
+
+-- Somente no PostgreSQL CI descartável: altera temporariamente a remuneração
+-- fictícia para R$ 12,34 e testa a RESERVA. SAVEPOINT restaura o snapshot original.
+SAVEPOINT payout_reserva_fake;
+UPDATE public.catalogo_remuneracoes_v2 SET valor_centavos=1234
+ WHERE pedido_id='00000000-0000-4000-8000-000000000052';
+UPDATE public.catalogo_solicitacao_saque_itens_v2 SET valor_centavos=1234
+ WHERE remuneracao_id=(SELECT id FROM public.catalogo_remuneracoes_v2
+ WHERE pedido_id='00000000-0000-4000-8000-000000000052');
+UPDATE public.catalogo_solicitacoes_saque_v2 SET valor_centavos=1234
+ WHERE motoboy_id='00000000-0000-4000-8000-000000000042';
+DO $test_payout_reserva$
+DECLARE v jsonb; v_repetido jsonb; v_intent uuid; v_blocked boolean:=false;
+BEGIN
+  IF pg_catalog.has_function_privilege('anon',
+       'public.catalogo_reservar_payout_v2(uuid,text)','EXECUTE')
+     OR pg_catalog.has_function_privilege('authenticated',
+       'public.catalogo_marcar_envio_payout_v2(uuid)','EXECUTE') THEN
+    RAISE EXCEPTION 'RPC privada de transferência exposta na Data API pública';
+  END IF;
+  v := public.catalogo_reservar_payout_v2(
+    (SELECT id FROM public.catalogo_solicitacoes_saque_v2
+       WHERE motoboy_id='00000000-0000-4000-8000-000000000042'),
+    'EMAIL');
+  IF (v->>'ok')::boolean IS DISTINCT FROM true OR
+     (v->>'idempotente')::boolean IS DISTINCT FROM false OR
+     (v->>'valor_centavos')::bigint <> 1234 OR
+     (v->>'reenviar_permitido')::boolean IS DISTINCT FROM false THEN
+     RAISE EXCEPTION 'Reserva inválida em PostgreSQL CI: %', v;
+  END IF;
+  v_intent := (v->>'intent_id')::uuid;
+  v_repetido := public.catalogo_reservar_payout_v2(
+    (SELECT id FROM public.catalogo_solicitacoes_saque_v2
+       WHERE motoboy_id='00000000-0000-4000-8000-000000000042'),
+    'EMAIL');
+  IF (v_repetido->>'idempotente')::boolean IS DISTINCT FROM true OR
+     (v_repetido->>'intent_id')::uuid IS DISTINCT FROM v_intent OR
+     (SELECT count(*) FROM public.catalogo_payout_intents_v2) <> 1 THEN
+    RAISE EXCEPTION 'Retry criou payout duplicado: %', v_repetido;
+  END IF;
+  -- Não permitir chave diferente enquanto houver intent pendente.
+  BEGIN
+    UPDATE public.catalogo_motoboy_perfis SET chave_pix_tipo='PHONE'
+      WHERE usuario_id='00000000-0000-4000-8000-000000000042';
+    RAISE EXCEPTION 'Troca do tipo Pix foi aceita com payout pendente';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM='Troca do tipo Pix foi aceita com payout pendente' THEN
+      RAISE;
+    END IF;
+  END;
+  v := public.catalogo_marcar_envio_payout_v2(v_intent);
+  IF (v->>'ok')::boolean IS DISTINCT FROM true OR
+     (SELECT tentativas FROM public.catalogo_payout_intents_v2 WHERE id=v_intent) <> 1 THEN
+    RAISE EXCEPTION 'Primeira tentativa não gravada antes do envio: %', v;
+  END IF;
+  v := public.catalogo_marcar_envio_payout_v2(v_intent);
+  IF (v->>'http_status')::integer <> 409 THEN
+    RAISE EXCEPTION 'Retry pós-envio não foi bloqueado: %', v;
+  END IF;
+  BEGIN
+    UPDATE public.catalogo_remuneracoes_v2 SET status='pago'
+      WHERE pedido_id='00000000-0000-4000-8000-000000000052';
+  EXCEPTION WHEN OTHERS THEN
+    v_blocked := true;
+  END;
+  IF NOT v_blocked THEN
+    RAISE EXCEPTION 'Crédito reservado foi pago manualmente em duplicidade';
+  END IF;
+  UPDATE public.catalogo_remuneracoes_v2 SET status='estornado'
+    WHERE pedido_id='00000000-0000-4000-8000-000000000052';
+  IF (SELECT status FROM public.catalogo_payout_intents_v2
+      WHERE id=v_intent) <> 'em_analise' THEN
+    RAISE EXCEPTION 'Estorno após reserva não colocou transferência em revisão';
+  END IF;
+END $test_payout_reserva$;
+ROLLBACK TO SAVEPOINT payout_reserva_fake;
+RELEASE SAVEPOINT payout_reserva_fake;
+
+-- ETAPA 3B: teste de confirmação real simulada, auditável e atômica.
+-- O cenário é inteiramente descartado com SAVEPOINT/ROLLBACK.
+SAVEPOINT payout_conciliacao_fake;
+UPDATE public.catalogo_remuneracoes_v2 SET valor_centavos=1234
+ WHERE pedido_id='00000000-0000-4000-8000-000000000052';
+UPDATE public.catalogo_solicitacao_saque_itens_v2 SET valor_centavos=1234
+ WHERE remuneracao_id=(SELECT id FROM public.catalogo_remuneracoes_v2
+ WHERE pedido_id='00000000-0000-4000-8000-000000000052');
+UPDATE public.catalogo_solicitacoes_saque_v2 SET valor_centavos=1234
+ WHERE motoboy_id='00000000-0000-4000-8000-000000000042';
+DO $test_payout_conciliacao$
+DECLARE
+  v jsonb;
+  v_intent uuid;
+  v_solicitacao uuid;
+  v_ref text;
+  v_tx_ref text;
+  v_payout text := 'POP01KV681P6SJ38NQHWX3XK162SS';
+  v_tx text := 'TOP01KV681P6SJ38NQHWX3SF2WM22';
+BEGIN
+  IF pg_catalog.has_function_privilege('anon',
+       'public.catalogo_conciliar_payout_v2(uuid,text,text,text,text,bigint,text,text)',
+       'EXECUTE') OR pg_catalog.has_function_privilege('authenticated',
+       'public.catalogo_registrar_criacao_payout_v2(uuid,text,text)','EXECUTE') THEN
+    RAISE EXCEPTION 'Rotina de confirmação de dinheiro exposta ao público';
+  END IF;
+  SELECT id INTO v_solicitacao FROM public.catalogo_solicitacoes_saque_v2
+    WHERE motoboy_id='00000000-0000-4000-8000-000000000042';
+  v := public.catalogo_reservar_payout_v2(v_solicitacao,'EMAIL');
+  IF (v->>'ok')::boolean IS DISTINCT FROM true THEN
+    RAISE EXCEPTION 'Não reservou segunda prova financeira fictícia: %',v;
+  END IF;
+  v_intent := (v->>'intent_id')::uuid;
+  v_ref := 'saque_'||pg_catalog.replace(v_solicitacao::text,'-','');
+  v_tx_ref := 'motoboy_'||pg_catalog.replace(v_solicitacao::text,'-','');
+  -- Sem POST ou confirmação do provedor, não se pode associar IDs.
+  v := public.catalogo_registrar_criacao_payout_v2(v_intent,v_payout,v_tx);
+  IF (v->>'http_status')::integer <> 409 THEN
+    RAISE EXCEPTION 'Vinculou provedor antes de iniciar tentativa: %',v;
+  END IF;
+  v := public.catalogo_marcar_envio_payout_v2(v_intent);
+  IF (v->>'ok')::boolean IS DISTINCT FROM true THEN
+    RAISE EXCEPTION 'Não registrou tentativa de envio: %',v;
+  END IF;
+  v := public.catalogo_registrar_criacao_payout_v2(v_intent,v_payout,v_tx);
+  IF (v->>'ok')::boolean IS DISTINCT FROM true OR
+     (v->>'transferencia_confirmada')::boolean IS DISTINCT FROM false THEN
+    RAISE EXCEPTION 'HTTP 202 indevidamente considerado pago: %',v;
+  END IF;
+  v := public.catalogo_registrar_criacao_payout_v2(v_intent,v_payout,v_tx);
+  IF (v->>'idempotente')::boolean IS DISTINCT FROM true THEN
+    RAISE EXCEPTION 'POST duplicado deveria ser idempotente: %',v;
+  END IF;
+  v := public.catalogo_conciliar_payout_v2(
+    v_intent,v_payout,v_tx,v_ref,v_tx_ref,1234,'pending','not_accredited');
+  IF (v->>'transferencia_confirmada')::boolean IS DISTINCT FROM false OR
+      (SELECT count(*) FROM public.catalogo_repasses_v2)<>0 THEN
+    RAISE EXCEPTION 'Payout pendente foi considerado pago: %',v;
+  END IF;
+  -- Status documentados: provedor ainda está processando ou banco não respondeu.
+  v := public.catalogo_conciliar_payout_v2(
+    v_intent,v_payout,v_tx,v_ref,v_tx_ref,1234,'transaction_in_process','pending_bank');
+  IF (v->>'transferencia_confirmada')::boolean IS DISTINCT FROM false
+     OR (SELECT count(*) FROM public.catalogo_repasses_v2)<>0 THEN
+    RAISE EXCEPTION 'Payout pending_bank creditado antes da hora: %',v;
+  END IF;
+  v := public.catalogo_conciliar_payout_v2(
+    v_intent,v_payout,v_tx,v_ref,v_tx_ref,1234,'success','in_progress');
+  IF (v->>'transferencia_confirmada')::boolean IS DISTINCT FROM false
+     OR (SELECT count(*) FROM public.catalogo_repasses_v2)<>0 THEN
+    RAISE EXCEPTION 'Payout success/in_progress creditado antes da hora: %',v;
+  END IF;
+  v := public.catalogo_conciliar_payout_v2(
+    v_intent,v_payout,v_tx,v_ref,v_tx_ref,1235,'success','accredited');
+  IF (v->>'http_status')::integer <> 409 OR
+      (SELECT count(*) FROM public.catalogo_repasses_v2)<>0 THEN
+    RAISE EXCEPTION 'Valor divergente autorizou saída financeira: %',v;
+  END IF;
+  v := public.catalogo_conciliar_payout_v2(
+    v_intent,v_payout,v_tx,v_ref,v_tx_ref,1234,'success','accredited');
+  IF (v->>'ok')::boolean IS DISTINCT FROM true OR
+      (v->>'transferencia_confirmada')::boolean IS DISTINCT FROM true OR
+      (SELECT status FROM public.catalogo_payout_intents_v2 WHERE id=v_intent)<>'confirmado' OR
+      (SELECT status FROM public.catalogo_solicitacoes_saque_v2
+       WHERE id=v_solicitacao)<>'pago' OR
+      (SELECT status FROM public.catalogo_remuneracoes_v2
+       WHERE pedido_id='00000000-0000-4000-8000-000000000052')<>'pago' OR
+      (SELECT count(*) FROM public.catalogo_repasses_v2
+       WHERE origem_registro='payout_provedor' AND registrado_por IS NULL
+         AND referencia='mp-payout:'||v_tx AND valor_centavos=1234)<>1 THEN
+    RAISE EXCEPTION 'Pagamento comprovado não gerou baixa transacional: %',v;
+  END IF;
+  v := public.catalogo_conciliar_payout_v2(
+    v_intent,v_payout,v_tx,v_ref,v_tx_ref,1234,'success','accredited');
+  IF (v->>'idempotente')::boolean IS DISTINCT FROM true OR
+      (SELECT count(*) FROM public.catalogo_repasses_v2)<>1 THEN
+    RAISE EXCEPTION 'Callback repetido criou repasse duplicado: %',v;
+  END IF;
+  -- Estorno posterior precisa de alerta, mantendo lançamento do pagamento real.
+  v := public.catalogo_conciliar_payout_v2(
+    v_intent,v_payout,v_tx,v_ref,v_tx_ref,1234,'refunded','refunded');
+  IF (v->>'http_status')::integer <> 409 OR
+     (SELECT count(*) FROM public.catalogo_repasses_v2)<>1 OR
+     (SELECT revisao_motivo IS NOT NULL FROM public.catalogo_payout_intents_v2
+      WHERE id=v_intent) IS DISTINCT FROM true THEN
+    RAISE EXCEPTION 'Reembolso posterior não gerou alerta auditável: %',v;
+  END IF;
+END $test_payout_conciliacao$;
+ROLLBACK TO SAVEPOINT payout_conciliacao_fake;
+RELEASE SAVEPOINT payout_conciliacao_fake;
+
 -- Estorno simulado antes do saque impede o crédito anterior de permanecer disponível.
 DO $test_refund$
 DECLARE v jsonb;
@@ -283,6 +569,10 @@ BEGIN
      OR (SELECT status FROM public.catalogo_remuneracoes_v2
          WHERE pedido_id='00000000-0000-4000-8000-000000000052') <> 'estornado' THEN
     RAISE EXCEPTION 'Estorno após a entrega não reverteu crédito ainda não pago: %',v;
+  END IF;
+  IF (SELECT status FROM public.catalogo_solicitacoes_saque_v2
+      WHERE motoboy_id='00000000-0000-4000-8000-000000000042') <> 'em_analise' THEN
+    RAISE EXCEPTION 'Estorno não suspendeu o saque mensal para revisão';
   END IF;
 
   v := public.catalogo_aplicar_pagamento_v2(

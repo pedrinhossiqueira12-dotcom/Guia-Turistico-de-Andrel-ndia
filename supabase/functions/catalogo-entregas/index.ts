@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import { encryptCourierPix, decryptCourierPix } from "../_shared/catalogo-entregas-crypto-v2.ts";
+import { validarChavePixTipadaV2, ehTipoChavePixV2 } from "../_shared/catalogo-pix-chave-v2.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const BUNDLE = Deno.env.get("SUPABASE_SECRET_KEYS") ?? "";
@@ -123,29 +124,47 @@ async function run(userId: string, body: Record<string, unknown>) {
     const statement = await rpc("catalogo_motoboy_extrato_v2", { p_operador_id: userId, p_offset: offset(body.offset) });
     return json({ success: true, ...(await personalStatement(statement, userId)) });
   }
+  if (action === "consultar_saques" || action === "solicitar_saque") {
+    const data = await rpc("catalogo_motoboy_saque_mensal_v2", {
+      p_operador_id: userId, p_acao: action === "solicitar_saque" ? "solicitar" : "listar",
+    });
+    return json({ success: true, ...data });
+  }
+  if (action === "salvar_chave_pix") {
+    const chave = text(body.chave_pix, 120);
+    const tipo = chave ? text(body.chave_pix_tipo, 16) : "";
+    if ((chave && (!ehTipoChavePixV2(tipo) || !validarChavePixTipadaV2(tipo, chave))) ||
+        (!chave && text(body.chave_pix_tipo, 16))) {
+      throw new HttpError("Selecione o tipo correto e informe uma chave Pix válida.");
+    }
+    let cifrada: string | null;
+    try { cifrada = await encryptCourierPix(chave, DATA_KEY, userId); }
+    catch { throw new HttpError("Não foi possível proteger sua chave Pix.", 503); }
+    const updated = await rpc("catalogo_salvar_chave_pix_tipado_v2", {
+      p_operador_id: userId, p_chave_pix_enc: cifrada, p_chave_pix_tipo: tipo || null,
+    });
+    return json({ success: true, ...updated, perfil: {
+      chave_pix: chave, chave_pix_tipo: tipo || null,
+    } });
+  }
   if (action === "confirmar_entrega") return json({ success: true, pedido: await confirmDelivery(userId, body) });
 
   const deliveryActions: Record<string, string> = {
     definir_disponibilidade: "disponibilidade", aceitar_entrega: "aceitar_entrega",
     coletar: "coletar", em_entrega: "em_entrega", desistir_entrega: "desistir",
-    registrar_ocorrencia: "registrar_ocorrencia", salvar_chave_pix: "salvar_chave_pix",
+    registrar_ocorrencia: "registrar_ocorrencia",
   };
   if (deliveryActions[action]) {
-    const personal = action === "definir_disponibilidade" || action === "salvar_chave_pix";
+    const personal = action === "definir_disponibilidade";
     if (action === "definir_disponibilidade" && typeof body.disponivel !== "boolean") throw new HttpError("Informe sua disponibilidade.");
     const reason = text(body.motivo, 500);
     if (["desistir_entrega", "registrar_ocorrencia"].includes(action) && !reason) throw new HttpError("Informe o motivo da ocorrência.");
-    let encryptedPix: string | null = null;
-    if (action === "salvar_chave_pix") {
-      try { encryptedPix = await encryptCourierPix(text(body.chave_pix, 254), DATA_KEY, userId); }
-      catch { throw new HttpError("Não foi possível proteger sua chave Pix. Tente novamente mais tarde.", 503); }
-    }
     return json({ success: true, ...(await rpc("catalogo_motoboy_acao_v2", {
       p_operador_id: userId, p_acao: deliveryActions[action],
       p_pedido_id: personal ? null : uuid(body.pedido_id),
       p_disponivel: action === "definir_disponibilidade" ? body.disponivel : null,
       p_motivo: reason || null, p_categoria: text(body.categoria, 60) || null,
-      p_chave_pix: encryptedPix,
+      p_chave_pix: null,
     })) });
   }
 
@@ -169,7 +188,16 @@ async function run(userId: string, body: Record<string, unknown>) {
       p_pedido_ids: orderIds, p_referencia: text(body.referencia, 120) || null,
       p_comprovante: text(body.comprovante, 500) || null,
     });
-    return json({ success: true, ...(action === "operacao_admin" ? await administrativeStatement(operation) : operation), admin: true });
+    if (action === "operacao_admin") {
+      const { data: requests, error: queueError } = await db.from("catalogo_solicitacoes_saque_v2")
+        .select("id,motoboy_id,mes_referencia,valor_centavos,status,solicitado_em,repasse_id")
+        .in("status", ["solicitado", "em_analise"])
+        .order("solicitado_em", { ascending: true }).limit(100);
+      if (queueError) throw new HttpError("Não foi possível consultar a fila de saques.", 500);
+      return json({ success: true, ...(await administrativeStatement(operation)),
+        solicitacoes_saque: requests || [], admin: true });
+    }
+    return json({ success: true, ...operation, admin: true });
   }
 
   const management = new Set(["listar_motoboys", "autorizar_motoboy", "suspender_motoboy", "atribuir_pedido", "listar_para_atribuicao"]);

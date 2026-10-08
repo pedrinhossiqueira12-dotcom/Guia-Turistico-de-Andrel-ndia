@@ -37,13 +37,15 @@
   const ACTION_FIELDS = {
     listar_entregas: ["offset"],
     consultar_extrato: ["offset"],
+    consultar_saques: [],
+    solicitar_saque: [],
     definir_disponibilidade: ["disponivel"],
     aceitar_entrega: ["pedido_id"],
     coletar: ["pedido_id"],
     em_entrega: ["pedido_id"],
     desistir_entrega: ["pedido_id", "motivo"],
     registrar_ocorrencia: ["pedido_id", "categoria", "motivo"],
-    salvar_chave_pix: ["chave_pix"],
+    salvar_chave_pix: ["chave_pix", "chave_pix_tipo"],
     confirmar_entrega: ["pedido_id", "comercio_id", "codigo_entrega", "recebimento_confirmado"],
   };
 
@@ -270,11 +272,19 @@
     if (extrato) extrato.hidden = true;
     const perfil = $("motoboyProfileForm");
     if (perfil) perfil.reset();
+    const pixForm = $("motoboyPixForm");
+    if (pixForm) pixForm.reset();
+    if ($("motoboyPixKey")) $("motoboyPixKey").value = "";
+    if ($("motoboyPixType")) $("motoboyPixType").value = "";
+    definirFeedback("motoboyPixFeedback", "");
   }
 
   function limparDadosPrivados() {
     limparPedidos();
     limparExtrato();
+    if ($("motoboySaquesHistorico")) $("motoboySaquesHistorico").textContent = "";
+    if ($("motoboySaqueMes")) $("motoboySaqueMes").textContent = "Saldo de meses encerrados sujeito a créditos financiados.";
+    definirFeedback("motoboySaqueFeedback", "");
     state.actionInFlight.clear();
   }
 
@@ -431,6 +441,9 @@
     if (checkbox) { checkbox.checked = disponibilidade; checkbox.disabled = false; }
     const chave = $("motoboyPixKey");
     if (chave && typeof perfil.chave_pix === "string" && document.activeElement !== chave) chave.value = perfil.chave_pix;
+    const tipoPix = $("motoboyPixType");
+    if (tipoPix && document.activeElement !== tipoPix)
+      tipoPix.value = typeof perfil.chave_pix_tipo === "string" ? perfil.chave_pix_tipo : "";
     const concluidadas = Array.isArray(state.extrato.entregas_concluidas) ? state.extrato.entregas_concluidas : [];
     const pagamentos = Array.isArray(state.extrato.pagamentos) ? state.extrato.pagamentos : [];
     const historico = $("motoboyHistory");
@@ -442,6 +455,54 @@
         const status = item.status_pagamento || item.status || "Registrado no servidor";
         return `<li><strong>${escapar(nome)}</strong><span>Pedido ${escapar(item.pedido_id || "não informado")} · ${escapar(status)}</span><b>${formatarMoeda(valor)}</b><small>${escapar(formatarData(item.pago_em || item.criado_em || item.entregue_em))}</small></li>`;
       }).join("") : '<li class="motoboy-history-empty">Ainda não há lançamentos no extrato do servidor.</li>';
+    }
+  }
+
+  async function carregarSaques() {
+    if (!state.session || !navigator.onLine) return;
+    const generation = state.generation;
+    const userId = state.userId;
+    try {
+      const data = await chamarApi({ acao: "consultar_saques" }, generation, userId);
+      validarSessaoAtual(generation, userId);
+      const lista = $("motoboySaquesHistorico");
+      if (lista) {
+        const items = Array.isArray(data.solicitacoes) ? data.solicitacoes : [];
+        lista.textContent = "";
+        for (const item of items) {
+          const linha = document.createElement("li");
+          linha.textContent = String(item.mes_referencia || "") + " — " +
+            formatarMoeda(item.valor_centavos) + " — " + String(item.status || "");
+          lista.appendChild(linha);
+        }
+        if (!items.length) lista.textContent = "Nenhum saque solicitado.";
+      }
+      const mes = $("motoboySaqueMes");
+      if (mes) mes.textContent = "Fechamento até: " + String(data.mes_elegivel || "");
+    } catch (err) {
+      if (err.message !== STALE_REQUEST) definirFeedback("motoboySaqueFeedback", err.message, true);
+    }
+  }
+
+  async function solicitarSaque(event) {
+    event.preventDefault();
+    if (!state.session) return;
+    const button = $("motoboySolicitarSaque");
+    if (button) button.disabled = true;
+    definirFeedback("motoboySaqueFeedback", "Enviando solicitação do saldo acumulado de meses encerrados…");
+    const generation = state.generation;
+    const userId = state.userId;
+    try {
+      const result = await chamarApi({ acao: "solicitar_saque" }, generation, userId);
+      validarSessaoAtual(generation, userId);
+      definirFeedback("motoboySaqueFeedback",
+        "Solicitação de " + formatarMoeda(result.valor_solicitado_centavos) +
+        " registrada. O Pix só será enviado após confirmação financeira.");
+      await carregarSaques();
+    } catch (err) {
+      if (err.message !== STALE_REQUEST) definirFeedback("motoboySaqueFeedback", err.message, true);
+    } finally {
+      if (generation === state.generation && button) button.disabled = false;
     }
   }
 
@@ -657,6 +718,14 @@
     event.preventDefault();
     const campo = $("motoboyPixKey");
     const chavePix = textoSeguro(campo?.value, 120);
+    const selectTipo = $("motoboyPixType");
+    const tipoPix = textoSeguro(selectTipo?.value, 16);
+    if ((chavePix && !["EMAIL","PHONE","CPF","CNPJ","PIX_CODE"].includes(tipoPix)) ||
+        (!chavePix && tipoPix)) {
+      definirFeedback("motoboyPixFeedback",
+        "Selecione um tipo ao cadastrar ou deixe ambos os campos vazios para remover.", true);
+      return;
+    }
     if (chavePix && chavePix.length < 3) {
       definirFeedback("motoboyPixFeedback", "Informe uma chave Pix válida ou deixe o campo vazio.", true);
       return;
@@ -666,10 +735,11 @@
     if (botao) botao.disabled = true;
     definirFeedback("motoboyPixFeedback", "Salvando sua chave Pix…");
     try {
-      const resultado = await chamarApi({ acao: "salvar_chave_pix", chave_pix: chavePix }, generation, state.userId);
+      const resultado = await chamarApi({ acao: "salvar_chave_pix", chave_pix: chavePix, chave_pix_tipo: tipoPix }, generation, state.userId);
       validarSessaoAtual(generation, state.userId);
       const perfil = resultado?.perfil || {};
       if (campo && typeof perfil.chave_pix === "string") campo.value = perfil.chave_pix;
+      if (selectTipo) selectTipo.value = perfil.chave_pix_tipo || "";
       definirFeedback("motoboyPixFeedback", chavePix ? "Chave Pix própria salva. O repasse continua sujeito a comprovação administrativa." : "Chave Pix removida do seu perfil.");
     } catch (erro) {
       if (erro.message !== STALE_REQUEST) definirFeedback("motoboyPixFeedback", erro.message || "Não foi possível salvar a chave Pix.", true);
@@ -735,7 +805,7 @@
     definirFeedback("motoboyLoginFeedback", "");
     definirAviso("Sessão autenticada", "Consultando ofertas e extrato autorizados para esta conta…");
     iniciarPolling();
-    await Promise.all([carregarEntregas(), carregarExtrato()]);
+    await Promise.all([carregarEntregas(), carregarExtrato(), carregarSaques()]);
   }
 
   async function fazerLogin(event) {
@@ -810,6 +880,7 @@
     $("motoboyLoadMore")?.addEventListener("click", () => carregarEntregas({ append: true }));
     $("motoboyAvailability")?.addEventListener("change", definirDisponibilidade);
     $("motoboyPixForm")?.addEventListener("submit", salvarChavePix);
+    $("motoboySaqueForm")?.addEventListener("submit", solicitarSaque);
     $("motoboyCancelConfirm")?.addEventListener("click", fecharConfirmacao);
     $("motoboyConfirmForm")?.addEventListener("submit", confirmarEntrega);
     $("motoboyCancelOccurrence")?.addEventListener("click", () => $("motoboyOccurrenceDialog")?.close());

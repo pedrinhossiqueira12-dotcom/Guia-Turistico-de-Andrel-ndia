@@ -107,11 +107,34 @@
         </div>
       </section>
 
+      <section class="motoboy-card" aria-labelledby="motoboySaqueTitle">
+        <span class="eyebrow">FECHAMENTO MENSAL</span>
+        <h2 id="motoboySaqueTitle">Solicitar recebimento</h2>
+        <p id="motoboySaqueMes">Você pode solicitar ganhos de meses já encerrados, inclusive saldos antigos liberados depois. Ganhos do mês atual não entram. O saldo elegível precisa atingir R$ 1,00 para solicitar Pix; valores menores continuam acumulados.</p>
+        <p>Esta solicitação não envia Pix automaticamente. A transferência depende da confirmação real do pagamento e será auditada.</p>
+        <form id="motoboySaqueForm">
+          <button id="motoboySolicitarSaque" class="motoboy-button motoboy-button-primary" type="submit">Solicitar saldo de meses encerrados</button>
+          <p id="motoboySaqueFeedback" role="status" class="motoboy-feedback"></p>
+        </form>
+        <h3>Solicitações de saque</h3>
+        <ul id="motoboySaquesHistorico" aria-live="polite"></ul>
+      </section>
+
       <section class="motoboy-card motoboy-profile-card" aria-labelledby="motoboyProfileTitle">
         <span class="eyebrow">RECEBIMENTO OPCIONAL</span>
         <h2 id="motoboyProfileTitle">Chave Pix própria</h2>
         <p>Informe somente uma chave sua. Ela é guardada pelo servidor para eventual repasse comprovado; a tela não envia identidade nem valor para criar remuneração.</p>
         <form id="motoboyPixForm" class="motoboy-form motoboy-pix-form">
+          <label for="motoboyPixType">Tipo de chave Pix</label>
+          <select id="motoboyPixType" class="motoboy-input" autocomplete="off">
+            <option value="">Selecione o tipo</option>
+            <option value="CPF">CPF (11 números, sem pontuação)</option>
+            <option value="CNPJ">CNPJ (14 números, sem pontuação)</option>
+            <option value="EMAIL">E-mail</option>
+            <option value="PHONE">Celular (+55 + DDD + número)</option>
+            <option value="PIX_CODE">Chave aleatória (UUID)</option>
+          </select>
+          <p class="motoboy-label-note">Uma chave existente sem tipo cadastrado precisa ser salva novamente para habilitar o saque.</p>
           <label for="motoboyPixKey">Chave Pix <span class="motoboy-label-note">opcional</span></label>
           <input id="motoboyPixKey" type="text" maxlength="120" autocomplete="off" placeholder="Deixe vazio para remover">
           <button id="motoboyPixButton" class="motoboy-button motoboy-button-secondary" type="submit">Salvar chave Pix</button>

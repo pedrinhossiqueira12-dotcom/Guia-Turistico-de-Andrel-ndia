@@ -80,7 +80,13 @@ def validate_plan(source=MIGRATIONS, manifest_path=MANIFEST):
     evidence.append({"source": local, "release": remote,
                      "sha256": applied["sha256"], "remote_applied": True})
 
-    files = sorted(x for x in source.glob("*.sql") if x.is_file())
+    # A migration de saque foi adicionada em PR separado e NAO faz parte das
+    # 29 versoes JA aplicadas. Mantemos a verificacao fail-closed por nome exato.
+    pending_saque = "20261008150000_solicitacao_saque_mensal_motoboy.sql"
+    all_files = sorted(x for x in source.glob("*.sql") if x.is_file())
+    if len(all_files) != 30 or not (source / pending_saque).is_file():
+        raise PreflightError("Expected exactly 29 applied SQL + the reviewed payout request migration.")
+    files = [x for x in all_files if x.name != pending_saque]
     if len(files) != 29:
         raise PreflightError(f"Expected 29 SQL files, found {len(files)}.")
     mappings, release_versions = {}, []

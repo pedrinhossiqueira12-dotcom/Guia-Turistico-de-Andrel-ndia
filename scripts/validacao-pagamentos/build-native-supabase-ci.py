@@ -33,7 +33,7 @@ def fail_if_untrusted():
     if STAGING == Path("/") or STAGING.parent != Path("/tmp"):
         raise RuntimeError("Unsafe temporary staging directory")
     migration_files = sorted((SOURCE / "migrations").glob("*.sql"))
-    if len(migration_files) != 29 or migration_files[1].name != ORIGINAL_SCHEDULER:
+    if len(migration_files) != 30 or migration_files[1].name != ORIGINAL_SCHEDULER or migration_files[-1].name != "20261008150000_solicitacao_saque_mensal_motoboy.sql":
         raise RuntimeError("Migration inventory changed, manual review required")
     if not (SOURCE / "migrations" / ALLOWLIST).is_file():
         raise RuntimeError("Allowlist migration missing")
@@ -125,7 +125,7 @@ def build():
     (tests_dir / NATIVE_TEST).write_text(real_test, encoding="utf-8")
 
     staged = sorted(migration_dir.glob("*.sql"))
-    if len(staged) != 31:
+    if len(staged) != 32:
         raise RuntimeError(f"Expected 31 temporary migrations, got {len(staged)}")
     assert staged[0].name == BASELINE
     assert staged[-1].name == migrations[-1].name

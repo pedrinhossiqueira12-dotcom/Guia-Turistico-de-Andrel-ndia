@@ -8,3 +8,6 @@ node_modules/
 supabase/.temp/
 __pycache__/
 *.py[cod]
+
+# IDs locais de homologação Payouts Sandbox; nunca versionar registros de execução.
+.payouts-sandbox-state/
