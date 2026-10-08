@@ -65,3 +65,9 @@ A consulta `information_schema.columns` no projeto existente confirmou a estrutu
 - A consulta de metadados de triggers não retornou gatilhos nessas duas tabelas. Isso não prova ausência de funções associadas em outros objetos.
 
 **Proteção de privacidade:** não transportar identificadores reais de administradores ou usuários para o baseline. Políticas dependentes de identidade administrativa devem usar uma identidade sintética exclusiva do ambiente de testes. O baseline executável ainda precisa preservar o comportamento de autorização sem usar dados reais.
+
+## Primeiro artefato de baseline (ainda não executado)
+
+O arquivo `supabase/tests/baseline/legacy-public-tables.sql` cria exclusivamente em ambiente descartável as tabelas legadas `avaliacoes` e `cadastros_comercios`. Inclui guarda que exige banco local `postgres`, `auth.users` presente e tabelas legadas ausentes. Não é uma migration e **não deve** ser aplicado à produção.
+
+**Pendências antes da execução completa:** conferir sequência/identity de `avaliacoes.id` (metadados atuais não expõem default), reconstruir a evolução da constraint `cadastros_comercios_etapa_check` (o default histórico `inicio` diverge da lista atual), confirmar que a infraestrutura Supabase local suporta as extensões e jobs agendados, e testar aplicação integral das migrations. As policies administrativas com identidade real não foram copiadas.
