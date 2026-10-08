@@ -125,6 +125,16 @@
         <h2 id="motoboyProfileTitle">Chave Pix própria</h2>
         <p>Informe somente uma chave sua. Ela é guardada pelo servidor para eventual repasse comprovado; a tela não envia identidade nem valor para criar remuneração.</p>
         <form id="motoboyPixForm" class="motoboy-form motoboy-pix-form">
+          <label for="motoboyPixType">Tipo de chave Pix</label>
+          <select id="motoboyPixType" class="motoboy-input" autocomplete="off">
+            <option value="">Selecione o tipo</option>
+            <option value="CPF">CPF (11 números, sem pontuação)</option>
+            <option value="CNPJ">CNPJ (14 números, sem pontuação)</option>
+            <option value="EMAIL">E-mail</option>
+            <option value="PHONE">Celular (+55 + DDD + número)</option>
+            <option value="PIX_CODE">Chave aleatória (UUID)</option>
+          </select>
+          <p class="motoboy-label-note">Uma chave existente sem tipo cadastrado precisa ser salva novamente para habilitar o saque.</p>
           <label for="motoboyPixKey">Chave Pix <span class="motoboy-label-note">opcional</span></label>
           <input id="motoboyPixKey" type="text" maxlength="120" autocomplete="off" placeholder="Deixe vazio para remover">
           <button id="motoboyPixButton" class="motoboy-button motoboy-button-secondary" type="submit">Salvar chave Pix</button>
