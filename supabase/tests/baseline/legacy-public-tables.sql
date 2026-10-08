@@ -10,6 +10,7 @@ BEGIN
      OR to_regclass('auth.users') IS NULL
      OR to_regclass('public.avaliacoes') IS NOT NULL
      OR to_regclass('public.cadastros_comercios') IS NOT NULL
+     OR to_regclass('public.mural_cadastros') IS NOT NULL
   THEN
     RAISE EXCEPTION 'Baseline legado exige Supabase local descartavel sem tabelas legadas';
   END IF;
@@ -63,3 +64,30 @@ CREATE POLICY cadastros_comercios_usuario_select ON public.cadastros_comercios
   FOR SELECT TO authenticated USING ((SELECT auth.uid()) = usuario_id);
 -- A policy de INSERT sera criada pela migration 20261006111500.
 -- Politicas administrativas com ID real nao sao transportadas ao teste.
+
+-- Tabela legada do mural, confirmada via metadados (sem copiar registros).
+-- O status historico pode ter 'aprovado'/'recusado' antes da primeira migration;
+-- a constraint definitiva sera criada pela propria migration.
+CREATE TABLE public.mural_cadastros (
+  id text PRIMARY KEY,
+  usuario_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  nome text NOT NULL,
+  categoria text NOT NULL,
+  descricao text DEFAULT '',
+  sobre text DEFAULT '',
+  instagram text DEFAULT '',
+  imagem text DEFAULT '',
+  imagens jsonb DEFAULT '[]'::jsonb,
+  status text NOT NULL DEFAULT 'pendente',
+  motivo_recusa text DEFAULT '',
+  criado_em timestamptz NOT NULL DEFAULT now(),
+  atualizado_em timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX mural_cadastros_status_idx ON public.mural_cadastros(status);
+CREATE INDEX mural_cadastros_usuario_id_idx ON public.mural_cadastros(usuario_id);
+ALTER TABLE public.mural_cadastros ENABLE ROW LEVEL SECURITY;
+
+-- Seed sintetica, necessaria ao DO de verificacao da primeira migration.
+-- Nao inclui informacoes de contato reais nem replica cadastros de producao.
+INSERT INTO public.cadastros_comercios (telefone_usuario,nome,status,etapa,local_id)
+VALUES ('TESTE-SEM-TELEFONE','PedroX do Grau','aprovado','formulario_web',NULL);
