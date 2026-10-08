@@ -1,10 +1,11 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const path = require('node:path');
 const vm = require('node:vm');
 const { execFileSync } = require('node:child_process');
 
-const ROOT = '/home/ubuntu/marketplace-antifraude';
+const ROOT = path.resolve(__dirname, '..');
 const OWNER = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const OTHER = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const RIDER = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';

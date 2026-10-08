@@ -11,7 +11,7 @@ function render(pedido) {
   let source = fs.readFileSync(path.join(__dirname, '..', 'js', 'catalogo-admin.js'), 'utf8');
   source = source.replace(/\}\)\(\);\s*$/, 'window.__renderPedidos = renderizarPedidosOffline; })();');
   vm.runInNewContext(source, { window, document, URLSearchParams, console });
-  window.__renderPedidos([{ id: 'pedido-teste', modalidade: 'retirada', total_centavos: 700, subtotal_produtos_centavos: 700, taxa_plataforma_centavos: 35, taxa_motoboy_centavos: 0, taxa_total_centavos: 35, versao_financeira: 2, ...pedido }]);
+  window.__renderPedidos([{ id: 'pedido-teste', modalidade: 'retirada', total_centavos: 700, subtotal_produtos_centavos: 700, taxa_plataforma_centavos: 49, taxa_motoboy_centavos: 0, taxa_total_centavos: 49, versao_financeira: 2, ...pedido }]);
   return elements.get('listaPedidosOffline').innerHTML;
 }
 
@@ -32,5 +32,7 @@ test('Dinheiro e cartão pendentes continuam podendo ser aceitos', () => {
   for (const forma_pagamento of ['dinheiro', 'cartao_credito', 'cartao_debito']) assert.match(render({ provedor: 'offline', forma_pagamento, status: 'aguardando_pagamento', status_pagamento: 'pendente' }), /Aceitar e preparar/);
 });
 test('Retirada v2 não anuncia taxa de motoboy', () => {
-  assert.match(render({ provedor: 'offline', forma_pagamento: 'dinheiro', status: 'aguardando_pagamento', status_pagamento: 'pendente' }), /5% plataforma, sem taxa de motoboy/);
+  const html = render({ provedor: 'offline', forma_pagamento: 'dinheiro', status: 'aguardando_pagamento', status_pagamento: 'pendente' });
+  assert.match(html, /Taxa do pedido: 0\.49/);
+  assert.doesNotMatch(html, /2% logística|taxa do motoboy/i);
 });
