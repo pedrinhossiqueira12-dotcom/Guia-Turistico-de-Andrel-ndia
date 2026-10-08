@@ -450,6 +450,25 @@ jobs:
           grep -Eq '^ok 23( |$)' /tmp/marketplace-financeiro.tap
           echo "PASS: $count pgTAP assertions in disposable catalogo_ci (remote cron migration excluded)"
 
+      - name: Confirm pgTAP rolled back and created no payment or delivery records
+        run: |
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          DO $pg_tap_rollback$
+          BEGIN
+            IF current_database() <> 'catalogo_ci'
+               OR (SELECT count(*) FROM public.catalogo_pedidos) <> 0
+               OR (SELECT count(*) FROM public.catalogo_pagamentos) <> 0
+               OR (SELECT count(*) FROM public.catalogo_comissoes_offline) <> 0
+               OR (SELECT count(*) FROM public.catalogo_remuneracoes_v2) <> 0
+               OR (SELECT count(*) FROM public.catalogo_lancamentos_financeiros_v2) <> 0
+               OR (SELECT count(*) FROM public.catalogos) <> 1
+               OR (SELECT count(*) FROM public.comercios_publicados) <> 140
+            THEN
+              RAISE EXCEPTION 'pgTAP left unexpected records in isolated database';
+            END IF;
+          END $pg_tap_rollback$;
+          SQL
+
   pricing-postgres-isolated:
     name: Real pricing RPC (isolated PostgreSQL)
     runs-on: ubuntu-latest
