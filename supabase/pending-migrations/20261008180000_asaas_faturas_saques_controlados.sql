@@ -150,7 +150,7 @@ CREATE OR REPLACE FUNCTION public.catalogo_asaas_atualizar_saque(
  p_saque uuid,p_estado text,p_transferencia text DEFAULT NULL,p_mensagem text DEFAULT NULL
 ) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
 DECLARE v public.catalogo_asaas_saques%ROWTYPE;
- v_credito record;v_qtd integer:=0;v_total integer:=0;v_repasse uuid;
+ v_credito record;v_qtd integer:=0;v_total integer:=0;v_repasse uuid;v_atualizados integer:=0;
 BEGIN
  SELECT * INTO v FROM public.catalogo_asaas_saques WHERE id=p_saque FOR UPDATE;
  IF NOT FOUND THEN RETURN jsonb_build_object('ok',false,'mensagem','Saque não encontrado.'); END IF;
@@ -217,6 +217,8 @@ BEGIN
  RETURNING id INTO v_repasse;
  UPDATE public.catalogo_remuneracoes_v2 SET status='pago',repasse_id=v_repasse,pago_em=now()
  WHERE id IN (SELECT remuneracao_id FROM public.catalogo_asaas_saque_itens WHERE saque_id=v.id AND ativo);
+ GET DIAGNOSTICS v_atualizados=ROW_COUNT;
+ IF v_atualizados<>v_qtd THEN RAISE EXCEPTION 'Divergência entre créditos e transferência; operação abortada'; END IF;
  UPDATE public.catalogo_lancamentos_financeiros_v2 SET status='pago',
   referencia='asaas:'||coalesce(v.transferencia_id,p_transferencia),atualizado_em=now()
  WHERE remuneracao_id IN
@@ -254,5 +256,39 @@ RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path='' AS $$
 $$;
 REVOKE ALL ON FUNCTION public.catalogo_asaas_saldo_sacavel(uuid) FROM PUBLIC,anon,authenticated;
 GRANT EXECUTE ON FUNCTION public.catalogo_asaas_saldo_sacavel(uuid) TO service_role;
+
+
+-- Proteção retrocompatível: o operador do sistema antigo não pode registrar
+-- um repasse manual sobre uma remuneração já comprometida pelo saque Asaas.
+-- A finalização Asaas é autorizada somente se o registro de repasse possuir
+-- o mesmo ID do saque em metadados. Sem reserva, o legado continua funcionando.
+CREATE OR REPLACE FUNCTION catalogo_private.catalogo_asaas_proteger_credito_reservado()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $asaas_guard$
+DECLARE v_reserva uuid;v_repasse_saque text;
+BEGIN
+ IF (NEW.status='pago' OR NEW.repasse_id IS DISTINCT FROM OLD.repasse_id)
+    AND EXISTS(
+      SELECT 1 FROM public.catalogo_asaas_saque_itens i
+      WHERE i.remuneracao_id=NEW.id AND i.ativo
+    ) THEN
+    SELECT i.saque_id INTO v_reserva FROM public.catalogo_asaas_saque_itens i
+       WHERE i.remuneracao_id=NEW.id AND i.ativo;
+    SELECT rep.metadata->>'saque_asaas_id' INTO v_repasse_saque
+    FROM public.catalogo_repasses_v2 rep WHERE rep.id=NEW.repasse_id;
+    IF NEW.status<>'pago' OR NEW.repasse_id IS NULL OR
+       v_repasse_saque IS DISTINCT FROM v_reserva::text THEN
+       RAISE EXCEPTION 'Crédito reservado para saque Asaas; repasse manual proibido'
+         USING ERRCODE='23514';
+    END IF;
+ END IF;
+ RETURN NEW;
+END;
+$asaas_guard$;
+DROP TRIGGER IF EXISTS catalogo_asaas_reserva_guard ON public.catalogo_remuneracoes_v2;
+CREATE TRIGGER catalogo_asaas_reserva_guard
+ BEFORE UPDATE OF status,repasse_id ON public.catalogo_remuneracoes_v2
+ FOR EACH ROW EXECUTE FUNCTION catalogo_private.catalogo_asaas_proteger_credito_reservado();
+REVOKE ALL ON FUNCTION catalogo_private.catalogo_asaas_proteger_credito_reservado()
+ FROM PUBLIC,anon,authenticated,service_role;
 
 COMMIT;
