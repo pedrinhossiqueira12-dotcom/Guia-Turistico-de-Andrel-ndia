@@ -10,7 +10,7 @@
 ## Estado da implementação e limites
 
 **Alterações somente na branch de revisão; não aplicar em produção antes da homologação.**
-- `supabase/migrations/20261008180000_asaas_faturas_saques_controlados.sql` cria tabelas e RPCs isoladas com RLS, travas de concorrência e reservas por remuneração, sem apagar nada.
+- `supabase/pending-migrations/20261008180000_asaas_faturas_saques_controlados.sql` cria tabelas e RPCs isoladas com RLS, travas de concorrência e reservas por remuneração, sem apagar nada.
 - `supabase/functions/catalogo-asaas-financeiro/index.ts`: cobrança, consulta, carteira, Pix de saída, webhook.
 - `pages/catalogo-admin.html`, `js/catalogo-admin.js`: cobrança mensal Asaas com cadastro do pagador.
 - `pages/motoboy.html`, `js/motoboy.js`: saldo sacável **efetivamente financiado pelo Asaas**, saque e histórico.
@@ -23,7 +23,7 @@
 
 1. Obter aprovação para a funcionalidade de API de transferências da conta Asaas e conferir limites, tarifas, eventual validação por SMS/Token APP, titularidade das chaves Pix e responsabilidade pelas taxas.
 2. Criar contas de **sandbox e produção separadas**, obter as respectivas API keys. Nunca registrar chaves no GitHub, JS público ou logs.
-3. Aplicar **somente a migration nova**, na ordem do histórico do projeto, após backup verificável e ensaio com banco de testes. Conferir as constraints, RLS e funções.
+3. Após homologação e backup, mover a migration de **pending-migrations** para a pasta **migrations** com a versão oficial e atualizar o inventário aplicado (o projeto atual exige exatamente 29 migrações confirmadas). Aplicar somente no momento da implantação controlada. Conferir as constraints, RLS e funções.
 4. Configurar Supabase Edge Function `catalogo-asaas-financeiro` com `verify_jwt=false` **apenas para permitir webhook Asaas**, pois as demais rotas verificam o JWT em `auth.getUser()` e a rota webhook verifica um token próprio.
 5. Adicionar os **Secrets** da Edge Function (Supabase → Edge Functions → Secrets):
    - `ASAAS_API_KEY` = chave sandbox inicialmente
