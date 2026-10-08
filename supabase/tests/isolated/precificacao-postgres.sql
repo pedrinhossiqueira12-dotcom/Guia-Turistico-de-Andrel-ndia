@@ -72,6 +72,21 @@ BEGIN
   IF (v_result->>'versao_financeira')::integer <> 2 THEN
     RAISE EXCEPTION 'Comercio piloto nao recebeu precificacao V2';
   END IF;
+  -- Uma lista piloto vazia nao deve habilitar V2 para nenhum comercio.
+  UPDATE public.catalogo_fluxo_config SET comercios_piloto=ARRAY[]::text[] WHERE id=true;
+  v_result := public.catalogo_fluxo_precificar('entrega',10000,'loja-piloto');
+  IF (v_result->>'versao_financeira')::integer <> 1 THEN
+    RAISE EXCEPTION 'Lista piloto vazia habilitou V2 indevidamente';
+  END IF;
+  -- Com o fluxo desativado, nem a lista piloto nem a flag Pix podem forcar V2.
+  UPDATE public.catalogo_fluxo_config
+     SET ativo=false,comercios_piloto=ARRAY['loja-piloto'],somente_pix=true
+   WHERE id=true;
+  v_result := public.catalogo_fluxo_precificar('entrega',10000,'loja-piloto');
+  IF (v_result->>'versao_financeira')::integer <> 1
+     OR (v_result->>'somente_pix')::boolean IS DISTINCT FROM false THEN
+    RAISE EXCEPTION 'Fluxo inativo manteve V2 ou restricao Pix: %',v_result;
+  END IF;
   UPDATE public.catalogo_fluxo_config SET ativo=false,comercios_piloto=NULL WHERE id=true;
   v_result := public.catalogo_fluxo_precificar('entrega',10000,NULL);
   IF (v_result->>'versao_financeira')::integer <> 1
