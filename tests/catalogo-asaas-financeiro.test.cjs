@@ -40,6 +40,24 @@ test("somente status bancário DONE conclui saque e créditos são reservados", 
   assert.match(sql, /IF v_total IS NULL OR v_total<=0/);
 });
 
+test("repasse antigo não pode consumir remuneração reservada ao Asaas", () => {
+  assert.match(sql, /CREATE TRIGGER catalogo_asaas_reserva_guard/);
+  assert.match(sql, /IF NEW.status<>'pago' OR NEW.repasse_id IS NULL/);
+  assert.match(sql, /v_repasse_saque IS DISTINCT FROM v_reserva::text/);
+  assert.match(sql, /GET DIAGNOSTICS v_atualizados=ROW_COUNT/);
+  assert.match(sql, /IF v_atualizados<>v_qtd THEN RAISE EXCEPTION/);
+});
+
+test("auditoria administrativa não executa transferências", () => {
+  const adminHtml = read("pages/entregas-operacao.html");
+  const adminJs = read("js/entregas-operacao.js");
+  assert.match(edge, /case "listar_saques_admin":return await listAdminPayouts\(user.id\)/);
+  assert.match(edge, /if\(uid!==ADMIN_USER_ID\)throw new Failure/);
+  assert.match(adminHtml, /id="listaSaquesAsaas"/);
+  assert.match(adminJs, /chamarApi\("listar_saques_admin"/);
+});
+
+
 test("telas antigas preservadas e opção de saque aparece apenas quando liberada", () => {
   assert.match(courierHtml, /id="motoboyWithdrawPix"[^>]*disabled/);
   assert.match(courierHtml, /id="motoboyPixKey"/);
