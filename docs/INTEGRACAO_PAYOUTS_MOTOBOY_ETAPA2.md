@@ -75,3 +75,15 @@ A rotina de reserva ainda precisa de revisão final, homologação sandbox e con
 
 A RPC financeira aceita fatos recebidos por um serviço com service_role. Ela não faz uma consulta independente ao Mercado Pago por SQL, portanto a sua segurança depende de o worker privado executar o GET e comparar os fatos antes de chamá-la. O código do worker é uma biblioteca não implantada, não um servidor de pagamentos ativo. **Não publicar uma rota que simplesmente retransmita parâmetros do usuário a essa RPC.**
 
+
+
+## Etapa 3C — tipo da chave Pix e bloqueio de alterações
+
+- O motoboy agora seleciona explicitamente o tipo (CPF, CNPJ, EMAIL, PHONE ou PIX_CODE) no painel. O cliente manda apenas os campos permitidos e a Edge identifica a conta pelo JWT autenticado; IDs do cliente não escolhem a conta a alterar.
+- O backend confirma **sintaxe/formato**, incluindo dígitos verificadores para CPF/CNPJ, telefone internacional com +55, e-mail e UUID para chave aleatória. Isso NÃO comprova titularidade nem que a chave exista no DICT: a verificação do beneficiário exige homologação/consulta de provedor.
+- A chave segue cifrada em AES-GCM e o novo campo chave_pix_tipo é salvo apenas junto com ela, pela RPC privada catalogo_salvar_chave_pix_tipado_v2. O perfil antigo continua com chave cifrada, mas tipo nulo; deve ser atualizado pelo próprio motoboy antes de solicitar saque.
+- A reserva financeira exige que o tipo do perfil corresponda ao tipo da intenção. O banco recusa alterações/remoções de tipo ou chave durante payout reservado, em_envio, aguardando_confirmacao ou em_analise.
+- A leitura autenticada do extrato devolve o tipo escolhido. Logout, troca de conta e limpeza de sessão apagam chave e tipo da interface.
+- A validação do Payouts Sandbox usa o mesmo módulo de validação; testes Deno/SQL/Node abrangem formato e isolamento.
+- **Permanece desativado:** nenhuma Edge pública tem rota de saque automático; não há credenciais de Payouts, verificação de titularidade no provedor, homologação Sandbox real ou assinatura Ed25519 de produção. Não realizar merge e deploy financeiro ainda.
+
