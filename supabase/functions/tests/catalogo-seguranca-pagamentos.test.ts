@@ -1,7 +1,8 @@
 import {
   amountToCents, centsToMoney, translateProviderStatus,
   extractProviderPayment, providerFactsError, verifyWebhookSignature,
-  buildWebhookManifest, encryptAesGcm, decryptAesGcm, uuidFromParts, randomDeliveryCode,\n  constantTimeEqual, parseWebhookSignature, sanitizedProviderId,
+  buildWebhookManifest, encryptAesGcm, decryptAesGcm, uuidFromParts, randomDeliveryCode,
+  constantTimeEqual, parseWebhookSignature, sanitizedProviderId,
 } from "../_shared/catalogo-pagamentos-v2.ts";
 
 function assert(condition: unknown, message: string) {
