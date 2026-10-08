@@ -39,7 +39,7 @@ BEGIN
  codigo_entrega_hash,codigo_entrega_expira_em,status,status_pagamento)
  SELECT x.id,'comercio-de-exemplo',x.external_ref,x.key,'entrega','pix',
  10000,0,10000,500,200,700,9300,2,'Comprador sintético','00000000000',
- repeat('d',64),repeat('e',64),now()+interval '1 hour','pago','aprovado'
+ repeat(md5(x.id::text),2),repeat(md5(x.id::text||':code'),2),now()+interval '1 hour','pago','aprovado'
  FROM (VALUES
    (v_order,'ci-saque-mes-fechado','00000000-0000-4000-8000-000000000361'::uuid),
    (v_second,'ci-saque-mes-atual','00000000-0000-4000-8000-000000000362'::uuid)
