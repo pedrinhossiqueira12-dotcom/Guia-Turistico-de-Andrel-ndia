@@ -278,7 +278,7 @@ DO $test_saque_mensal$
 DECLARE v jsonb; v_again jsonb; v_count integer;
 BEGIN
   UPDATE public.catalogo_remuneracoes_v2
-     SET criado_em=date_trunc('month',pg_catalog.now())-interval '1 day'
+     SET criado_em=date_trunc('month',pg_catalog.now())-interval '2 months'
    WHERE pedido_id='00000000-0000-4000-8000-000000000052';
   v := public.catalogo_motoboy_saque_mensal_v2(
     '00000000-0000-4000-8000-000000000042','solicitar');
