@@ -109,7 +109,7 @@ BEGIN
     RAISE EXCEPTION 'ERRO: V1 foi alterada para 7 por cento';
   EXCEPTION WHEN check_violation THEN NULL;
   END;
-END $$;
+END $;
 
 DO $
 BEGIN
