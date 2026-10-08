@@ -25,7 +25,14 @@
 `20261007233535` — taxa fixa de 7%;
 `20261007233541` — finalizar regras financeiras e offline.
 
-Os três primeiros itens locais e remotos têm nomes/efeitos parecidos, mas é necessário comparar SQL e dependências de cada um **antes** de qualquer `migration repair`, alteração de timestamp ou implantação. Tratar `20261007213000` como migração nova **somente depois** de reconciliar o histórico e conferir que sua aplicação numa cópia restaurada não destrói objetos existentes. Nunca reaplicar cegamente scripts financeiros sobre produção.
+**Verificação de conteúdo executada em 08/10/2026 (read-only):** o campo `supabase_migrations.schema_migrations.statements[1]` foi comparado ao texto integral dos três arquivos da branch. As três correspondências são **exatamente iguais, byte a byte**:
+- `20261007233513` = `20261007173000` (10.766 caracteres);
+- `20261007233535` = `20261007190000` (11.360 caracteres);
+- `20261007233541` = `20261007203000` (15.346 caracteres).
+
+As três migrations **já estão executadas** no banco remoto; os timestamps locais são aliases históricos, não scripts pendentes a reaplicar. O Supabase CLI compara **timestamps**, não SQL, no histórico de migrations. Ainda é necessário reconciliar as versões de forma controlada antes de `db push`; **nenhum `migration repair` foi executado**. A migração `20261007213000` continua realmente pendente, mas possui timestamp **anterior** ao último timestamp remoto; não assumir que um `db push` comum fará a seleção correta. Planejar sua promoção como única atualização de SQL validada, com um novo identificador de versão cronologicamente válido se apropriado, sem duplicar a aplicação em produção.
+
+Um teste novo no CI usa um banco `catalogo_upgrade_ci` descartável clonado antes da migration final, com snapshots V1/V2 sintéticos que incluem arredondamento legado de 7% diferente do arredondamento único. Ele aplica só a migration final e exige preservação dos valores de pedidos e comissões. Este ensaio **não é substituto** da restauração dos dados reais.
 
 ## 3. Pré-requisitos obrigatórios para GO
 
