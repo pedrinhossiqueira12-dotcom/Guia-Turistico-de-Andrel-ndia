@@ -84,3 +84,14 @@ As comissões de compras pagas com checkout Mercado Pago não entram automaticam
 - [ ] Definir retenção de PII (CPF/CNPJ do comércio e chave Pix), texto LGPD e direitos do titular.
 - [ ] Homologar rollback, conciliação e alertas operacionais; migrar SQL pendente ao histórico de produção e implantar Edge com flags desligadas.
 - [ ] Ativar operações separadamente após validação real de webhooks e status; não tratar CI verde como certificação financeira.
+
+
+## Status de implantação (Sandbox, 8 de outubro de 2026)
+
+- Projeto staging Supabase: `jbttwihctuibchhcyqtl`.
+- Migration **já aplicada apenas nesse staging** através do conector Supabase, com nome `asaas_faturas_saques_controlados_sandbox` e versão remota `20261008221706`. **Não reaplicar** a migration no mesmo staging: a versão local pendente tem nome de arquivo diferente.
+- Edge Function `catalogo-asaas-financeiro` implantada em staging: **ACTIVE, versão 1**, com `verify_jwt=false` pois o Webhook usa autenticação por token e as rotas comuns verificam JWT internamente.
+- Verificação SQL pós-instalação: 5 tabelas novas, 4 RPCs públicas, trigger de proteção de remunerações, RLS em todas as 5 tabelas e nenhuma permissão SELECT para `anon`/`authenticated`.
+- Fluxos de cobrança e saque **continuam desativados por flags**. Credenciais do usuário, Webhook, faturamento real e homologação financeira ainda precisam ser testados.
+- **Produção `xdmbkflufsfqziixzpxc` permanece sem essa migration e sem a nova Edge Function.** Nunca mesclar/deployar direto em produção apenas porque o CI e a instalação staging passaram.
+- O usuário deve configurar no painel Asaas Sandbox **Webhook de eventos comum** com token e URL de staging. **Não ativar ainda** o mecanismo separado de validação de saques por Webhook (`type=TRANSFER`, resposta `APPROVED/REFUSED`): esse protocolo especial ainda não está implementado.
