@@ -175,7 +175,16 @@ async function run(userId: string, body: Record<string, unknown>) {
       p_pedido_ids: orderIds, p_referencia: text(body.referencia, 120) || null,
       p_comprovante: text(body.comprovante, 500) || null,
     });
-    return json({ success: true, ...(action === "operacao_admin" ? await administrativeStatement(operation) : operation), admin: true });
+    if (action === "operacao_admin") {
+      const { data: requests, error: queueError } = await db.from("catalogo_solicitacoes_saque_v2")
+        .select("id,motoboy_id,mes_referencia,valor_centavos,status,solicitado_em,repasse_id")
+        .in("status", ["solicitado", "em_analise"])
+        .order("solicitado_em", { ascending: true }).limit(100);
+      if (queueError) throw new HttpError("Não foi possível consultar a fila de saques.", 500);
+      return json({ success: true, ...(await administrativeStatement(operation)),
+        solicitacoes_saque: requests || [], admin: true });
+    }
+    return json({ success: true, ...operation, admin: true });
   }
 
   const management = new Set(["listar_motoboys", "autorizar_motoboy", "suspender_motoboy", "atribuir_pedido", "listar_para_atribuicao"]);
