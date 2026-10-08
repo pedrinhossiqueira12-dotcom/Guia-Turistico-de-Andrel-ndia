@@ -25,6 +25,16 @@
 
 **Evidência de concorrência:** commit `0896c858ee42171aa7655c2d2b6f442def5c983e`, execução GitHub Actions `37718565249`, job `113120670877` (**SUCCESS**), com duas sessões esperando simultaneamente no banco `catalogo_race_ci`, cópia descartável do schema. O CI destrói a cópia ao final. Isso não é prova de concorrência sob tráfego de produção, mas confirma o bloqueio atômico da RPC em PostgreSQL real.
 
+## Ensaios adicionais aprovados — handlers HTTP e recuperação de backup sintético
+
+- [x] **Handlers HTTP reais de Edge Functions:** `supabase/functions/tests/catalogo-edge-http.test.ts` importou as funções de Pix, pedidos offline, fatura Pix e webhook sem abrir sockets, com `fetch` completamente interceptado e sem permissão `--allow-net` no runtime Deno. **4/4 testes passaram.** Foram verificadas as respostas ao checkout desligado, tentativa de confirmação de entrega por endpoint público, método HTTP inválido e ausência de autenticação/HMAC.
+- [x] **Conciliação do webhook com respostas do provedor simuladas:** POST assinado com HMAC válido consulta pedido e credenciais do comércio na API simulada, busca valores e taxas no mock do Mercado Pago e aplica `catalogo_aplicar_pagamento_v2` com **R$ 1,01 e taxa de R$ 0,07**, ignorando valores arbitrários enviados no corpo da notificação. Valor divergente é rejeitado antes do RPC; `application_fee` divergente é registrado para revisão com tarifa não comprovada; tarifa ausente não produz confirmação de financiamento. Nenhuma chamada ao Mercado Pago real foi efetuada.
+- [x] **Backup/restauração de ensaio:** o CI executou `pg_dump` PostgreSQL 17 em `catalogo_ci` com dados **exclusivamente fictícios** e restaurou o arquivo em `catalogo_restore_ci`. Conferiu schema completo, tabelas, RLS, constraints, ausência de pedidos/pagamentos reais, dados sintéticos e RPC de 7% após o restore. A cópia de recuperação é descartada. **Não houve leitura, cópia, backup nem restauração da produção.**
+
+Evidências: job HTTP `113126792656` e job financeiro/restore `113126792843`, workflow `37720497432`, commit `a353f9d773e4a044d196ff03ffc67643c72d66ca`. O job financeiro/restore passou; o job original `supabase test db` permanece **SKIPPED**.
+
+**Importante:** o sucesso no backup sintético comprova o procedimento em PostgreSQL, **não** valida backup da produção ou restauração real de Auth/Storage gerenciados pelo Supabase. Mantemos a exigência de backup restaurável do ambiente real antes de qualquer deploy.
+
 ## Bloqueio comprovado na produção: CHECK legado de taxa fixa em 5%
 
 Na auditoria **somente leitura**, o schema do projeto de produção ainda possui `catalogo_pedidos_check1` com a fórmula `taxa_plataforma_centavos = round(subtotal_produtos_centavos * 0.05)`. Essa constraint contraria a regra de V2 sem entrega, em que a plataforma deve receber **7%**. Consequência: pedidos novos de retirada/consumo local podem falhar ao gravar, mesmo se a precificação da RPC estiver correta. Também pode impedir a divisão por arredondamento único em certas entregas V2.
