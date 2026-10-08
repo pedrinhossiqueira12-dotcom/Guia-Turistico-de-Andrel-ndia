@@ -23,6 +23,69 @@ jobs:
       - name: Test financial snapshots without database access
         run: deno test --no-check --allow-read=supabase/functions supabase/functions/tests/catalogo-financeiro.test.ts supabase/functions/tests/catalogo-checkouts-contract.test.ts supabase/functions/tests/catalogo-seguranca-pagamentos.test.ts
 
+  legacy-baseline-smoke:
+    name: Legacy baseline and first migration (disposable PostgreSQL)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: local-ci-only
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: local-ci-only
+      PGDATABASE: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify disposable database connection
+        run: |
+          test "$PGHOST" = localhost
+          test "$PGPORT" = 5432
+          test "$PGDATABASE" = postgres
+          test "$PGUSER" = postgres
+          test -z "${DATABASE_URL:-}"
+          test -z "${PGSERVICE:-}"
+          test -z "${PGHOSTADDR:-}"
+          test -z "${PGOPTIONS:-}"
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT current_database(), inet_server_addr() IS NOT NULL" | grep -Fx 'postgres|t'
+      - name: Create minimal Supabase Auth test doubles
+        run: |
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE anon NOLOGIN;
+          CREATE ROLE authenticated NOLOGIN;
+          CREATE ROLE service_role NOLOGIN;
+          CREATE SCHEMA auth;
+          CREATE TABLE auth.users (id uuid PRIMARY KEY);
+          CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $
+            SELECT NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid
+          $;
+          SQL
+      - name: Ensure baseline rejects missing opt-in
+        run: |
+          if psql -v ON_ERROR_STOP=1 -f supabase/tests/baseline/legacy-public-tables.sql > /tmp/baseline-no-opt-in.log 2>&1; then
+            echo "ERROR: baseline accepted missing opt-in"
+            exit 1
+          fi
+          grep -q "Baseline legado exige Supabase local descartavel" /tmp/baseline-no-opt-in.log
+      - name: Apply baseline and actual first migration
+        run: |
+          psql -v ON_ERROR_STOP=1 -1 -c "SET app.marketplace_test_baseline = 'enabled'" -f supabase/tests/baseline/legacy-public-tables.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261002233841_publication_metadata_reversible_archive_20261002.sql
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT COUNT(*) FROM public.cadastros_comercios WHERE local_id = 'pedrox-do-grau' AND status = 'aprovado'" | grep -Fx 1
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT COUNT(*) FROM public.comercios_publicados" | grep -Fx 139
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT COUNT(*) FROM pg_policies WHERE schemaname = 'public' AND tablename = 'mural_cadastros' AND policyname = 'Mural — público vê ativos'" | grep -Fx 1
+
   pricing-postgres-isolated:
     name: Real pricing RPC (isolated PostgreSQL)
     runs-on: ubuntu-latest
