@@ -95,6 +95,13 @@
           <div class="motoboy-balance-card"><span>Pago</span><strong id="motoboyBalancePago">R$ 0,00</strong></div>
           <div class="motoboy-balance-card"><span>Retido</span><strong id="motoboyBalanceRetido">R$ 0,00</strong></div>
         </div>
+        <div class="motoboy-balance-card" style="margin:16px 0;">
+          <span>Disponível para saque (faturas Asaas liquidadas)</span>
+          <strong id="motoboyAsaasBalance">R$ 0,00</strong>
+          <button id="motoboyWithdrawPix" class="motoboy-button motoboy-button-primary" type="button" disabled>Sacar via Pix</button>
+          <p id="motoboyWithdrawFeedback" class="motoboy-feedback" role="status">Aguardando habilitação dos saques.</p>
+          <ul id="motoboyWithdrawHistory" class="motoboy-history" aria-label="Histórico de saques"></ul>
+        </div>
         <p id="motoboyEarningsFeedback" class="motoboy-feedback" role="status"></p>
         <div class="motoboy-reliability">
           <div><span class="eyebrow">LEITURA PRUDENTE</span><h3>Confiabilidade</h3></div>
@@ -108,11 +115,11 @@
       </section>
 
       <section class="motoboy-card motoboy-profile-card" aria-labelledby="motoboyProfileTitle">
-        <span class="eyebrow">RECEBIMENTO OPCIONAL</span>
+        <span class="eyebrow">DADOS PARA SAQUE</span>
         <h2 id="motoboyProfileTitle">Chave Pix própria</h2>
-        <p>Informe somente uma chave sua. Ela é guardada pelo servidor para eventual repasse comprovado; a tela não envia identidade nem valor para criar remuneração.</p>
+        <p>Informe somente uma chave sua. Ela é protegida no servidor e utilizada somente para transferências Pix solicitadas por você. A chave deve ser de sua titularidade.</p>
         <form id="motoboyPixForm" class="motoboy-form motoboy-pix-form">
-          <label for="motoboyPixKey">Chave Pix <span class="motoboy-label-note">opcional</span></label>
+          <label for="motoboyPixKey">Chave Pix <span class="motoboy-label-note">obrigatória para sacar</span></label>
           <input id="motoboyPixKey" type="text" maxlength="120" autocomplete="off" placeholder="Deixe vazio para remover">
           <button id="motoboyPixButton" class="motoboy-button motoboy-button-secondary" type="submit">Salvar chave Pix</button>
           <p id="motoboyPixFeedback" class="motoboy-feedback" role="status"></p>
@@ -120,7 +127,7 @@
       </section>
     </section>
 
-    <p class="motoboy-footer-note">Este painel não exibe faturas, catálogo de produtos ou pedidos de outros usuários. Códigos e dados pessoais aparecem apenas na etapa autorizada da entrega. Repasses dependem de baixa e comprovação administrativa.</p>
+    <p class="motoboy-footer-note">Este painel não exibe faturas, catálogo de produtos ou pedidos de outros usuários. Códigos e dados pessoais aparecem apenas na etapa autorizada da entrega. Saques ficam disponíveis após entrega confirmada, fatura liquidada e autorização do provedor.</p>
   </main>
 
   <dialog id="motoboyConfirmDialog" class="motoboy-dialog" aria-labelledby="motoboyConfirmTitle">
@@ -170,6 +177,6 @@
   </dialog>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="../js/motoboy.js?v=motoboy-v2-20261006"></script>
+  <script src="../js/motoboy.js?v=motoboy-v2-asaas-20261008"></script>
 </body>
 </html>
