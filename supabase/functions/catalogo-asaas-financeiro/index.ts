@@ -287,6 +287,42 @@ async function listAdminPayouts(uid:string){
  if(saquesError||emissoesError)throw new Failure("Consulta da auditoria financeira indisponível.",503);
  return respond({success:true,saques:saques||[],emissoes_pendentes:emissoes||[]});
 }
+// Recuperação segura de resposta inconclusiva após POST /transfers.
+// O operador SOMENTE informa um ID para CONSULTA. Não gera novo Pix.
+async function reconcileAdminTransfer(uid:string,body:Record<string,unknown>){
+ if(uid!==ADMIN_USER_ID)throw new Failure("Acesso exclusivo do administrador da plataforma.",403);
+ const saqueId=value(body.saque_id,36),transferId=value(body.transferencia_id,130);
+ check(/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(saqueId)&&/^[A-Za-z0-9_-]{4,130}$/.test(transferId),
+  "Informe os identificadores válidos do saque e da transferência.",400);
+ const {data:row,error}=await db.from("catalogo_asaas_saques")
+  .select("id,valor_centavos,transferencia_id,status").eq("id",saqueId).maybeSingle();
+ if(error||!row)throw new Failure("Saque não encontrado.",404);
+ if(["concluido","falhou"].includes(row.status))
+  return respond({success:true,status:row.status,mensagem:"Saque já encerrado; nenhuma nova transferência foi criada."});
+ if(row.transferencia_id&&row.transferencia_id!==transferId)
+  throw new Failure("Esta reserva já está vinculada a outra transferência. Revisão manual necessária.",409);
+ const transfer=await asaas("/transfers/"+encodeURIComponent(transferId));
+ check(transfer.id===transferId&&transfer.externalReference===saqueId&&
+  cents(transfer.value)===Number(row.valor_centavos),
+  "Os dados bancários não correspondem à reserva. Operação mantida em revisão.",409);
+ const status=value(transfer.status,60);
+ if(status==="DONE"){
+  if(row.status!=="enviado")
+   await rpc("catalogo_asaas_atualizar_saque",{p_saque:saqueId,p_estado:"revisao",
+     p_transferencia:transferId,p_mensagem:"Recuperado pela administração após conferência Asaas"});
+  const result=await rpc("catalogo_asaas_atualizar_saque",{p_saque:saqueId,
+    p_estado:"concluido",p_transferencia:transferId,p_mensagem:null});
+  return respond({success:true,status:result.status,mensagem:"Transferência confirmada pelo Asaas; baixa registrada."});
+ }
+ if(["FAILED","CANCELLED"].includes(status)){
+  const result=await rpc("catalogo_asaas_atualizar_saque",{p_saque:saqueId,
+   p_estado:"falhou",p_transferencia:transferId,p_mensagem:"Falha da transferência confirmada no Asaas"});
+  return respond({success:true,status:result.status,mensagem:"Falha bancária comprovada. Reserva liberada para nova solicitação."});
+ }
+ await rpc("catalogo_asaas_atualizar_saque",{p_saque:saqueId,
+  p_estado:"revisao",p_transferencia:transferId,p_mensagem:"Transferência em processamento no Asaas"});
+ return respond({success:true,status:"revisao",mensagem:"Transferência identificada, ainda não concluída. Saldo segue reservado."});
+}
 async function webhook(request:Request){
  if(!WEBHOOK_TOKEN)throw new Failure("Webhook não configurado.",503);
  const actual=request.headers.get("asaas-access-token")||"";
@@ -328,6 +364,7 @@ Deno.serve(async (request:Request)=>{
    case "consultar_carteira":return await wallet(user.id,true);
    case "solicitar_saque":return await withdraw(user.id);
    case "listar_saques_admin":return await listAdminPayouts(user.id);
+   case "conciliar_saque_admin":return await reconcileAdminTransfer(user.id,body);
    default:throw new Failure("Ação inválida.",400);
   }
  }catch(e){
