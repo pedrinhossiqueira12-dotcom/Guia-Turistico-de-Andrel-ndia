@@ -14,7 +14,7 @@ test('solicitacao de saque é limitada a JWT autenticado e mês encerrado', () =
   assert.match(edge, /p_operador_id: userId/);
   assert.match(edge, /await user\(request\)/);
   assert.match(sql, /catalogo_v2_autorizado\(p_operador_id\)/);
-  assert.match(sql, /date_trunc\('month',pg_catalog\.now\(\)\) - interval '1 month'/);
+  assert.match(sql, /date_trunc\('month',pg_catalog\.now\(\) AT TIME ZONE 'America\/Sao_Paulo'\) - interval '1 month'/);
 });
 test('servidor impede pedir saques sem lastro ou duplicar crédito', () => {
   assert.match(sql, /pg_advisory_xact_lock/);
@@ -29,7 +29,7 @@ test('servidor impede pedir saques sem lastro ou duplicar crédito', () => {
 test('saldos de meses antigos não expiram; créditos do mês atual ficam fora', () => {
   assert.doesNotMatch(sql, /r\.criado_em\s*>=\s*v_mes/,
     'Limitar ao mês anterior faz remunerações antigas ficarem esquecidas');
-  assert.match(sql, /r\.criado_em<v_mes\+interval '1 month'/);
+  assert.match(sql, /r\.criado_em<\(\(v_mes\+interval '1 month'\) AT TIME ZONE 'America\/Sao_Paulo'\)/);
   assert.match(sql, /NOT EXISTS \(SELECT 1 FROM public\.catalogo_solicitacao_saque_itens_v2/,
     'Créditos já incluídos em outra solicitação não podem ser repetidos');
   const scenario = read('supabase/tests/isolated/catalogo-pedidos-entregas-e2e-postgres.sql');
