@@ -1,5 +1,8 @@
 # Auditoria de divergências de funções Edge — PR #35
 
+> **ATUALIZAÇÃO PÓS-DEPLOY — 08/10/2026:** as divergências efetivas nas quatro funções financeiras essenciais abaixo foram corrigidas no Supabase de produção, após a migração remota `20261008120906`: `catalogo-pedido-pix` v34, `catalogo-pedido-offline` v44, `mercadopago-marketplace-webhook` v36, `catalogo-fatura-pix` v9. Todos os arquivos (entrypoints e módulos importados) foram relidos da função publicada e comparados byte a byte com a branch; **100% idênticos e ACTIVE**. Os demais itens abaixo descrevem a auditoria anterior à sincronização; o histórico deve ser preservado. As divergências residuais em `catalogo-pix-producao` e OAuth eram diferenças de formatação/implementação não incluídas neste deploy; nenhuma alteração foi feita nesses endpoints. Sandbox real ainda não homologada. Nenhuma cobrança real foi iniciada por esta operação.
+
+
 **Data:** 08/10/2026. Auditoria **somente leitura**, comparando os arquivos da branch
 `logic/finalizacao-marketplace-2026-10-07` aos arquivos realmente retornados
 pela API de funções Edge do projeto Supabase de produção. Não houve deploy,
