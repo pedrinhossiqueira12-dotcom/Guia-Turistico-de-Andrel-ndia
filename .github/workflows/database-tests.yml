@@ -78,6 +78,14 @@ jobs:
             exit 1
           fi
           grep -q "Baseline legado exige Supabase local descartavel" /tmp/baseline-no-opt-in.log
+      - name: Ensure baseline rejects wrong database even with opt-in
+        run: |
+          if psql -d postgres -v ON_ERROR_STOP=1 -1 -c "SET app.marketplace_test_baseline = 'enabled'" -f supabase/tests/baseline/legacy-public-tables.sql > /tmp/baseline-wrong-db.log 2>&1; then
+            echo "ERROR: baseline accepted wrong database"
+            exit 1
+          fi
+          grep -q "Baseline legado exige Supabase local descartavel" /tmp/baseline-wrong-db.log
+          psql -d postgres -v ON_ERROR_STOP=1 -Atqc "SELECT to_regclass('public.avaliacoes') IS NULL AND to_regclass('public.cadastros_comercios') IS NULL AND to_regclass('public.mural_cadastros') IS NULL" | grep -Fx t
       - name: Apply baseline and actual first migration
         run: |
           psql -v ON_ERROR_STOP=1 -1 -c "SET app.marketplace_test_baseline = 'enabled'" -f supabase/tests/baseline/legacy-public-tables.sql
