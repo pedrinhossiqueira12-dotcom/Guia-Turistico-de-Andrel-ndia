@@ -10,7 +10,7 @@ end = migration.index("$$;", start) + len("$$;")
 function = migration[start:end]
 assert "v_plataforma := round(p_subtotal_centavos::numeric * 0.07)::integer - v_motoboy" in function
 assert "CREATE OR REPLACE FUNCTION public.catalogo_fluxo_precificar(" in function
-assert function.count("$") == 2, "Delimitadores inesperados na RPC extraida"
+assert function.count(chr(36) * 2) == 2, "Delimitadores inesperados na RPC extraida"
 assert fixture.count("DO $$") == 1
 bootstrap, assertions = fixture.split("DO $$", 1)
 Path("/tmp/catalogo-precificacao-ci.sql").write_text(
