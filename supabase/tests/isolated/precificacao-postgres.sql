@@ -28,7 +28,7 @@ BEGIN
       RAISE EXCEPTION 'Divergencia de entrega para % centavos: %',v_subtotal,v_result;
     END IF;
   END LOOP;
-  FOREACH v_subtotal IN ARRAY ARRAY[1,8,30,101,10000] LOOP
+  FOR v_subtotal IN 1..10000 LOOP
     v_result := public.catalogo_fluxo_precificar('retirada',v_subtotal,NULL);
     IF (v_result->>'taxa_plataforma_centavos')::integer <> round(v_subtotal::numeric * 0.07)::integer
        OR (v_result->>'taxa_motoboy_centavos')::integer <> 0 THEN
@@ -43,11 +43,11 @@ BEGIN
   IF (public.catalogo_fluxo_precificar('entrega',0,NULL)->>'http_status')::integer <> 400 THEN
     RAISE EXCEPTION 'Subtotal zero aceito';
   END IF;
-  UPDATE public.catalogo_fluxo_config SET ativo=false WHERE id=true;
+  -- A configuracao piloto deve ativar V2 somente para comercios autorizados.\n  UPDATE public.catalogo_fluxo_config SET comercios_piloto=ARRAY['loja-piloto'] WHERE id=true;\n  v_result := public.catalogo_fluxo_precificar('entrega',101,'loja-externa');\n  IF (v_result->>'versao_financeira')::integer <> 1 THEN\n    RAISE EXCEPTION 'Comercio fora do piloto recebeu precificacao V2';\n  END IF;\n  v_result := public.catalogo_fluxo_precificar('entrega',101,'loja-piloto');\n  IF (v_result->>'versao_financeira')::integer <> 2 THEN\n    RAISE EXCEPTION 'Comercio piloto nao recebeu precificacao V2';\n  END IF;\n  UPDATE public.catalogo_fluxo_config SET ativo=false,comercios_piloto=NULL WHERE id=true;
   v_result := public.catalogo_fluxo_precificar('entrega',10000,NULL);
   IF (v_result->>'versao_financeira')::integer <> 1
      OR (v_result->>'taxa_total_centavos')::integer <> 500 THEN
     RAISE EXCEPTION 'Fallback legado incorreto: %',v_result;
   END IF;
 END $$;
-SELECT 'PASS: 10000 subtotais, modalidades, invalidos e fallback legado' AS resultado;
+SELECT 'PASS: 10000 subtotais em tres modalidades, piloto, invalidos e fallback legado' AS resultado;
