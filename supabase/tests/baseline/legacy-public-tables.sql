@@ -1,9 +1,12 @@
 -- SOMENTE TESTES LOCAIS. NUNCA executar em producao.
 -- Reconstroi tabelas legadas anteriores ao primeiro migration versionado.
 -- Executar em instancia Supabase DESCARTAVEL antes das migrations, apos auth existir.
+-- Exige opt-in EXPLICITO por sessao: SET app.marketplace_test_baseline = 'enabled';
+-- O opt-in NAO substitui isolamento de rede/credenciais e validacao do alvo.
 DO $guard$
 BEGIN
-  IF current_database() <> 'postgres'
+  IF current_setting('app.marketplace_test_baseline', true) IS DISTINCT FROM 'enabled'
+     OR current_database() <> 'postgres'
      OR to_regclass('auth.users') IS NULL
      OR to_regclass('public.avaliacoes') IS NOT NULL
      OR to_regclass('public.cadastros_comercios') IS NOT NULL
