@@ -3,7 +3,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const read = (name) => fs.readFileSync(name, "utf8");
-const sql = read("supabase/migrations/20261008180000_asaas_faturas_saques_controlados.sql");
+const sql = read("supabase/pending-migrations/20261008180000_asaas_faturas_saques_controlados.sql");
 const edge = read("supabase/functions/catalogo-asaas-financeiro/index.ts");
 const courier = read("js/motoboy.js");
 const courierHtml = read("pages/motoboy.html");
