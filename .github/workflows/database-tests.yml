@@ -109,6 +109,10 @@ jobs:
           deno-version: v2.x
       - name: Type-check sandbox-only payouts adapter
         run: deno check --node-modules-dir=auto supabase/functions/_shared/catalogo-payouts-sandbox-v2.ts supabase/functions/_shared/catalogo-payouts-worker-sandbox-v2.ts supabase/functions/catalogo-entregas/index.ts
+      - name: Type-check payout homologation tool without credentials
+        run: deno check scripts/validacao-pagamentos/payouts-sandbox-preflight.ts
+      - name: Simulate homologation CLI without environment, network or database
+        run: deno run --no-check scripts/validacao-pagamentos/payouts-sandbox-preflight.ts --dry-run
       - name: Test financial snapshots without database access
         run: deno test --no-check --allow-read=supabase/functions supabase/functions/tests/catalogo-financeiro.test.ts supabase/functions/tests/catalogo-checkouts-contract.test.ts supabase/functions/tests/catalogo-seguranca-pagamentos.test.ts supabase/functions/tests/catalogo-webhook-identificacao.test.ts supabase/functions/tests/catalogo-fatura-provedor.test.ts supabase/functions/tests/catalogo-payouts-sandbox.test.ts supabase/functions/tests/catalogo-payouts-worker-sandbox.test.ts supabase/functions/tests/catalogo-pix-chave-tipado.test.ts
 
