@@ -25,7 +25,7 @@ type State = {
   providerPayoutId?: string;
   providerTransactionId?: string;
 };
-const MODES = ["--dry-run", "--execute-sandbox", "--check-status"] as const;
+const MODES = ["--dry-run", "--readiness", "--execute-sandbox", "--check-status"] as const;
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const FAKE_POP="POP01KV681P6SJ38NQHWX3XK162SS";
 const FAKE_TOP="TOP01KV681P6SJ38NQHWX3SF2WM22";
@@ -106,6 +106,17 @@ async function protectedOptions():Promise<{
   const runId=checkedRunId();
   const token=env("MP_PAYOUTS_TEST_ACCESS_TOKEN");
   check(token.length>=12,"Credencial de TESTE inválida.");
+  // A credencial de teste pode compartilhar formato/prefixo com a produtiva.
+  // Portanto, a flag X-test-token por si só NÃO prova que o token é de teste.
+  // Se a sessão contém um token produtivo conhecido, jamais reutilizá-lo.
+  for (const prodName of [
+    "MP_PLATFORM_ACCESS_TOKEN", "MP_PAYOUTS_PROD_ACCESS_TOKEN",
+    "MP_ACCESS_TOKEN", "MERCADO_PAGO_ACCESS_TOKEN",
+  ]) {
+    const knownProductionToken = Deno.env.get(prodName);
+    check(!knownProductionToken || knownProductionToken !== token,
+      "Credencial de teste coincide com credencial produtiva presente no ambiente: bloqueado.");
+  }
   return {runId,token,transport:networkTransport()};
 }
 function preparedForRecipient(runId:string):PayoutPrepared {
@@ -121,6 +132,54 @@ function maskedReport(input:Record<string,unknown>) {
   // Sem token, chave, CPF, endereço ou corpo bruto da API.
   console.log(JSON.stringify(input));
 }
+
+/**
+ * Checagem LOCAL e SOMENTE LEITURA: não tenta rede, não consulta Supabase,
+ * não salva arquivos e nunca imprime valores de tokens, chaves ou UUIDs.
+ * Não consegue confirmar habilitação de Payouts na conta Mercado Pago.
+ */
+async function readinessReport() {
+  const tryEnv=(name:string):string=>{
+    try { return Deno.env.get(name) || ""; }
+    catch { return ""; } // Sem --allow-env: bloqueado por padrão.
+  };
+  const token=tryEnv("MP_PAYOUTS_TEST_ACCESS_TOKEN");
+  const confirmations=
+    tryEnv("MP_PAYOUTS_TEST_APPROVED")==="CONFIRMO_SANDBOX" &&
+    tryEnv("MP_PAYOUTS_TEST_DESTINATION_APPROVED")==="DESTINO_TESTE_CONFIRMADO";
+  const runId=tryEnv("MP_PAYOUTS_TEST_RUN_ID");
+  let validRecipient=false;
+  const pixType=tryEnv("MP_PAYOUTS_TEST_PIX_TYPE");
+  const pixKey=tryEnv("MP_PAYOUTS_TEST_PIX_KEY");
+  try {
+    if (pixType && pixKey) {
+      prepararPayoutSandbox({
+        saqueId:"123e4567-e89b-42d3-a456-426614174000",
+        pixType:pixType as "EMAIL",chavePix:pixKey,valorCentavos:100,
+      });
+      validRecipient=true;
+    }
+  } catch { /* Só indicar ausência do requisito; NUNCA mostrar Pix. */ }
+  const productionTokenMatch=[
+    "MP_PLATFORM_ACCESS_TOKEN","MP_PAYOUTS_PROD_ACCESS_TOKEN",
+    "MP_ACCESS_TOKEN","MERCADO_PAGO_ACCESS_TOKEN",
+  ].some(name=>!!tryEnv(name) && tryEnv(name)===token);
+  const credentialsValid=token.length>=12 && !productionTokenMatch;
+  const ready=credentialsValid && confirmations && UUID.test(runId) && validRecipient;
+  console.log(JSON.stringify({
+    modo:"checagem_local_sem_rede",
+    credencialTesteConfigurada:credentialsValid,
+    autorizacoesExplicitas:confirmations,
+    uuidDoEnsaioValido:UUID.test(runId),
+    chaveDestinatarioFormatoValido:validRecipient,
+    possivelReutilizacaoTokenProducao:productionTokenMatch,
+    acessoMercadoPagoPayoutsVerificado:false,
+    aptoParaPrepararTesteSandbox:ready,
+    transferenciaExecutada:false,
+    observacao:"Confirme manualmente habilitação Payouts, origem de teste da credencial e titularidade da chave destino antes de enviar.",
+  }));
+}
+
 async function executeSandbox() {
   const {runId,token,transport}=await protectedOptions();
   const prepared=preparedForRecipient(runId);
@@ -182,8 +241,9 @@ async function checkStatus() {
 async function main() {
   const arg=Deno.args.length===0?"--dry-run":Deno.args[0];
   check(Deno.args.length<=1 && MODES.includes(arg as typeof MODES[number]),
-    "Use apenas --dry-run, --execute-sandbox ou --check-status.");
+    "Use --dry-run, --readiness, --execute-sandbox ou --check-status.");
   if(arg==="--dry-run") return await dryRun();
+  if(arg==="--readiness") return await readinessReport();
   if(arg==="--execute-sandbox") return await executeSandbox();
   return await checkStatus();
 }
