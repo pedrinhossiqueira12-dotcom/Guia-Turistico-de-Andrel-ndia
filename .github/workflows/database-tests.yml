@@ -53,6 +53,11 @@ jobs:
           test "$PGHOST" = "localhost"
           test "$PGDATABASE" = "catalogo_ci"
           test "$PGUSER" = "postgres"
+          test "$PGPORT" = "5432"
+          test -z "${DATABASE_URL:-}"
+          test -z "${PGSERVICE:-}"
+          test -z "${PGHOSTADDR:-}"
+          test -z "${PGOPTIONS:-}"
           psql -v ON_ERROR_STOP=1 -Atqc "SELECT current_database(), inet_server_addr() IS NOT NULL" | grep -Fx 'catalogo_ci|t'
       - name: Assemble test using actual migration RPC
         run: python scripts/validacao-pagamentos/build-isolated-pricing-test.py
