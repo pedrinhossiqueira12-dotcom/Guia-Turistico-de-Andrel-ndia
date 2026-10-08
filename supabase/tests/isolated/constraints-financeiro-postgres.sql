@@ -204,6 +204,18 @@ BEGIN
   IF (SELECT count(*) FROM public.catalogo_comissoes_offline) <> 50002 THEN
     RAISE EXCEPTION 'Quantidade inesperada de comissoes sinteticas';
   END IF;
+  -- Verifica a distribuicao exata dos cenarios, nao apenas o total de linhas.
+  IF (SELECT count(*) FROM public.catalogo_pedidos WHERE versao_financeira=1) <> 10002
+     OR (SELECT count(*) FROM public.catalogo_pedidos WHERE versao_financeira=2 AND modalidade='entrega') <> 20000
+     OR (SELECT count(*) FROM public.catalogo_pedidos WHERE versao_financeira=2 AND modalidade='retirada') <> 10000
+     OR (SELECT count(*) FROM public.catalogo_pedidos WHERE versao_financeira=2 AND modalidade='consumo_local') <> 10000
+     OR (SELECT count(*) FROM public.catalogo_comissoes_offline WHERE versao_financeira=1) <> 10002
+     OR (SELECT count(*) FROM public.catalogo_comissoes_offline WHERE versao_financeira=2 AND modalidade='entrega') <> 20000
+     OR (SELECT count(*) FROM public.catalogo_comissoes_offline WHERE versao_financeira=2 AND modalidade='retirada') <> 10000
+     OR (SELECT count(*) FROM public.catalogo_comissoes_offline WHERE versao_financeira=2 AND modalidade='consumo_local') <> 10000
+  THEN
+    RAISE EXCEPTION 'Distribuicao inesperada de modalidades e versoes financeiras';
+  END IF;
   IF EXISTS (
     SELECT 1 FROM public.catalogo_pedidos
      WHERE taxa_total_centavos <> taxa_plataforma_centavos + taxa_motoboy_centavos
