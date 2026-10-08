@@ -9,7 +9,9 @@
  * O transport é OBRIGATÓRIO e injetado pelo chamador, sem fetch implícito.
  * Criar payout (202) NUNCA equivale a registrar crédito como pago.
  */
-export type PayoutPixType = "EMAIL" | "PHONE" | "CPF" | "CNPJ" | "PIX_CODE";
+import { validarChavePixTipadaV2, type TipoChavePixV2 } from "./catalogo-pix-chave-v2.ts";
+
+export type PayoutPixType = TipoChavePixV2;
 export type PayoutTransport = (url: string, init: RequestInit) => Promise<Response>;
 export type PayoutRequest = {
   saqueId: string;
@@ -41,18 +43,6 @@ export type PayoutPrepared = {
 const ENDPOINT = "https://api.mercadopago.com/v1/payouts";
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const RESOURCE_RE = /^(POP|TOP)[A-Z0-9]{8,60}$/i;
-const PIX_TYPES: readonly PayoutPixType[] = ["EMAIL", "PHONE", "CPF", "CNPJ", "PIX_CODE"];
-
-function validPixKey(kind: PayoutPixType, key: string): boolean {
-  if (!PIX_TYPES.includes(kind) || key.length < 3 || key.length > 120) return false;
-  switch (kind) {
-    case "EMAIL": return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(key);
-    case "PHONE": return /^\+55[1-9][0-9]{9,10}$/.test(key);
-    case "CPF": return /^(\d{11}|\d{3}\.\d{3}\.\d{3}-\d{2})$/.test(key);
-    case "CNPJ": return /^(\d{14}|\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})$/.test(key);
-    case "PIX_CODE": return UUID_RE.test(key);
-  }
-}
 function parseNotificationUrl(url: string): string {
   let parsed: URL;
   try { parsed = new URL(url); }
@@ -71,7 +61,7 @@ export function prepararPayoutSandbox(input: PayoutRequest): PayoutPrepared {
     throw new Error("Payouts exige no mínimo R$ 1,00 e valor válido em centavos.");
   }
   const chave = typeof input.chavePix === "string" ? input.chavePix.trim() : "";
-  if (!validPixKey(input.pixType, chave)) throw new Error("Chave Pix/tipo inválidos.");
+  if (!validarChavePixTipadaV2(input.pixType, chave)) throw new Error("Chave Pix/tipo inválidos.");
   const suffix = input.saqueId.replace(/-/g, "").toLowerCase();
   const reference = "saque_" + suffix;
   const txReference = "motoboy_" + suffix;
