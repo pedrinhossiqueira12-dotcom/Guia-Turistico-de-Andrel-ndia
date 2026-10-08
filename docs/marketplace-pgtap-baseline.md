@@ -25,3 +25,11 @@ O teste `supabase/tests/database/marketplace_financeiro_v2.test.sql` contém 23 
 ## Evidência necessária para liberar
 
 Anexar os logs do reset local, execução completa do pgTAP, lista de jobs aprovados e auditoria das dependências legadas. Manter o job desabilitado até essa evidência existir.
+
+## Dependências legadas identificadas na inspeção inicial
+
+- `20261002233841_publication_metadata_reversible_archive_20261002.sql`: usa `auth.users` e roles `anon`, `authenticated` e `service_role`. Esses objetos são fornecidos pelo ambiente Supabase e não podem ser simulados apenas com PostgreSQL puro.
+- `20261002235010_schedule_storage_retention_dry_run_20261002.sql`: instala `pg_cron` e `pg_net`, consulta `vault.secrets` e chama `vault.create_secret`. A migração exige que essas extensões e o Vault estejam disponíveis **antes** da execução. Também agenda atividade de retenção, portanto precisa ser inspecionada em ambiente isolado.
+- `20261003013323_catalogo_digital_20261003000000.sql`: referencia `public.comercios_publicados` e `auth.users`, reforçando a necessidade de aplicar as migrações na ordem e com a infraestrutura Supabase inicializada.
+
+**Limite da auditoria:** esta é uma inspeção parcial dos primeiros arquivos, não uma comprovação de que todas as dependências foram identificadas. O job pgTAP deve permanecer desabilitado até uma execução integral reproduzível.
