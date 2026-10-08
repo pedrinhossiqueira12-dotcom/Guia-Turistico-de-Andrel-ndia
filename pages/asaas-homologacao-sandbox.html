@@ -35,7 +35,7 @@ pre{white-space:pre-wrap;word-break:break-all;padding:14px;background:#f3f5f1;bo
 <label>Senha de teste<input id="password" type="password" autocomplete="current-password" required></label>
 <div class="actions"><button type="submit" id="login">Entrar no Sandbox</button><button class="secondary" id="logout" type="button" hidden>Sair</button></div>
 </form>
-<p id="session" class="muted">Não autenticado.</p>
+<p id="session" class="muted">Não autenticado.</p><p id="uid" class="muted" hidden></p>
 </section>
 <section id="billing" hidden>
 <h2>2. Consultar fatura de homologação</h2>
@@ -77,6 +77,7 @@ async function refresh(){
  $("billing").hidden=!u;$("logout").hidden=!u;
  $("login-form").hidden=!!u;
  $("session").textContent=u?"Autenticado no Sandbox: "+u.email:"Não autenticado.";
+ $("uid").hidden=!u;$("uid").textContent=u?"Seu User UID de testes: "+u.id:"";
  if(!u){$("pix").hidden=true;$("result").textContent="Nenhuma consulta realizada.";}
 }
 async function call(acao,body={}){
