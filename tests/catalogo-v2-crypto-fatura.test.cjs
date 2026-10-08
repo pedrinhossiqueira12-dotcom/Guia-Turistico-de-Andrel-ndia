@@ -16,7 +16,7 @@ function cryptoModule() {
 }
 function delivery(actor, result={ok:true}, key=KEY) {
   let handler;const calls=[];const c=cryptoModule();
-  const db={auth:{getUser:async()=>({data:{user:{id:actor}},error:null})},rpc:async(name,args)=>{calls.push({name,args});return{data:result,error:null};}};
+  const db={auth:{getUser:async()=>({data:{user:{id:actor}},error:null})},rpc:async(name,args)=>{calls.push({name,args});return{data:name==='catalogo_saque_creditos_reservados_v2'?[]:result,error:null};}};
   const context={...c,Request,Response,createClient:()=>db,console:{error(){}},Deno:{env:{get:name=>name==='MP_OAUTH_ENCRYPTION_KEY'?key:''},serve:fn=>{handler=fn;}}};
   vm.runInNewContext(stripTypeScriptTypes(fs.readFileSync('supabase/functions/catalogo-entregas/index.ts','utf8').replace(/^import[^;]+;\s*/gm,'')),context);
   return {handler,calls};
@@ -58,6 +58,21 @@ test('operação administrativa exige root antes de decifrar dados e não invent
   const result={ok:true,remuneracoes:[{pedido_id:'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',motoboy_id:RIDER,chave_pix_enc:cipher,pix_ciphertext:cipher,status:'disponivel',financiamento_comprovado:true}]};
   const denied=delivery(RIDER,result);assert.equal((await denied.handler(req({acao:'operacao_admin',admin:true}))).status,403);assert.equal(denied.calls.length,0);
   const e=delivery(ADMIN,result);const body=await(await e.handler(req({acao:'operacao_admin'}))).json();assert.equal(body.admin,true);assert.equal(body.remuneracoes[0].status,'a_receber');assert.equal(body.remuneracoes[0].financiado,true);assert.equal(body.remuneracoes[0].chave_pix,'fixture@example.invalid');assert.doesNotMatch(JSON.stringify(body),/pix-v2:|pix_ciphertext|chave_pix_enc/);
+});
+test('saque mensal usa só o UUID da sessão JWT e não o valor enviado pelo navegador',async()=>{
+  const e=delivery(RIDER,{ok:true,saque_id:'11111111-1111-4111-8111-111111111111',valor_centavos:100});
+  const res=await e.handler(req({acao:'solicitar_saque',motoboy_id:ADMIN,valor_centavos:99999999,conta:'indevida'}));
+  assert.equal(res.status,200);
+  assert.equal(e.calls.length,1);
+  assert.equal(e.calls[0].name,'catalogo_motoboy_solicitar_saque_v2');
+  assert.deepEqual(JSON.parse(JSON.stringify(e.calls[0].args)),{p_operador_id:RIDER});
+});
+test('consultar saques não revela dados de outro motoboy',async()=>{
+  const e=delivery(RIDER,{ok:true,saques:[]});
+  const res=await e.handler(req({acao:'consultar_saques',motoboy_id:ADMIN}));
+  assert.equal(res.status,200);
+  assert.equal(e.calls[0].name,'catalogo_motoboy_listar_saques_v2');
+  assert.equal(e.calls[0].args.p_operador_id,RIDER);
 });
 test('fatura usa perfil oficial, GET após criação e validação integral antes da baixa',()=>{
   const source=fs.readFileSync('supabase/functions/catalogo-fatura-pix/index.ts','utf8');
