@@ -88,6 +88,7 @@ jobs:
           from pglast import parse_sql
           paths = sorted(Path("supabase/migrations").glob("*.sql"))
           paths += sorted(Path("supabase/tests/database").glob("*.sql"))
+          paths += sorted(Path("supabase/tests/baseline").glob("*.sql"))
           paths += sorted(Path("supabase/tests/isolated").glob("*.sql"))
           assert paths, "No SQL files found"
           failures = []
@@ -109,8 +110,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # The legacy schema baseline is not yet in the repository.
-      # Only enable this job after adding a reproducible test-only baseline.
+      # A partial baseline exists, but it is NOT integrated with Supabase reset.
+      # Keep gated until full migrations and pgTAP pass in a disposable instance.
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1
         with:
