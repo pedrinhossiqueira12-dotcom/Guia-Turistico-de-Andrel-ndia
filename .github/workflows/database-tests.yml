@@ -201,6 +201,8 @@ jobs:
       - name: Apply real catalogo digital migration (without scheduling migration)
         run: |
           psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261003013323_catalogo_digital_20261003000000.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261003013323_catalogo_digital_20261003000000.sql
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM pg_trigger WHERE tgname IN ('catalogos_atualizado_em','catalogo_categorias_atualizado_em','catalogo_produtos_atualizado_em') AND NOT tgisinternal" | grep -Fx 3
           psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM storage.buckets WHERE id='catalogos'" | grep -Fx 1
           psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM pg_policies WHERE schemaname='storage' AND tablename='objects' AND policyname='catalogos_proprietario_upload_ativo'" | grep -Fx 1
           psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM pg_class WHERE oid IN ('public.catalogos'::regclass,'public.catalogo_assinaturas'::regclass,'public.catalogo_categorias'::regclass,'public.catalogo_produtos'::regclass) AND relrowsecurity" | grep -Fx 4
