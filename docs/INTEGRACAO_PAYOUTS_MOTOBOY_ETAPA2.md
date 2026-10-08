@@ -38,3 +38,20 @@
 - https://www.mercadopago.com.br/developers/pt/docs/payouts/integration-test
 - https://www.mercadopago.com.br/developers/pt/docs/payouts/notifications
 - https://www.mercadopago.com.br/developers/pt/docs/payouts/go-to-production
+
+
+## Etapa 3A — reserva bancária implementada no PR (sem publicação)
+
+A migration ainda NÃO aplicada em produção, 20261008150000_solicitacao_saque_mensal_motoboy.sql, foi ampliada com:
+
+- Tabela restrita catalogo_payout_intents_v2: exatamente **uma intenção por solicitação**, ID de idempotência e referência externa únicos, snapshot da chave Pix protegido por AES-GCM (sem chave em texto), estado e timestamp da tentativa.
+- RPC privada catalogo_reservar_payout_v2(uuid,text): somente service_role, trava a solicitação, perfil e créditos no banco; só reserva se TODOS os valores e o lastro coincidirem. **Mínimo de R$ 1,00 por payout**, mesmo que a solicitação de ganhos possa ser inferior.
+- RPC privada catalogo_marcar_envio_payout_v2(uuid): primeira tentativa vira em_envio, com contador 1. Uma segunda tentativa recebe 409; a próxima integração deverá consultar primeiro o provedor, NÃO repetir um POST de resultado indeterminado.
+- Trigger catalogo_bloquear_repasse_reservado_v2: bloqueia registrar status pago manualmente em créditos com payout reservado.
+- Trigger catalogo_revisar_payout_apos_estorno_v2: muda intenção em curso para em_analise ao ocorrer estorno/chargeback.
+- Teste PostgreSQL real em SAVEPOINT/ROLLBACK, com dados fictícios: reserva com R$ 12,34, idempotência, bloqueio de segundo envio, bloqueio de baixa manual e retenção em estorno. Nada é persistido ao término.
+
+**Bloqueios intencionais:** estas RPCs não enviam Pix, não registram status pago e NÃO estão chamadas por Edge Functions públicas. O tipo Pix é passado somente pelo backend privilegiado e ainda precisará ser confirmado pelo motoboy em campo tipado; hoje a UI não o coleta. Tampouco há conciliação final de sucesso autorizado: o bloqueio contra baixa dupla impede dar baixa nesses créditos até que seja construído o fluxo transacional de confirmação do provedor.
+
+A rotina de reserva ainda precisa de revisão final, homologação sandbox e controle de credenciais antes de liberar qualquer operação real. Não fazer merge do PR #38 para produção por considerar estes testes equivalentes a repasse de dinheiro.
+
