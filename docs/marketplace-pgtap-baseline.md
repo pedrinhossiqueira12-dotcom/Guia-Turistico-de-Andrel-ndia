@@ -18,6 +18,19 @@ Evidência: workflow no commit `5c67941b87fa846016251f0db960e635fbc0b087`, execu
 
 **Limite crucial:** isso **não equivale** a `supabase test db` com Supabase local completo e todas as 29 migrações. O job original `database-tests` continua **SKIPPED** até a migração de agendamento ser isolada sem acesso ao projeto remoto, ser possível reconstruir o ambiente Supabase completo e o reset + pgTAP nativos passarem sem exceções.
 
+## Avanço posterior: migração Cron/Vault e cenários end-to-end isolados
+
+O job `scheduler-inert-migration-test` reproduz a lógica da **29ª migração** com uma cópia temporária gerada a partir do SQL original. O gerador exige os comandos e o endereço originais esperados, troca o endpoint de produção por `ci-no-network.invalid` e remove apenas os dois comandos de instalação de extensões. Stubs isolados implementam `cron.schedule`/`cron.unschedule` como inserção/remoção **de linhas locais**, nunca como execução de tarefas, e simulam o Vault com segredo sintético. A migração foi aplicada e reaplicada com sucesso: exatamente um job inerte, um token preservado e permissões restritas. **A migração original não foi aplicada integralmente a um Supabase local com Cron real**.
+
+No banco descartável que já executa as 28 migrações, foram acrescentados dois cenários de integração transacionais, revertidos ao final:
+
+1. `supabase/tests/isolated/catalogo-pedidos-entregas-e2e-postgres.sql`: Pix, cancelamento pré/pós-aceite, aceite sequencial de motoboys, desistência antes da coleta, prova física de entrega, remuneração de **2%** em pedido de R$ 1,01 e estorno.
+2. `supabase/tests/isolated/catalogo-offline-fatura-e2e-postgres.sql`: entrega por dinheiro e cartão de débito, crédito retido de 2% por entrega, emissão de fatura de 7%, rejeição de valores divergentes, confirmação idempotente, liberação após pagamento da fatura e retenção/bloqueio após estorno.
+
+Ambos passaram no workflow das execuções `37717937694` e `37717941007`, commit `d1c1b9535131b75161b798e3e3ebedadbc67b43b`.
+
+**Ainda pendente:** `supabase test db` nativo com todas as dependências gerenciadas, verificação de conexões concorrentes simultâneas, chamadas reais ao provedor de pagamento em sandbox e aceite/autorização de implantação em produção. A proteção contra execução remota permanece obrigatória.
+
 ## Bloqueios a resolver
 
 1. Reconstituir o estado inicial de schema anterior à primeira migração versionada. Verificar dependências de `public`, `auth`, `storage`, funções, triggers, grants, tipos e extensões. Não copiar dados de clientes nem segredos da produção.
@@ -80,7 +93,7 @@ A consulta `information_schema.columns` no projeto existente confirmou a estrutu
 
 ## Primeiro artefato de baseline (executado em banco descartável no CI)
 
-O arquivo `supabase/tests/baseline/legacy-public-tables.sql` cria exclusivamente em ambiente descartável as tabelas legadas `avaliacoes` e `cadastros_comercios`. Inclui guarda que exige banco descartável `catalogo_ci`, `auth.users` presente e tabelas legadas ausentes. Não é uma migration e **não deve** ser aplicado à produção.
+O arquivo `supabase/tests/baseline/legacy-public-tables.sql` cria exclusivamente em ambiente descartável as três tabelas legadas `avaliacoes`, `cadastros_comercios` e `mural_cadastros`. Inclui guarda que exige banco descartável `catalogo_ci`, `auth.users` presente e tabelas legadas ausentes. Não é uma migration e **não deve** ser aplicado à produção.
 
 **Pendências antes da execução completa:** conferir sequência/identity de `avaliacoes.id` (metadados atuais não expõem default), reconstruir a evolução da constraint `cadastros_comercios_etapa_check` (o default histórico `inicio` diverge da lista atual), confirmar que a infraestrutura Supabase local suporta as extensões e jobs agendados, e testar aplicação integral das migrations. As policies administrativas com identidade real não foram copiadas.
 
