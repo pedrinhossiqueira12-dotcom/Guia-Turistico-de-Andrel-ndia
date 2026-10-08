@@ -87,4 +87,35 @@ END;
 $$;
 REVOKE ALL ON FUNCTION public.catalogo_motoboy_saque_mensal_v2(uuid,text) FROM PUBLIC,anon,authenticated;
 GRANT EXECUTE ON FUNCTION public.catalogo_motoboy_saque_mensal_v2(uuid,text) TO service_role;
+-- O repasse administrativo existente é o ÚNICO ponto que comprova um pagamento.
+-- A solicitação acompanha o status sem jamais executar transferência.
+CREATE FUNCTION public.catalogo_conciliar_solicitacao_saque_v2()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $
+DECLARE v_solicitacao uuid;
+BEGIN
+  IF NEW.status='pago' AND NEW.repasse_id IS NOT NULL
+     AND (OLD.status IS DISTINCT FROM NEW.status OR OLD.repasse_id IS DISTINCT FROM NEW.repasse_id) THEN
+    FOR v_solicitacao IN SELECT DISTINCT i.solicitacao_id
+      FROM public.catalogo_solicitacao_saque_itens_v2 i
+      WHERE i.remuneracao_id=NEW.id LOOP
+      -- Todos os créditos da solicitação devem estar pagos e apontar ao
+      -- MESMO repasse real; do contrário há pendência para revisão manual.
+      UPDATE public.catalogo_solicitacoes_saque_v2 s
+         SET status='pago', repasse_id=NEW.repasse_id, resolvido_em=pg_catalog.now()
+       WHERE s.id=v_solicitacao AND s.status IN ('solicitado','em_analise')
+         AND NOT EXISTS (
+           SELECT 1 FROM public.catalogo_solicitacao_saque_itens_v2 i
+           JOIN public.catalogo_remuneracoes_v2 r ON r.id=i.remuneracao_id
+           WHERE i.solicitacao_id=s.id AND
+             (r.status<>'pago' OR r.repasse_id IS DISTINCT FROM NEW.repasse_id)
+         );
+    END LOOP;
+  END IF;
+  RETURN NEW;
+END;
+$;
+CREATE TRIGGER catalogo_conciliar_solicitacao_saque_v2
+AFTER UPDATE OF status,repasse_id ON public.catalogo_remuneracoes_v2
+FOR EACH ROW EXECUTE FUNCTION public.catalogo_conciliar_solicitacao_saque_v2();
+REVOKE ALL ON FUNCTION public.catalogo_conciliar_solicitacao_saque_v2() FROM PUBLIC,anon,authenticated;
 COMMIT;
