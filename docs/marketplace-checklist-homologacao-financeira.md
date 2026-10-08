@@ -1,5 +1,8 @@
 # Homologação financeira do marketplace — Guia Andrelândia
 
+> **ATUALIZAÇÃO CONFIRMADA — 08/10/2026:** com autorização do proprietário para avançar sem backup do banco, a migração financeira final foi **aplicada** via Supabase com a versão remota `20261008120906` (`arredondamento_taxa_total_7_outubro_2026`). O SQL aplicado é o arquivo local `20261007213000_arredondamento_taxa_total_7.sql`, sem os wrappers de transação, verificado por SHA-256 remoto `40e7ecd1759e1d6eb4cb438bb6cd1e6cdec8fc878513e135d92e83f80ffd1155`. Foram conferidos **17 pedidos (9 V1, 8 V2)** e **7 comissões (5 V1, 2 V2)**, sem alteração de contagens ou somatórios financeiros. A constraint antiga foi removida, novas constraints ativas e RPC de preços testada em leitura: R$ 0,33 na entrega gera taxa total R$ 0,02 (plataforma R$ 0,01; motoboy R$ 0,01); retirada gera R$ 0,02 para plataforma. Histórico contém **29 migrações**, **nenhuma pendente** na fotografia desta data. Não executar novamente a migração. **Os itens abaixo que ainda a descrevam como pendente são registros históricos anteriores a esta atualização.** O backup do GitHub não permite restaurar dados, Auth ou Storage do Supabase; este risco foi aceito, mas não houve cópia restaurável do banco. Ainda faltam sincronização/homologação dos bundles Edge e testes de pagamento em sandbox antes de declarar produção integralmente homologada.
+
+
 > Documento de controle. Não autoriza migrações, deploy ou alterações em pedidos reais.
 
 ## Situação conhecida
