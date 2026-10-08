@@ -39,10 +39,12 @@ BEGIN
   IF p_operador_id IS NULL OR NOT catalogo_private.catalogo_v2_autorizado(p_operador_id) THEN
     RETURN jsonb_build_object('ok',false,'http_status',403,'mensagem','Motoboy não autorizado.');
   END IF;
-  IF p_acao NOT IN ('listar','solicitar') THEN
+  IF p_acao IS NULL OR p_acao NOT IN ('listar','solicitar') THEN
     RETURN jsonb_build_object('ok',false,'http_status',400,'mensagem','Ação inválida.');
   END IF;
-  -- Somente mês calendário anterior; o mês em curso jamais é sacável.
+  -- Competência de fechamento: inclui créditos de meses já encerrados que
+  -- ficaram disponíveis tardiamente, mas nunca os do mês em curso.
+  -- Créditos já vinculados a outras solicitações não entram novamente.
   v_mes := (date_trunc('month',pg_catalog.now()) - interval '1 month')::date;
   IF p_acao='solicitar' THEN
     IF NOT EXISTS (SELECT 1 FROM public.catalogo_motoboy_perfis pf
@@ -57,12 +59,12 @@ BEGIN
     END IF;
     -- Bloqueia alterações concorrentes nos créditos enquanto compõe a lista.
     PERFORM 1 FROM public.catalogo_remuneracoes_v2 r
-      WHERE r.motoboy_id=p_operador_id AND r.criado_em>=v_mes
+      WHERE r.motoboy_id=p_operador_id
         AND r.criado_em<v_mes+interval '1 month'
       ORDER BY r.id FOR UPDATE;
     SELECT coalesce(sum(r.valor_centavos),0),count(*) INTO v_total,v_itens
       FROM public.catalogo_remuneracoes_v2 r
-      WHERE r.motoboy_id=p_operador_id AND r.criado_em>=v_mes
+      WHERE r.motoboy_id=p_operador_id
         AND r.criado_em<v_mes+interval '1 month'
         AND r.status='disponivel' AND r.financiamento_comprovado
         AND r.repasse_id IS NULL AND catalogo_private.catalogo_v2_financiado(r.pedido_id)
@@ -74,7 +76,7 @@ BEGIN
       VALUES(p_operador_id,v_mes,v_total) RETURNING id INTO v_request;
     INSERT INTO public.catalogo_solicitacao_saque_itens_v2(solicitacao_id,remuneracao_id,valor_centavos)
       SELECT v_request,r.id,r.valor_centavos FROM public.catalogo_remuneracoes_v2 r
-      WHERE r.motoboy_id=p_operador_id AND r.criado_em>=v_mes
+      WHERE r.motoboy_id=p_operador_id
         AND r.criado_em<v_mes+interval '1 month'
         AND r.status='disponivel' AND r.financiamento_comprovado
         AND r.repasse_id IS NULL AND catalogo_private.catalogo_v2_financiado(r.pedido_id)
