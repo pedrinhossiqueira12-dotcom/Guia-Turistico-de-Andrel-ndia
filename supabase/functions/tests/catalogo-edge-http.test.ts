@@ -79,11 +79,16 @@ Deno.env.set("MP_PLATFORM_WEBHOOK_SECRET", "");
 
 // Fail closed: qualquer fetch fora dos mocks deve falhar, sem abrir rede.
 let forbiddenRequests = 0;
+type FetchImpl = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 const nativeFetch = globalThis.fetch;
-globalThis.fetch = async (_input: RequestInfo | URL) => {
+const denyNetwork: FetchImpl = async () => {
   forbiddenRequests++;
   throw new Error("CI BLOQUEOU acesso a rede real");
 };
+let currentMockFetch: FetchImpl = denyNetwork;
+// Wrapper STAVEL: supabase-js pode capturar fetch quando createClient e chamado.
+// Os casos de teste trocam apenas a implementacao, nunca a referencia.
+globalThis.fetch = (input: RequestInfo | URL, init?: RequestInit) => currentMockFetch(input, init);
 
 await capture("pix", new URL("../catalogo-pedido-pix/index.ts", import.meta.url).href);
 await capture("offline", new URL("../catalogo-pedido-offline/index.ts", import.meta.url).href);
@@ -168,9 +173,8 @@ Deno.test("webhook HMAC valido consulta fatos autenticados e aplica RPC financei
   let calls: string[] = [];
   let rpcPayload: Record<string, unknown> | null = null;
   let actualPayment = structuredClone(payment);
-  const previous = globalThis.fetch;
   try {
-    globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    currentMockFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
       const rawUrl = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
       const u = new URL(rawUrl);
       calls.push(`${init?.method || "GET"} ${u.host}${u.pathname}`);
@@ -213,6 +217,6 @@ Deno.test("webhook HMAC valido consulta fatos autenticados e aplica RPC financei
     assert(rpcPayload === null, "Divergencia autenticada chegou a RPC de liberacao");
     assert(calls.length === 3, "Valor divergente executou mutacao");
   } finally {
-    globalThis.fetch = previous;
+    currentMockFetch = denyNetwork;
   }
 });
