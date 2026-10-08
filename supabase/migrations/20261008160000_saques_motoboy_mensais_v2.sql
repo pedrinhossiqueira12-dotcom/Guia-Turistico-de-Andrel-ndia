@@ -197,6 +197,20 @@ RETURNS uuid[] LANGUAGE sql STABLE SECURITY DEFINER SET search_path='' AS $saque
   WHERE sc.ativo AND s.estado <> 'pago';
 $saque_reservados$;
 
+-- Seleção para conciliação periódica: nunca exige beneficiário ou valor
+-- passado por um agendador externo. Prioriza novos pedidos e reconsulta os antigos.
+CREATE OR REPLACE FUNCTION public.catalogo_saque_proximo_v2()
+RETURNS jsonb LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path='' AS $saque_proximo$
+  SELECT coalesce(
+    (SELECT jsonb_build_object('ok',true,'saque_id',s.id)
+     FROM public.catalogo_saques_motoboy_v2 s
+     WHERE s.estado IN ('solicitado','processando','aguardando_confirmacao')
+     ORDER BY CASE WHEN s.estado='solicitado' THEN 0 ELSE 1 END,
+              s.atualizado_em ASC,s.id LIMIT 1),
+    jsonb_build_object('ok',true,'saque_id',null)
+  );
+$saque_proximo$;
+
 -- RPC para o worker backend. Nunca aceitar status ou IDs vindos do navegador.
 -- "preparar": fixa referência e evita segunda transferência simultânea.
 -- "registrar": salva IDs do payout SEM marcar como pago.
@@ -294,6 +308,12 @@ BEGIN
     RETURN jsonb_build_object('ok',true,'saque_id',v_s.id,'repasse_id',v_rep,
       'valor_centavos',v_s.valor_centavos,'transferencia_executada',true);
   END IF;
+  IF p_acao='observado' THEN
+    IF v_s.estado='aguardando_confirmacao' THEN
+      UPDATE public.catalogo_saques_motoboy_v2 SET atualizado_em=now() WHERE id=v_s.id;
+    END IF;
+    RETURN jsonb_build_object('ok',true,'estado',v_s.estado);
+  END IF;
   IF p_acao='falha' THEN
     -- Só liberar reserva se provedor comprovadamente rejeitou sem transferir.
     IF v_s.estado NOT IN ('processando','aguardando_confirmacao') OR p_status IS DISTINCT FROM 'rejected' THEN
@@ -311,12 +331,14 @@ REVOKE ALL ON FUNCTION
   public.catalogo_motoboy_solicitar_saque_v2(uuid),
   public.catalogo_motoboy_listar_saques_v2(uuid),
   public.catalogo_saque_creditos_reservados_v2(),
+  public.catalogo_saque_proximo_v2(),
   public.catalogo_saque_worker_v2(text,uuid,text,text,text)
 FROM PUBLIC,anon,authenticated;
 GRANT EXECUTE ON FUNCTION
   public.catalogo_motoboy_solicitar_saque_v2(uuid),
   public.catalogo_motoboy_listar_saques_v2(uuid),
   public.catalogo_saque_creditos_reservados_v2(),
+  public.catalogo_saque_proximo_v2(),
   public.catalogo_saque_worker_v2(text,uuid,text,text,text)
 TO service_role;
 REVOKE ALL ON FUNCTION catalogo_private.catalogo_bloquear_repasse_com_saque_v2() FROM PUBLIC,anon,authenticated;
