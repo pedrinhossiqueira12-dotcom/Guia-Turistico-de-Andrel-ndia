@@ -89,6 +89,17 @@ BEGIN
     RAISE EXCEPTION 'ERRO: subtotal adulterado aceito em comissao';
   EXCEPTION WHEN check_violation THEN NULL;
   END;
+  -- Entregas V2 devem reservar a parcela de 2% ao motoboy.
+  BEGIN
+    INSERT INTO public.catalogo_pedidos VALUES(10000,2,'entrega',700,0,700);
+    RAISE EXCEPTION 'ERRO: entrega V2 sem parcela de motoboy aceita';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
+  BEGIN
+    INSERT INTO public.catalogo_comissoes_offline VALUES(10000,2,'entrega',700,0,700,700);
+    RAISE EXCEPTION 'ERRO: comissao V2 sem parcela de motoboy aceita';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
   -- CHECKs devem ser aplicados tambem a alteracoes de registros existentes.
   BEGIN
     UPDATE public.catalogo_pedidos
