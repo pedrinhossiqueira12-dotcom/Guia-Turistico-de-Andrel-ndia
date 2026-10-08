@@ -71,6 +71,10 @@ UPDATE public.catalogos SET modalidades = ARRAY['entrega','retirada']::text[]
 INSERT INTO public.catalogo_categorias(comercio_id, nome)
 VALUES ('vagao-lanches', 'Bebidas do proprietário');
 
+-- O upload válido é permitido SOMENTE ao proprietário com assinatura ativa.
+INSERT INTO storage.objects(bucket_id, name)
+VALUES ('catalogos', 'vagao-lanches/produtos/lanche.webp');
+
 DO $check_owner$
 DECLARE denied boolean := false;
 BEGIN
@@ -89,6 +93,28 @@ BEGIN
   END;
   IF NOT denied THEN
     RAISE EXCEPTION 'Proprietário editou o catálogo de outro comércio';
+  END IF;
+
+  denied := false;
+  BEGIN
+    INSERT INTO storage.objects(bucket_id, name)
+      VALUES ('catalogos', 'mega-lanches/produtos/alheio.webp');
+  EXCEPTION WHEN insufficient_privilege THEN
+    denied := true;
+  END;
+  IF NOT denied THEN
+    RAISE EXCEPTION 'Proprietário conseguiu enviar imagem para o catálogo alheio';
+  END IF;
+
+  denied := false;
+  BEGIN
+    INSERT INTO storage.objects(bucket_id, name)
+      VALUES ('catalogos', 'vagao-lanches/produtos/arquivo.exe');
+  EXCEPTION WHEN insufficient_privilege THEN
+    denied := true;
+  END;
+  IF NOT denied THEN
+    RAISE EXCEPTION 'Upload aceitou extensão não permitida';
   END IF;
 
   denied := false;
@@ -117,6 +143,17 @@ BEGIN
   END;
   IF NOT denied THEN
     RAISE EXCEPTION 'Terceiro inseriu categoria no catálogo alheio';
+  END IF;
+
+  denied := false;
+  BEGIN
+    INSERT INTO storage.objects(bucket_id, name)
+      VALUES ('catalogos', 'vagao-lanches/produtos/invasor.webp');
+  EXCEPTION WHEN insufficient_privilege THEN
+    denied := true;
+  END;
+  IF NOT denied THEN
+    RAISE EXCEPTION 'Terceiro conseguiu enviar imagem para catálogo alheio';
   END IF;
 END $check_stranger$;
 RESET ROLE;
@@ -148,6 +185,17 @@ BEGIN
   IF NOT denied THEN
     RAISE EXCEPTION 'Proprietário conseguiu editar catálogo bloqueado';
   END IF;
+
+  denied := false;
+  BEGIN
+    INSERT INTO storage.objects(bucket_id, name)
+      VALUES ('catalogos', 'vagao-lanches/produtos/bloqueado.webp');
+  EXCEPTION WHEN insufficient_privilege THEN
+    denied := true;
+  END;
+  IF NOT denied THEN
+    RAISE EXCEPTION 'Proprietário enviou imagem com catálogo bloqueado';
+  END IF;
 END $check_blocked_owner$;
 RESET ROLE;
 
@@ -167,4 +215,12 @@ BEGIN
 END $check_expired$;
 RESET ROLE;
 
-SELECT 'PASS: permissões comportamentais, isolamento entre donos, bloqueio e assinatura vencida' AS result;
+DO $uploads$
+BEGIN
+  IF (SELECT count(*) FROM storage.objects WHERE bucket_id = 'catalogos') <> 1
+  THEN
+    RAISE EXCEPTION 'Uploads indevidos foram aceitos pela política do Storage';
+  END IF;
+END $uploads$;
+
+SELECT 'PASS: autorização de catálogos e uploads, isolamento entre donos, bloqueio e assinatura vencida' AS result;
