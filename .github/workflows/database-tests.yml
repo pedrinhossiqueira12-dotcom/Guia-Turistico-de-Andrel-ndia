@@ -692,6 +692,21 @@ jobs:
           total=$(find supabase/migrations -maxdepth 1 -name '*.sql' | wc -l)
           test "$count" -eq "$((total - 1))"
           echo "Applied $count of $total real migrations to disposable catalogo_ci."
+      - name: Apply staged Asaas migration to disposable clone only
+        run: |
+          set -euo pipefail
+          test "$PGHOST" = localhost
+          test "$PGDATABASE" = catalogo_ci
+          test -z "${DATABASE_URL:-}"
+          createdb --template=catalogo_ci catalogo_asaas_ci
+          trap 'dropdb --if-exists --force catalogo_asaas_ci' EXIT
+          psql -d catalogo_asaas_ci -v ON_ERROR_STOP=1 -f supabase/pending-migrations/20261008180000_asaas_faturas_saques_controlados.sql
+          psql -d catalogo_asaas_ci -v ON_ERROR_STOP=1 -Atqc "SELECT relrowsecurity FROM pg_class WHERE oid='public.catalogo_asaas_saques'::regclass" | grep -Fx t
+          psql -d catalogo_asaas_ci -v ON_ERROR_STOP=1 -Atqc "SELECT to_regprocedure('public.catalogo_asaas_reservar_saque(uuid)') IS NOT NULL" | grep -Fx t
+          psql -d catalogo_asaas_ci -v ON_ERROR_STOP=1 -Atqc "SELECT to_regprocedure('public.catalogo_asaas_saldo_sacavel(uuid)') IS NOT NULL" | grep -Fx t
+          dropdb --if-exists --force catalogo_asaas_ci
+          trap - EXIT
+          echo "PASS: Asaas staging migration parsed, applied and RLS validated on local clone"
       - name: Read-only historical pricing preflight on disposable database
         run: |
           set -euo pipefail
