@@ -166,8 +166,27 @@ BEGIN
     RAISE EXCEPTION 'Webhook duplicado gerou crédito de motoboy adicional: %',v_result;
   END IF;
 
+  -- O mapeamento de refund parcial da Edge Function envia 'contestado'
+  -- para a RPC. Aqui verificamos o bloqueio, sem afirmar estorno integral.
   v_result := public.catalogo_confirmar_cobranca_fatura(
-    'ci-fatura-offline-1','estornado','ci-pagamento-fatura',14,'Estorno simulado');
+    'ci-fatura-offline-1','contestado','ci-pagamento-fatura',14,
+    'Estorno parcial do provedor; conferência manual obrigatória');
+  IF (v_result->>'ok')::boolean IS DISTINCT FROM true
+     OR (SELECT status FROM public.catalogo_fatura_cobrancas
+         WHERE order_id='ci-fatura-offline-1') <> 'contestado'
+     OR (SELECT count(*) FROM public.catalogo_remuneracoes_v2
+         WHERE status='retido' AND financiamento_comprovado=false) <> 2
+     OR (SELECT status FROM public.catalogo_fechamentos_offline
+         WHERE id=v_fid) <> 'vencido'
+     OR (SELECT bloqueado FROM public.catalogos
+         WHERE comercio_id='comercio-de-exemplo') IS DISTINCT FROM true THEN
+    RAISE EXCEPTION 'Contestação parcial não reteve créditos e dívida: %',v_result;
+  END IF;
+
+  -- Se posteriormente houver prova de estorno total, preserva os créditos retidos
+  -- sem gerar pagamentos ou lançamentos duplicados.
+  v_result := public.catalogo_confirmar_cobranca_fatura(
+    'ci-fatura-offline-1','estornado','ci-pagamento-fatura',14,'Estorno integral confirmado');
   IF (v_result->>'ok')::boolean IS DISTINCT FROM true
      OR (SELECT count(*) FROM public.catalogo_remuneracoes_v2
          WHERE status='retido' AND financiamento_comprovado=false) <> 2
@@ -179,4 +198,4 @@ BEGIN
   END IF;
 END $invoice_offline$;
 
-SELECT 'PASS: dinheiro/cartão entrega 2%, fatura 7%, liquidação, idempotência e estorno' AS result;
+SELECT 'PASS: dinheiro/cartão, 7%, liquidação, idempotência, contestação parcial e estorno integral' AS result;
