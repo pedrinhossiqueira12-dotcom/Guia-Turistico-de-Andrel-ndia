@@ -37,6 +37,8 @@
   const ACTION_FIELDS = {
     listar_entregas: ["offset"],
     consultar_extrato: ["offset"],
+    consultar_saques: [],
+    solicitar_saque: [],
     definir_disponibilidade: ["disponivel"],
     aceitar_entrega: ["pedido_id"],
     coletar: ["pedido_id"],
@@ -445,6 +447,54 @@
     }
   }
 
+  async function carregarSaques() {
+    if (!state.session || !navigator.onLine) return;
+    const generation = state.generation;
+    const userId = state.userId;
+    try {
+      const data = await chamarApi({ acao: "consultar_saques" }, generation, userId);
+      validarSessaoAtual(generation, userId);
+      const lista = $("motoboySaquesHistorico");
+      if (lista) {
+        const items = Array.isArray(data.solicitacoes) ? data.solicitacoes : [];
+        lista.replaceChildren();
+        for (const item of items) {
+          const linha = document.createElement("li");
+          linha.textContent = String(item.mes_referencia || "") + " — " +
+            formatarMoeda(item.valor_centavos) + " — " + String(item.status || "");
+          lista.appendChild(linha);
+        }
+        if (!items.length) lista.textContent = "Nenhum saque solicitado.";
+      }
+      const mes = $("motoboySaqueMes");
+      if (mes) mes.textContent = "Mês elegível para solicitar: " + String(data.mes_elegivel || "");
+    } catch (err) {
+      if (err.message !== STALE_REQUEST) definirFeedback("motoboySaqueFeedback", err.message, true);
+    }
+  }
+
+  async function solicitarSaque(event) {
+    event.preventDefault();
+    if (!state.session) return;
+    const button = $("motoboySolicitarSaque");
+    if (button) button.disabled = true;
+    definirFeedback("motoboySaqueFeedback", "Enviando solicitação do mês anterior…");
+    const generation = state.generation;
+    const userId = state.userId;
+    try {
+      const result = await chamarApi({ acao: "solicitar_saque" }, generation, userId);
+      validarSessaoAtual(generation, userId);
+      definirFeedback("motoboySaqueFeedback",
+        "Solicitação de " + formatarMoeda(result.valor_solicitado_centavos) +
+        " registrada. O Pix só será enviado após confirmação financeira.");
+      await carregarSaques();
+    } catch (err) {
+      if (err.message !== STALE_REQUEST) definirFeedback("motoboySaqueFeedback", err.message, true);
+    } finally {
+      if (generation === state.generation && button) button.disabled = false;
+    }
+  }
+
   async function carregarExtrato() {
     if (!state.session || state.extractLoading || !navigator.onLine) return;
     const generation = state.generation;
@@ -735,7 +785,7 @@
     definirFeedback("motoboyLoginFeedback", "");
     definirAviso("Sessão autenticada", "Consultando ofertas e extrato autorizados para esta conta…");
     iniciarPolling();
-    await Promise.all([carregarEntregas(), carregarExtrato()]);
+    await Promise.all([carregarEntregas(), carregarExtrato(), carregarSaques()]);
   }
 
   async function fazerLogin(event) {
@@ -810,6 +860,7 @@
     $("motoboyLoadMore")?.addEventListener("click", () => carregarEntregas({ append: true }));
     $("motoboyAvailability")?.addEventListener("change", definirDisponibilidade);
     $("motoboyPixForm")?.addEventListener("submit", salvarChavePix);
+    $("motoboySaqueForm")?.addEventListener("submit", solicitarSaque);
     $("motoboyCancelConfirm")?.addEventListener("click", fecharConfirmacao);
     $("motoboyConfirmForm")?.addEventListener("submit", confirmarEntrega);
     $("motoboyCancelOccurrence")?.addEventListener("click", () => $("motoboyOccurrenceDialog")?.close());
