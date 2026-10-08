@@ -610,6 +610,26 @@ jobs:
           psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM public.catalogo_remuneracoes_v2" | grep -Fx 0
           psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM public.catalogo_pagamentos_v2" | grep -Fx 0
 
+      - name: Reject cash-and-card invoice scenarios without opt-in
+        run: |
+          if psql -v ON_ERROR_STOP=1 -f supabase/tests/isolated/catalogo-offline-fatura-e2e-postgres.sql > /tmp/catalogo-offline-no-opt-in.log 2>&1; then
+            echo 'ERROR: offline invoice scenario accepted missing opt-in'
+            exit 1
+          fi
+          grep -q 'Cenario offline exige catalogo_ci vazio e opt-in' /tmp/catalogo-offline-no-opt-in.log
+      - name: Exercise real cash and card deliveries, invoice payment and refund
+        run: |
+          psql -X -v ON_ERROR_STOP=1 <<'SQL'
+          BEGIN;
+          SET app.marketplace_test_offline = 'enabled';
+          \i supabase/tests/isolated/catalogo-offline-fatura-e2e-postgres.sql
+          ROLLBACK;
+          SQL
+          # Every financial state change above is rolled back on the disposable DB.
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM public.catalogo_pedidos" | grep -Fx 0
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM public.catalogo_remuneracoes_v2" | grep -Fx 0
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM public.catalogo_fatura_cobrancas" | grep -Fx 0
+
   pricing-postgres-isolated:
     name: Real pricing RPC (isolated PostgreSQL)
     runs-on: ubuntu-latest
