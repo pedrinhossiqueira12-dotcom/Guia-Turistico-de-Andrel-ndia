@@ -33,3 +33,11 @@ Anexar os logs do reset local, execução completa do pgTAP, lista de jobs aprov
 - `20261003013323_catalogo_digital_20261003000000.sql`: referencia `public.comercios_publicados` e `auth.users`, reforçando a necessidade de aplicar as migrações na ordem e com a infraestrutura Supabase inicializada.
 
 **Limite da auditoria:** esta é uma inspeção parcial dos primeiros arquivos, não uma comprovação de que todas as dependências foram identificadas. O job pgTAP deve permanecer desabilitado até uma execução integral reproduzível.
+
+## Dependências adicionais confirmadas
+
+- `20261004110000_avaliacoes_avatar_url.sql` usa `ALTER TABLE public.avaliacoes` sem `CREATE TABLE IF NOT EXISTS`. A tabela `public.avaliacoes` precisa existir **antes** dessa migração; é uma dependência legada concreta.
+- `20261006111500_corrigir_rls_cadastros_comercios.sql` cria uma policy diretamente sobre `public.cadastros_comercios`, que também precisa existir previamente. A policy depende ainda de `auth.uid()` e do campo `usuario_id`.
+- `20261006130000_catalogo_gratuito_por_conexao.sql` define uma função no schema `catalogo_private` e consulta `public.catalogo_recebedores`, `public.catalogos` e `public.comercios_publicados`. A existência e a ordem de criação desses objetos precisam ser verificadas na reconstrução.
+
+**Implicação:** as migrações versionadas não são, por si só, prova de que um `supabase db reset` vazio funcionará. Não criar tabelas fictícias em produção para contornar essa lacuna.
