@@ -18,10 +18,12 @@
 - [x] Dinheiro e cartão de débito fictícios por RPC: entrega comprovada gera crédito de **2% retido**; fatura de **7%** (5% plataforma + 2% logística) liquida o crédito; divergência não libera fundos; evento duplicado não duplica créditos; estorno volta a reter e bloqueia comércio.
 - [x] Testes de RLS de catálogo e Storage: autorização dos proprietários, bloqueio de terceiros, imagens inválidas, suspensão e assinatura vencida.
 - [x] Cenários Pix/offline executados dentro de **transações revertidas**, sem pedidos, pagamentos ou comissões de teste persistentes.
+- [x] **Concorrência real**: duas conexões PostgreSQL independentes aguardaram bloqueio na mesma linha por duas rodadas. Em cada rodada houve exatamente um vencedor da oferta de motoboy, mesmo após desistência e reoferta. Conclusão física gerou apenas um crédito retido de 2%.
+- [x] **Comprador x comércio simultâneos**: duas conexões disputaram o mesmo pedido em duas rodadas; foram observados tanto o aceite do comércio vencendo quanto o cancelamento do comprador vencendo. O perdedor recebeu HTTP 409; status, ocorrência, reembolso e ledger permaneceram consistentes.
 
 **Evidência:** workflow `Database tests` no ramo de desenvolvimento, commit `d1c1b9535131b75161b798e3e3ebedadbc67b43b`, execuções `37717937694` e `37717941007` (sucesso). Os resultados validam o comportamento das RPCs com dados sintéticos, **não** a comunicação com o Mercado Pago, o frontend ou o Supabase completo.
 
-**Limite do teste de motoboys:** foi comprovado que o segundo entregador é rejeitado após o primeiro aceitar; ainda falta simular tentativas *verdadeiramente simultâneas* de conexão independentes e verificar esse caso sob concorrência.
+**Evidência de concorrência:** commit `0896c858ee42171aa7655c2d2b6f442def5c983e`, execução GitHub Actions `37718565249`, job `113120670877` (**SUCCESS**), com duas sessões esperando simultaneamente no banco `catalogo_race_ci`, cópia descartável do schema. O CI destrói a cópia ao final. Isso não é prova de concorrência sob tráfego de produção, mas confirma o bloqueio atômico da RPC em PostgreSQL real.
 
 ## Critérios obrigatórios antes de qualquer deploy
 
@@ -58,5 +60,5 @@
 ## Bloqueios atuais
 
 1. Execução nativa `supabase db reset --local` e `supabase test db` com **todas** as dependências Supabase e o agendamento externo neutralizado; atualmente só foi executado pgTAP em PostgreSQL isolado.
-2. Homologação ponta a ponta com frontend e **provedor de pagamento sandbox** (Pix, webhooks, chargebacks), além de concorrência real entre motoboys.
+2. Homologação ponta a ponta com frontend e **provedor de pagamento sandbox** (Pix, webhooks e chargebacks); concorrência real no banco isolado já passou, mas ainda falta verificar o comportamento da UI sob carga.
 3. Backup e restauração verificáveis do banco real, auditoria de deploy e aprovação explícita para migração/implantação em produção.
