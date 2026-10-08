@@ -235,7 +235,7 @@ GRANT EXECUTE ON FUNCTION public.catalogo_asaas_registrar_fatura(uuid,text,integ
  public.catalogo_asaas_atualizar_saque(uuid,text,text,text) TO service_role;
 
 CREATE OR REPLACE FUNCTION public.catalogo_asaas_saldo_sacavel(p_motoboy uuid)
-RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path='' AS $
+RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path='' AS $$
  SELECT jsonb_build_object(
   'disponivel_centavos',coalesce(sum(r.valor_centavos),0)::integer,
   'creditos',count(*)::integer
@@ -251,7 +251,7 @@ RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path='' AS $
   AND c.status='paga' AND f.status='pago'
   AND b.gateway='asaas' AND b.status='pago' AND b.pago_em IS NOT NULL
   AND NOT EXISTS(SELECT 1 FROM public.catalogo_asaas_saque_itens i WHERE i.remuneracao_id=r.id AND i.ativo);
-$;
+$$;
 REVOKE ALL ON FUNCTION public.catalogo_asaas_saldo_sacavel(uuid) FROM PUBLIC,anon,authenticated;
 GRANT EXECUTE ON FUNCTION public.catalogo_asaas_saldo_sacavel(uuid) TO service_role;
 
