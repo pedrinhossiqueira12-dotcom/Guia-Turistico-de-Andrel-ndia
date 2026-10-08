@@ -115,6 +115,29 @@ BEGIN
     RAISE EXCEPTION 'ERRO: UPDATE inconsistente de comissao aceito';
   EXCEPTION WHEN check_violation THEN NULL;
   END;
+  -- A modalidade nao pode mudar sem recalcular a distribuicao financeira.
+  BEGIN
+    UPDATE public.catalogo_pedidos
+       SET modalidade = 'retirada'
+     WHERE ctid = (
+       SELECT ctid FROM public.catalogo_pedidos
+        WHERE versao_financeira = 2 AND modalidade = 'entrega'
+          AND taxa_motoboy_centavos > 0 LIMIT 1
+     );
+    RAISE EXCEPTION 'ERRO: troca de entrega para retirada aceita sem recalculo';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
+  BEGIN
+    UPDATE public.catalogo_comissoes_offline
+       SET modalidade = 'consumo_local'
+     WHERE ctid = (
+       SELECT ctid FROM public.catalogo_comissoes_offline
+        WHERE versao_financeira = 2 AND modalidade = 'entrega'
+          AND taxa_motoboy_centavos > 0 LIMIT 1
+     );
+    RAISE EXCEPTION 'ERRO: troca de entrega para consumo local aceita sem recalculo';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
   -- As restricoes precisam rejeitar valores inconsistentes.
   BEGIN
     INSERT INTO public.catalogo_comissoes_offline VALUES(10000,2,'entrega',500,300,800,800);
