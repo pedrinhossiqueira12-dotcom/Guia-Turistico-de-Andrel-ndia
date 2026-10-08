@@ -190,12 +190,12 @@ $$;
 -- No painel administrativo, ocultar a opção de repassar créditos que já
 -- foram reservados pelo motoboy. O trigger financeiro também bloqueia a baixa.
 CREATE OR REPLACE FUNCTION public.catalogo_saque_creditos_reservados_v2()
-RETURNS uuid[] LANGUAGE sql STABLE SECURITY DEFINER SET search_path='' AS $
+RETURNS uuid[] LANGUAGE sql STABLE SECURITY DEFINER SET search_path='' AS $saque_reservados$
   SELECT coalesce(array_agg(sc.remuneracao_id),ARRAY[]::uuid[])
   FROM public.catalogo_saque_creditos_v2 sc
   JOIN public.catalogo_saques_motoboy_v2 s ON s.id=sc.saque_id
   WHERE sc.ativo AND s.estado <> 'pago';
-$;
+$saque_reservados$;
 
 -- RPC para o worker backend. Nunca aceitar status ou IDs vindos do navegador.
 -- "preparar": fixa referência e evita segunda transferência simultânea.
