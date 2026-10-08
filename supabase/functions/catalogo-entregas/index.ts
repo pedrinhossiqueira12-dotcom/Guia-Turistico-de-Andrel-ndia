@@ -123,6 +123,12 @@ async function run(userId: string, body: Record<string, unknown>) {
     const statement = await rpc("catalogo_motoboy_extrato_v2", { p_operador_id: userId, p_offset: offset(body.offset) });
     return json({ success: true, ...(await personalStatement(statement, userId)) });
   }
+  if (action === "consultar_saques" || action === "solicitar_saque") {
+    const data = await rpc("catalogo_motoboy_saque_mensal_v2", {
+      p_operador_id: userId, p_acao: action === "solicitar_saque" ? "solicitar" : "listar",
+    });
+    return json({ success: true, ...data });
+  }
   if (action === "confirmar_entrega") return json({ success: true, pedido: await confirmDelivery(userId, body) });
 
   const deliveryActions: Record<string, string> = {
