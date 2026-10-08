@@ -6,6 +6,18 @@ O job `database-tests` de `.github/workflows/database-tests.yml` permanece **SKI
 
 O teste `supabase/tests/database/marketplace_financeiro_v2.test.sql` contém 23 assertions e executa `UPDATE public.catalogo_fluxo_config` dentro de uma transação revertida ao final. Ele deve ser executado **somente em um banco descartável**, nunca no projeto de produção.
 
+## Testes efetivamente aprovados no PostgreSQL isolado (2026-10-07)
+
+O job `complete-chain-postgres-isolated` do GitHub Actions demonstrou a aplicação ordenada de **28 das 29 migrações SQL reais** em `catalogo_ci` (serviço efêmero PostgreSQL 17). A migração `20261002235010_schedule_storage_retention_dry_run_20261002.sql` foi **excluída deliberadamente**, pois contém URL do projeto de produção e agenda chamadas HTTP. A extensão `pg_cron` foi mantida indisponível no banco isolado, impedindo a criação de agendamentos.
+
+As dependências históricas são preenchidas exclusivamente com stubs de Auth/Storage e seeds sintéticas, incluindo `comercio-de-exemplo`, exigido como chave estrangeira pela migração de allowlist. Nenhum cadastro, pedido, pagamento ou token real é copiado da produção.
+
+No mesmo job, a extensão **pgTAP real** (`postgresql-17-pgtap`) executou `supabase/tests/database/marketplace_financeiro_v2.test.sql`. Resultado confirmado pelo log do CI: **23 assertions aprovadas, 0 falhas**, incluindo a função de arredondamento final e os snapshots históricos. A suíte usa `BEGIN`/`ROLLBACK` e o CI verifica que não persistiram pedidos ou lançamentos financeiros de teste.
+
+Evidência: workflow no commit `5c67941b87fa846016251f0db960e635fbc0b087`, execução `37716952226`, job `113115498377`. O reforço de verificação após rollback foi adicionado em commit posterior.
+
+**Limite crucial:** isso **não equivale** a `supabase test db` com Supabase local completo e todas as 29 migrações. O job original `database-tests` continua **SKIPPED** até a migração de agendamento ser isolada sem acesso ao projeto remoto, ser possível reconstruir o ambiente Supabase completo e o reset + pgTAP nativos passarem sem exceções.
+
 ## Bloqueios a resolver
 
 1. Reconstituir o estado inicial de schema anterior à primeira migração versionada. Verificar dependências de `public`, `auth`, `storage`, funções, triggers, grants, tipos e extensões. Não copiar dados de clientes nem segredos da produção.
@@ -66,9 +78,9 @@ A consulta `information_schema.columns` no projeto existente confirmou a estrutu
 
 **Proteção de privacidade:** não transportar identificadores reais de administradores ou usuários para o baseline. Políticas dependentes de identidade administrativa devem usar uma identidade sintética exclusiva do ambiente de testes. O baseline executável ainda precisa preservar o comportamento de autorização sem usar dados reais.
 
-## Primeiro artefato de baseline (ainda não executado)
+## Primeiro artefato de baseline (executado em banco descartável no CI)
 
-O arquivo `supabase/tests/baseline/legacy-public-tables.sql` cria exclusivamente em ambiente descartável as tabelas legadas `avaliacoes` e `cadastros_comercios`. Inclui guarda que exige banco local `postgres`, `auth.users` presente e tabelas legadas ausentes. Não é uma migration e **não deve** ser aplicado à produção.
+O arquivo `supabase/tests/baseline/legacy-public-tables.sql` cria exclusivamente em ambiente descartável as tabelas legadas `avaliacoes` e `cadastros_comercios`. Inclui guarda que exige banco descartável `catalogo_ci`, `auth.users` presente e tabelas legadas ausentes. Não é uma migration e **não deve** ser aplicado à produção.
 
 **Pendências antes da execução completa:** conferir sequência/identity de `avaliacoes.id` (metadados atuais não expõem default), reconstruir a evolução da constraint `cadastros_comercios_etapa_check` (o default histórico `inicio` diverge da lista atual), confirmar que a infraestrutura Supabase local suporta as extensões e jobs agendados, e testar aplicação integral das migrations. As policies administrativas com identidade real não foram copiadas.
 
