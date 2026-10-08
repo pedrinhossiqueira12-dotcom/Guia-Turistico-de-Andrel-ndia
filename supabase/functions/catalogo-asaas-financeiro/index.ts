@@ -164,10 +164,19 @@ async function createInvoice(uid:string,body:Record<string,unknown>,email:string
  const {data:claim,error:claimError}=await db.from("catalogo_asaas_emissoes")
   .insert({fechamento_id:f.id}).select("operacao_id").single();
  // Claim único impede duas cobranças durante chamadas concorrentes ou timeout.
- if(claimError||!claim)throw new Failure("A emissão está reservada. Consulte antes de criar outra cobrança.",409);
+ // Se já existe uma reserva, SOMENTE recuperamos via GET; nunca fazemos outro POST.
+ if(claimError&&claimError.code!=="23505")
+  throw new Failure("Não foi possível reservar a fatura para cobrança.",503);
+ const novoClaim=!claimError&&Boolean(claim);
  const ref=reference(store,month);
  const list=await asaas("/payments?externalReference="+encodeURIComponent(ref)+"&limit=100");
- let payment=Array.isArray(list.data)?list.data.find((p:Record<string,unknown>)=>p.externalReference===ref):null;
+ const candidates=Array.isArray(list.data)
+  ? list.data.filter((p:Record<string,unknown>)=>p.externalReference===ref) : [];
+ if(candidates.length>1)
+  throw new Failure("Há mais de uma cobrança com a mesma referência no Asaas. Revisão manual necessária.",409);
+ let payment=candidates[0]||null;
+ if(!payment&&!novoClaim)
+  throw new Failure("Emissão reservada e ainda não localizada no Asaas. Não é seguro emitir outro Pix automaticamente.",409);
  if(!payment){
   payment=await asaas("/payments","POST",{
    customer:customerId,billingType:"PIX",value:money(Number(f.total_comissao_centavos)),
@@ -182,16 +191,20 @@ async function createInvoice(uid:string,body:Record<string,unknown>,email:string
  check(verified.customer===customerId && verified.externalReference===ref &&
   verified.billingType==="PIX" && cents(verified.value)===Number(f.total_comissao_centavos),
   "Cobrança divergente; operação reservada para revisão.",409);
- const qr=await asaas("/payments/"+encodeURIComponent(String(payment.id))+"/pixQrCode");
+ const alreadyPaid=verified.status==="RECEIVED";
+ const qr=alreadyPaid?{}:await asaas("/payments/"+encodeURIComponent(String(payment.id))+"/pixQrCode");
  const pix=parsePix(verified,qr);
- check(Boolean(pix.code),"Pix sem copia e cola. Consulte a cobrança no provedor.",502);
- const registered=await rpc("catalogo_asaas_registrar_fatura",{
+ if(!alreadyPaid)check(Boolean(pix.code),"Pix sem copia e cola. Consulte a cobrança no provedor.",502);
+ await rpc("catalogo_asaas_registrar_fatura",{
   p_fechamento:f.id,p_payment:verified.id,p_valor:f.total_comissao_centavos,
   p_qr:pix.code,p_imagem:pix.imageBase64,p_url:pix.ticketUrl,
   p_expira:qr.expirationDate||null
  });
+ if(alreadyPaid)await verifyInvoice(String(verified.id),
+  {order_id:verified.id,valor_centavos:f.total_comissao_centavos},store,month);
  return respond({success:true,order_id:verified.id,fatura:f,valor_centavos:f.total_comissao_centavos,
-  cobranca_status:"pendente",pix,mensagem:"Pix Asaas emitido. Aguarde a confirmação do recebimento."});
+  cobranca_status:alreadyPaid?"pago":"pendente",pix,
+  mensagem:alreadyPaid?"Cobrança recuperada e pagamento conciliado.":"Pix Asaas emitido. Aguarde a confirmação do recebimento."});
 }
 function pixDestination(key:string){
  const cleaned=key.trim(),digits=cleaned.replace(/\D/g,"");
