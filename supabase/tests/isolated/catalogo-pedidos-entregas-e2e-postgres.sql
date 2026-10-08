@@ -273,6 +273,42 @@ BEGIN
   END IF;
 END $test_delivery$;
 
+-- Self-service de saque: só mês anterior, lastro válido e chave Pix protegida.
+DO $test_saque_mensal$
+DECLARE v jsonb; v_again jsonb; v_count integer;
+BEGIN
+  UPDATE public.catalogo_remuneracoes_v2
+     SET criado_em=date_trunc('month',pg_catalog.now())-interval '1 day'
+   WHERE pedido_id='00000000-0000-4000-8000-000000000052';
+  v := public.catalogo_motoboy_saque_mensal_v2(
+    '00000000-0000-4000-8000-000000000042','solicitar');
+  IF (v->>'http_status')::integer <> 409 THEN
+    RAISE EXCEPTION 'Saque sem chave Pix protegida deveria ser recusado: %',v;
+  END IF;
+  UPDATE public.catalogo_motoboy_perfis
+     SET chave_pix_enc='pix-v2:abcdefghijklmnop.AAAAAAAAAAAAAAAAAAAAAAAA'
+   WHERE usuario_id='00000000-0000-4000-8000-000000000042';
+  v := public.catalogo_motoboy_saque_mensal_v2(
+    '00000000-0000-4000-8000-000000000042','solicitar');
+  IF (v->>'ok')::boolean IS DISTINCT FROM true
+     OR (v->>'valor_solicitado_centavos')::bigint <> 2
+     OR (v->>'transferencia_executada')::boolean IS DISTINCT FROM false THEN
+    RAISE EXCEPTION 'Saque mensal fictício sem transferência foi recusado: %',v;
+  END IF;
+  v_again := public.catalogo_motoboy_saque_mensal_v2(
+    '00000000-0000-4000-8000-000000000042','solicitar');
+  IF (v_again->>'http_status')::integer <> 409 THEN
+    RAISE EXCEPTION 'Solicitação mensal duplicada deveria retornar 409: %',v_again;
+  END IF;
+  SELECT count(*) INTO v_count FROM public.catalogo_solicitacao_saque_itens_v2;
+  IF v_count <> 1 THEN RAISE EXCEPTION 'Crédito do pedido foi contabilizado mais de uma vez'; END IF;
+  v := public.catalogo_motoboy_saque_mensal_v2(
+    '00000000-0000-4000-8000-000000000041','listar');
+  IF coalesce(jsonb_array_length(v->'solicitacoes'),0) <> 0 THEN
+    RAISE EXCEPTION 'Solicitação de outro entregador vazou no extrato';
+  END IF;
+END $test_saque_mensal$;
+
 -- Estorno simulado antes do saque impede o crédito anterior de permanecer disponível.
 DO $test_refund$
 DECLARE v jsonb;
@@ -283,6 +319,10 @@ BEGIN
      OR (SELECT status FROM public.catalogo_remuneracoes_v2
          WHERE pedido_id='00000000-0000-4000-8000-000000000052') <> 'estornado' THEN
     RAISE EXCEPTION 'Estorno após a entrega não reverteu crédito ainda não pago: %',v;
+  END IF;
+  IF (SELECT status FROM public.catalogo_solicitacoes_saque_v2
+      WHERE motoboy_id='00000000-0000-4000-8000-000000000042') <> 'em_analise' THEN
+    RAISE EXCEPTION 'Estorno não suspendeu o saque mensal para revisão';
   END IF;
 
   v := public.catalogo_aplicar_pagamento_v2(
