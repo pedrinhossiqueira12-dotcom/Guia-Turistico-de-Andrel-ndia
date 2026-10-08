@@ -172,6 +172,7 @@ Deno.test("webhook HMAC valido consulta fatos autenticados e aplica RPC financei
   const url = `/functions/v1/mercadopago-marketplace-webhook?type=payment&data.id=${PAYMENT_ID}`;
   let calls: string[] = [];
   let rpcPayload: Record<string, unknown> | null = null;
+  let auditPatch: Record<string, unknown> | null = null;
   let actualPayment = structuredClone(payment);
   try {
     currentMockFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -180,6 +181,13 @@ Deno.test("webhook HMAC valido consulta fatos autenticados e aplica RPC financei
       calls.push(`${init?.method || "GET"} ${u.host}${u.pathname}`);
       if (u.host === "ci-supabase.invalid" && u.pathname === "/rest/v1/catalogo_pedidos"
           && u.searchParams.has("payment_id") && (init?.method || "GET") === "GET") return result(order);
+      if (u.host === "ci-supabase.invalid" && u.pathname === "/rest/v1/catalogo_pedidos"
+          && (init?.method || "GET") === "GET" && u.searchParams.has("id")) return result(order);
+      if (u.host === "ci-supabase.invalid" && u.pathname === "/rest/v1/catalogo_pedidos"
+          && init?.method === "PATCH") {
+        auditPatch = JSON.parse(String(init.body));
+        return result({ id: ORDER_ID });
+      }
       if (u.host === "ci-supabase.invalid" && u.pathname === "/rest/v1/catalogo_recebedores"
           && (init?.method || "GET") === "GET") return result(receiver);
       if (u.host === "api.mercadopago.com" && u.pathname === `/v1/payments/${PAYMENT_ID}`
@@ -191,7 +199,11 @@ Deno.test("webhook HMAC valido consulta fatos autenticados e aplica RPC financei
       if (u.host === "ci-supabase.invalid" && u.pathname === "/rest/v1/rpc/catalogo_aplicar_pagamento_v2"
           && init?.method === "POST") {
         rpcPayload = JSON.parse(String(init.body));
-        return result({ ok: true, status_pagamento: "aprovado", financiamento_comprovado: true });
+        const hasFeeProof = rpcPayload?.p_taxa_centavos === 7 && rpcPayload?.p_status === "aprovado";
+        return result({
+          ok: true, status_pagamento: hasFeeProof ? "aprovado" : "contestado",
+          financiamento_comprovado: hasFeeProof,
+        });
       }
       throw new Error(`Rede nao autorizada no CI: ${u.host}${u.pathname}`);
     };
@@ -216,6 +228,44 @@ Deno.test("webhook HMAC valido consulta fatos autenticados e aplica RPC financei
     assertions(mismatch, 409, "Webhook valor divergente no MP");
     assert(rpcPayload === null, "Divergencia autenticada chegou a RPC de liberacao");
     assert(calls.length === 3, "Valor divergente executou mutacao");
+
+    // Uma taxa de marketplace incorreta não pode ser aceita: registrar auditoria
+    // e enviar à RPC de revisão financeira com taxa não comprovada.
+    calls = [];
+    rpcPayload = null;
+    auditPatch = null;
+    actualPayment = { ...payment, application_fee: 0.08 };
+    const feeMismatch = await webhook(post(url, {
+      type: "payment", data: { id: PAYMENT_ID }, application_fee: 0.07,
+    }, headers));
+    assertions(feeMismatch, 409, "Taxa autenticada divergente");
+    const review = await feeMismatch.json();
+    assert(review.revisao_financeira === true && review.taxa_conferida === false,
+      "Taxa divergente reportada como financiamento confirmado");
+    assert(rpcPayload?.p_status === "revisao_parcial", "Taxa divergente não entrou em revisão");
+    assert(rpcPayload?.p_taxa_centavos === null, "Taxa diverge, mas RPC recebeu confirmação da taxa");
+    const metadata = auditPatch?.metadata as Record<string, unknown> | undefined;
+    const proof = metadata?.provider_fee_review as Record<string, unknown> | undefined;
+    assert(proof?.esperado_centavos === 7 && proof?.observado_centavos === 8
+      && proof?.motivo === "taxa_divergente", "Fatos de divergência não foram auditados");
+    assert(calls.length === 6, `Auditoria financeira incompleta: ${calls.join(" | ")}`);
+
+    // Uma resposta do provedor sem application_fee é informativa, não prova
+    // que os 7% foram transferidos. A RPC deve marcar revisão pendente.
+    calls = [];
+    rpcPayload = null;
+    auditPatch = null;
+    actualPayment = { ...payment, application_fee: undefined } as typeof payment;
+    const missingFee = await webhook(post(url, {
+      type: "payment", data: { id: PAYMENT_ID },
+    }, headers));
+    assertions(missingFee, 200, "Taxa ainda não informada");
+    const notFunded = await missingFee.json();
+    assert(notFunded.revisao_financeira === true && notFunded.financiamento_comprovado === false,
+      "Webhook sem tarifa marcou financiamento comprovado");
+    assert(rpcPayload?.p_taxa_centavos === null, "Tarifa ausente foi inventada no RPC");
+    assert(auditPatch === null, "Tarifa desconhecida registrada como divergente");
+    assert(calls.length === 4, "Tarifa ausente executou operações inesperadas");
   } finally {
     currentMockFetch = denyNetwork;
   }
