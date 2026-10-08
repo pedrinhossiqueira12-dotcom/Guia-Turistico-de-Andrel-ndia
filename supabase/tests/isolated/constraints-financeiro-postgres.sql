@@ -49,6 +49,14 @@ BEGIN
     INSERT INTO public.catalogo_pedidos VALUES(v_subtotal,1,'entrega',v_plataforma,0,v_plataforma);
     INSERT INTO public.catalogo_comissoes_offline VALUES(v_subtotal,1,'entrega',v_plataforma,0,v_plataforma,v_plataforma);
   END LOOP;
+  -- Snapshots legados V1 devem permanecer validos tambem em retirada e consumo local.
+  FOREACH v_modalidade IN ARRAY ARRAY['retirada','consumo_local'] LOOP
+    v_plataforma := round(101::numeric * 0.05)::integer;
+    INSERT INTO public.catalogo_pedidos
+      VALUES (101,1,v_modalidade,v_plataforma,0,v_plataforma);
+    INSERT INTO public.catalogo_comissoes_offline
+      VALUES (101,1,v_modalidade,v_plataforma,0,v_plataforma,v_plataforma);
+  END LOOP;
   -- Valores negativos, totais manipulados e comissoes divergentes devem falhar.
   BEGIN
     INSERT INTO public.catalogo_pedidos VALUES(10000,2,'entrega',-1,201,200);
@@ -105,10 +113,10 @@ END $$;
 
 DO $
 BEGIN
-  IF (SELECT count(*) FROM public.catalogo_pedidos) <> 50000 THEN
+  IF (SELECT count(*) FROM public.catalogo_pedidos) <> 50002 THEN
     RAISE EXCEPTION 'Quantidade inesperada de pedidos sinteticos';
   END IF;
-  IF (SELECT count(*) FROM public.catalogo_comissoes_offline) <> 50000 THEN
+  IF (SELECT count(*) FROM public.catalogo_comissoes_offline) <> 50002 THEN
     RAISE EXCEPTION 'Quantidade inesperada de comissoes sinteticas';
   END IF;
   IF EXISTS (
@@ -122,4 +130,4 @@ BEGIN
   END IF;
 END $;
 
-SELECT 'PASS: restricoes reais de pedidos e comissoes offline (50000 linhas por tabela)' AS resultado;
+SELECT 'PASS: restricoes reais de pedidos e comissoes offline (50002 linhas por tabela)' AS resultado;
