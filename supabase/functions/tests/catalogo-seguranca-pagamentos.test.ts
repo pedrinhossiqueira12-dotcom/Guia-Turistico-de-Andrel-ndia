@@ -1,7 +1,7 @@
 import {
   amountToCents, centsToMoney, translateProviderStatus,
   extractProviderPayment, providerFactsError, verifyWebhookSignature,
-  buildWebhookManifest, encryptAesGcm, decryptAesGcm, uuidFromParts,
+  buildWebhookManifest, encryptAesGcm, decryptAesGcm, uuidFromParts, randomDeliveryCode,
 } from "../_shared/catalogo-pagamentos-v2.ts";
 
 function assert(condition: unknown, message: string) {
@@ -79,4 +79,14 @@ Deno.test("criptografia vincula segredo ao pedido e impede reutilizacao", async 
   const two=await uuidFromParts("pedido","loja","chave");
   const other=await uuidFromParts("pedido","outra-loja","chave");
   assert(one===two && one!==other, "Idempotencia nao deterministica ou nao isolada");
+});
+
+Deno.test("codigos de entrega sao validos e variados", () => {
+  const codes=new Set<string>();
+  for(let i=0;i<1000;i++) {
+    const code=randomDeliveryCode();
+    assert(/^\\d{6}$/.test(code) && Number(code)>=100000, "Codigo de entrega invalido");
+    codes.add(code);
+  }
+  assert(codes.size>950, "Entropia insuficiente nos codigos");
 });
