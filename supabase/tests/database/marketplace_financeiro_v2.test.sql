@@ -4,7 +4,7 @@
 
 begin;
 
-select plan(21);
+select plan(22);
 
 update public.catalogo_fluxo_config
    set ativo=true, comercios_piloto=NULL
@@ -169,6 +169,16 @@ select ok(
   not has_function_privilege('authenticated',
     'public.catalogo_motoboy_acao_v2(uuid,text,uuid,boolean,text,text,text)', 'EXECUTE'),
   'usuario autenticado nao pode assumir identidade de motoboy por RPC direta'
+);
+
+select ok(
+  not exists (
+    select 1
+    from generate_series(1,10000) as x(subtotal)
+    where (catalogo_fluxo_precificar('entrega',x.subtotal,NULL)->>'taxa_total_centavos')::integer
+      <> round(x.subtotal::numeric * 0.07)::integer
+  ),
+  'entrega aplica 7% exatos com arredondamento unico de 1 centavo a 100 reais'
 );
 
 select * from finish();
