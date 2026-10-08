@@ -52,6 +52,19 @@ A migração **ainda não aplicada à produção**, `supabase/migrations/2026100
 
 **Evidência nativa Supabase:** commit `d155fe7d1e9e03730e3fa8fbe3eb9660af97ee19`, execução CI [37722544899](https://github.com/pedrinhossiqueira12-dotcom/Guia-Turistico-de-Andrel-ndia/actions/runs/37722544899), job `113133291267` (**SUCCESS**): CLI gerou projeto em `/tmp/guia-supabase-native-ci`, executou `supabase start`, `supabase db reset --local`, `supabase test db` e reportou `Files=1, Tests=23, Result: PASS`. A migração de agendamento perigosa foi neutralizada SOMENTE no diretório temporário. O banco de produção não foi alterado.
 
+## Auditoria final de compatibilidade de snapshots — produção (somente leitura)
+
+Consulta executada em **8 de outubro de 2026**, sobre os dados já existentes, sem retornar nomes, IDs, endereços, compradores ou valores individuais. A expressão de validação reproduziu os **CHECKs da migração pendente** `20261007213000_arredondamento_taxa_total_7.sql`, usando `IS DISTINCT FROM true` para contabilizar também resultados nulos.
+
+| Tabela real | Total | V1 | V2 | Entregas | Sem entrega | Incompatíveis com novo CHECK |
+|---|---:|---:|---:|---:|---:|---:|
+| `catalogo_pedidos` | 17 | 9 | 8 | 17 | 0 | **0** |
+| `catalogo_comissoes_offline` | 7 | 5 | 2 | 7 | 0 | **0** |
+
+**Conclusão limitada:** os 24 registros financeiros conferidos satisfazem as regras propostas; isso não demonstra que os novos fluxos de retirada e consumo local funcionam na produção, pois não há pedidos dessas modalidades. O CHECK legado de 5% continua presente no esquema de produção até autorização para aplicar a migração pendente. **Não houve UPDATE, INSERT, DELETE, DDL, deploy ou cobrança real durante a auditoria**.
+
+A consulta deverá ser repetida imediatamente antes de uma eventual implantação; esses totais são um retrato, não um monitoramento permanente.
+
 ## Critérios obrigatórios antes de qualquer deploy
 
 - [ ] CI verde no commit exato a publicar; verificar todos os jobs, inclusive os pulados.
