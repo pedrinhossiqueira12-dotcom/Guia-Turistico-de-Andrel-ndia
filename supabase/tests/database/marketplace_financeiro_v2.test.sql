@@ -4,7 +4,7 @@
 
 begin;
 
-select plan(22);
+select plan(23);
 
 update public.catalogo_fluxo_config
    set ativo=true, comercios_piloto=NULL
@@ -179,6 +179,17 @@ select ok(
       <> round(x.subtotal::numeric * 0.07)::integer
   ),
   'entrega aplica 7% exatos com arredondamento unico de 1 centavo a 100 reais'
+);
+
+select ok(
+  exists (
+    select 1 from pg_constraint
+    where conrelid='public.catalogo_comissoes_offline'::regclass
+      and conname='catalogo_comissoes_offline_v2_snapshot_check'
+      and pg_get_constraintdef(oid) like '%0.07%'
+      and pg_get_constraintdef(oid) like '%0.05%'
+  ),
+  'comissoes offline aceitam arredondamento novo e snapshots historicos'
 );
 
 select * from finish();
