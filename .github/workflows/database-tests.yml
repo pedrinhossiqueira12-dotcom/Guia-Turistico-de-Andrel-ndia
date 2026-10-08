@@ -56,6 +56,14 @@ jobs:
           psql -v ON_ERROR_STOP=1 -Atqc "SELECT current_database(), inet_server_addr() IS NOT NULL" | grep -Fx 'catalogo_ci|t'
       - name: Assemble test using actual migration RPC
         run: python scripts/validacao-pagamentos/build-isolated-pricing-test.py
+      - name: Verify fixture rejects a wrong database
+        run: |
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE TABLE IF NOT EXISTS public.catalogo_fluxo_config (id integer)"
+          if psql -v ON_ERROR_STOP=1 -d postgres -f /tmp/catalogo-precificacao-ci.sql > /tmp/fixture-guard.log 2>&1; then
+            echo "ERROR: fixture executed outside catalogo_ci"
+            exit 1
+          fi
+          grep -q "Fixture financeira exige banco catalogo_ci vazio" /tmp/fixture-guard.log
       - name: Execute PostgreSQL integration checks
         run: |
           psql -v ON_ERROR_STOP=1 -f /tmp/catalogo-precificacao-ci.sql
