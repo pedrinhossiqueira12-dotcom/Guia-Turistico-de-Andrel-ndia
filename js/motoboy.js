@@ -278,7 +278,7 @@
     limparPedidos();
     limparExtrato();
     if ($("motoboySaquesHistorico")) $("motoboySaquesHistorico").textContent = "";
-    if ($("motoboySaqueMes")) $("motoboySaqueMes").textContent = "Mês anterior sujeito a créditos financiados.";
+    if ($("motoboySaqueMes")) $("motoboySaqueMes").textContent = "Saldo de meses encerrados sujeito a créditos financiados.";
     definirFeedback("motoboySaqueFeedback", "");
     state.actionInFlight.clear();
   }
@@ -470,7 +470,7 @@
         if (!items.length) lista.textContent = "Nenhum saque solicitado.";
       }
       const mes = $("motoboySaqueMes");
-      if (mes) mes.textContent = "Mês elegível para solicitar: " + String(data.mes_elegivel || "");
+      if (mes) mes.textContent = "Fechamento até: " + String(data.mes_elegivel || "");
     } catch (err) {
       if (err.message !== STALE_REQUEST) definirFeedback("motoboySaqueFeedback", err.message, true);
     }
@@ -481,7 +481,7 @@
     if (!state.session) return;
     const button = $("motoboySolicitarSaque");
     if (button) button.disabled = true;
-    definirFeedback("motoboySaqueFeedback", "Enviando solicitação do mês anterior…");
+    definirFeedback("motoboySaqueFeedback", "Enviando solicitação do saldo acumulado de meses encerrados…");
     const generation = state.generation;
     const userId = state.userId;
     try {
