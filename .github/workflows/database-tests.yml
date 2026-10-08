@@ -21,7 +21,7 @@ jobs:
         with:
           deno-version: v2.x
       - name: Test financial snapshots without database access
-        run: deno test --no-check --allow-read=supabase/functions supabase/functions/tests/catalogo-financeiro.test.ts supabase/functions/tests/catalogo-checkouts-contract.test.ts supabase/functions/tests/catalogo-seguranca-pagamentos.test.ts
+        run: deno test --no-check --allow-read=supabase/functions supabase/functions/tests/catalogo-financeiro.test.ts supabase/functions/tests/catalogo-checkouts-contract.test.ts supabase/functions/tests/catalogo-seguranca-pagamentos.test.ts supabase/functions/tests/catalogo-webhook-identificacao.test.ts supabase/functions/tests/catalogo-fatura-provedor.test.ts
 
   legacy-baseline-smoke:
     name: Legacy baseline and first migration (disposable PostgreSQL)
