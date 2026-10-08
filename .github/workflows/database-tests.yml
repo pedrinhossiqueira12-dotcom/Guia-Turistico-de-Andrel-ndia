@@ -214,6 +214,17 @@ jobs:
           psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM pg_policies WHERE schemaname='storage' AND tablename='objects' AND policyname='catalogos_proprietario_upload_ativo'" | grep -Fx 1
           psql -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM pg_class WHERE oid IN ('public.catalogos'::regclass,'public.catalogo_assinaturas'::regclass,'public.catalogo_categorias'::regclass,'public.catalogo_produtos'::regclass) AND relrowsecurity" | grep -Fx 4
 
+      - name: Reject RLS scenarios without explicit opt-in
+        run: |
+          if psql -v ON_ERROR_STOP=1 -f supabase/tests/isolated/catalogo-rls-postgres.sql > /tmp/catalogo-rls-no-opt-in.log 2>&1; then
+            echo "ERROR: behavioral security fixture accepted missing opt-in"
+            exit 1
+          fi
+          grep -q "Teste RLS do catálogo permitido somente no catalogo_ci" /tmp/catalogo-rls-no-opt-in.log
+      - name: Exercise real catalog permissions for owner, stranger and anonymous visitor
+        run: |
+          psql -v ON_ERROR_STOP=1 -1 -c "SET app.marketplace_test_scenario = 'enabled'" -f supabase/tests/isolated/catalogo-rls-postgres.sql
+
   pricing-postgres-isolated:
     name: Real pricing RPC (isolated PostgreSQL)
     runs-on: ubuntu-latest
