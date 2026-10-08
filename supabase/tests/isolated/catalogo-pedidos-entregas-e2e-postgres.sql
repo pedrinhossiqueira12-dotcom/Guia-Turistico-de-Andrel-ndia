@@ -485,6 +485,19 @@ BEGIN
       (SELECT count(*) FROM public.catalogo_repasses_v2)<>0 THEN
     RAISE EXCEPTION 'Payout pendente foi considerado pago: %',v;
   END IF;
+  -- Status documentados: provedor ainda está processando ou banco não respondeu.
+  v := public.catalogo_conciliar_payout_v2(
+    v_intent,v_payout,v_tx,v_ref,v_tx_ref,1234,'transaction_in_process','pending_bank');
+  IF (v->>'transferencia_confirmada')::boolean IS DISTINCT FROM false
+     OR (SELECT count(*) FROM public.catalogo_repasses_v2)<>0 THEN
+    RAISE EXCEPTION 'Payout pending_bank creditado antes da hora: %',v;
+  END IF;
+  v := public.catalogo_conciliar_payout_v2(
+    v_intent,v_payout,v_tx,v_ref,v_tx_ref,1234,'success','in_progress');
+  IF (v->>'transferencia_confirmada')::boolean IS DISTINCT FROM false
+     OR (SELECT count(*) FROM public.catalogo_repasses_v2)<>0 THEN
+    RAISE EXCEPTION 'Payout success/in_progress creditado antes da hora: %',v;
+  END IF;
   v := public.catalogo_conciliar_payout_v2(
     v_intent,v_payout,v_tx,v_ref,v_tx_ref,1235,'success','accredited');
   IF (v->>'http_status')::integer <> 409 OR
@@ -510,6 +523,15 @@ BEGIN
   IF (v->>'idempotente')::boolean IS DISTINCT FROM true OR
       (SELECT count(*) FROM public.catalogo_repasses_v2)<>1 THEN
     RAISE EXCEPTION 'Callback repetido criou repasse duplicado: %',v;
+  END IF;
+  -- Estorno posterior precisa de alerta, mantendo lançamento do pagamento real.
+  v := public.catalogo_conciliar_payout_v2(
+    v_intent,v_payout,v_tx,v_ref,v_tx_ref,1234,'refunded','refunded');
+  IF (v->>'http_status')::integer <> 409 OR
+     (SELECT count(*) FROM public.catalogo_repasses_v2)<>1 OR
+     (SELECT revisao_motivo IS NOT NULL FROM public.catalogo_payout_intents_v2
+      WHERE id=v_intent) IS DISTINCT FROM true THEN
+    RAISE EXCEPTION 'Reembolso posterior não gerou alerta auditável: %',v;
   END IF;
 END $test_payout_conciliacao$;
 ROLLBACK TO SAVEPOINT payout_conciliacao_fake;
