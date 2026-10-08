@@ -45,6 +45,10 @@ BEGIN
   -- Somente mês calendário anterior; o mês em curso jamais é sacável.
   v_mes := (date_trunc('month',pg_catalog.now()) - interval '1 month')::date;
   IF p_acao='solicitar' THEN
+    IF NOT EXISTS (SELECT 1 FROM public.catalogo_motoboy_perfis pf
+                   WHERE pf.usuario_id=p_operador_id AND pf.chave_pix_enc IS NOT NULL) THEN
+      RETURN jsonb_build_object('ok',false,'http_status',409,'mensagem','Cadastre sua chave Pix antes de solicitar o saque.');
+    END IF;
     -- Serializa duas solicitações simultâneas da mesma conta.
     PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(p_operador_id::text,20261008));
     IF EXISTS (SELECT 1 FROM public.catalogo_solicitacoes_saque_v2
