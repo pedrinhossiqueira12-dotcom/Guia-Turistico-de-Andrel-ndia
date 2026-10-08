@@ -41,7 +41,7 @@ jobs:
           test -z "${DATABASE_URL:-}"
       - name: Exercise Edge functions without listening sockets or network permission
         run: |
-          deno test --no-check --allow-env --allow-read=supabase/functions \
+          deno test --no-check --node-modules-dir=auto --allow-env --allow-read=supabase/functions \
             supabase/functions/tests/catalogo-edge-http.test.ts
 
   legacy-baseline-smoke:
