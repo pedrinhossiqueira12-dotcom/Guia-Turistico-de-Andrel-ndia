@@ -145,6 +145,7 @@ BEGIN
      WHERE ctid = (
        SELECT ctid FROM public.catalogo_pedidos
         WHERE versao_financeira = 1 AND modalidade = 'entrega'
+          AND subtotal_produtos_centavos = 10000
         LIMIT 1
      );
     RAISE EXCEPTION 'ERRO: pedido V1 convertido em V2 sem recalculo';
@@ -156,6 +157,7 @@ BEGIN
      WHERE ctid = (
        SELECT ctid FROM public.catalogo_comissoes_offline
         WHERE versao_financeira = 1 AND modalidade = 'entrega'
+          AND subtotal_produtos_centavos = 10000
         LIMIT 1
      );
     RAISE EXCEPTION 'ERRO: comissao V1 convertida em V2 sem recalculo';
