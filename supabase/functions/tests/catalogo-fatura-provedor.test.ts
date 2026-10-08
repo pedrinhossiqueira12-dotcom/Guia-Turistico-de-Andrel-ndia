@@ -139,6 +139,41 @@ Deno.test("fatura traduz estados terminais sem reaprovar contestacoes", () => {
   assert(refunded.valid && refunded.state === "estornado", "Estorno reconhecido incorretamente");
 });
 
+Deno.test("estorno parcial de fatura fica em contestacao e nunca vira devolucao integral", () => {
+  // Mesmo se a order disser 'refunded', o detalhe 'partially_refunded'
+  // invalida a interpretacao de estorno integral.
+  const cases = [
+    { orderStatus: "processed", detail: "partially_refunded", paymentStatus: "processed", paymentDetail: "accredited" },
+    { orderStatus: "refunded", detail: "partially_refunded", paymentStatus: "refunded", paymentDetail: "refunded" },
+    { orderStatus: "processed", detail: "accredited", paymentStatus: "processed", paymentDetail: "partially_refunded" },
+    { orderStatus: "processed", detail: "refund_pending", paymentStatus: "processed", paymentDetail: "accredited" },
+    { orderStatus: "processed", detail: "accredited", paymentStatus: "processed", paymentDetail: "refund_in_process" },
+  ];
+  for (const item of cases) {
+    const order = orderFixture();
+    order.status = item.orderStatus;
+    order.status_detail = item.detail;
+    order.transactions.payments[0].status = item.paymentStatus;
+    order.transactions.payments[0].status_detail = item.paymentDetail;
+    const result = assessFaturaOrder(order, { ...expected, requirePixArtifacts: false });
+    assert(result.valid, `Estorno parcial bem identificado foi rejeitado: ${JSON.stringify(item)} => ${JSON.stringify(result)}`);
+    assert(result.state === "contestado", `Estorno parcial tratado como integral/aprovado: ${JSON.stringify(item)} => ${result.state}`);
+    assert(estadoCobrancaDaOrder(result.state) === "contestado", "Contestado nao propagado para a RPC segura da fatura");
+  }
+
+  const full = orderFixture();
+  full.status = "refunded";
+  full.status_detail = "refunded";
+  full.transactions.payments[0].status = "refunded";
+  full.transactions.payments[0].status_detail = "refunded";
+  const result = assessFaturaOrder(full, { ...expected, requirePixArtifacts: false });
+  assert(result.valid && result.state === "estornado", "Devolucao integral nao foi reconhecida");
+  assert(estadoCobrancaDaOrder(result.state) === "estornado", "Devolucao integral nao chegou ao estado correto da fatura");
+
+  const approved = assessFaturaOrder(orderFixture(), expected);
+  assert(approved.valid && approved.state === "aprovado", "Correcao afetou pagamento integral confirmado");
+});
+
 Deno.test("assinatura do webhook da fatura exige timestamp, request-id e HMAC", async () => {
   const secret="segredo-testes-fatura", requestId="req-ci-12", dataId="order_ci_123";
   const now=1760000000000, timestamp=String(now/1000);
