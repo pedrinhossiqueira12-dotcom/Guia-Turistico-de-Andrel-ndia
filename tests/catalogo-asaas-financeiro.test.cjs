@@ -58,6 +58,26 @@ test("auditoria administrativa não executa transferências", () => {
 });
 
 
+
+test("reconciliação após timeout não reemite cobranças nem Pix", () => {
+  assert.match(edge, /const novoClaim=!claimError&&Boolean\(claim\)/);
+  assert.match(edge, /if\(!payment&&!novoClaim\)/);
+  assert.match(edge, /if\(candidates.length>1\)/);
+  assert.match(edge, /if\(!payment\)\{/);
+  assert.match(edge, /if\(alreadyPaid\)await verifyInvoice/);
+});
+
+test("administrador pode conciliar transferência apenas por GET, sem novo pagamento", () => {
+  const admin = read("js/entregas-operacao.js");
+  assert.match(edge, /async function reconcileAdminTransfer\(uid:string,body:Record/);
+  assert.match(edge, /const transfer=await asaas\("\/transfers\/"\+encodeURIComponent\(transferId\)\)/);
+  assert.match(edge, /transfer.externalReference===saqueId/);
+  assert.match(edge, /cents\(transfer.value\)===Number\(row.valor_centavos\)/);
+  assert.match(admin, /"conciliar_saque_admin"/);
+  assert.match(admin, /sem criar transferência/);
+});
+
+
 test("telas antigas preservadas e opção de saque aparece apenas quando liberada", () => {
   assert.match(courierHtml, /id="motoboyWithdrawPix"[^>]*disabled/);
   assert.match(courierHtml, /id="motoboyPixKey"/);
