@@ -162,6 +162,9 @@ CREATE TABLE public.catalogo_payout_intents_v2 (
     CHECK (status IN ('reservado','em_envio','aguardando_confirmacao','em_analise','confirmado','cancelado')),
   payout_id text UNIQUE,
   transacao_id text UNIQUE,
+  repasse_id uuid UNIQUE REFERENCES public.catalogo_repasses_v2(id) ON DELETE RESTRICT,
+  ultima_consulta_em timestamptz,
+  confirmado_em timestamptz,
   tentativas integer NOT NULL DEFAULT 0 CHECK (tentativas >= 0),
   reservado_em timestamptz NOT NULL DEFAULT pg_catalog.now(),
   primeira_tentativa_em timestamptz,
@@ -174,6 +177,14 @@ CREATE TABLE public.catalogo_payout_intents_v2 (
 );
 CREATE INDEX catalogo_payout_intents_v2_estado_idx
   ON public.catalogo_payout_intents_v2(status,reservado_em);
+
+-- Registros da confirmação real via provedor não devem falsificar autoria humana.
+ALTER TABLE public.catalogo_repasses_v2
+  ADD COLUMN origem_registro text NOT NULL DEFAULT 'admin_manual';
+ALTER TABLE public.catalogo_repasses_v2 ALTER COLUMN registrado_por DROP NOT NULL;
+ALTER TABLE public.catalogo_repasses_v2 ADD CONSTRAINT catalogo_repasses_origem_v2_check
+  CHECK ((origem_registro='admin_manual' AND registrado_por IS NOT NULL)
+      OR (origem_registro='payout_provedor' AND registrado_por IS NULL));
 
 ALTER TABLE public.catalogo_payout_intents_v2 ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.catalogo_payout_intents_v2 FROM PUBLIC,anon,authenticated;
@@ -294,7 +305,10 @@ BEGIN
        SELECT 1 FROM public.catalogo_solicitacao_saque_itens_v2 i
        JOIN public.catalogo_payout_intents_v2 p
          ON p.solicitacao_id=i.solicitacao_id
-       WHERE i.remuneracao_id=OLD.id AND p.status <> 'cancelado'
+       WHERE i.remuneracao_id=OLD.id
+         AND p.status <> 'cancelado'
+         AND NOT (p.status='confirmado' AND NEW.repasse_id=p.repasse_id
+                  AND p.repasse_id IS NOT NULL)
      ) THEN
     RAISE EXCEPTION 'Crédito vinculado a payout reservado. Exige conciliação financeira.';
   END IF;
