@@ -6,7 +6,7 @@
 DO $guard$
 BEGIN
   IF current_setting('app.marketplace_test_baseline', true) IS DISTINCT FROM 'enabled'
-     OR current_database() <> 'postgres'
+     OR current_database() <> 'catalogo_ci'
      OR to_regclass('auth.users') IS NULL
      OR to_regclass('public.avaliacoes') IS NOT NULL
      OR to_regclass('public.cadastros_comercios') IS NOT NULL
