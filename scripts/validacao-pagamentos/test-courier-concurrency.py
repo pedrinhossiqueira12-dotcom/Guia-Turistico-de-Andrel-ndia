@@ -180,8 +180,8 @@ def race_buyer_cancel_vs_merchant_accept(order_id: str, token_digit: str, buyer_
             stderr=subprocess.PIPE, text=True, bufsize=1
         )
         holder.stdin.write(
-            "BEGIN;\\n"
-            f"SELECT 'ROW_LOCK_HELD' FROM public.catalogo_pedidos WHERE id='{order_id}' FOR UPDATE;\\n"
+            "BEGIN;\n"
+            f"SELECT 'ROW_LOCK_HELD' FROM public.catalogo_pedidos WHERE id='{order_id}' FOR UPDATE;\n"
         )
         holder.stdin.flush()
         ready, _, _ = select.select([holder.stdout], [], [], TIMEOUT_SECONDS)
@@ -231,7 +231,7 @@ def race_buyer_cancel_vs_merchant_accept(order_id: str, token_digit: str, buyer_
         else:
             raise RuntimeError("Both buyer and merchant were not observed blocked simultaneously")
 
-        holder.stdin.write("COMMIT;\\n\\\\q\\n")
+        holder.stdin.write("COMMIT;\n\\q\n")
         holder.stdin.flush()
         holder.wait(timeout=TIMEOUT_SECONDS)
         if holder.returncode != 0:
