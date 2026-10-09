@@ -38,7 +38,7 @@ test("falha em aberto retém dinheiro; somente saques bancários encerrados libe
 
 test("browser bloqueia pedido de saque enquanto há revisão excepcional aberta",()=>{
  assert.match(edge,/revisao_excepcional_aberta:revisaoExcepcionalAberta/);
- assert.match(edge,/saque_habilitado:activeCourier&&!revisaoExcepcionalAberta&&ENVIRONMENT==="sandbox"/);
+ assert.match(edge,/saque_habilitado:activeCourier&&!revisaoExcepcionalAberta&&!evidenciaBancariaPendente&&ENVIRONMENT==="sandbox"/);
  assert.match(ui,/carteira\.revisao_excepcional_aberta===true/);
  assert.match(ui,/saque comum ficará bloqueado até a decisão administrativa/);
  assert.match(ui,/botao\.disabled = !state\.session \|\| state\.withdrawalLoading \|\| !carteira\.saque_habilitado/);
