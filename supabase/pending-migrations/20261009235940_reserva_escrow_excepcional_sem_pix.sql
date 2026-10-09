@@ -188,6 +188,43 @@ REVOKE ALL ON FUNCTION public.catalogo_asaas_separar_creditos_excepcionais(text,
 GRANT EXECUTE ON FUNCTION public.catalogo_asaas_separar_creditos_excepcionais(text,uuid)
  TO service_role;
 
+-- Valores e titulares em separacao nao podem ser reescritos como pagos.
+-- UMA excecao necessaria: se o financiamento for estornado/contestado,
+-- permitir downgrade da linha para retido ou pendencia_revisao,
+-- preservando a prova contábil para investigacao (sem autorizar Pix).
+CREATE OR REPLACE FUNCTION catalogo_private.catalogo_asaas_proteger_separacao_excepcional()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=''
+AS $guard$
+BEGIN
+ IF NEW IS NOT DISTINCT FROM OLD THEN RETURN NEW; END IF;
+ IF NOT EXISTS(
+  SELECT 1 FROM public.catalogo_asaas_separacoes_excepcionais_itens i
+  WHERE i.remuneracao_id=OLD.id
+ ) THEN RETURN NEW; END IF;
+ IF OLD.status='disponivel'
+  AND NEW.status IN ('retido','pendencia_revisao')
+  AND OLD.financiamento_comprovado AND NOT NEW.financiamento_comprovado
+  AND NEW.id=OLD.id AND NEW.pedido_id=OLD.pedido_id
+  AND NEW.comercio_id=OLD.comercio_id AND NEW.motoboy_id=OLD.motoboy_id
+  AND NEW.valor_centavos=OLD.valor_centavos
+  AND NEW.origem=OLD.origem AND NEW.repasse_id IS NOT DISTINCT FROM OLD.repasse_id
+  AND NEW.criado_em IS NOT DISTINCT FROM OLD.criado_em
+  AND NEW.disponibilizado_em IS NOT DISTINCT FROM OLD.disponibilizado_em
+  AND NEW.pago_em IS NOT DISTINCT FROM OLD.pago_em
+  AND NEW.metadata IS NOT DISTINCT FROM OLD.metadata THEN
+  RETURN NEW;
+ END IF;
+ RAISE EXCEPTION 'Credito em separacao excepcional nao pode ser modificado nem liquidado'
+  USING ERRCODE='23514';
+END $guard$;
+REVOKE ALL ON FUNCTION catalogo_private.catalogo_asaas_proteger_separacao_excepcional()
+ FROM PUBLIC,anon,authenticated,service_role;
+DROP TRIGGER IF EXISTS catalogo_asaas_escrow_credito_guard
+ ON public.catalogo_remuneracoes_v2;
+CREATE TRIGGER catalogo_asaas_escrow_credito_guard
+ BEFORE UPDATE ON public.catalogo_remuneracoes_v2
+ FOR EACH ROW EXECUTE FUNCTION catalogo_private.catalogo_asaas_proteger_separacao_excepcional();
+
 COMMENT ON TABLE public.catalogo_asaas_separacoes_excepcionais IS
  'Separacao contabil IMUTAVEL para revisao futura. Nao paga, nao libera, nao autoriza Pix.';
 COMMIT;
