@@ -138,7 +138,9 @@ test("com payouts off somente GET autenticado concilia saques antigos sem criar 
  assert.match(edge, /else enabled\(path\.startsWith\("\/transfers"\)\?"payouts":"billing"\)/);
  assert.match(edge, /for\(const row of pending\|\|\[\]\)/);
  assert.match(edge, /await reconcileTransfer\(String\(row\.id\),String\(row\.transferencia_id\)\)/);
- assert.match(edge, /async function withdraw\(uid:string\)\{\s*enabled\("payouts"\)/);
+ const withdrawBlock=edge.slice(edge.indexOf("async function withdraw(uid:string)"),edge.indexOf("const ADMIN_USER_ID"));
+ assert.match(withdrawBlock, /enabled\("payouts"\)/);
+ assert.ok(withdrawBlock.indexOf('if(ENVIRONMENT!=="sandbox")') < withdrawBlock.indexOf('enabled("payouts")'));
  assert.match(edge, /if\(status==="DONE"\)/);
  assert.match(edge, /if\(\["FAILED","CANCELLED"\]\.includes\(status\)\)/);
 });
