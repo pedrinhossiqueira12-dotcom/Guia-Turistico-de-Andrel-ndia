@@ -54,7 +54,7 @@ test("saldo liberado e pendencias nao dependem de status ativo do motoboy",()=>{
   assert.match(residual,/catalogo_asaas_saldo_historico/);
   assert.match(historySql,/CREATE OR REPLACE FUNCTION public\.catalogo_asaas_saldo_historico/);
   assert.match(historySql,/CREATE OR REPLACE FUNCTION public\.catalogo_asaas_pendencias_historicas/);
-  assert.doesNotMatch(historySql,/catalogo_v2_autorizado|\.ativo\s*=/);
+  assert.doesNotMatch(historySql.replace(/^--.*$/gm,""),/catalogo_v2_autorizado|\.ativo\s*=/);
   assert.match(historySql,/r\.status='disponivel'/);
   assert.match(historySql,/r\.status='retido'/);
   assert.match(historySql,/b\.gateway='asaas'/);
