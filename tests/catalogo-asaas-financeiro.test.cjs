@@ -123,3 +123,12 @@ test("auditabilidade idempotente sem acesso público ou destruição do históri
  assert.match(edge, /if\(insertError\?\.code==="23505"\)/);
  assert.doesNotMatch(validationSQL, /TRUNCATE|DROP TABLE|DELETE FROM/i);
 });
+
+
+test("validação pode testar token com pagamentos de saída bloqueados; transferência buscada por ID", () => {
+ assert.match(edge, /if\(!PAYOUTS_ON\)return approveResponse\("REFUSED"/);
+ assert.match(edge, /equalSecret\(actual,WITHDRAWAL_AUTH_TOKEN\)/);
+ assert.match(edge, /\.eq\("transferencia_id",id\)\.maybeSingle\(\)/);
+ assert.match(edge, /const ref=String\(saque\.id\)/);
+ assert.match(edge, /payloadRef && payloadRef!==saque\.id/);
+});
