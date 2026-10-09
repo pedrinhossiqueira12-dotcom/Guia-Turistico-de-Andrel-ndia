@@ -614,7 +614,7 @@ async function authorizeWithdrawal(request:Request){
     const rem=item.catalogo_remuneracoes_v2 as unknown as Record<string,unknown>;
     return t+Number(rem?.valor_centavos||0);
    },0);
-   const eligible=records.length>0 && records.length<=100 && records.every(item=>{
+   const eligible=records.length>0 && records.length<=1000 && records.every(item=>{
     const r=item.catalogo_remuneracoes_v2 as unknown as Record<string,unknown>;
     return r && r.motoboy_id===saque.motoboy_id &&
       r.status==="disponivel" && r.financiamento_comprovado===true &&
