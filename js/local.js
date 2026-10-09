@@ -294,19 +294,24 @@ async function carregarLocal() {
     // A publicação registrada no banco prevalece sobre a cópia estática.
     if (encontrado._tipo === "comercio") {
       const cliente = obterSupabaseClient();
-      if (cliente) {
-        const { data: publicacao, error: erroPublicacao } = await cliente
-          .from("comercios_publicados")
-          .select("status")
-          .eq("local_id", String(encontrado.id))
-          .maybeSingle();
+      if (!cliente) {
+        mostrarLocalIndisponivel("Não foi possível verificar a disponibilidade deste comércio. Tente novamente.");
+        return;
+      }
+      const { data: publicacao, error: erroPublicacao } = await cliente
+        .from("comercios_publicados")
+        .select("status")
+        .eq("local_id", String(encontrado.id))
+        .maybeSingle();
 
-        if (erroPublicacao) {
-          console.warn("Não foi possível conferir o status da publicação:", erroPublicacao);
-        } else if (publicacao && String(publicacao.status || "").toLowerCase() !== "ativo") {
-          mostrarLocalIndisponivel("Este estabelecimento foi despublicado do Guia.");
-          return;
-        }
+      if (erroPublicacao) {
+        console.warn("Não foi possível conferir o status da publicação:", erroPublicacao);
+        mostrarLocalIndisponivel("Não foi possível verificar a disponibilidade deste comércio. Tente novamente.");
+        return;
+      }
+      if (publicacao && String(publicacao.status || "").toLowerCase() !== "ativo") {
+        mostrarLocalIndisponivel("Este estabelecimento foi despublicado do Guia.");
+        return;
       }
     }
 
