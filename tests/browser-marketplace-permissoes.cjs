@@ -27,7 +27,7 @@ const tests = [
   },
   {
     id: "motoboy_sem_permissao", path: "/pages/motoboy.html",
-    indicator: "#motoboyOrdersFeedback", message: "Conta sem permissão",
+    indicator: "#motoboyLoginFeedback", message: "Conta sem permissão",
     async check(page) {
       assert.equal(await page.locator("#motoboyEarnings").isVisible(), false);
       assert.equal(await page.locator("#motoboyOrders .motoboy-order").count(), 0);
