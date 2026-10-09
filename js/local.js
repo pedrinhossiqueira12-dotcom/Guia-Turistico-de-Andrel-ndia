@@ -290,6 +290,26 @@ async function carregarLocal() {
       return;
     }
 
+    // O JSON pode estar desatualizado após o arquivamento financeiro.
+    // A publicação registrada no banco prevalece sobre a cópia estática.
+    if (encontrado._tipo === "comercio") {
+      const cliente = obterSupabaseClient();
+      if (cliente) {
+        const { data: publicacao, error: erroPublicacao } = await cliente
+          .from("comercios_publicados")
+          .select("status")
+          .eq("local_id", String(encontrado.id))
+          .maybeSingle();
+
+        if (erroPublicacao) {
+          console.warn("Não foi possível conferir o status da publicação:", erroPublicacao);
+        } else if (publicacao && String(publicacao.status || "").toLowerCase() !== "ativo") {
+          mostrarLocalIndisponivel("Este estabelecimento foi despublicado do Guia.");
+          return;
+        }
+      }
+    }
+
     if (encontrado._tipo === "comercio" && String(encontrado.status || "").toLowerCase() !== "ativo") {
       mostrarLocalIndisponivel("Este estabelecimento não está disponível publicamente.");
       return;
