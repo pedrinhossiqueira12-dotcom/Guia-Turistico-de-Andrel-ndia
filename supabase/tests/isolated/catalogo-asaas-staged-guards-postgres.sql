@@ -436,6 +436,7 @@ DECLARE
  v_other_req uuid;
  v_normal uuid;
  v_evidence jsonb;
+ v_preconferencia jsonb;
  v_rejections integer:=0;
 BEGIN
  INSERT INTO auth.users(id) VALUES(v_uid),(v_other);
@@ -449,6 +450,15 @@ BEGIN
   'guia-exc:residual:'||v_req,600,'PENDING'
  ) INTO v_evidence;
  IF v_evidence->>'ok'<>'true' THEN RAISE EXCEPTION 'Evidencia do CI nao registrada'; END IF;
+
+ SELECT public.catalogo_asaas_preconferir_pagamento_excepcional('residual',v_req)
+ INTO v_preconferencia;
+ IF v_preconferencia->>'evidencias_bancarias_para_conciliar' IS DISTINCT FROM '1'
+ OR v_preconferencia->>'sem_impedimentos_identificados' IS DISTINCT FROM 'false'
+ OR v_preconferencia->>'pagamento_autorizado' IS DISTINCT FROM 'false' THEN
+  RAISE EXCEPTION 'Preconferencia ignorou evidencia bancaria em HOLD: %',v_preconferencia;
+ END IF;
+
  UPDATE public.catalogo_asaas_saldos_residuais
  SET status='recusada',analisado_por=v_uid,finalizado_em=now(),
      detalhe_revisao='A analise de teste foi recusada, mantendo o hold bancario'
