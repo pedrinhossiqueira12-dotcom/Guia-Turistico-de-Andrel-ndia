@@ -34,3 +34,22 @@ test("ensaio de R$120 confirma fotografia em evidencia DONE, com hold depois",()
  assert.match(ci,/v_after_bank->>'evidencias_bancarias_para_conciliar' IS DISTINCT FROM '1'/);
  assert.match(ci,/v_after_bank->>'pagamento_autorizado' IS DISTINCT FROM 'false'/);
 });
+
+test("somente admin recebe comparação forense com foto existente, sem baixar saldos",()=>{
+ const edge=read("supabase/functions/catalogo-asaas-financeiro/index.ts");
+ const ui=read("js/admin-encerramentos.js");
+ const start=edge.indexOf("async function preconferirExcepcionalAdmin(");
+ const end=edge.indexOf("async function consultarERegistrarTransferenciaExcepcionalSandbox(",start);
+ assert.ok(start>=0&&end>start);
+ const h=edge.slice(start,end);
+ assert.match(h,/uid!==ADMIN_USER_ID/);
+ assert.match(h,/catalogo_asaas_preconferir_pagamento_excepcional/);
+ assert.match(h,/catalogo_asaas_transferencias_excepcionais_auditoria/);
+ assert.match(h,/\.eq\("tipo",tipo\)\.eq\("solicitacao_id",id\)\.maybeSingle\(\)/);
+ assert.match(h,/fingerprint_igual_ao_atual:igual/);
+ assert.match(h,/foto\.creditos_fingerprint_observado_sha256===resultado\.fingerprint_creditos_sha256/);
+ assert.match(ui,/foto\.fingerprint_igual_ao_atual===true/);
+ assert.match(ui,/DIVERGENTE OU AUSENTE/);
+ assert.match(ui,/c\.pagamento_autorizado!==false/);
+ assert.doesNotMatch(h,/POST \/transfers|UPDATE public\.catalogo_remuneracoes/);
+});
