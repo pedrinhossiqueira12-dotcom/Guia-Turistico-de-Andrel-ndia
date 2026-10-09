@@ -6,7 +6,7 @@ const read=p=>fs.readFileSync(p,"utf8");
 const sql=read("supabase/pending-migrations/20261009220500_evidencias_transferencia_excepcional_sandbox.sql");
 const edge=read("supabase/functions/catalogo-asaas-financeiro/index.ts");
 const ci=read("supabase/tests/isolated/catalogo-asaas-staged-guards-postgres.sql");
-const start=edge.indexOf("async function observarTransferenciaExcepcionalSandboxAdmin(");
+const start=edge.indexOf("async function consultarERegistrarTransferenciaExcepcionalSandbox(");
 const end=edge.indexOf("async function revisarRegularizacaoSaidaAdmin(",start);
 assert.ok(start>=0&&end>start);
 const observation=edge.slice(start,end);
@@ -48,4 +48,17 @@ test("RLS e grants impedem usuário comum de fabricar evento",()=>{
  assert.match(sql,/TO service_role/);
  assert.match(sql,/GRANT SELECT,INSERT ON public\.catalogo_asaas_observacoes_excepcionais_auditoria TO service_role/);
  assert.match(ci,/Auditoria bancaria exposta ao publico/);
+});
+
+test("webhook excepcional não confia no payload e só observa estado via GET no sandbox",()=>{
+ const start=edge.indexOf("async function webhook(request:Request)");
+ const end=edge.indexOf("Deno.serve(",start);
+ assert.ok(start>=0&&end>start);
+ const wh=edge.slice(start,end);
+ assert.match(wh,/event\.startsWith\("TRANSFER_"\)/);
+ assert.match(wh,/if\(ENVIRONMENT!=="sandbox"\|\|!match\)/);
+ assert.match(wh,/guia-exc:\(residual\|saida\)/);
+ assert.match(wh,/consultarERegistrarTransferenciaExcepcionalSandbox\(match\[1\],match\[2\],transferId\)/);
+ assert.match(wh,/await reconcileTransfer\(String\(saque\.id\),transferId\)/);
+ assert.doesNotMatch(wh,/\/transfers","POST"|p_estado:"concluido"/);
 });
