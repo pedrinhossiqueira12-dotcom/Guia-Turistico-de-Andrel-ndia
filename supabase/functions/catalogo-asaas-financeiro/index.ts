@@ -338,6 +338,7 @@ async function wallet(uid:string,withReconcile=false){
   .eq("motoboy_id",uid).order("criado_em",{ascending:false}).limit(20);
  if(error)throw new Failure("Histórico de saques indisponível.",503);
  return respond({success:true,
+   entregador_ativo:activeCourier,
    saque_habilitado:activeCourier&&ENVIRONMENT==="sandbox"&&PAYOUTS_ON&&WITHDRAWAL_AUTH_ON&&
      WITHDRAWAL_AUTH_TOKEN.length>=32&&Boolean(ASAAS_TOKEN),
    saque_minimo_centavos:SAQUE_MINIMO_CENTAVOS,
