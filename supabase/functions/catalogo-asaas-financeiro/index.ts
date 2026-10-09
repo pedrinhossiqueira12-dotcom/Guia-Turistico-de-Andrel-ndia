@@ -536,8 +536,19 @@ async function preconferirExcepcionalAdmin(uid:string,body:Record<string,unknown
  const resultado=await rpc("catalogo_asaas_preconferir_pagamento_excepcional",{
   p_tipo:tipo,p_solicitacao:id
  });
+ // Comparacao exclusivamente forense: foto gravada quando um GET bancario
+ // foi observado, nao necessariamente quando o Pix foi enviado.
+ const {data:foto,error:fotoError}=await db
+  .from("catalogo_asaas_transferencias_excepcionais_auditoria")
+  .select("creditos_fingerprint_observado_sha256,creditos_observados,valor_creditos_observados_centavos,composicao_conferida_na_observacao,fotografia_observada_em")
+  .eq("tipo",tipo).eq("solicitacao_id",id).maybeSingle();
+ if(fotoError)throw new Failure("Não foi possível consultar a fotografia da auditoria bancária.",503);
+ const igual=Boolean(foto?.creditos_fingerprint_observado_sha256&&
+  resultado?.fingerprint_creditos_sha256&&
+  foto.creditos_fingerprint_observado_sha256===resultado.fingerprint_creditos_sha256);
  return respond({success:true,conferencia:resultado,
-  mensagem:"Pré-conferência somente de leitura. Não autoriza pagamento nem substitui comprovante do banco."});
+  fotografia_bancaria:foto?{...foto,fingerprint_igual_ao_atual:igual}:null,
+  mensagem:"Pré-conferência somente de leitura. A fotografia bancária não atesta destinatário, pagamento ou autorização de Pix."});
 }
 // Auditoria do Asaas via GET, exclusivamente Sandbox. Não cria transferência,
 // não atesta destinatário, não baixa créditos e não marca a análise como paga.
