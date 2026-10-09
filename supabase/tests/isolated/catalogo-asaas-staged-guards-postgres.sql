@@ -947,4 +947,159 @@ BEGIN
  RAISE NOTICE 'PASS: banco exige mesmo lock, titular, valor e bloqueia reserva duplicada';
 END $bank_evidence_serialized$;
 
+
+-- Ensaio de escrow sem pagamento. Todas as linhas são revertidas.
+DO $escrow_creditos$
+DECLARE
+ v_uid uuid:='edededed-eded-4ede-8ede-ededededed10';
+ v_store text:='ci-escrow-creditos-finais';
+ v_pedido uuid;
+ v_fechamento uuid;
+ v_competencia date;
+ v_i int;
+ v_before jsonb;
+ v_after jsonb;
+ v_saida uuid;
+ v_preflight jsonb;
+ v_again jsonb;
+ v_bank_response jsonb;
+ v_after_bank jsonb;
+ v_bank_fingerprint text;
+ v_bank_count bigint;
+ v_bank_amount bigint;
+ v_bank_consistent boolean;
+ v_blocks int:=0;
+ v_saldo jsonb;
+ v_reserva jsonb;
+ v_duplicada jsonb;
+ v_posreserva jsonb;
+ v_item uuid;
+ v_qty bigint;
+ v_sum bigint;
+BEGIN
+ INSERT INTO auth.users(id) VALUES(v_uid);
+ INSERT INTO public.comercios_publicados(local_id,status) VALUES(v_store,'ativo');
+ INSERT INTO public.catalogos(comercio_id,proprietario_id) VALUES(v_store,v_uid);
+ INSERT INTO public.catalogo_motoboys(comercio_id,usuario_id,nome,email,ativo,autorizado_por)
+ VALUES(v_store,v_uid,'Entregador CI dois meses','test-exit@example.invalid',true,v_uid);
+
+ FOR v_i IN 1..2 LOOP
+  v_competencia:=make_date(2098,v_i,1);
+  INSERT INTO public.catalogo_pedidos(
+   comercio_id,referencia_externa,provedor,idempotency_key,status,
+   status_pagamento,modalidade,forma_pagamento,subtotal_produtos_centavos,
+   entrega_centavos,total_centavos,taxa_plataforma_centavos,
+   repasse_bruto_comercio_centavos,cliente_nome,cliente_telefone,
+   versao_financeira,taxa_motoboy_centavos,taxa_total_centavos,
+   entrega_status,metadata
+  ) VALUES(v_store,'ci-escrow-creditos-'||v_i,'offline',gen_random_uuid(),
+   'entregue','aprovado','entrega','dinheiro',300000,0,300000,15000,279000,
+   'Cliente sintético','00000000000',2,6000,21000,'entregue',
+   jsonb_build_object('ensaio','duas-competencias','mes',v_i))
+  RETURNING id INTO v_pedido;
+
+  INSERT INTO public.catalogo_fechamentos_offline(
+    comercio_id,competencia,total_pedidos,total_comissao_centavos,status,pago_em
+  ) VALUES(v_store,v_competencia,1,21000,'pago',now())
+  RETURNING id INTO v_fechamento;
+
+  INSERT INTO public.catalogo_fatura_componentes_v2(fechamento_id,pedido_id,tipo,valor_centavos)
+  VALUES(v_fechamento,v_pedido,'plataforma',15000),
+        (v_fechamento,v_pedido,'logistica',6000);
+
+  INSERT INTO public.catalogo_comissoes_offline(
+   pedido_id,comercio_id,competencia,subtotal_produtos_centavos,
+   taxa_percentual,valor_comissao_centavos,status,pago_em,
+   taxa_plataforma_centavos,taxa_motoboy_centavos,valor_total_centavos,
+   versao_financeira,motoboy_id,financiamento_logistica_comprovado
+  ) VALUES(v_pedido,v_store,v_competencia,300000,5,21000,'paga',now(),
+   15000,6000,21000,2,v_uid,true);
+
+  INSERT INTO public.catalogo_fatura_cobrancas(
+   fechamento_id,comercio_id,competencia,gateway,
+   payment_id,status,valor_centavos,pago_em
+  ) VALUES(v_fechamento,v_store,v_competencia,'asaas',
+   'ci-pagamento-escrow-'||v_i,'pago',21000,now());
+
+  IF NOT catalogo_private.catalogo_v2_financiado(v_pedido) THEN
+   RAISE EXCEPTION 'Financiamento da competencia % nao valido',v_competencia;
+  END IF;
+  INSERT INTO public.catalogo_remuneracoes_v2(
+   pedido_id,comercio_id,motoboy_id,valor_centavos,
+   status,financiamento_comprovado
+  ) VALUES(v_pedido,v_store,v_uid,6000,'disponivel',true);
+ END LOOP;
+
+ SELECT public.catalogo_asaas_saldo_historico(v_uid) INTO v_saldo;
+ IF (v_saldo->>'disponivel_centavos')::bigint<>12000
+ THEN RAISE EXCEPTION 'Fixture sem 12000 centavos comprovados'; END IF;
+ DELETE FROM public.catalogo_motoboys WHERE usuario_id=v_uid;
+ INSERT INTO public.catalogo_asaas_regularizacoes_inativos(
+  motoboy_id,saldo_snapshot_centavos,motivo
+ ) VALUES(v_uid,12000,'inatividade') RETURNING id INTO v_saida;
+
+ SELECT public.catalogo_asaas_separar_creditos_excepcionais('saida',v_saida) INTO v_reserva;
+ IF v_reserva->>'ok' IS DISTINCT FROM 'true'
+  OR v_reserva->>'creditos_separados' IS DISTINCT FROM '2'
+  OR v_reserva->>'valor_centavos' IS DISTINCT FROM '12000'
+  OR v_reserva->>'pagamento_autorizado' IS DISTINCT FROM 'false'
+  OR v_reserva->>'baixa_realizada' IS DISTINCT FROM 'false'
+ THEN RAISE EXCEPTION 'Separacao contábil não confirmou dois créditos: %',v_reserva; END IF;
+ SELECT count(*),sum(valor_centavos)::bigint INTO v_qty,v_sum
+ FROM public.catalogo_asaas_separacoes_excepcionais_itens
+ WHERE separacao_id=(v_reserva->>'separacao_id')::uuid;
+ IF v_qty<>2 OR v_sum<>12000 THEN
+  RAISE EXCEPTION 'Itens separados incorretos: % %',v_qty,v_sum; END IF;
+
+ SELECT public.catalogo_asaas_preconferir_pagamento_excepcional('saida',v_saida)
+ INTO v_posreserva;
+ IF v_posreserva->>'separacoes_contabeis_sem_liquidacao' IS DISTINCT FROM '1'
+ OR v_posreserva->>'sem_impedimentos_identificados' IS DISTINCT FROM 'false'
+ OR v_posreserva->>'pagamento_autorizado' IS DISTINCT FROM 'false'
+ OR v_posreserva->>'fingerprint_creditos_sha256'
+  IS DISTINCT FROM v_reserva->>'fingerprint_sha256' THEN
+  RAISE EXCEPTION 'Pré-conferência não mostra HOLD contábil: %',v_posreserva;
+ END IF;
+
+ SELECT public.catalogo_asaas_separar_creditos_excepcionais('saida',v_saida) INTO v_duplicada;
+ IF v_duplicada->>'ok' IS DISTINCT FROM 'false'
+ OR v_duplicada->>'separacao_id' IS DISTINCT FROM v_reserva->>'separacao_id' THEN
+  RAISE EXCEPTION 'Reserva duplicada sem idempotência de referência: %',v_duplicada; END IF;
+ SELECT remuneracao_id INTO v_item
+ FROM public.catalogo_asaas_separacoes_excepcionais_itens
+ WHERE separacao_id=(v_reserva->>'separacao_id')::uuid LIMIT 1;
+
+ BEGIN
+  UPDATE public.catalogo_remuneracoes_v2 SET valor_centavos=valor_centavos+1
+   WHERE id=v_item;
+  RAISE EXCEPTION 'Crédito separado sofreu adulteração';
+ EXCEPTION WHEN check_violation THEN v_blocks:=v_blocks+1;
+ END;
+ BEGIN
+  UPDATE public.catalogo_remuneracoes_v2 SET status='pago',pago_em=now()
+   WHERE id=v_item;
+  RAISE EXCEPTION 'Crédito separado recebeu baixa artificial';
+ EXCEPTION WHEN check_violation THEN v_blocks:=v_blocks+1;
+ END;
+ BEGIN
+  INSERT INTO public.catalogo_asaas_saques(motoboy_id,valor_centavos)
+   VALUES(v_uid,12000);
+  RAISE EXCEPTION 'Saque comum criado sobre separação excepcional';
+ EXCEPTION WHEN check_violation THEN v_blocks:=v_blocks+1;
+ END;
+ IF v_blocks<>3 THEN RAISE EXCEPTION 'Esperados três bloqueios, obtidos %',v_blocks; END IF;
+ IF NOT EXISTS(SELECT 1 FROM public.catalogo_remuneracoes_v2
+  WHERE id=v_item AND status='disponivel' AND repasse_id IS NULL) THEN
+  RAISE EXCEPTION 'Crédito foi liquidado indevidamente'; END IF;
+
+ IF has_function_privilege('anon',
+   'public.catalogo_asaas_separar_creditos_excepcionais(text,uuid)','EXECUTE')
+ OR has_function_privilege('authenticated',
+   'public.catalogo_asaas_separar_creditos_excepcionais(text,uuid)','EXECUTE')
+ OR has_table_privilege('service_role',
+   'public.catalogo_asaas_separacoes_excepcionais_itens','INSERT')
+ THEN RAISE EXCEPTION 'Permissões do escrow estão abertas demais'; END IF;
+ RAISE NOTICE 'PASS: 2 itens (R$120), separação contábil bloqueia baixa, saque comum e duplicação; zero Pix';
+END $escrow_creditos$;
+
 ROLLBACK;
