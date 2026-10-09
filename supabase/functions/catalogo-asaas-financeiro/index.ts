@@ -507,6 +507,43 @@ async function preconferirExcepcionalAdmin(uid:string,body:Record<string,unknown
  return respond({success:true,conferencia:resultado,
   mensagem:"Pré-conferência somente de leitura. Não autoriza pagamento nem substitui comprovante do banco."});
 }
+// Auditoria do Asaas via GET, exclusivamente Sandbox. Não cria transferência,
+// não atesta destinatário, não baixa créditos e não marca a análise como paga.
+async function observarTransferenciaExcepcionalSandboxAdmin(uid:string,body:Record<string,unknown>){
+ if(uid!==ADMIN_USER_ID)throw new Failure("Acesso restrito à administração.",403);
+ if(ENVIRONMENT!=="sandbox")throw new Failure("Auditoria excepcional disponível somente no Sandbox.",403);
+ if(!ASAAS_TOKEN)throw new Failure("Credencial Asaas Sandbox não configurada.",503);
+ const tipo=value(body.tipo,15),solicitacaoId=value(body.solicitacao_id,70);
+ const transferenciaId=value(body.transferencia_id,130);
+ check(["residual","saida"].includes(tipo),"Tipo de solicitação inválido.",400);
+ check(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(solicitacaoId),
+  "Identificador da solicitação inválido.",400);
+ check(/^[A-Za-z0-9_-]{4,130}$/.test(transferenciaId),"Identificador de transferência inválido.",400);
+
+ const tabela=tipo==="residual"?"catalogo_asaas_saldos_residuais":"catalogo_asaas_regularizacoes_inativos";
+ const {data:solicitacao,error}=await db.from(tabela)
+  .select("id,motoboy_id,saldo_snapshot_centavos,status").eq("id",solicitacaoId).maybeSingle();
+ if(error||!solicitacao)throw new Failure("Solicitação financeira não encontrada.",404);
+
+ // GET vincula somente dados obtidos da API Asaas. Nunca confiar no status do cliente.
+ const t=await asaas("/transfers/"+encodeURIComponent(transferenciaId));
+ const externalReference="guia-exc:"+tipo+":"+solicitacaoId;
+ check(t.id===transferenciaId&&t.externalReference===externalReference,
+  "Referência do provedor não corresponde à solicitação.",409);
+ const valor=cents(t.value);
+ check(valor===Number(solicitacao.saldo_snapshot_centavos),
+  "Valor da transferência diverge da solicitação. Revisão manual necessária.",409);
+ const status=value(t.status,40);
+ check(["PENDING","IN_BANK_PROCESSING","BLOCKED","DONE","FAILED","CANCELLED"].includes(status),
+  "Estado bancário desconhecido. Registro suspenso para revisão.",409);
+
+ const evidencia=await rpc("catalogo_asaas_registrar_observacao_excepcional",{
+  p_tipo:tipo,p_solicitacao:solicitacaoId,p_transferencia:transferenciaId,
+  p_referencia:externalReference,p_valor_centavos:valor,p_estado:status
+ });
+ return respond({success:true,observacao:evidencia,
+  mensagem:"Estado consultado no Asaas Sandbox e registrado. Destinatário ainda não validado; nenhum saldo foi baixado nem Pix foi enviado."});
+}
 async function revisarRegularizacaoSaidaAdmin(uid:string,body:Record<string,unknown>){
  if(uid!==ADMIN_USER_ID)throw new Failure("Acesso restrito à administração.",403);
  const id=value(body.solicitacao_id,70);
@@ -898,6 +935,7 @@ Deno.serve(async (request:Request)=>{
    case "listar_regularizacoes_saida_admin":return await listarRegularizacoesSaidaAdmin(user.id);
    case "revisar_regularizacao_saida_admin":return await revisarRegularizacaoSaidaAdmin(user.id,body);
    case "preconferir_pagamento_excepcional_admin":return await preconferirExcepcionalAdmin(user.id,body);
+   case "observar_transferencia_excepcional_sandbox_admin":return await observarTransferenciaExcepcionalSandboxAdmin(user.id,body);
    case "revisar_analise_residual_admin":return await revisarAnaliseResidual(user.id,body);
    case "solicitar_saque":return await withdraw(user.id);
    case "auditar_saque_sandbox":return await auditPendingSandboxTransfer(user.id);
