@@ -29,6 +29,7 @@
       money(c.saldo_snapshot_centavos)+"; saldo atual "+money(c.saldo_atual_centavos)+
       "; comissões liberadas "+Number(c.creditos_disponiveis||0)+
       "; saques em aberto "+Number(c.saques_em_aberto||0)+
+      "; evidências bancárias ainda sem conciliação "+Number(c.evidencias_bancarias_para_conciliar||0)+
       "; solicitações conflitantes "+Number(c.solicitacoes_sobrepostas||0)+
       (c.sem_impedimentos_identificados===true
         ? ". Valores conferem neste instante, mas é obrigatória nova validação antes de qualquer transferência."
