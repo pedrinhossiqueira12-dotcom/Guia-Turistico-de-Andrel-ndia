@@ -28,8 +28,10 @@
 - `catalogo_asaas_reservar_saque` é quem bloqueia valor abaixo de **10.000 centavos**, usando apenas créditos financiados e liquidados.
 - A carteira mostra o saldo disponível e o progresso para o mínimo.
 - Créditos retidos mostram estabelecimento e competência, diferenciando fechamento, fatura aguardando pagamento, vencida e pagamento em conferência.
-- Até 1.000 créditos entram em uma solicitação; para grande volume de créditos unitários mínimos, revisar paginação e limites de consulta antes de produção.
-- Saldos residuais inferiores ao mínimo, especialmente em encerramento de conta, precisam de rotina de liquidação específica com revisão jurídica; **não podem ser perdidos nem apagados**.
+- Até 1.000 créditos entram em uma solicitação; o Webhook de autorização foi alinhado ao mesmo limite. A leitura do PostgREST não deve truncar grupos de 1.000 registros; conferir isso antes de produção.
+- A tabela privada `catalogo_asaas_saldos_residuais` e a opção na carteira permitem solicitar **análise do saldo liberado de R$ 0,01 até R$ 99,99** em situações de encerramento ou interrupção de atividades. O pedido não realiza Pix, não altera a remuneração e é limitado a uma análise aberta por motoboy.
+- **Pendente:** mecanismo comprovado para efetivamente liquidar o saldo residual excepcional, com autorização financeira, prova de transferência e conciliação, além de contestação; não é permitido marcar `concluida` sem comprovante válido.
+- Saldos residuais **não podem ser perdidos nem apagados**, independentemente do estado do cadastro.
 
 ## Encerramento de comércio com pendências
 
@@ -47,7 +49,7 @@
 3. [ ] Revisar termos e Política de Privacidade com profissional habilitado; disponibilizar canal real de contestação.
 4. [ ] Testar migração de conta existente sem aceite (bloqueio de NOVAS operações, leitura e regularização continuam).
 5. [ ] Integrar e auditar o arquivamento público e o endpoint legado de exclusão.
-6. [ ] Implementar liquidação excepcional de saldo residual inferior a R$ 100 em encerramentos.
+6. [ ] Revisar pedidos de saldo residual já registrados e implementar liquidação excepcional comprovada inferior a R$ 100 em encerramentos; a fila de solicitação está pronta, a transferência excepcional não.
 7. [ ] Validar fechamento automático mensal: no STAGING `fechamento_offline_ativo=false` mesmo com o cron presente; manter desativado até uma homologação supervisionada.
 8. [ ] Obter autorização comercial e contratual Asaas, condições de tarifas e conta de produção PJ elegível para Pix Automático, se e quando for implantado.
 9. [ ] Somente após autorização expressa implantar em produção, começando com flags de cobrança/saque **desligadas**.
