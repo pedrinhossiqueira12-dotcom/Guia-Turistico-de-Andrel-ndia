@@ -30,11 +30,11 @@ test("termos podem ser renovados por motoboy inativo sem reabilitar entregas",()
 });
 
 test("carteira mantém consulta e histórico em perfil inativo, mas não habilita Pix",()=>{
-  assert.match(wallet,/select\("usuario_id,ativo"\)/);
+  assert.match(wallet,/Promise\.all\(\[/);
   assert.match(wallet,/\.eq\("usuario_id",uid\)\.limit\(1\)/);
-  assert.match(wallet,/const activeCourier=allowed\[0\]\.ativo===true/);
+  assert.match(wallet,/const activeCourier=Boolean\(active\?\.length\)/);
   assert.match(wallet,/saque_habilitado:activeCourier&&ENVIRONMENT==="sandbox"/);
-  assert.doesNotMatch(wallet,/\.eq\("ativo",true\)/);
+  assert.match(wallet,/\.eq\("ativo",true\)\.limit\(1\)/);
 });
 
 test("solicitação residual usa exceção limitada; saque regular mantém bloqueio",()=>{
@@ -70,4 +70,12 @@ test("somente backend pode consultar creditos historicos por UUID",()=>{
   assert.match(historySql,/TO service_role/);
   assert.match(historySql,/SECURITY DEFINER SET search_path=''/);
   assert.doesNotMatch(historySql,/UPDATE public\.|DELETE FROM public\.|POST \/transfers/);
+});
+
+test("vinculos mistos de varios comercios nao dependem do primeiro status retornado",()=>{
+  assert.match(wallet,/const \[\{data:allowed,error:e\},\{data:active,error:activeError\}\]=await Promise\.all/);
+  assert.match(wallet,/if\(e\|\|activeError\)throw new Failure/);
+  assert.match(wallet,/if\(!allowed\?\.length\)throw new Failure/);
+  assert.match(wallet,/const activeCourier=Boolean\(active\?\.length\)/);
+  assert.doesNotMatch(wallet,/allowed\[0\]\.ativo/);
 });
