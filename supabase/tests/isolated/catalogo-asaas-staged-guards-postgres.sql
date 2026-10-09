@@ -564,4 +564,41 @@ BEGIN
  RAISE NOTICE 'PASS: replay de autorizacao nao ignora hold bancario posterior';
 END $authorization_revalidation$;
 
+
+DO $historic_rights$
+DECLARE
+ v_uid uuid:='ffffffff-ffff-4fff-8fff-ffffffffffff';
+ v_balance jsonb;
+ v_pendencias jsonb;
+BEGIN
+ INSERT INTO auth.users(id) VALUES(v_uid);
+ -- Sem associacao em catalogo_motoboys, e sem comissoes, o saldo fica 0.
+ IF EXISTS(SELECT 1 FROM public.catalogo_motoboys m WHERE m.usuario_id=v_uid) THEN
+  RAISE EXCEPTION 'Fixture nao representa ex-entregador sem vinculo';
+ END IF;
+ SELECT public.catalogo_asaas_saldo_historico(v_uid) INTO v_balance;
+ SELECT public.catalogo_asaas_pendencias_historicas(v_uid) INTO v_pendencias;
+ IF (v_balance->>'disponivel_centavos')::bigint <> 0
+    OR (v_balance->>'creditos')::bigint<>0 OR v_pendencias<>'[]'::jsonb THEN
+  RAISE EXCEPTION 'Ex-entregador sem remuneracao recebeu creditos indevidos';
+ END IF;
+
+ -- O saldo deve depender apenas de remuneracoes em nome do titular,
+ -- sem exigir linha de vinculo apos a ultima entrega.
+ IF pg_catalog.pg_get_functiondef(
+   'public.catalogo_asaas_saldo_historico(uuid)'::regprocedure
+ ) LIKE '%FROM public.catalogo_motoboys%'
+ OR pg_catalog.pg_get_functiondef(
+   'public.catalogo_asaas_pendencias_historicas(uuid)'::regprocedure
+ ) LIKE '%FROM public.catalogo_motoboys%' THEN
+  RAISE EXCEPTION 'RPC ainda exige vinculo comercial para consultar saldo historico';
+ END IF;
+ IF has_function_privilege('anon','public.catalogo_asaas_saldo_historico(uuid)','EXECUTE')
+    OR has_function_privilege('authenticated',
+         'public.catalogo_asaas_pendencias_historicas(uuid)','EXECUTE') THEN
+  RAISE EXCEPTION 'RPC de historico acessivel diretamente por clientes';
+ END IF;
+ RAISE NOTICE 'PASS: saldo historico sem vinculo depende exclusivamente de remuneracoes e nao vaza dados';
+END $historic_rights$;
+
 ROLLBACK;
