@@ -104,7 +104,11 @@
       $("nomeComercioAdmin").textContent = comercio?.nome || comercioId;
       if (resultado.proprietario && !resultado.admin) {
         const termos=await chamarFaturaPix({acao:"consultar_termos",papel:"comercio"});
-        if (!termos.aceito) {
+        // Quitar faturas existentes é permitido mesmo sem novo aceite.
+        // O bloqueio da loja permanece: não habilita produtos nem novas vendas.
+        const motivoFinanceiro=["Comissão de pagamentos presenciais vencida.",
+          "Encerramento solicitado pelo proprietário"].includes(resultado.motivo_bloqueio);
+        if (!termos.aceito && !(resultado.bloqueado && motivoFinanceiro)) {
           $("painelCatalogo").hidden=true;
           $("catalogoBloqueado").hidden=true;
           if (!$("catalogoTermsDialog").open) $("catalogoTermsDialog").showModal();
