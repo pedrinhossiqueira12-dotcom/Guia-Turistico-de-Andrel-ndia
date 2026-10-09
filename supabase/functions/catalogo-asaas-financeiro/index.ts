@@ -48,8 +48,12 @@ async function rpc(name:string,args:Record<string,unknown>){
 }
 async function asaas(path:string,method="GET",body?:unknown){
  // Defesa independente, na saída HTTP: esta implementação não envia saques na produção.
- if(method==="POST" && path==="/transfers" && ENVIRONMENT!=="sandbox")
-  throw new Failure("Transferência Pix de produção não está liberada.",503);
+ if(method==="POST" && path==="/transfers"){
+  if(ENVIRONMENT!=="sandbox")
+   throw new Failure("Transferência Pix de produção não está liberada.",503);
+  if(!WITHDRAWAL_AUTH_ON || WITHDRAWAL_AUTH_TOKEN.length<32)
+   throw new Failure("Sem autorização por Webhook, saques não são permitidos.",503);
+ }
  // Permitir GET de uma transferência antiga mesmo se saques novos estiverem desativados.
  // POST /transfers continua bloqueado pela flag. A baixa exige status validado do Asaas.
  if(path.startsWith("/transfers") && method==="GET"){
@@ -256,7 +260,9 @@ async function wallet(uid:string,withReconcile=false){
   .select("id,status,valor_centavos,criado_em,concluido_em")
   .eq("motoboy_id",uid).order("criado_em",{ascending:false}).limit(20);
  if(error)throw new Failure("Histórico de saques indisponível.",503);
- return respond({success:true,saque_habilitado:PAYOUTS_ON&&Boolean(ASAAS_TOKEN),
+ return respond({success:true,
+   saque_habilitado:ENVIRONMENT==="sandbox"&&PAYOUTS_ON&&WITHDRAWAL_AUTH_ON&&
+     WITHDRAWAL_AUTH_TOKEN.length>=32&&Boolean(ASAAS_TOKEN),
    saldo_disponivel_centavos:balance.disponivel_centavos||0,
    saques:history||[]});
 }
@@ -320,6 +326,10 @@ async function withdraw(uid:string){
  if(ENVIRONMENT!=="sandbox")
   throw new Failure("Saques Asaas ainda não liberados para produção.",503);
  enabled("payouts");
+ // Falha fechada: token e validação de saques devem estar ativos ANTES de
+ // reservar saldo ou emitir POST /transfers no Asaas.
+ if(!WITHDRAWAL_AUTH_ON || WITHDRAWAL_AUTH_TOKEN.length<32)
+  throw new Failure("Autorização de saída por Webhook desabilitada. Saques suspensos.",503);
  const {data:profile,error}=await db.from("catalogo_motoboy_perfis")
   .select("chave_pix_enc,em_analise").eq("usuario_id",uid).maybeSingle();
  if(error||!profile||profile.em_analise||!profile.chave_pix_enc)throw new Failure("Cadastre sua chave Pix e confirme seu perfil.",409);
