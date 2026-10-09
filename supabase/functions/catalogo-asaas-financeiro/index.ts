@@ -149,7 +149,7 @@ async function reconcileInvoice(uid:string,body:Record<string,unknown>){
  const qr=proof.estado==="pago"?{}:await asaas("/payments/"+encodeURIComponent(String(charge.order_id))+"/pixQrCode");
  return respond({success:true,fatura:f,cobranca_status:proof.conciliado.status||proof.estado,
   valor_centavos:charge.valor_centavos,pix:parsePix(proof.payment,qr),
-  mensagem:proof.estado==="pago"?"Pagamento reconhecido e créditos liberados.":"Aguardando liquidação da cobrança."});
+  mensagem:proof.estado==="pago"?"Pagamento reconhecido e fatura quitada. Créditos são disponibilizados somente quando houver remunerações elegíveis.":"Aguardando liquidação da cobrança."});
 }
 async function createInvoice(uid:string,body:Record<string,unknown>,email:string){
  enabled("billing");
