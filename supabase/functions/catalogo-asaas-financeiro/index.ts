@@ -377,6 +377,8 @@ async function solicitarAnaliseResidual(uid:string,body:Record<string,unknown>){
  if(error?.code==="23505")
    return respond({success:true,status:"pendente",
     mensagem:"Já existe uma análise de saldo residual para sua conta. Nenhum Pix foi enviado."});
+ if(error?.code==="23514")
+  throw new Failure("Existe outro pedido financeiro em aberto. Aguarde a revisão ou procure a administração.",409);
  if(error||!data)throw new Failure("Não foi possível registrar seu pedido de análise.",503);
  return respond({success:true,id:data.id,status:data.status,
    mensagem:"Solicitação de análise registrada. Não é uma transferência e não altera seu saldo disponível."});
@@ -406,6 +408,8 @@ async function solicitarRegularizacaoSaida(uid:string,body:Record<string,unknown
   .select("id,status").single();
  if(error?.code==="23505")return respond({success:true,status:"pendente",
    mensagem:"Já existe uma regularização aberta. Nenhuma transferência foi iniciada."});
+ if(error?.code==="23514")
+  throw new Failure("Existe uma análise residual aberta. Aguarde a revisão antes de pedir a regularização.",409);
  if(error||!data)throw new Failure("Falha ao registrar regularização financeira.",503);
  return respond({success:true,id:data.id,status:data.status,
   mensagem:"Regularização solicitada para conferência administrativa. Não é saque, Pix ou promessa de data de pagamento."});
