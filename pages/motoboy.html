@@ -115,6 +115,19 @@
             </form>
             <p id="motoboyResidualFeedback" class="motoboy-feedback" role="status"></p>
           </div>
+          <div id="motoboySaidaBloco" hidden>
+            <h3>Regularização de créditos após inatividade</h3>
+            <p>Se você não possui mais vínculos ativos com comércios e tem R$ 100 ou mais em créditos já liberados, poderá pedir uma conferência financeira. Esta opção não reativa sua conta e não efetua Pix nem confirma pagamento.</p>
+            <form id="motoboySaidaForm" class="motoboy-form">
+              <label for="motoboySaidaMotivo">Motivo da regularização</label>
+              <select id="motoboySaidaMotivo" required>
+                <option value="inatividade">Interrompi minhas entregas</option>
+                <option value="encerramento">Encerrei minhas atividades</option>
+              </select>
+              <button id="motoboySaidaSubmit" class="motoboy-button motoboy-button-secondary" type="submit">Solicitar regularização financeira</button>
+            </form>
+            <p id="motoboySaidaFeedback" class="motoboy-feedback" role="status"></p>
+          </div>
           <ul id="motoboyWithdrawHistory" class="motoboy-history" aria-label="Histórico de saques"></ul>
         </div>
 <section class="motoboy-card" aria-labelledby="motoboyPendingTitle">
