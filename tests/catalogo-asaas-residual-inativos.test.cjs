@@ -76,7 +76,7 @@ test("somente backend pode consultar creditos historicos por UUID",()=>{
 test("vinculos mistos de varios comercios nao dependem do primeiro status retornado",()=>{
   assert.match(wallet,/const \[\{data:allowed,error:e\},\{data:active,error:activeError\}\]=await Promise\.all/);
   assert.match(wallet,/if\(e\|\|activeError\)throw new Failure/);
-  assert.match(wallet,/if\(!allowed\?\.length\)throw new Failure/);
+  assert.match(wallet,/if\(!allowed\?\.length&&!titularHistorico\)/);
   assert.match(wallet,/const activeCourier=Boolean\(active\?\.length\)/);
   assert.doesNotMatch(wallet,/allowed\[0\]\.ativo/);
 });
