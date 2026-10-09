@@ -28,11 +28,17 @@
       "Pré-conferência (NÃO autoriza Pix): saldo solicitado "+
       money(c.saldo_snapshot_centavos)+"; saldo atual "+money(c.saldo_atual_centavos)+
       "; comissões liberadas "+Number(c.creditos_disponiveis||0)+
+      "; créditos individualmente conferidos "+Number(c.creditos_individuais_validos||0)+
+      "; soma validada "+money(c.valor_creditos_individuais_centavos)+
+      "; composição integral "+(c.composicao_creditos_integra===true?"sim":"NÃO")+
+      "; SHA-256 dos créditos "+(
+        /^[0-9a-f]{64}$/.test(String(c.fingerprint_creditos_sha256||""))
+          ? c.fingerprint_creditos_sha256 : "não disponível")+
       "; saques em aberto "+Number(c.saques_em_aberto||0)+
       "; evidências bancárias ainda sem conciliação "+Number(c.evidencias_bancarias_para_conciliar||0)+
       "; solicitações conflitantes "+Number(c.solicitacoes_sobrepostas||0)+
       (c.sem_impedimentos_identificados===true
-        ? ". Valores conferem neste instante, mas é obrigatória nova validação antes de qualquer transferência."
+        ? ". Créditos conferem neste instante; a SHA-256 é somente referência para auditoria, NÃO prova de pagamento. É obrigatória nova validação transacional antes de qualquer transferência."
         : ". Há divergência ou bloqueio: NÃO movimentar valores."),c.sem_impedimentos_identificados!==true
     );
   }
