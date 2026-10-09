@@ -22,6 +22,7 @@
       tipo,solicitacao_id:String(item.id||"")
     });
     const c=resposta.conferencia;
+    const foto=resposta.fotografia_bancaria||null;
     if(!c||c.pagamento_autorizado!==false||c.requer_revalidacao_transacional!==true)
       throw new Error("Resposta de pré-conferência inesperada. Pagamento permanece bloqueado.");
     aviso(
@@ -37,6 +38,13 @@
       "; saques em aberto "+Number(c.saques_em_aberto||0)+
       "; evidências bancárias ainda sem conciliação "+Number(c.evidencias_bancarias_para_conciliar||0)+
       "; solicitações conflitantes "+Number(c.solicitacoes_sobrepostas||0)+
+      (foto
+        ? "; foto do GET bancário: "+
+          (foto.composicao_conferida_na_observacao===true?"composição validada no registro":"composição NÃO validada")+
+          "; comparação com créditos atuais: "+
+          (foto.fingerprint_igual_ao_atual===true?"igual (não comprova Pix)":"DIVERGENTE OU AUSENTE — revisão obrigatória")+
+          "; saldo registrado "+money(foto.valor_creditos_observados_centavos)
+        : "; nenhuma fotografia de observação bancária registrada")+
       (c.sem_impedimentos_identificados===true
         ? ". Créditos conferem neste instante; a SHA-256 é somente referência para auditoria, NÃO prova de pagamento. É obrigatória nova validação transacional antes de qualquer transferência."
         : ". Há divergência ou bloqueio: NÃO movimentar valores."),c.sem_impedimentos_identificados!==true
