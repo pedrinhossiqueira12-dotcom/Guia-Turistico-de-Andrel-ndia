@@ -610,7 +610,7 @@ DECLARE
  v_uid uuid := 'caca0a0a-caca-4caa-8caa-caca0a0a0a01';
  v_store text := 'ci-carteira-sem-vinculo-positivo';
  v_pedido uuid; v_fechamento uuid; v_residual uuid;
- v_before jsonb;v_after jsonb;v_pending jsonb;
+ v_before jsonb;v_after jsonb;v_pending jsonb;v_preflight jsonb;
 BEGIN
  INSERT INTO auth.users(id) VALUES(v_uid);
  INSERT INTO public.comercios_publicados(local_id,status) VALUES(v_store,'ativo');
@@ -697,6 +697,16 @@ BEGIN
  IF (public.catalogo_asaas_saldo_sacavel(v_uid)->>'disponivel_centavos')::bigint>0 THEN
   RAISE EXCEPTION 'Ex-motoboy sem vinculo recebeu autorizacao de saque comum';
  END IF;
+ SELECT public.catalogo_asaas_preconferir_pagamento_excepcional('residual',v_residual)
+  INTO v_preflight;
+ IF v_preflight->>'composicao_creditos_integra' IS DISTINCT FROM 'true'
+  OR v_preflight->>'creditos_individuais_validos' IS DISTINCT FROM '1'
+  OR v_preflight->>'valor_creditos_individuais_centavos' IS DISTINCT FROM '200'
+  OR length(v_preflight->>'fingerprint_creditos_sha256')<>64
+  OR v_preflight->>'sem_impedimentos_identificados' IS DISTINCT FROM 'true'
+  OR v_preflight->>'pagamento_autorizado' IS DISTINCT FROM 'false' THEN
+  RAISE EXCEPTION 'Preconferencia individual divergente ou autorizou pagamento: %',v_preflight;
+ END IF;
 
  RAISE NOTICE 'PASS: saldo positivo de 200 centavos financiado, 1 credito e pedido residual preservados SEM ultimo vinculo';
 END $positive_orphan_balance$;
@@ -715,6 +725,8 @@ DECLARE
  v_before jsonb;
  v_after jsonb;
  v_saida uuid;
+ v_preflight jsonb;
+ v_again jsonb;
  v_blocks int:=0;
 BEGIN
  INSERT INTO auth.users(id) VALUES(v_uid);
@@ -791,6 +803,21 @@ BEGIN
   SELECT 1 FROM public.catalogo_asaas_regularizacoes_inativos
   WHERE id=v_saida AND status='pendente'
  ) THEN RAISE EXCEPTION 'Pedido de saida nao foi registrado'; END IF;
+
+ SELECT public.catalogo_asaas_preconferir_pagamento_excepcional('saida',v_saida)
+ INTO v_preflight;
+ SELECT public.catalogo_asaas_preconferir_pagamento_excepcional('saida',v_saida)
+ INTO v_again;
+ IF v_preflight->>'composicao_creditos_integra' IS DISTINCT FROM 'true'
+  OR v_preflight->>'creditos_individuais_validos' IS DISTINCT FROM '2'
+  OR v_preflight->>'valor_creditos_individuais_centavos' IS DISTINCT FROM '12000'
+  OR v_preflight->>'sem_impedimentos_identificados' IS DISTINCT FROM 'true'
+  OR v_preflight->>'pagamento_autorizado' IS DISTINCT FROM 'false'
+  OR length(v_preflight->>'fingerprint_creditos_sha256')<>64
+  OR v_preflight->>'fingerprint_creditos_sha256'
+    IS DISTINCT FROM v_again->>'fingerprint_creditos_sha256' THEN
+  RAISE EXCEPTION 'Comissoes individuais ou fingerprint nao conferem: %',v_preflight;
+ END IF;
 
  BEGIN
   INSERT INTO public.catalogo_asaas_regularizacoes_inativos(
