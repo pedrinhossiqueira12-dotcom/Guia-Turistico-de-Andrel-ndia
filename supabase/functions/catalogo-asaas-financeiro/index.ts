@@ -486,14 +486,18 @@ async function authorizeWithdrawal(request:Request){
  catch{return approveResponse("REFUSED","JSON inválido.");}
  if(body.type!=="TRANSFER")return approveResponse("REFUSED","Apenas transferências Pix do Guia são autorizadas.");
  const incoming=input(body.transfer);
- const id=value(incoming.id,120),ref=value(incoming.externalReference,80);
- if(!/^[0-9a-f-]{36}$/i.test(id)||!/^[0-9a-f-]{36}$/i.test(ref))
+ const id=value(incoming.id,120),payloadRef=value(incoming.externalReference,80);
+ // O exemplo do Asaas não obriga externalReference no POST do Webhook.
+ // A referência canônica vem da reserva previamente vinculada ao ID bancário.
+ if(!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id))
   return approveResponse("REFUSED","Transferência não identificada.");
  const {data:saque,error:lookupError}=await db.from("catalogo_asaas_saques")
    .select("id,motoboy_id,status,valor_centavos,transferencia_id,pix_destino_sha256")
-   .eq("id",ref).maybeSingle();
+   .eq("transferencia_id",id).maybeSingle();
  if(lookupError)throw new Failure("Erro ao verificar reserva.",503);
- if(!saque || saque.transferencia_id!==id)return approveResponse("REFUSED","Transferência desconhecida.");
+ if(!saque || saque.transferencia_id!==id ||
+    (payloadRef && payloadRef!==saque.id))return approveResponse("REFUSED","Transferência desconhecida.");
+ const ref=String(saque.id);
  const {data:existing,error:existingError}=await db.from("catalogo_asaas_validacoes_saque")
    .select("decisao,motivo").eq("saque_id",ref).eq("transferencia_id",id).maybeSingle();
  if(existingError)throw new Failure("Erro ao recuperar autorização.",503);
