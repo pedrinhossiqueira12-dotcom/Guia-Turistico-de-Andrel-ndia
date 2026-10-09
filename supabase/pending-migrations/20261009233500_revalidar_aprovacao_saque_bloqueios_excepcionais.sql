@@ -15,6 +15,7 @@ DECLARE
  v_total bigint;
  v_elegiveis boolean;
  v_bloqueio boolean;
+ v_perfil_apto boolean;
 BEGIN
  SELECT * INTO v_saque
  FROM public.catalogo_asaas_saques WHERE id=p_saque;
@@ -38,6 +39,17 @@ BEGIN
  )
  INTO v_bloqueio;
 
+ -- Uma aprovacao antiga nao permite pagar um motoboy suspenso, inativo,
+ -- com perfil em analise ou chave Pix em investigacao.
+ SELECT EXISTS (
+   SELECT 1 FROM public.catalogo_motoboy_perfis perfil
+   WHERE perfil.usuario_id=v_saque.motoboy_id
+    AND perfil.apto AND NOT perfil.em_analise
+ ) AND EXISTS (
+   SELECT 1 FROM public.catalogo_motoboys m
+   WHERE m.usuario_id=v_saque.motoboy_id AND m.ativo
+ ) INTO v_perfil_apto;
+
  SELECT count(*),count(*) FILTER (WHERE i.ativo),
   coalesce(sum(r.valor_centavos::bigint) FILTER (WHERE i.ativo),0),
   coalesce(bool_and(
@@ -54,8 +66,9 @@ BEGIN
  RETURN jsonb_build_object(
   'ok',true,
   'bloqueio_excepcional',v_bloqueio,
+  'perfil_atualmente_apto',v_perfil_apto,
   'elegivel',(
-   v_saque.status='enviado' AND NOT v_bloqueio
+   v_saque.status='enviado' AND NOT v_bloqueio AND v_perfil_apto
    AND v_qtd>0 AND v_ativos=v_qtd
    AND v_elegiveis AND v_total=v_saque.valor_centavos
   ),
