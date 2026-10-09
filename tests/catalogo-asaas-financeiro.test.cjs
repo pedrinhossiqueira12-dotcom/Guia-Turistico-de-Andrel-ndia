@@ -251,3 +251,24 @@ test("saque de R$ 100 e aceite versionado são exigidos pelo servidor", () => {
  assert.doesNotMatch(local,/acao:\s*"marcar_meu_comercio_deletado"/);
  assert.match(local,/acao:"solicitar_encerramento"/);
 });
+
+
+test("revisão residual: pedido privado abaixo de R$ 100 nunca cria transferência",()=>{
+ const m=read("supabase/pending-migrations/20261009160000_solicitacoes_saldo_residual_motoboy.sql");
+ const ui=read("js/motoboy.js");
+ const html=read("pages/motoboy.html");
+ assert.match(m,/saldo_snapshot_centavos BETWEEN 1 AND 9999/);
+ assert.match(m,/WHERE status IN \('pendente','em_analise'\)/);
+ assert.match(m,/ALTER TABLE public\.catalogo_asaas_saldos_residuais ENABLE ROW LEVEL SECURITY/);
+ assert.match(m,/REVOKE ALL ON public\.catalogo_asaas_saldos_residuais FROM PUBLIC,anon,authenticated/);
+ assert.match(edge,/case "solicitar_analise_residual":return await solicitarAnaliseResidual\(user\.id,body\)/);
+ assert.match(edge,/case "listar_analises_residuais_admin":return await listarAnalisesResiduais\(user\.id\)/);
+ const fn=edge.slice(edge.indexOf("async function solicitarAnaliseResidual("),edge.indexOf("async function reconcileTransfer("));
+ assert.match(fn,/await requireTerms\(uid,"motoboy",""\)/);
+ assert.match(fn,/amount>0&&amount<SAQUE_MINIMO_CENTAVOS/);
+ assert.match(fn,/\.insert\(\{motoboy_id:uid,saldo_snapshot_centavos:amount,motivo\}\)/);
+ assert.doesNotMatch(fn,/asaas\("\/transfers"|catalogo_asaas_reservar_saque|catalogo_asaas_atualizar_saque/);
+ assert.match(ui,/motoboyResidualForm/);
+ assert.match(html,/id="motoboyResidualForm"/);
+ assert.match(edge,/const eligible=records\.length>0 && records\.length<=1000/);
+});
