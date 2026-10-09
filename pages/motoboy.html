@@ -101,6 +101,19 @@
           <button id="motoboyWithdrawPix" class="motoboy-button motoboy-button-primary" type="button" disabled>Sacar via Pix</button>
           <p id="motoboyWithdrawFeedback" class="motoboy-feedback" role="status">Aguardando habilitação dos saques.</p>
           <p id="motoboyWithdrawMinimo" class="motoboy-feedback">Saque mínimo: R$ 100,00 em créditos liberados.</p>
+          <div id="motoboyResidualBloco" hidden>
+            <h3>Saldo residual abaixo de R$ 100</h3>
+            <p>Se deixar de realizar entregas ou quiser encerrar suas atividades, solicite a análise do saldo liberado restante. A solicitação não efetua Pix nem reduz seu saldo.</p>
+            <form id="motoboyResidualForm" class="motoboy-form">
+              <label for="motoboyResidualMotivo">Motivo da solicitação</label>
+              <select id="motoboyResidualMotivo" required>
+                <option value="inatividade">Vou interromper minhas entregas</option>
+                <option value="encerramento">Quero encerrar minhas atividades</option>
+              </select>
+              <button id="motoboyResidualSubmit" class="motoboy-button motoboy-button-secondary" type="submit">Solicitar análise do saldo</button>
+            </form>
+            <p id="motoboyResidualFeedback" class="motoboy-feedback" role="status"></p>
+          </div>
           <ul id="motoboyWithdrawHistory" class="motoboy-history" aria-label="Histórico de saques"></ul>
         </div>
 <section class="motoboy-card" aria-labelledby="motoboyPendingTitle">
