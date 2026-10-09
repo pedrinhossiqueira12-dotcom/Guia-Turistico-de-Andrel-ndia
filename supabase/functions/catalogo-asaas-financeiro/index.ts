@@ -322,7 +322,7 @@ async function wallet(uid:string,withReconcile=false){
    catch { /* Nunca liberar por erro de rede; o saldo continua reservado. */ }
   }
  }
- const balance=await rpc("catalogo_asaas_saldo_sacavel",{p_motoboy:uid});
+ const balance=await rpc("catalogo_asaas_saldo_historico",{p_motoboy:uid});
  const pendencias=await rpc("catalogo_asaas_pendencias_motoboy",{p_motoboy:uid});
  const {data:residual,error:residualError}=await db.from("catalogo_asaas_saldos_residuais")
    .select("id,status,saldo_snapshot_centavos,motivo,solicitado_em,detalhe_revisao")
@@ -350,7 +350,7 @@ async function solicitarAnaliseResidual(uid:string,body:Record<string,unknown>){
  const motivo=value(body.motivo,30);
  check(motivo==="encerramento"||motivo==="inatividade",
   "Informe o motivo do pedido de análise.",400);
- const saldo=await rpc("catalogo_asaas_saldo_sacavel",{p_motoboy:uid});
+ const saldo=await rpc("catalogo_asaas_saldo_historico",{p_motoboy:uid});
  const amount=Number(saldo.disponivel_centavos||0);
  check(Number.isSafeInteger(amount)&&amount>0&&amount<SAQUE_MINIMO_CENTAVOS,
   "A revisão de saldo residual exige valor liberado entre R$ 0,01 e R$ 99,99.",409);
