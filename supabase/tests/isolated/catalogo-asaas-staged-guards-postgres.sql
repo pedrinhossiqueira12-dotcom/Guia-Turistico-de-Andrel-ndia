@@ -366,4 +366,66 @@ BEGIN
  RAISE NOTICE 'PASS: banco observado e idempotente, nunca baixa creditos ou autoriza Pix';
 END $evidence$;
 
+DO $saque_exclusivo$
+DECLARE
+ v_uid uuid := 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+ v_res uuid;
+ v_saque uuid;
+ v_saida uuid;
+ v_refused integer := 0;
+BEGIN
+ INSERT INTO auth.users(id) VALUES(v_uid);
+
+ INSERT INTO public.catalogo_asaas_saldos_residuais(
+  motoboy_id,saldo_snapshot_centavos,motivo
+ ) VALUES(v_uid,799,'inatividade') RETURNING id INTO v_res;
+
+ BEGIN
+  INSERT INTO public.catalogo_asaas_saques(motoboy_id,valor_centavos)
+  VALUES(v_uid,10000);
+  RAISE EXCEPTION 'Saque regular criado durante analise residual aberta';
+ EXCEPTION WHEN SQLSTATE '23514' THEN v_refused:=v_refused+1;
+ END;
+
+ UPDATE public.catalogo_asaas_saldos_residuais
+ SET status='recusada',analisado_por=v_uid,finalizado_em=now(),
+   detalhe_revisao='Recusa sintetica para testar exclusao mutua com saques'
+ WHERE id=v_res;
+
+ INSERT INTO public.catalogo_asaas_saques(motoboy_id,valor_centavos)
+ VALUES(v_uid,10000) RETURNING id INTO v_saque;
+
+ BEGIN
+  INSERT INTO public.catalogo_asaas_regularizacoes_inativos(
+   motoboy_id,saldo_snapshot_centavos,motivo
+  ) VALUES(v_uid,11000,'inatividade');
+  RAISE EXCEPTION 'Regularizacao criada durante saque regular reservado';
+ EXCEPTION WHEN SQLSTATE '23514' THEN v_refused:=v_refused+1;
+ END;
+ BEGIN
+  INSERT INTO public.catalogo_asaas_saldos_residuais(
+   motoboy_id,saldo_snapshot_centavos,motivo
+  ) VALUES(v_uid,900,'inatividade');
+  RAISE EXCEPTION 'Analise residual criada durante saque regular reservado';
+ EXCEPTION WHEN SQLSTATE '23514' THEN v_refused:=v_refused+1;
+ END;
+
+ UPDATE public.catalogo_asaas_saques SET status='falhou' WHERE id=v_saque;
+ INSERT INTO public.catalogo_asaas_regularizacoes_inativos(
+  motoboy_id,saldo_snapshot_centavos,motivo
+ ) VALUES(v_uid,11000,'inatividade') RETURNING id INTO v_saida;
+
+ BEGIN
+  INSERT INTO public.catalogo_asaas_saques(motoboy_id,valor_centavos)
+  VALUES(v_uid,10000);
+  RAISE EXCEPTION 'Saque regular criado durante regularizacao aberta';
+ EXCEPTION WHEN SQLSTATE '23514' THEN v_refused:=v_refused+1;
+ END;
+
+ IF v_refused<>4 THEN
+  RAISE EXCEPTION 'Quatro bloqueios de exclusao mutua esperados; recebidos %',v_refused;
+ END IF;
+ RAISE NOTICE 'PASS: travas compartilhadas entre saque regular e pedidos excepcionais';
+END $saque_exclusivo$;
+
 ROLLBACK;
