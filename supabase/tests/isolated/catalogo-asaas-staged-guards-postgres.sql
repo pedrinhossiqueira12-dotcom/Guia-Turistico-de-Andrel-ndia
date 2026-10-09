@@ -272,4 +272,35 @@ BEGIN
  RAISE NOTICE 'PASS: dois caminhos de solicitacao nao podem coexistir em aberto';
 END $overlap$;
 
+DO $preflight_check$
+DECLARE
+ v_user uuid := 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+ v_request uuid;
+ v_response jsonb;
+BEGIN
+ SELECT id INTO v_request
+ FROM public.catalogo_asaas_regularizacoes_inativos
+ WHERE motoboy_id=v_user AND status='pendente'
+ ORDER BY solicitado_em DESC LIMIT 1;
+ IF v_request IS NULL THEN RAISE EXCEPTION 'Solicitacao de CI para preconferencia nao encontrada'; END IF;
+ SELECT public.catalogo_asaas_preconferir_pagamento_excepcional('saida',v_request)
+ INTO v_response;
+ IF v_response->>'ok' IS DISTINCT FROM 'true'
+    OR v_response->>'pagamento_autorizado' IS DISTINCT FROM 'false'
+    OR v_response->>'requer_revalidacao_transacional' IS DISTINCT FROM 'true'
+    OR v_response->>'saldo_snapshot_centavos' IS DISTINCT FROM '12500'
+ THEN RAISE EXCEPTION 'Resposta de preconferencia insegura: %',v_response;
+ END IF;
+ IF has_function_privilege('anon',
+       'public.catalogo_asaas_preconferir_pagamento_excepcional(text,uuid)','EXECUTE')
+    OR has_function_privilege('authenticated',
+       'public.catalogo_asaas_preconferir_pagamento_excepcional(text,uuid)','EXECUTE')
+    OR NOT has_function_privilege('service_role',
+       'public.catalogo_asaas_preconferir_pagamento_excepcional(text,uuid)','EXECUTE')
+ THEN RAISE EXCEPTION 'Preconferencia nao e privada do backend'; END IF;
+ IF (public.catalogo_asaas_preconferir_pagamento_excepcional('outra',v_request)->>'ok') IS DISTINCT FROM 'false'
+ THEN RAISE EXCEPTION 'Preconferencia aceitou tipo invalido'; END IF;
+ RAISE NOTICE 'PASS: preconferencia somente leitura, bloqueada para publico e sem autorizar pagamentos';
+END $preflight_check$;
+
 ROLLBACK;
