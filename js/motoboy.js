@@ -461,9 +461,16 @@
       : residual?.status==="concluida" ? "A solicitação anterior foi concluída. Consulte o suporte para conferir os documentos."
       : residual?.status==="recusada" ? "A solicitação anterior foi recusada. Entre em contato com o suporte para esclarecer."
       : "Peça análise somente se for interromper suas atividades. Esta ação não realiza transferência.");
-    definirFeedback("motoboyWithdrawFeedback", carteira.saque_habilitado
-      ? saldoValido ? "Você pode solicitar o Pix diretamente pelo Guia Andrelândia." : `Faltam ${formatarMoeda(Math.max(0,minimo-saldo))} em créditos liberados para alcançar o saque mínimo.`
-      : "O saque automático ainda não foi habilitado pela plataforma.");
+    const situacaoSaque=carteira.entregador_ativo===false
+      ? saldo>0
+        ? "Seu perfil de entregador está inativo. Seu saldo permanece registrado, mas o saque comum está suspenso até regularização administrativa."
+        : "Seu perfil de entregador está inativo. Consulte o histórico para acompanhar eventuais créditos."
+      : carteira.saque_habilitado
+        ? saldoValido
+          ? "Você pode solicitar o Pix diretamente pelo Guia Andrelândia."
+          : `Faltam ${formatarMoeda(Math.max(0,minimo-saldo))} em créditos liberados para alcançar o saque mínimo.`
+        : "O saque automático ainda não foi habilitado pela plataforma.";
+    definirFeedback("motoboyWithdrawFeedback", situacaoSaque);
   }
 
   async function solicitarAnaliseSaldoResidual(event) {
