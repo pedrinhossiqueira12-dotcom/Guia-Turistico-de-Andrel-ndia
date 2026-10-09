@@ -727,6 +727,12 @@ DECLARE
  v_saida uuid;
  v_preflight jsonb;
  v_again jsonb;
+ v_bank_response jsonb;
+ v_after_bank jsonb;
+ v_bank_fingerprint text;
+ v_bank_count bigint;
+ v_bank_amount bigint;
+ v_bank_consistent boolean;
  v_blocks int:=0;
 BEGIN
  INSERT INTO auth.users(id) VALUES(v_uid);
@@ -840,6 +846,34 @@ BEGIN
  EXCEPTION WHEN unique_violation OR check_violation THEN v_blocks:=v_blocks+1;
  END;
  IF v_blocks<>3 THEN RAISE EXCEPTION 'Esperados 3 bloqueios; obtidos %',v_blocks; END IF;
+
+ -- Observacao bancaria NO SANDBOX nao prova titular nem baixa valores.
+ -- O trigger captura a composicao de creditos INDEPENDENTEMENTE do cliente.
+ SELECT public.catalogo_asaas_registrar_observacao_excepcional(
+  'saida',v_saida,'ci_bank_snapshot_12k',
+  'guia-exc:saida:'||v_saida,12000,'DONE'
+ ) INTO v_bank_response;
+ IF v_bank_response->>'ok' IS DISTINCT FROM 'true'
+  OR v_bank_response->>'pagamento_baixado' IS DISTINCT FROM 'false' THEN
+  RAISE EXCEPTION 'Observacao do banco baixou valores ou foi rejeitada: %',v_bank_response;
+ END IF;
+ SELECT creditos_fingerprint_observado_sha256,creditos_observados,
+  valor_creditos_observados_centavos,composicao_conferida_na_observacao
+ INTO v_bank_fingerprint,v_bank_count,v_bank_amount,v_bank_consistent
+ FROM public.catalogo_asaas_transferencias_excepcionais_auditoria
+ WHERE tipo='saida' AND solicitacao_id=v_saida;
+ IF v_bank_fingerprint IS DISTINCT FROM v_preflight->>'fingerprint_creditos_sha256'
+ OR v_bank_count<>2 OR v_bank_amount<>12000 OR v_bank_consistent IS NOT TRUE THEN
+  RAISE EXCEPTION 'Foto de creditos bancarios nao corresponde a preconferencia: % % % %',
+  v_bank_fingerprint,v_bank_count,v_bank_amount,v_bank_consistent;
+ END IF;
+ SELECT public.catalogo_asaas_preconferir_pagamento_excepcional('saida',v_saida)
+ INTO v_after_bank;
+ IF v_after_bank->>'evidencias_bancarias_para_conciliar' IS DISTINCT FROM '1'
+  OR v_after_bank->>'sem_impedimentos_identificados' IS DISTINCT FROM 'false'
+  OR v_after_bank->>'pagamento_autorizado' IS DISTINCT FROM 'false' THEN
+  RAISE EXCEPTION 'Preconferencia ignorou HOLD depois de evidência bancaria: %',v_after_bank;
+ END IF;
 
  RAISE NOTICE 'PASS: 2 meses (R$120), 2 creditos, sem ultimo vinculo, saida pendente e 3 reservas duplicadas bloqueadas';
 END $orphan_large_balance$;
