@@ -45,3 +45,29 @@ test("solicitação residual usa exceção limitada; saque regular mantém bloqu
   assert.match(withdraw,/ENVIRONMENT!=="sandbox"/);
   assert.match(withdraw,/catalogo_asaas_reservar_saque/);
 });
+
+const historySql=fs.readFileSync("supabase/pending-migrations/20261009190000_saldo_historico_motoboy_inativo.sql","utf8");
+
+test("saldo liberado e pendencias nao dependem de status ativo do motoboy",()=>{
+  assert.match(wallet,/catalogo_asaas_saldo_historico/);
+  assert.match(wallet,/catalogo_asaas_pendencias_historicas/);
+  assert.match(residual,/catalogo_asaas_saldo_historico/);
+  assert.match(historySql,/CREATE OR REPLACE FUNCTION public\.catalogo_asaas_saldo_historico/);
+  assert.match(historySql,/CREATE OR REPLACE FUNCTION public\.catalogo_asaas_pendencias_historicas/);
+  assert.doesNotMatch(historySql,/catalogo_v2_autorizado|\.ativo\s*=/);
+  assert.match(historySql,/r\.status='disponivel'/);
+  assert.match(historySql,/r\.status='retido'/);
+  assert.match(historySql,/b\.gateway='asaas'/);
+  assert.match(historySql,/AND NOT EXISTS\(/);
+});
+
+test("somente backend pode consultar creditos historicos por UUID",()=>{
+  for(const fnName of ["catalogo_asaas_saldo_historico","catalogo_asaas_pendencias_historicas"]){
+    assert.match(historySql,new RegExp("REVOKE ALL ON FUNCTION public\\."+fnName+"\\(uuid\\)"));
+    assert.match(historySql,new RegExp("GRANT EXECUTE ON FUNCTION public\\."+fnName+"\\(uuid\\)"));
+  }
+  assert.match(historySql,/FROM PUBLIC, anon, authenticated/);
+  assert.match(historySql,/TO service_role/);
+  assert.match(historySql,/SECURITY DEFINER SET search_path=''/);
+  assert.doesNotMatch(historySql,/UPDATE public\.|DELETE FROM public\.|POST \/transfers/);
+});
