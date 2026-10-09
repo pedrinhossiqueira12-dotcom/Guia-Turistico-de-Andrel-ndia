@@ -230,7 +230,8 @@ async function reconcileInvoice(uid:string,body:Record<string,unknown>){
   mensagem:proof.estado==="pago"?"Pagamento reconhecido e fatura quitada. Créditos são disponibilizados somente quando houver remunerações elegíveis.":"Aguardando liquidação da cobrança."});
 }
 async function createInvoice(uid:string,body:Record<string,unknown>,email:string){
- await requireTerms(uid,"comercio",commerce(body.comercio_id));
+ // Regularização de obrigação já constituída não depende da aceitação
+ // de novos termos; aceite continua obrigatório para iniciar novas vendas.
  const {data:method,error:methodError}=await db.from("catalogo_cobranca_preferencias")
   .select("metodo").eq("comercio_id",commerce(body.comercio_id)).maybeSingle();
  if(methodError)throw new Failure("Falha ao consultar modalidade de cobrança.",503);
