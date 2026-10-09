@@ -272,3 +272,27 @@ test("revisão residual: pedido privado abaixo de R$ 100 nunca cria transferênc
  assert.match(html,/id="motoboyResidualForm"/);
  assert.match(edge,/const eligible=records\.length>0 && records\.length<=1000/);
 });
+
+
+test("encerramento auditado protege publicação, histórico e acesso à fatura",()=>{
+ const sql=read("supabase/pending-migrations/20261009162000_bloquear_exclusao_debitos_e_finalizar_arquivamento.sql");
+ const panel=read("js/admin-encerramentos.js");
+ const html=read("pages/admin-encerramentos.html");
+ const merchant=read("js/catalogo-admin.js");
+ assert.match(sql,/CREATE OR REPLACE FUNCTION catalogo_private\.catalogo_pendencias_encerramento/);
+ assert.match(sql,/p\.status NOT IN \('entregue','concluido','cancelado','reembolsado'\)/);
+ assert.match(sql,/CREATE TRIGGER catalogo_publicacao_sem_divida_guard/);
+ assert.match(sql,/BEFORE DELETE OR UPDATE OF status ON public\.comercios_publicados/);
+ assert.match(sql,/CREATE TRIGGER catalogo_historico_guard_delete/);
+ assert.match(sql,/BEFORE DELETE ON public\.catalogos/);
+ assert.match(sql,/CREATE OR REPLACE FUNCTION public\.catalogo_finalizar_encerramento_financeiro/);
+ assert.match(sql,/IF p_admin IS DISTINCT FROM/);
+ assert.match(sql,/UPDATE public\.comercios_publicados SET status='arquivado'/);
+ assert.doesNotMatch(sql,/DELETE FROM public\.(?:catalogo_|comercios_publicados)/);
+ assert.match(edge,/case "listar_encerramentos_admin":return await listarEncerramentosAdmin\(user\.id\)/);
+ assert.match(edge,/case "finalizar_encerramento_admin":return await finalizarEncerramentoAdmin\(user\.id,body\)/);
+ assert.match(edge,/check\(body\.confirmacao===true/);
+ assert.match(panel,/finalizar_encerramento_admin/);
+ assert.match(html,/id="listaEncerramentos"/);
+ assert.match(merchant,/Encerramento solicitado pelo proprietário/);
+});
