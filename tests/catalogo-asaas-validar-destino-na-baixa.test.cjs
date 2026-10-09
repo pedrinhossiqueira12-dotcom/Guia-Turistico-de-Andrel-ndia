@@ -38,7 +38,8 @@ test("valor, tipo Pix e chave de destino no Asaas devem ser verificáveis",()=>{
  assert.doesNotMatch(proof,/cpfCnpj===|ownerName===|identidade_comprovada:true/);
 });
 test("nenhum fluxo excepcional concede quitação com observação bancária parcial",()=>{
- assert.match(edge,/'pagamento_baixado',false|pagamento_baixado:false/);
+ const sql=fs.readFileSync("supabase/pending-migrations/20261009220500_evidencias_transferencia_excepcional_sandbox.sql","utf8");
+ assert.match(sql,/'pagamento_baixado',false/);
  assert.match(edge,/observarTransferenciaExcepcionalSandboxAdmin/);
  assert.match(edge,/ENVIRONMENT!=="sandbox"/);
 });
