@@ -38,6 +38,7 @@
       "; saques em aberto "+Number(c.saques_em_aberto||0)+
       "; evidências bancárias ainda sem conciliação "+Number(c.evidencias_bancarias_para_conciliar||0)+
       "; solicitações conflitantes "+Number(c.solicitacoes_sobrepostas||0)+
+      "; créditos em separação contábil sem baixa "+Number(c.separacoes_contabeis_sem_liquidacao||0)+
       (foto
         ? "; foto do GET bancário: "+
           (foto.composicao_conferida_na_observacao===true?"composição validada no registro":"composição NÃO validada")+
