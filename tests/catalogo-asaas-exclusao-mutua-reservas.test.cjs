@@ -63,7 +63,7 @@ test("evidencia bancaria mantém HOLD apesar de recusas e bloqueia conclusão co
  assert.match(bankHold,/REVOKE ALL ON FUNCTION catalogo_private\.catalogo_reter_creditos_com_evidencia_excepcional\(\)/);
  assert.doesNotMatch(bankHold,/INSERT INTO public\.catalogo_asaas_saques|UPDATE public\.catalogo_remuneracoes_v2|POST \/transfers/);
  assert.match(isolated,/evidencia bancaria preserva HOLD apos recusas/);
- assert.match(isolated,/observacao tardia liquidou saldo sem prova/);
+ assert.match(isolated,/Observacao tardia liquidou saldo sem prova/);
  assert.match(isolated,/Permitiu conciliacao contábil normal/);
 });
 
