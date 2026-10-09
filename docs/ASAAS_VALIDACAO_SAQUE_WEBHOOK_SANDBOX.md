@@ -29,6 +29,22 @@ Referência oficial: https://docs.asaas.com/docs/mecanismo-para-validacao-de-saq
 5. Não ativar validação de transações solicitadas pelo painel do Asaas se quiser autorizar somente saques originados pela API Guia; operações desconhecidas sempre recebem `REFUSED`.
 6. O Asaas documenta que o mecanismo de autorização permite dispensar a autenticação por Token SMS sob os mecanismos de segurança configurados. Confirmar a exigência específica com o Asaas antes de alterar o Token SMS; não desligar outras proteções sem homologação.
 
+## Teste de autenticação sem movimentar saldo
+
+Com o cadastro do Webhook salvo no painel do Asaas Sandbox e o token igual no
+Supabase de testes, habilitar **apenas** `ASAAS_SAQUE_VALIDACAO_ENABLED=true`;
+manter `ASAAS_PAYOUTS_ENABLED=false`.
+
+Enviar POST para `/saque-autorizacao` com:
+- `asaas-access-token`: token da validação de saque, exclusivamente do Sandbox;
+- JSON `{"type":"BILL"}` (payload inofensivo, não é solicitação bancária).
+
+Resultado esperado: HTTP 200, JSON com `status:"REFUSED"` e motivo de saques
+desativados. Com token errado, resposta HTTP 401. Não acionar `POST /transfers`.
+Quando os testes negativos estiverem verificados, preparar crédito e transferência
+**novos** para teste com `ASAAS_PAYOUTS_ENABLED=true`. Não tentar autorizar
+retroativamente a operação anterior sem snapshot de destino Pix.
+
 ## Fluxo e verificações
 
 1. O motoboy autenticado solicita um saque no Guia; o servidor reserva créditos elegíveis.
