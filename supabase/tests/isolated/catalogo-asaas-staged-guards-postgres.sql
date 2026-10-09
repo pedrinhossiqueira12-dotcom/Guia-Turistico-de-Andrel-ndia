@@ -93,6 +93,16 @@ BEGIN
   INSERT INTO public.catalogo_asaas_saldos_residuais
     (motoboy_id,saldo_snapshot_centavos,motivo)
     VALUES(v_uid,250,'inatividade') RETURNING id INTO v_residual;
+
+  -- A analise em andamento nao pode registrar analisado_por:
+  -- esse campo e reservado por CHECK para a decisao final.
+  UPDATE public.catalogo_asaas_saldos_residuais
+    SET status='em_analise', analisado_por=NULL
+    WHERE id=v_residual AND status='pendente';
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Falha: pendente nao entrou em analise';
+  END IF;
+
   BEGIN
     UPDATE public.catalogo_asaas_saldos_residuais SET
       status='concluida',analisado_por=v_uid,finalizado_em=now(),
