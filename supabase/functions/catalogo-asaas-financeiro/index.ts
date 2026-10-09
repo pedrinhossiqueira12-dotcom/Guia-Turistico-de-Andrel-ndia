@@ -101,20 +101,21 @@ const TERMOS_VERSAO="2026-10-09";
 const SAQUE_MINIMO_CENTAVOS=10000;
 // Teto por transação conservador para contas Asaas novas; não limita o saldo acumulado.
 const SAQUE_MAXIMO_PIX_CENTAVOS=500000;
-async function roleScope(uid:string,papel:string,store:string){
+async function roleScope(uid:string,papel:string,store:string,allowInactiveMotoboy=false){
  check(papel==="comercio"||papel==="motoboy","Perfil de aceite inválido.",400);
  if(papel==="comercio"){
   check(/^[a-z0-9-]{1,180}$/.test(store),"Comércio inválido.",400);
   await owner(uid,store);return store;
  }
- const {data,error}=await db.from("catalogo_motoboys").select("usuario_id")
-  .eq("usuario_id",uid).eq("ativo",true).limit(1);
+ let query=db.from("catalogo_motoboys").select("usuario_id").eq("usuario_id",uid);
+ if(!allowInactiveMotoboy)query=query.eq("ativo",true);
+ const {data,error}=await query.limit(1);
  if(error)throw new Failure("Falha ao verificar autorização.",503);
  check(Boolean(data?.length),"Seu perfil de entregador ainda não foi autorizado.",403);
  return "";
 }
-async function termsStatus(uid:string,papel:string,store:string){
- const scope=await roleScope(uid,papel,store);
+async function termsStatus(uid:string,papel:string,store:string,allowInactiveMotoboy=false){
+ const scope=await roleScope(uid,papel,store,allowInactiveMotoboy);
  const {data,error}=await db.from("catalogo_aceites_operacionais")
   .select("documento").eq("usuario_id",uid).eq("papel",papel)
   .eq("comercio_id",scope).eq("versao",TERMOS_VERSAO);
@@ -124,13 +125,15 @@ async function termsStatus(uid:string,papel:string,store:string){
   termos_aceitos:docs.has("termos"),privacidade_ciente:docs.has("privacidade"),
   aceito:docs.has("termos")&&docs.has("privacidade")};
 }
-async function requireTerms(uid:string,papel:string,store:string){
- if(!(await termsStatus(uid,papel,store)).aceito)
+async function requireTerms(uid:string,papel:string,store:string,allowInactiveMotoboy=false){
+ if(!(await termsStatus(uid,papel,store,allowInactiveMotoboy)).aceito)
   throw new Failure("Leia e aceite os Termos de Uso e confirme a ciência da Política de Privacidade.",428);
 }
 async function acceptTerms(uid:string,body:Record<string,unknown>){
  const papel=value(body.papel,15),store=papel==="comercio"?commerce(body.comercio_id):"";
- await roleScope(uid,papel,store);
+ // Motoboy inativo pode renovar aceite para solicitar revisao do saldo antigo.
+ // O aceite nao reativa perfil nem autoriza novas entregas/saques regulares.
+ await roleScope(uid,papel,store,papel==="motoboy");
  check(body.aceito_termos===true&&body.ciente_privacidade===true,
   "Marque os dois campos para confirmar ciência.",400);
  const rows=["termos","privacidade"].map(documento=>({
@@ -140,7 +143,7 @@ async function acceptTerms(uid:string,body:Record<string,unknown>){
   onConflict:"usuario_id,papel,comercio_id,documento,versao",ignoreDuplicates:true
  });
  if(error)throw new Failure("Não foi possível registrar seu aceite.",503);
- return respond({success:true,...await termsStatus(uid,papel,store)});
+ return respond({success:true,...await termsStatus(uid,papel,store,papel==="motoboy")});
 }
 async function requestClosure(uid:string,body:Record<string,unknown>){
  const store=commerce(body.comercio_id);
@@ -306,9 +309,11 @@ function pixDestination(key:string){
  throw new Failure("Chave Pix inválida. Use CPF, CNPJ, e-mail, telefone com +55 ou chave aleatória.",400);
 }
 async function wallet(uid:string,withReconcile=false){
- const {data:allowed,error:e}=await db.from("catalogo_motoboys").select("usuario_id")
-  .eq("usuario_id",uid).eq("ativo",true).limit(1);
- if(e||!allowed?.length)throw new Failure("Perfil de entregador não autorizado.",403);
+ const {data:allowed,error:e}=await db.from("catalogo_motoboys").select("usuario_id,ativo")
+  .eq("usuario_id",uid).limit(1);
+ if(e)throw new Failure("Falha ao verificar perfil de entregador.",503);
+ if(!allowed?.length)throw new Failure("Perfil de entregador não autorizado.",403);
+ const activeCourier=allowed[0].ativo===true;
  if(withReconcile){
   const {data:pending}=await db.from("catalogo_asaas_saques").select("id,transferencia_id")
    .eq("motoboy_id",uid).in("status",["enviado","revisao"]).not("transferencia_id","is",null).limit(5);
@@ -328,7 +333,7 @@ async function wallet(uid:string,withReconcile=false){
   .eq("motoboy_id",uid).order("criado_em",{ascending:false}).limit(20);
  if(error)throw new Failure("Histórico de saques indisponível.",503);
  return respond({success:true,
-   saque_habilitado:ENVIRONMENT==="sandbox"&&PAYOUTS_ON&&WITHDRAWAL_AUTH_ON&&
+   saque_habilitado:activeCourier&&ENVIRONMENT==="sandbox"&&PAYOUTS_ON&&WITHDRAWAL_AUTH_ON&&
      WITHDRAWAL_AUTH_TOKEN.length>=32&&Boolean(ASAAS_TOKEN),
    saque_minimo_centavos:SAQUE_MINIMO_CENTAVOS,
    saque_maximo_por_pix_centavos:SAQUE_MAXIMO_PIX_CENTAVOS,
@@ -340,7 +345,8 @@ async function wallet(uid:string,withReconcile=false){
 }
 // Solicitação administrativa de saldo residual: não cria saque nem chama o Asaas.
 async function solicitarAnaliseResidual(uid:string,body:Record<string,unknown>){
- await requireTerms(uid,"motoboy","");
+ // Inatividade do entregador nao extingue creditos nem impede sua revisao.
+ await requireTerms(uid,"motoboy","",true);
  const motivo=value(body.motivo,30);
  check(motivo==="encerramento"||motivo==="inatividade",
   "Informe o motivo do pedido de análise.",400);
@@ -746,7 +752,8 @@ Deno.serve(async (request:Request)=>{
   const body=input(await request.json().catch(()=>({})));
   switch(value(body.acao,60)){
    case "consultar_termos":return respond({success:true,...await termsStatus(user.id,value(body.papel,15),
-     value(body.papel,15)==="comercio"?commerce(body.comercio_id):"")});
+     value(body.papel,15)==="comercio"?commerce(body.comercio_id):"",
+     value(body.papel,15)==="motoboy")});
    case "aceitar_termos":return await acceptTerms(user.id,body);
    case "solicitar_encerramento":return await requestClosure(user.id,body);
    case "consultar_encerramento":return await consultarEncerramento(user.id,body);
