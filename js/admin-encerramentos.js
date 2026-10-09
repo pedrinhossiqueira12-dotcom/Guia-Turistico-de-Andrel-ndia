@@ -16,6 +16,25 @@
     if(error||data?.success!==true)throw new Error(data?.mensagem||error?.message||"Operação não autorizada.");
     return data;
   }
+  async function preconferirPagamento(tipo,item){
+    const resposta=await api({
+      acao:"preconferir_pagamento_excepcional_admin",
+      tipo,solicitacao_id:String(item.id||"")
+    });
+    const c=resposta.conferencia;
+    if(!c||c.pagamento_autorizado!==false||c.requer_revalidacao_transacional!==true)
+      throw new Error("Resposta de pré-conferência inesperada. Pagamento permanece bloqueado.");
+    aviso(
+      "Pré-conferência (NÃO autoriza Pix): saldo solicitado "+
+      money(c.saldo_snapshot_centavos)+"; saldo atual "+money(c.saldo_atual_centavos)+
+      "; comissões liberadas "+Number(c.creditos_disponiveis||0)+
+      "; saques em aberto "+Number(c.saques_em_aberto||0)+
+      "; solicitações conflitantes "+Number(c.solicitacoes_sobrepostas||0)+
+      (c.sem_impedimentos_identificados===true
+        ? ". Valores conferem neste instante, mas é obrigatória nova validação antes de qualquer transferência."
+        : ". Há divergência ou bloqueio: NÃO movimentar valores."),c.sem_impedimentos_identificados!==true
+    );
+  }
   async function listarAnalisesResiduais(){
     const response=await api({acao:"listar_analises_residuais_admin"});
     const lista=$("listaAnalisesResiduais");
@@ -75,7 +94,15 @@
       }
       recusar.addEventListener("click",()=>revisar("recusada"));
       analisar.addEventListener("click",()=>revisar("em_analise"));
-      linha.append(analisar,recusar);
+      const conferir=document.createElement("button");conferir.type="button";
+      conferir.className="secondary";conferir.textContent="Conferir créditos";
+      conferir.addEventListener("click",async()=>{
+        conferir.disabled=true;
+        try{await preconferirPagamento("residual",item);}
+        catch(erro){aviso(erro.message||"Pré-conferência indisponível.",true);}
+        finally{conferir.disabled=false;}
+      });
+      linha.append(analisar,recusar,conferir);
       li.append(titulo,detalhe,justificativa,linha);
       lista.appendChild(li);
     }
@@ -130,7 +157,15 @@
       }
       analisar.addEventListener("click",()=>revisar("em_analise"));
       recusar.addEventListener("click",()=>revisar("recusada"));
-      acoes.append(analisar,recusar);
+      const conferir=document.createElement("button");conferir.type="button";
+      conferir.className="secondary";conferir.textContent="Conferir créditos";
+      conferir.addEventListener("click",async()=>{
+        conferir.disabled=true;
+        try{await preconferirPagamento("saida",item);}
+        catch(erro){aviso(erro.message||"Pré-conferência indisponível.",true);}
+        finally{conferir.disabled=false;}
+      });
+      acoes.append(analisar,recusar,conferir);
       li.append(titulo,detalhe,justificativa,acoes);lista.appendChild(li);
     }
     return solicitacoes.length;
