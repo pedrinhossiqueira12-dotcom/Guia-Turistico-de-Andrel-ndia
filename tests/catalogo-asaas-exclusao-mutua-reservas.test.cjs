@@ -49,3 +49,28 @@ test("gatilhos privados não podem ser executados diretamente por clientes",()=>
  assert.match(sql,/REVOKE ALL ON FUNCTION catalogo_private\.catalogo_bloquear_revisao_com_saque_em_aberto\(\)/);
  assert.match(sql,/FROM PUBLIC,anon,authenticated,service_role/);
 });
+
+const bankHold=read("supabase/pending-migrations/20261009224000_congelar_novo_saque_com_evidencia_excepcional.sql");
+
+test("evidencia bancaria mantém HOLD apesar de recusas e bloqueia conclusão contábil",()=>{
+ assert.match(bankHold,/catalogo_asaas_transferencias_excepcionais_auditoria/);
+ assert.match(bankHold,/BEFORE INSERT ON public\.catalogo_asaas_saques/);
+ assert.match(bankHold,/BEFORE INSERT ON public\.catalogo_asaas_saldos_residuais/);
+ assert.match(bankHold,/BEFORE INSERT ON public\.catalogo_asaas_regularizacoes_inativos/);
+ assert.match(bankHold,/BEFORE UPDATE OF status ON public\.catalogo_asaas_saques/);
+ assert.match(bankHold,/NEW\.status='concluido'/);
+ assert.match(bankHold,/pg_catalog\.hashtextextended\('asaas-saque:'\|\|NEW\.motoboy_id::text,0\)/);
+ assert.match(bankHold,/REVOKE ALL ON FUNCTION catalogo_private\.catalogo_reter_creditos_com_evidencia_excepcional\(\)/);
+ assert.doesNotMatch(bankHold,/INSERT INTO public\.catalogo_asaas_saques|UPDATE public\.catalogo_remuneracoes_v2|POST \/transfers/);
+ assert.match(isolated,/evidencia bancaria preserva HOLD apos recusas/);
+ assert.match(isolated,/observacao tardia liquidou saldo sem prova/);
+ assert.match(isolated,/Permitiu conciliacao contábil normal/);
+});
+
+test("o painel deixa de habilitar Pix e novas análises enquanto banco estiver inconclusivo",()=>{
+ assert.match(edge,/evidencia_bancaria_pendente:evidenciaBancariaPendente/);
+ assert.match(edge,/saque_habilitado:activeCourier&&!revisaoExcepcionalAberta&&!evidenciaBancariaPendente&&ENVIRONMENT/);
+ assert.match(ui,/carteira\.evidencia_bancaria_pendente===true/);
+ assert.match(ui,/Uma transferência bancária excepcional precisa ser conciliada/);
+ assert.match(ui,/carteira\.evidencia_bancaria_pendente\|\|!state\.termosAceitos/);
+});
