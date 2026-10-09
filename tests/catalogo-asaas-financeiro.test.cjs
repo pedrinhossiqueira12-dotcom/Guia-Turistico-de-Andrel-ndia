@@ -296,3 +296,15 @@ test("encerramento auditado protege publicação, histórico e acesso à fatura"
  assert.match(html,/id="listaEncerramentos"/);
  assert.match(merchant,/Encerramento solicitado pelo proprietário/);
 });
+
+
+test("fatura anterior pode ser quitada sem novo aceite; novas vendas continuam protegidas",()=>{
+ const invoice=edge.slice(edge.indexOf("async function createInvoice("),edge.indexOf("function pixDestination("));
+ const merchant=read("js/catalogo-admin.js");
+ const orders=read("supabase/functions/catalogo-pedidos-offline-admin/index.ts");
+ assert.doesNotMatch(invoice,/await requireTerms\(uid,"comercio"/);
+ assert.match(invoice,/enabled\("billing"\)/);
+ assert.match(merchant,/const motivoFinanceiro=\["Comissão de pagamentos presenciais vencida\."/);
+ assert.match(merchant,/!\(resultado\.bloqueado && motivoFinanceiro\)/);
+ assert.match(orders,/await requireTermsForNewOrders\(userId,comercioId\)/);
+});
