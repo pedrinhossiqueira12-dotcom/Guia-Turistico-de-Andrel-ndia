@@ -179,4 +179,52 @@ BEGIN
 END
 $checks$;
 
+DO $regularizacao$
+DECLARE v_uid uuid := 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  v_id uuid; v_rejeicoes integer := 0; v_estado text;
+BEGIN
+ IF to_regclass('public.catalogo_asaas_regularizacoes_inativos') IS NULL
+   OR has_table_privilege('anon','public.catalogo_asaas_regularizacoes_inativos','SELECT')
+   OR has_table_privilege('authenticated','public.catalogo_asaas_regularizacoes_inativos','INSERT')
+   OR NOT has_table_privilege('service_role','public.catalogo_asaas_regularizacoes_inativos','INSERT')
+ THEN RAISE EXCEPTION 'Regularizacao ausente ou exposicao indevida'; END IF;
+
+ INSERT INTO public.catalogo_asaas_regularizacoes_inativos
+   (motoboy_id,saldo_snapshot_centavos,motivo)
+ VALUES(v_uid,15000,'inatividade') RETURNING id INTO v_id;
+ BEGIN
+   INSERT INTO public.catalogo_asaas_regularizacoes_inativos
+     (motoboy_id,saldo_snapshot_centavos,motivo)
+   VALUES(v_uid,16000,'inatividade');
+   RAISE EXCEPTION 'Regularizacao duplicada foi aceita';
+ EXCEPTION WHEN unique_violation THEN v_rejeicoes:=v_rejeicoes+1;
+ END;
+
+ BEGIN
+   UPDATE public.catalogo_asaas_regularizacoes_inativos
+     SET saldo_snapshot_centavos=20000 WHERE id=v_id;
+   RAISE EXCEPTION 'Snapshot alterado';
+ EXCEPTION WHEN SQLSTATE '23514' THEN v_rejeicoes:=v_rejeicoes+1;
+ END;
+ UPDATE public.catalogo_asaas_regularizacoes_inativos
+   SET status='em_analise',atualizado_em=now() WHERE id=v_id;
+ UPDATE public.catalogo_asaas_regularizacoes_inativos
+   SET status='recusada',revisado_por=v_uid,finalizado_em=now(),
+       atualizado_em=now(),
+       justificativa='Recusa administrativa de teste com saldo preservado'
+   WHERE id=v_id AND status='em_analise';
+ BEGIN
+   UPDATE public.catalogo_asaas_regularizacoes_inativos
+     SET status='pendente' WHERE id=v_id;
+   RAISE EXCEPTION 'Pedido finalizado reaberto';
+ EXCEPTION WHEN SQLSTATE '23514' THEN v_rejeicoes:=v_rejeicoes+1;
+ END;
+ SELECT status INTO v_estado FROM public.catalogo_asaas_regularizacoes_inativos WHERE id=v_id;
+ IF v_rejeicoes<>3 OR v_estado IS DISTINCT FROM 'recusada'
+ THEN RAISE EXCEPTION 'Regularizacao inconsistente: refusas %, estado %',v_rejeicoes,v_estado;
+ END IF;
+ RAISE NOTICE 'PASS: regularizacao somente administrativa, idempotencia e trilha imutavel';
+END
+$regularizacao$;
+
 ROLLBACK;
