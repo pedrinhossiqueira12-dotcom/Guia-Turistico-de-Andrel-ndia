@@ -594,12 +594,18 @@ async function reconcileTransfer(saqueId:string,transferId:string){
  const transfer=await asaas("/transfers/"+encodeURIComponent(transferId));
  check(transfer.id===transferId&&transfer.externalReference===saqueId,"Transferência de outro identificador.",409);
  const {data:row,error}=await db.from("catalogo_asaas_saques")
-  .select("id,valor_centavos,transferencia_id,status").eq("id",saqueId).maybeSingle();
+  .select("id,valor_centavos,transferencia_id,status,pix_destino_sha256").eq("id",saqueId).maybeSingle();
  if(error||!row||row.transferencia_id!==transferId)throw new Failure("Transferência não vinculada.",409);
  check(cents(transfer.value)===Number(row.valor_centavos),"Valor da transferência divergente. Saque em revisão.",409);
  const status=value(transfer.status,60);
- if(status==="DONE")return await rpc("catalogo_asaas_atualizar_saque",
-  {p_saque:saqueId,p_estado:"concluido",p_transferencia:transferId,p_mensagem:null});
+ if(status==="DONE"){
+  // A resposta DONE prova o estado bancario, NAO prova por si so o destino.
+  // Mesmo se a chave do perfil mudou, comparar com HMAC do POST original.
+  check(await destinoPixConfirmadoParaBaixa(row,transfer),
+   "Asaas confirmou a transferência, mas o destino Pix não pôde ser validado. Saque permanece em revisão.",409);
+  return await rpc("catalogo_asaas_atualizar_saque",
+   {p_saque:saqueId,p_estado:"concluido",p_transferencia:transferId,p_mensagem:null});
+ }
  if(["FAILED","CANCELLED"].includes(status))return await rpc("catalogo_asaas_atualizar_saque",
   {p_saque:saqueId,p_estado:"falhou",p_transferencia:transferId,p_mensagem:"Transferência recusada pelo Asaas"});
  return {ok:true,status:"enviado"};
@@ -732,7 +738,7 @@ async function reconcileAdminTransfer(uid:string,body:Record<string,unknown>){
  check(/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(saqueId)&&/^[A-Za-z0-9_-]{4,130}$/.test(transferId),
   "Informe os identificadores válidos do saque e da transferência.",400);
  const {data:row,error}=await db.from("catalogo_asaas_saques")
-  .select("id,valor_centavos,transferencia_id,status").eq("id",saqueId).maybeSingle();
+  .select("id,valor_centavos,transferencia_id,status,pix_destino_sha256").eq("id",saqueId).maybeSingle();
  if(error||!row)throw new Failure("Saque não encontrado.",404);
  if(["concluido","falhou"].includes(row.status))
   return respond({success:true,status:row.status,mensagem:"Saque já encerrado; nenhuma nova transferência foi criada."});
@@ -744,6 +750,8 @@ async function reconcileAdminTransfer(uid:string,body:Record<string,unknown>){
   "Os dados bancários não correspondem à reserva. Operação mantida em revisão.",409);
  const status=value(transfer.status,60);
  if(status==="DONE"){
+  check(await destinoPixConfirmadoParaBaixa(row,transfer),
+   "Asaas confirmou a transferência, mas o destino Pix não pôde ser validado. Saque permanece em revisão.",409);
   if(row.status!=="enviado")
    await rpc("catalogo_asaas_atualizar_saque",{p_saque:saqueId,p_estado:"revisao",
      p_transferencia:transferId,p_mensagem:"Recuperado pela administração após conferência Asaas"});
@@ -809,6 +817,17 @@ async function pixDestinationsMatch(fingerprint:string,transfers:Record<string,u
   }
  }
  return checked>0;
+}
+// Revalidação obrigatoria antes de baixa, inclusive por webhook/admin.
+// Banco reportar DONE sem revelar chave de destino nao basta. Não confundir
+// correspondencia de chave com verificação de titularidade CPF/CNPJ.
+async function destinoPixConfirmadoParaBaixa(
+ saque:Record<string,unknown>,transfer:Record<string,unknown>
+){
+ const hash=value(saque.pix_destino_sha256,64);
+ if(!/^[a-f0-9]{64}$/.test(hash))return false;
+ if(value(transfer.operationType,12)!=="PIX")return false;
+ return await pixDestinationsMatch(hash,[transfer]);
 }
 async function equalSecret(actual:string,expected:string){
  if(expected.length<32||actual.length<32||actual.length>255)return false;
