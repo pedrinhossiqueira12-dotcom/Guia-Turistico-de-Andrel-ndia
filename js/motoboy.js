@@ -789,6 +789,7 @@
     limparDadosPrivados();
     fecharConfirmacao();
     $("motoboyOccurrenceDialog")?.close();
+    $("motoboyTermsDialog")?.close();
     if ($("motoboyLoginCard")) $("motoboyLoginCard").hidden = false;
     if ($("motoboyPanel")) $("motoboyPanel").hidden = true;
     if ($("motoboyLogout")) $("motoboyLogout").hidden = true;
@@ -831,6 +832,7 @@
       state.termosAceitos = true;
     } catch (erro) {
       $("motoboyPanel").hidden = true;
+      if ($("motoboyLoginCard")) $("motoboyLoginCard").hidden = false;
       definirFeedback("motoboyLoginFeedback", erro.message || "Não foi possível verificar os termos.", true);
       return;
     }
