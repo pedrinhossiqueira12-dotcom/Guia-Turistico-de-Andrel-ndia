@@ -3294,9 +3294,7 @@ async function filtrarPublicacoesEncerradas(comercios) {
   try {
     for (let inicio = 0; inicio < ids.length; inicio += 100) {
       const { data, error } = await supabaseClient
-        .from("comercios_publicados")
-        .select("local_id,status")
-        .in("local_id", ids.slice(inicio, inicio + 100));
+        .rpc("catalogo_status_publicacao", { p_ids: ids.slice(inicio, inicio + 100) });
       if (error) throw error;
       for (const registro of data || []) {
         situacoes.set(String(registro.local_id), String(registro.status || "").toLowerCase());
