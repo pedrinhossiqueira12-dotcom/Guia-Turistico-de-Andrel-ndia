@@ -51,9 +51,8 @@ BEGIN
  END IF;
 
  -- Fotografia da carteira no momento de OBSERVAR a transferencia.
- -- Pode ser posterior a transferencia; nao e comprovante de pagamento.
- -- Captura feita NO BANCO: ignorar fingerprint enviada pelo cliente.
- -- Se preconferencia falhar, manter a evidência e deixar fotografia vazia.
+ -- Pode ser posterior ao Pix; nao constitui comprovante bancario.
+ -- Hash sempre calculado no banco; ignorar campos enviados pelo cliente.
  BEGIN
   v_fotografia:=public.catalogo_asaas_preconferir_pagamento_excepcional(
    NEW.tipo,NEW.solicitacao_id);
@@ -61,28 +60,13 @@ BEGIN
   v_fotografia:=NULL;
  END;
  NEW.creditos_fingerprint_observado_sha256:=
-  CASE WHEN (v_fotografia->>'fingerprint_creditos_sha256') ~ '^[a-f0-9]{64}
- -- bancaria posterior. O conflito permanece registrado para apuracao;
- -- nunca marcar credito como pago por esta rotina.
- RETURN NEW;
-END
-$guard$;
+  CASE WHEN (v_fotografia->>'fingerprint_creditos_sha256') ~ '^[a-f0-9]{64}$'
    THEN v_fotografia->>'fingerprint_creditos_sha256' ELSE NULL END;
  NEW.creditos_observados:=
-  CASE WHEN (v_fotografia->>'creditos_individuais_validos') ~ '^[0-9]{1,18}
- -- bancaria posterior. O conflito permanece registrado para apuracao;
- -- nunca marcar credito como pago por esta rotina.
- RETURN NEW;
-END
-$guard$;
+  CASE WHEN (v_fotografia->>'creditos_individuais_validos') ~ '^[0-9]{1,18}$'
    THEN (v_fotografia->>'creditos_individuais_validos')::bigint ELSE NULL END;
  NEW.valor_creditos_observados_centavos:=
-  CASE WHEN (v_fotografia->>'valor_creditos_individuais_centavos') ~ '^[0-9]{1,18}
- -- bancaria posterior. O conflito permanece registrado para apuracao;
- -- nunca marcar credito como pago por esta rotina.
- RETURN NEW;
-END
-$guard$;
+  CASE WHEN (v_fotografia->>'valor_creditos_individuais_centavos') ~ '^[0-9]{1,18}$'
    THEN (v_fotografia->>'valor_creditos_individuais_centavos')::bigint ELSE NULL END;
  NEW.composicao_conferida_na_observacao:=coalesce(
   (v_fotografia->>'composicao_creditos_integra')::boolean,false)
