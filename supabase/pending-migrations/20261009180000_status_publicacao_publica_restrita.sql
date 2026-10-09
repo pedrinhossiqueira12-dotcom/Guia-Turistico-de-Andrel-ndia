@@ -1,5 +1,5 @@
 -- Apenas o status da publicação é público; nunca conceder SELECT da tabela.
--- PENDENTE: aplicar somente em STAGING antes de habilitar frontend.
+-- Homologado em STAGING em 2026-10-09. PENDENTE para producao; nao promover sem aprovacao.
 BEGIN;
 CREATE OR REPLACE FUNCTION public.catalogo_status_publicacao(p_ids text[])
 RETURNS TABLE(local_id text, status text)
