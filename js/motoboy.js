@@ -540,8 +540,12 @@
       if (error.message === STALE_REQUEST) return;
       state.carteira = null;
       if ($("motoboyWithdrawPix")) $("motoboyWithdrawPix").disabled = true;
-      if ($("motoboyAsaasBalance")) $("motoboyAsaasBalance").textContent = "R$ 0,00";
-      definirFeedback("motoboyWithdrawFeedback", error.message || "Carteira indisponível. Seus créditos históricos permanecem protegidos.", true);
+      if ($("motoboyResidualSubmit")) $("motoboyResidualSubmit").disabled = true;
+      if ($("motoboySaidaSubmit")) $("motoboySaidaSubmit").disabled = true;
+      if ($("motoboyResidualBloco")) $("motoboyResidualBloco").hidden = true;
+      if ($("motoboySaidaBloco")) $("motoboySaidaBloco").hidden = true;
+      if ($("motoboyAsaasBalance")) $("motoboyAsaasBalance").textContent = "Indisponível";
+      definirFeedback("motoboyWithdrawFeedback", error.message || "Não foi possível consultar o saldo. Isso não significa que seus créditos foram zerados.", true);
     }
   }
 
