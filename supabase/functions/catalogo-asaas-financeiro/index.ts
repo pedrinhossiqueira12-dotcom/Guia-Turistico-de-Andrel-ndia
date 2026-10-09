@@ -526,7 +526,6 @@ async function authorizeWithdrawal(request:Request){
    }else reason="Conta do motoboy ou créditos não elegíveis.";
   }else reason="Identidade, valor, estado ou destino Pix divergente.";
  }else reason="Reserva não habilitada, valor divergente ou operação não Pix.";
- }
  const {error:insertError}=await db.from("catalogo_asaas_validacoes_saque")
    .insert({saque_id:ref,transferencia_id:id,decisao:decision,motivo:reason});
  if(insertError && insertError.code!=="23505")throw new Failure("Falha ao registrar auditoria.",503);
