@@ -323,6 +323,16 @@ Deno.serve(async (request: Request) => {
       action === "solicitar_ativacao" || action === "consultar_banner" || action === "salvar_banner",
     );
     if (!catalog.allowed) return json({ proprietario: false, mensagem: catalog.reason }, 403);
+    if (["solicitar_ativacao","salvar_banner"].includes(action)
+      && authenticated.user.id !== ADMIN_USER_ID) {
+      const {data:aceites,error:aceiteError}=await admin.from("catalogo_aceites_operacionais")
+        .select("documento").eq("usuario_id",authenticated.user.id)
+        .eq("papel","comercio").eq("comercio_id",commerceId).eq("versao","2026-10-09");
+      if(aceiteError) return json({success:false,mensagem:"Não foi possível conferir o aceite dos termos."},503);
+      const docs=new Set((aceites||[]).map(x=>x.documento));
+      if(!docs.has("termos")||!docs.has("privacidade"))
+        return json({success:false,mensagem:"Leia e aceite os termos para estabelecimentos antes de ativar o catálogo."},428);
+    }
     if (action === "consultar_banner") {
       return json({ success: true, proprietario: true, banner_url: catalog.banner_url || null });
     }
