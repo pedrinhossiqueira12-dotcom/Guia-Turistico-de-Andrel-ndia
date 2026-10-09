@@ -473,12 +473,14 @@ const approveResponse=(status:"APPROVED"|"REFUSED",reason?:string)=>new Response
  {status:200,headers:WITHDRAWAL_RESPONSE_HEADERS});
 async function authorizeWithdrawal(request:Request){
  // PROTEÇÃO: homologação exclusivamente Sandbox, com opt-in e token diferente do webhook de eventos.
- if(ENVIRONMENT!=="sandbox" || !WITHDRAWAL_AUTH_ON || !PAYOUTS_ON || !ASAAS_TOKEN ||
+ if(ENVIRONMENT!=="sandbox" || !WITHDRAWAL_AUTH_ON || !ASAAS_TOKEN ||
     WITHDRAWAL_AUTH_TOKEN.length<32)
   return approveResponse("REFUSED","Validação de saída indisponível no ambiente.");
  const actual=request.headers.get("asaas-access-token")||"";
  if(!(await equalSecret(actual,WITHDRAWAL_AUTH_TOKEN)))
    return new Response(JSON.stringify({error:"unauthorized"}),{status:401,headers:WITHDRAWAL_RESPONSE_HEADERS});
+ // Permite homologar token e recusa de operações com as transferências desativadas.
+ if(!PAYOUTS_ON)return approveResponse("REFUSED","Saques desativados até concluir a homologação.");
  const raw=await request.text();
  if(raw.length>32768)return approveResponse("REFUSED","Payload de validação fora do limite.");
  let body:Record<string,unknown>;
