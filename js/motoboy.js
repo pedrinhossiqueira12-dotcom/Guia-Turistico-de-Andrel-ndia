@@ -441,11 +441,42 @@
       const situacao = ({fatura_vencida:"Fatura vencida",aguardando_pagamento:"Aguardando pagamento da fatura",pagamento_em_conferencia:"Pagamento em conferência",aguardando_fechamento:"Aguardando fechamento mensal"})[item.situacao] || "Em análise";
       return `<li><strong>${escapar(nome)}</strong><span>${escapar(situacao)} · ${escapar(String(item.competencia||""))}</span><b>${escapar(formatarMoeda(item.valor_centavos))}</b></li>`;
     }).join("") : "<li>Nenhuma comissão de fatura pendente identificada.</li>";
+    const residualBloco=$("motoboyResidualBloco");
+    const residual=carteira.saldo_residual || null;
+    const residualAberto=residual && ["pendente","em_analise"].includes(residual.status);
+    if(residualBloco)residualBloco.hidden=!(residualAberto || saldo>0 && saldo<minimo);
+    const residualBtn=$("motoboyResidualSubmit");
+    if(residualBtn)residualBtn.disabled=Boolean(residualAberto)||!state.termosAceitos;
+    if(residualBloco)definirFeedback("motoboyResidualFeedback",
+      residualAberto ? "Sua solicitação está aguardando análise. O saldo continua disponível e nenhum Pix foi criado."
+      : residual?.status==="concluida" ? "A solicitação anterior foi concluída. Consulte o suporte para conferir os documentos."
+      : residual?.status==="recusada" ? "A solicitação anterior foi recusada. Entre em contato com o suporte para esclarecer."
+      : "Peça análise somente se for interromper suas atividades. Esta ação não realiza transferência.");
     definirFeedback("motoboyWithdrawFeedback", carteira.saque_habilitado
       ? saldoValido ? "Você pode solicitar o Pix diretamente pelo Guia Andrelândia." : `Faltam ${formatarMoeda(Math.max(0,minimo-saldo))} em créditos liberados para alcançar o saque mínimo.`
       : "O saque automático ainda não foi habilitado pela plataforma.");
   }
 
+  async function solicitarAnaliseSaldoResidual(event) {
+    event.preventDefault();
+    if(!state.session || !state.termosAceitos)return;
+    const generation=state.generation,uid=state.userId;
+    const btn=$("motoboyResidualSubmit");
+    if(btn)btn.disabled=true;
+    definirFeedback("motoboyResidualFeedback","Registrando pedido de análise…");
+    try{
+      const resposta=await chamarApi({acao:"solicitar_analise_residual",
+        motivo:$("motoboyResidualMotivo")?.value||""},generation,uid,ASAAS_URL);
+      validarSessaoAtual(generation,uid);
+      definirFeedback("motoboyResidualFeedback",resposta.mensagem||"Solicitação recebida.");
+      await carregarCarteira();
+    }catch(erro){
+      if(erro.message!==STALE_REQUEST)
+        definirFeedback("motoboyResidualFeedback",erro.message||"Não foi possível registrar análise.",true);
+    }finally{
+      if(generation===state.generation&&btn)btn.disabled=false;
+    }
+  }
   async function carregarCarteira() {
     if (!state.session || !navigator.onLine || state.withdrawalLoading) return;
     const generation = state.generation;
@@ -934,6 +965,7 @@
     $("motoboyLogout")?.addEventListener("click", sair);
     $("motoboyRefresh")?.addEventListener("click", () => { carregarEntregas(); carregarExtrato(); carregarCarteira(); });
     $("motoboyWithdrawPix")?.addEventListener("click", solicitarSaque);
+    $("motoboyResidualForm")?.addEventListener("submit",solicitarAnaliseSaldoResidual);
     $("motoboyLoadMore")?.addEventListener("click", () => carregarEntregas({ append: true }));
     $("motoboyAvailability")?.addEventListener("change", definirDisponibilidade);
     $("motoboyPixForm")?.addEventListener("submit", salvarChavePix);
