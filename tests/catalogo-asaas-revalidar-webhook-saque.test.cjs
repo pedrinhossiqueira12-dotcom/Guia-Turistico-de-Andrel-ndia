@@ -26,7 +26,10 @@ test("RPC bloqueia revisão aberta e evidência bancária mesmo com remuneraçõ
  assert.match(sql,/catalogo_asaas_saldos_residuais r/);
  assert.match(sql,/catalogo_asaas_regularizacoes_inativos s/);
  assert.match(sql,/catalogo_asaas_transferencias_excepcionais_auditoria e/);
- assert.match(sql,/v_saque\.status='enviado' AND NOT v_bloqueio/);
+ assert.match(sql,/v_saque\.status='enviado' AND NOT v_bloqueio AND v_perfil_apto/);
+ assert.match(sql,/perfil\.apto AND NOT perfil\.em_analise/);
+ assert.match(sql,/m\.usuario_id=v_saque\.motoboy_id AND m\.ativo/);
+ assert.match(sql,/'perfil_atualmente_apto',v_perfil_apto/);
  assert.match(sql,/'bloqueio_excepcional',v_bloqueio/);
  assert.match(sql,/v_elegiveis AND v_total=v_saque\.valor_centavos/);
  assert.doesNotMatch(sql,/INSERT INTO|UPDATE public\.catalogo_remuneracoes_v2|POST \/transfers/);
