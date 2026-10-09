@@ -707,6 +707,30 @@ jobs:
           dropdb --if-exists --force catalogo_asaas_ci
           trap - EXIT
           echo "PASS: Asaas staging migration parsed, applied and RLS validated on local clone"
+      - name: Apply all staged Asaas migrations and test closure guards on disposable clone
+        run: |
+          set -euo pipefail
+          test "$PGHOST" = localhost
+          test "$PGDATABASE" = catalogo_ci
+          test -z "${DATABASE_URL:-}"
+          test -z "${SUPABASE_ACCESS_TOKEN:-}"
+          test -z "${SUPABASE_DB_PASSWORD:-}"
+          createdb --template=catalogo_ci catalogo_asaas_guards_ci
+          trap 'dropdb --if-exists --force catalogo_asaas_guards_ci' EXIT
+          for migration in supabase/pending-migrations/*.sql; do
+            echo "Validating staged SQL: $migration"
+            psql -X -d catalogo_asaas_guards_ci -v ON_ERROR_STOP=1 -f "$migration" > /dev/null
+          done
+          psql -X -d catalogo_asaas_guards_ci -v ON_ERROR_STOP=1 \
+            -f supabase/tests/isolated/catalogo-asaas-staged-guards-postgres.sql
+          test "$(psql -X -d catalogo_asaas_guards_ci -Atqc \
+            "SELECT count(*) FROM public.catalogos WHERE comercio_id='ci-asaas-encerramento-guard'")" = 0
+          test "$(psql -X -d catalogo_asaas_guards_ci -Atqc \
+            "SELECT count(*) FROM public.catalogo_asaas_saldos_residuais")" = 0
+          dropdb --if-exists --force catalogo_asaas_guards_ci
+          trap - EXIT
+          echo "PASS: staged guards tested transactionally in disposable PostgreSQL"
+
       - name: Read-only historical pricing preflight on disposable database
         run: |
           set -euo pipefail
