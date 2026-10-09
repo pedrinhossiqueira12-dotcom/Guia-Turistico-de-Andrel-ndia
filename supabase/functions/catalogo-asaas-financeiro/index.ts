@@ -427,7 +427,7 @@ async function revisarAnaliseResidual(uid:string,body:Record<string,unknown>){
  const agora=new Date().toISOString();
  const {data,error}=await db.from("catalogo_asaas_saldos_residuais")
   .update({status:destino,detalhe_revisao:detalhe||null,
-    analisado_por:uid,atualizado_em:agora,
+    analisado_por:destino==="recusada"?uid:null,atualizado_em:agora,
     finalizado_em:destino==="recusada"?agora:null})
   .eq("id",id).eq("status",esperado)
   .select("id,status").maybeSingle();
