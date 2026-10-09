@@ -33,6 +33,7 @@ test("carteira mantém consulta e histórico em perfil inativo, mas não habilit
   assert.match(wallet,/Promise\.all\(\[/);
   assert.match(wallet,/\.eq\("usuario_id",uid\)\.limit\(1\)/);
   assert.match(wallet,/const activeCourier=Boolean\(active\?\.length\)/);
+  assert.match(wallet,/entregador_ativo:activeCourier/);
   assert.match(wallet,/saque_habilitado:activeCourier&&ENVIRONMENT==="sandbox"/);
   assert.match(wallet,/\.eq\("ativo",true\)\.limit\(1\)/);
 });
@@ -78,4 +79,12 @@ test("vinculos mistos de varios comercios nao dependem do primeiro status retorn
   assert.match(wallet,/if\(!allowed\?\.length\)throw new Failure/);
   assert.match(wallet,/const activeCourier=Boolean\(active\?\.length\)/);
   assert.doesNotMatch(wallet,/allowed\[0\]\.ativo/);
+});
+
+test("interface explica o bloqueio sem apagar créditos históricos",()=>{
+  const ui=fs.readFileSync("js/motoboy.js","utf8");
+  assert.match(ui,/carteira\.entregador_ativo===false/);
+  assert.match(ui,/Seu saldo permanece registrado/);
+  assert.match(ui,/saque comum está suspenso até regularização administrativa/);
+  assert.match(ui,/motoboyResidualBloco/);
 });
