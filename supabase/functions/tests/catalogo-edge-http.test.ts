@@ -95,6 +95,31 @@ await capture("offline", new URL("../catalogo-pedido-offline/index.ts", import.m
 await capture("fatura", new URL("../catalogo-fatura-pix/index.ts", import.meta.url).href);
 await capture("webhook", new URL("../mercadopago-marketplace-webhook/index.ts", import.meta.url).href);
 
+// Capta a Edge Asaas original sem credenciais bancarias nem rede.
+// Ao desligar a validacao, nenhuma operacao pode ser aprovada no handler.
+Deno.env.set("ASAAS_ENVIRONMENT", "sandbox");
+Deno.env.set("ASAAS_API_KEY", "ci-asaas-token-ficticio");
+Deno.env.set("ASAAS_PAYOUTS_ENABLED", "false");
+Deno.env.set("ASAAS_SAQUE_VALIDACAO_ENABLED", "false");
+Deno.env.set("ASAAS_SAQUE_VALIDACAO_TOKEN", "ci-validacao-asaas-webhook-token-ficticio-32");
+await capture("asaas", new URL("../catalogo-asaas-financeiro/index.ts", import.meta.url).href);
+
+Deno.test("Asaas com validacao desativada recusa por HTTP sem consultar rede", async () => {
+  const start = forbiddenRequests;
+  const asaas = handlers.get("asaas")!;
+  const endpoint = "/functions/v1/catalogo-asaas-financeiro/saque-autorizacao";
+  const response = await asaas(post(endpoint, {type:"TRANSFER",transfer:{
+    id:"11111111-1111-4111-8111-111111111111",value:5000,operationType:"PIX"
+  }}, {"asaas-access-token":"ci-validacao-asaas-webhook-token-ficticio-32"}));
+  assertions(response, 200, "Asaas webhook desligado");
+  const payload = await response.json();
+  assert(payload.status==="REFUSED", "Webhook desativado aprovou saida financeira");
+  assert(payload.refuseReason==="Validação de saída indisponível no ambiente.",
+    "Webhook desligado devolveu mensagem de aprovacao");
+  assertions(await asaas(new Request(SB_URL+endpoint,{method:"GET"})),405,"Asaas GET recusado");
+  assert(forbiddenRequests===start, "Webhook Asaas desligado tentou rede");
+});
+
 Deno.test("checkouts desligados recusam criacao HTTP antes de qualquer acesso externo", async () => {
   const start = forbiddenRequests;
   const pix = handlers.get("pix")!;
