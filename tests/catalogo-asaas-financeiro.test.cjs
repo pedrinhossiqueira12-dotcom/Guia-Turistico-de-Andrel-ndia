@@ -142,3 +142,17 @@ test("com payouts off somente GET autenticado concilia saques antigos sem criar 
  assert.match(edge, /if\(status==="DONE"\)/);
  assert.match(edge, /if\(\["FAILED","CANCELLED"\]\.includes\(status\)\)/);
 });
+
+
+test("fingerprint HMAC SHA-256 tem hash explícito e é calculado antes da reserva", async () => {
+ assert.match(edge, /crypto\.subtle\.importKey\("raw",keyBytes,\{name:"HMAC",hash:"SHA-256"\},false,\["sign"\]\)/);
+ const before = edge.slice(edge.indexOf("async function withdraw(uid:string)"),edge.indexOf("const ADMIN_USER_ID"));
+ assert.ok(before.indexOf("const destinationHash=await pixFingerprint") < before.indexOf('catalogo_asaas_reservar_saque'));
+ assert.ok(before.indexOf("p_estado:\"falhou\"") < before.indexOf('transfer=await asaas("/transfers","POST"'));
+ // O algoritmo é executável com WebCrypto, não apenas um token nominal.
+ const { webcrypto } = require("node:crypto");
+ const k = await webcrypto.subtle.importKey(
+   "raw",new Uint8Array(32).fill(10),{name:"HMAC",hash:"SHA-256"},false,["sign"]);
+ const sig = new Uint8Array(await webcrypto.subtle.sign("HMAC",k,new TextEncoder().encode("guia-asaas-pix-v1:EVP:abc")));
+ assert.equal(sig.length,32);
+});
