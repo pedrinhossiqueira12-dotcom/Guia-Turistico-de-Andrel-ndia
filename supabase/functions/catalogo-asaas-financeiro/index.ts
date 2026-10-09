@@ -309,11 +309,16 @@ function pixDestination(key:string){
  throw new Failure("Chave Pix inválida. Use CPF, CNPJ, e-mail, telefone com +55 ou chave aleatória.",400);
 }
 async function wallet(uid:string,withReconcile=false){
- const {data:allowed,error:e}=await db.from("catalogo_motoboys").select("usuario_id,ativo")
-  .eq("usuario_id",uid).limit(1);
- if(e)throw new Failure("Falha ao verificar perfil de entregador.",503);
+ // O mesmo entregador pode integrar varios comercios: um vinculo inativo
+ // nao deve ocultar outro vinculo ativo. Consultas independentes de 1 linha.
+ const [{data:allowed,error:e},{data:active,error:activeError}]=await Promise.all([
+  db.from("catalogo_motoboys").select("usuario_id").eq("usuario_id",uid).limit(1),
+  db.from("catalogo_motoboys").select("usuario_id").eq("usuario_id",uid)
+   .eq("ativo",true).limit(1)
+ ]);
+ if(e||activeError)throw new Failure("Falha ao verificar perfil de entregador.",503);
  if(!allowed?.length)throw new Failure("Perfil de entregador não autorizado.",403);
- const activeCourier=allowed[0].ativo===true;
+ const activeCourier=Boolean(active?.length);
  if(withReconcile){
   const {data:pending}=await db.from("catalogo_asaas_saques").select("id,transferencia_id")
    .eq("motoboy_id",uid).in("status",["enviado","revisao"]).not("transferencia_id","is",null).limit(5);
