@@ -227,4 +227,49 @@ BEGIN
 END
 $regularizacao$;
 
+DO $overlap$
+DECLARE
+ v_uid uuid := 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+ v_res uuid;
+ v_saida uuid;
+ v_rejected integer := 0;
+BEGIN
+ IF to_regprocedure('catalogo_private.catalogo_impedir_revisoes_sobrepostas()') IS NULL THEN
+  RAISE EXCEPTION 'Trigger de solicitacoes simultaneas ausente';
+ END IF;
+
+ INSERT INTO public.catalogo_asaas_saldos_residuais
+  (motoboy_id,saldo_snapshot_centavos,motivo)
+ VALUES(v_uid,900,'inatividade') RETURNING id INTO v_res;
+
+ BEGIN
+  INSERT INTO public.catalogo_asaas_regularizacoes_inativos
+   (motoboy_id,saldo_snapshot_centavos,motivo)
+  VALUES(v_uid,12500,'inatividade');
+  RAISE EXCEPTION 'Revisao de saida simultanea foi aceita';
+ EXCEPTION WHEN SQLSTATE '23514' THEN v_rejected:=v_rejected+1;
+ END;
+
+ UPDATE public.catalogo_asaas_saldos_residuais
+ SET status='recusada',detalhe_revisao='Analise residual encerrada no ensaio financeiro',
+  analisado_por=v_uid,finalizado_em=now(),atualizado_em=now()
+ WHERE id=v_res;
+ INSERT INTO public.catalogo_asaas_regularizacoes_inativos
+  (motoboy_id,saldo_snapshot_centavos,motivo)
+ VALUES(v_uid,12500,'inatividade') RETURNING id INTO v_saida;
+
+ BEGIN
+  INSERT INTO public.catalogo_asaas_saldos_residuais
+   (motoboy_id,saldo_snapshot_centavos,motivo)
+  VALUES(v_uid,700,'inatividade');
+  RAISE EXCEPTION 'Analise residual simultanea foi aceita';
+ EXCEPTION WHEN SQLSTATE '23514' THEN v_rejected:=v_rejected+1;
+ END;
+
+ IF v_rejected<>2 THEN
+  RAISE EXCEPTION 'Recusas de solicitacoes simultaneas ausentes: %',v_rejected;
+ END IF;
+ RAISE NOTICE 'PASS: dois caminhos de solicitacao nao podem coexistir em aberto';
+END $overlap$;
+
 ROLLBACK;
