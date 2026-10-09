@@ -57,9 +57,20 @@ async function listOrders(comercioId: string, isPlatformAdmin = false) {
     return visible;
   });
 }
+async function requireTermsForNewOrders(userId:string,comercioId:string){
+ if(userId===ADMIN_USER_ID)return;
+ const {data,error}=await db.from("catalogo_aceites_operacionais")
+  .select("documento").eq("usuario_id",userId).eq("papel","comercio")
+  .eq("comercio_id",comercioId).eq("versao","2026-10-09");
+ if(error)throw new HttpError("Aceite de termos indisponível.",503);
+ const docs=new Set((data||[]).map(x=>x.documento));
+ if(!docs.has("termos")||!docs.has("privacidade"))
+  throw new HttpError("Aceite os Termos de Uso e confirme ciência da Política de Privacidade.",428);
+}
 async function updateStatus(userId: string, body: Record<string, unknown>) {
   const comercioId = text(body.comercio_id, 180); const pedidoId = text(body.pedido_id, 60); const next = text(body.status, 30); const motivo = text(body.motivo, 500);
   const access = await owner(userId, comercioId); if (access.bloqueado && next !== "cancelado") throw new HttpError("Catálogo bloqueado por inadimplência.", 423);
+  if(next==="em_preparo")await requireTermsForNewOrders(userId,comercioId);
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(pedidoId)) throw new HttpError("Pedido inválido.");
   const operations: Record<string, string> = { em_preparo: "aceitar", pronto: "pronto", cancelado: "solicitar_cancelamento" };
   if (!operations[next]) throw new HttpError("Transição inválida.");
