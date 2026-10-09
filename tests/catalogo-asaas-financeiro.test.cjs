@@ -132,3 +132,13 @@ test("validação pode testar token com pagamentos de saída bloqueados; transfe
  assert.match(edge, /const ref=String\(saque\.id\)/);
  assert.match(edge, /payloadRef && payloadRef!==saque\.id/);
 });
+
+test("com payouts off somente GET autenticado concilia saques antigos sem criar outros", () => {
+ assert.match(edge, /if\(path\.startsWith\("\/transfers"\) && method==="GET"\)/);
+ assert.match(edge, /else enabled\(path\.startsWith\("\/transfers"\)\?"payouts":"billing"\)/);
+ assert.match(edge, /for\(const row of pending\|\|\[\]\)/);
+ assert.match(edge, /await reconcileTransfer\(String\(row\.id\),String\(row\.transferencia_id\)\)/);
+ assert.match(edge, /async function withdraw\(uid:string\)\{\s*enabled\("payouts"\)/);
+ assert.match(edge, /if\(status==="DONE"\)/);
+ assert.match(edge, /if\(\["FAILED","CANCELLED"\]\.includes\(status\)\)/);
+});
