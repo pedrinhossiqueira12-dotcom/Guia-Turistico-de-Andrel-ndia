@@ -60,10 +60,10 @@ test("painel oferece somente conferir valores, não libera pagamento",()=>{
 });
 
 test("carteira oculta formulario do outro tipo quando pedido concorrente está aberto",()=>{
- assert.match(courier,/residualAberto\|\|saidaAberta\|\|!state\.termosAceitos/);
- assert.match(courier,/saidaAberta\|\|residualAberto\|\|!state\.termosAceitos/);
- assert.match(courier,/!saidaAberta&&saldo>0&&saldo<minimo/);
- assert.match(courier,/!residualAberto&&carteira\.entregador_ativo===false&&saldo>=minimo/);
+ assert.match(courier,/residualAberto\|\|saidaAberta\|\|carteira\.evidencia_bancaria_pendente\|\|!state\.termosAceitos/);
+ assert.match(courier,/saidaAberta\|\|residualAberto\|\|carteira\.evidencia_bancaria_pendente\|\|!state\.termosAceitos/);
+ assert.match(courier,/!saidaAberta&&!carteira\.evidencia_bancaria_pendente&&saldo>0&&saldo<minimo/);
+ assert.match(courier,/!residualAberto&&!carteira\.evidencia_bancaria_pendente&&carteira\.entregador_ativo===false&&saldo>=minimo/);
 });
 
 const holdPreflight=read("supabase/pending-migrations/20261009225000_preconferencia_considerar_hold_bancario.sql");
@@ -74,6 +74,6 @@ test("a pré-conferência expõe HOLD bancário e nunca libera pagamento com pro
  assert.match(holdPreflight,/'evidencias_bancarias_para_conciliar',v_evidencias/);
  assert.match(holdPreflight,/'pagamento_autorizado',false/);
  assert.match(holdPreflight,/'requer_revalidacao_transacional',true/);
- assert.match(ui,/evidencias bancárias ainda sem conciliação/);
+ assert.match(ui,/evidências bancárias ainda sem conciliação/);
  assert.match(isolated,/Preconferencia ignorou evidencia bancaria em HOLD/);
 });
