@@ -196,7 +196,10 @@ test("reserva Asaas trava também reabertura e adulteração de crédito já pag
 });
 
 test("branch de homologação nunca envia transferência Asaas com ambiente production", () => {
- assert.match(edge, /async function withdraw\(uid:string\)\{\s*\/\/[^\n]*\n[^]*?if\(ENVIRONMENT!=="sandbox"\)/);
+ const withdrawBlock=edge.slice(edge.indexOf("async function withdraw(uid:string)"),edge.indexOf("const ADMIN_USER_ID"));
+ assert.ok(withdrawBlock.includes('if(ENVIRONMENT!=="sandbox")'),"Saque precisa bloquear produção");
+ assert.ok(withdrawBlock.indexOf('if(ENVIRONMENT!=="sandbox")') < withdrawBlock.indexOf('catalogo_asaas_reservar_saque'));
+ assert.ok(withdrawBlock.indexOf('await requireTerms(uid,"motoboy","")') < withdrawBlock.indexOf('catalogo_asaas_reservar_saque'));
  assert.match(edge, /if\(method==="POST" && path==="\/transfers"\)\{/);
  assert.match(edge, /throw new Failure\("Transferência Pix de produção não está liberada\.",503\)/);
  assert.match(edge, /if\(ENVIRONMENT!=="sandbox" \|\| !WITHDRAWAL_AUTH_ON/);
@@ -214,4 +217,37 @@ test("saques exigem flags e token de autorização ativos antes de reserva e POS
  assert.match(network,/if\(!WITHDRAWAL_AUTH_ON \|\| WITHDRAWAL_AUTH_TOKEN\.length<32\)/);
  assert.match(wallet,/saque_habilitado:ENVIRONMENT==="sandbox"&&PAYOUTS_ON&&WITHDRAWAL_AUTH_ON&&/);
  assert.match(wallet,/WITHDRAWAL_AUTH_TOKEN\.length>=32&&Boolean\(ASAAS_TOKEN\)/);
+});
+
+
+test("saque de R$ 100 e aceite versionado são exigidos pelo servidor", () => {
+ const mig=read("supabase/pending-migrations/20261009150000_termos_cobranca_futura_encerramento_e_saque_minimo.sql");
+ const pending=read("supabase/pending-migrations/20261009151000_carteira_pendencias_por_comercio.sql");
+ const motoboy=read("js/motoboy.js");
+ const merchant=read("js/catalogo-admin.js");
+ const local=read("js/local.js");
+ const closures=mig.slice(mig.indexOf("CREATE OR REPLACE FUNCTION public.catalogo_solicitar_encerramento_financeiro"));
+ assert.match(mig,/v_total<10000/);
+ assert.match(mig,/ORDER BY r\.id LIMIT 1000 FOR UPDATE OF r/);
+ assert.match(mig,/CREATE TABLE IF NOT EXISTS public\.catalogo_aceites_operacionais/);
+ assert.match(mig,/CREATE TABLE IF NOT EXISTS public\.catalogo_cobranca_preferencias/);
+ assert.match(mig,/metodo text NOT NULL DEFAULT 'pix_manual'/);
+ assert.match(mig,/status_autorizacao='autorizada'/);
+ assert.match(mig,/ALTER TABLE public\.catalogo_aceites_operacionais ENABLE ROW LEVEL SECURITY/);
+ assert.match(mig,/REVOKE ALL ON public\.catalogo_aceites_operacionais FROM PUBLIC,anon,authenticated/);
+ assert.match(closures,/FOR UPDATE/);
+ assert.match(closures,/divida_apurada_centavos/);
+ assert.doesNotMatch(closures,/DELETE FROM public\.(?:catalogo_fatura|catalogo_comissoes|catalogo_remuneracoes)/);
+ assert.match(pending,/CREATE OR REPLACE FUNCTION public\.catalogo_asaas_pendencias_motoboy/);
+ assert.match(edge,/async function requireTerms\(uid:string,papel:string,store:string\)/);
+ assert.match(edge,/case "aceitar_termos":return await acceptTerms/);
+ assert.match(edge,/case "solicitar_encerramento":return await requestClosure/);
+ assert.match(edge,/SAQUE_MINIMO_CENTAVOS=10000/);
+ assert.match(edge,/metodo_cobranca:"pix_manual",pix_automatico_disponivel:false/);
+ assert.match(motoboy,/motoboyTermsDialog/);
+ assert.match(motoboy,/motoboyPendingByStore/);
+ assert.match(merchant,/catalogoTermsDialog/);
+ assert.match(merchant,/regularizarFaturaBloqueada/);
+ assert.doesNotMatch(local,/acao:\s*"marcar_meu_comercio_deletado"/);
+ assert.match(local,/acao:"solicitar_encerramento"/);
 });
