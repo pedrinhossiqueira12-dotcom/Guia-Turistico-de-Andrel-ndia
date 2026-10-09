@@ -47,7 +47,11 @@ async function rpc(name:string,args:Record<string,unknown>){
  return data;
 }
 async function asaas(path:string,method="GET",body?:unknown){
- enabled(path.startsWith("/transfers")?"payouts":"billing");
+ // Permitir GET de uma transferência antiga mesmo se saques novos estiverem desativados.
+ // POST /transfers continua bloqueado pela flag. A baixa exige status validado do Asaas.
+ if(path.startsWith("/transfers") && method==="GET"){
+  if(!ASAAS_TOKEN)throw new Failure("Consulta Asaas indisponível sem credencial.",503);
+ }else enabled(path.startsWith("/transfers")?"payouts":"billing");
  const response=await fetch(API_BASE+path,{
   method,headers:{"access_token":ASAAS_TOKEN,"accept":"application/json",
     "content-type":"application/json","User-Agent":"GuiaAndrelandia/1.0"},
@@ -239,7 +243,7 @@ async function wallet(uid:string,withReconcile=false){
  if(withReconcile){
   const {data:pending}=await db.from("catalogo_asaas_saques").select("id,transferencia_id")
    .eq("motoboy_id",uid).in("status",["enviado","revisao"]).not("transferencia_id","is",null).limit(5);
-  if(PAYOUTS_ON)for(const row of pending||[]){
+  for(const row of pending||[]){
    try {await reconcileTransfer(String(row.id),String(row.transferencia_id));}
    catch { /* Nunca liberar por erro de rede; o saldo continua reservado. */ }
   }
