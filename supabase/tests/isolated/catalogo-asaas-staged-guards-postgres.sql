@@ -428,4 +428,79 @@ BEGIN
  RAISE NOTICE 'PASS: travas compartilhadas entre saque regular e pedidos excepcionais';
 END $saque_exclusivo$;
 
+DO $bank_evidence_hold$
+DECLARE
+ v_uid uuid:='cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+ v_other uuid:='dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+ v_req uuid;
+ v_other_req uuid;
+ v_normal uuid;
+ v_evidence jsonb;
+ v_rejections integer:=0;
+BEGIN
+ INSERT INTO auth.users(id) VALUES(v_uid),(v_other);
+
+ -- Um registro bancario observado retém o saldo mesmo se a análise foi recusada.
+ INSERT INTO public.catalogo_asaas_saldos_residuais
+   (motoboy_id,saldo_snapshot_centavos,motivo)
+ VALUES(v_uid,600,'inatividade') RETURNING id INTO v_req;
+ SELECT public.catalogo_asaas_registrar_observacao_excepcional(
+  'residual',v_req,'ci_hold_bank_01',
+  'guia-exc:residual:'||v_req,600,'PENDING'
+ ) INTO v_evidence;
+ IF v_evidence->>'ok'<>'true' THEN RAISE EXCEPTION 'Evidencia do CI nao registrada'; END IF;
+ UPDATE public.catalogo_asaas_saldos_residuais
+ SET status='recusada',analisado_por=v_uid,finalizado_em=now(),
+     detalhe_revisao='A analise de teste foi recusada, mantendo o hold bancario'
+ WHERE id=v_req;
+
+ BEGIN
+  INSERT INTO public.catalogo_asaas_saques(motoboy_id,valor_centavos)
+  VALUES(v_uid,10000);
+  RAISE EXCEPTION 'Permitiu saque comum com evidencia excepcional';
+ EXCEPTION WHEN SQLSTATE '23514' THEN v_rejections:=v_rejections+1;
+ END;
+ BEGIN
+  INSERT INTO public.catalogo_asaas_saldos_residuais(
+   motoboy_id,saldo_snapshot_centavos,motivo
+  ) VALUES(v_uid,500,'inatividade');
+  RAISE EXCEPTION 'Permitiu outra analise residual com evidencia bancaria';
+ EXCEPTION WHEN SQLSTATE '23514' THEN v_rejections:=v_rejections+1;
+ END;
+ BEGIN
+  INSERT INTO public.catalogo_asaas_regularizacoes_inativos(
+   motoboy_id,saldo_snapshot_centavos,motivo
+  ) VALUES(v_uid,12000,'inatividade');
+  RAISE EXCEPTION 'Permitiu outra regularizacao com evidencia bancaria';
+ EXCEPTION WHEN SQLSTATE '23514' THEN v_rejections:=v_rejections+1;
+ END;
+
+ -- Testa conflito tardio: observação chega depois de reserva normal.
+ INSERT INTO public.catalogo_asaas_saldos_residuais(
+  motoboy_id,saldo_snapshot_centavos,motivo
+ ) VALUES(v_other,250,'inatividade') RETURNING id INTO v_other_req;
+ UPDATE public.catalogo_asaas_saldos_residuais
+ SET status='recusada',analisado_por=v_other,finalizado_em=now(),
+     detalhe_revisao='Analise anterior de teste encerrada antes do saque comum'
+ WHERE id=v_other_req;
+ INSERT INTO public.catalogo_asaas_saques(motoboy_id,valor_centavos)
+ VALUES(v_other,10000) RETURNING id INTO v_normal;
+ SELECT public.catalogo_asaas_registrar_observacao_excepcional(
+  'residual',v_other_req,'ci_hold_late_01',
+  'guia-exc:residual:'||v_other_req,250,'DONE'
+ ) INTO v_evidence;
+ IF v_evidence->>'pagamento_baixado'<>'false' THEN
+  RAISE EXCEPTION 'Observacao tardia liquidou saldo sem prova';
+ END IF;
+
+ BEGIN
+  UPDATE public.catalogo_asaas_saques SET status='concluido' WHERE id=v_normal;
+  RAISE EXCEPTION 'Permitiu conciliacao contábil normal com banco excepcional em revisão';
+ EXCEPTION WHEN SQLSTATE '23514' THEN v_rejections:=v_rejections+1;
+ END;
+
+ IF v_rejections<>4 THEN RAISE EXCEPTION 'Hold bancario falhou: %',v_rejections; END IF;
+ RAISE NOTICE 'PASS: evidencia bancaria preserva HOLD apos recusas e na concorrencia com saque normal';
+END $bank_evidence_hold$;
+
 ROLLBACK;
