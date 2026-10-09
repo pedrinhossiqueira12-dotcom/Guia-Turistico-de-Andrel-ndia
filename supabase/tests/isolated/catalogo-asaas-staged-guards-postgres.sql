@@ -817,4 +817,73 @@ BEGIN
  RAISE NOTICE 'PASS: 2 meses (R$120), 2 creditos, sem ultimo vinculo, saida pendente e 3 reservas duplicadas bloqueadas';
 END $orphan_large_balance$;
 
+
+-- O trigger de evidencia excepcional adquire a mesma trava por motoboy do
+-- saque comum, inclusive quando a observacao vem tardiamente.
+DO $bank_evidence_serialized$
+DECLARE
+ v_a uuid:='fadafada-fada-4ada-8ada-fadafada0001';
+ v_b uuid:='fadafada-fada-4ada-8ada-fadafada0002';
+ v_req uuid;
+ v_blocks int:=0;
+ v_result jsonb;
+ v_trigger text;
+ v_function text;
+BEGIN
+ INSERT INTO auth.users(id) VALUES(v_a),(v_b);
+ INSERT INTO public.catalogo_asaas_saldos_residuais(
+  motoboy_id,saldo_snapshot_centavos,motivo
+ ) VALUES(v_a,250,'inatividade') RETURNING id INTO v_req;
+
+ BEGIN
+  INSERT INTO public.catalogo_asaas_transferencias_excepcionais_auditoria(
+   tipo,solicitacao_id,motoboy_id,valor_centavos,
+   transferencia_id,referencia_externa)
+  VALUES('residual',v_req,v_b,250,'ci_wrong_owner_01',
+   'guia-exc:residual:'||v_req);
+  RAISE EXCEPTION 'Evidencia aceita com titular diferente';
+ EXCEPTION WHEN check_violation THEN v_blocks:=v_blocks+1;
+ END;
+ BEGIN
+  INSERT INTO public.catalogo_asaas_transferencias_excepcionais_auditoria(
+   tipo,solicitacao_id,motoboy_id,valor_centavos,
+   transferencia_id,referencia_externa)
+  VALUES('residual',v_req,v_a,251,'ci_wrong_amount_01',
+   'guia-exc:residual:'||v_req);
+  RAISE EXCEPTION 'Evidencia aceita com valor adulterado';
+ EXCEPTION WHEN check_violation THEN v_blocks:=v_blocks+1;
+ END;
+
+ SELECT public.catalogo_asaas_registrar_observacao_excepcional(
+  'residual',v_req,'ci_valid_hold_01',
+  'guia-exc:residual:'||v_req,250,'DONE'
+ ) INTO v_result;
+ IF v_result->>'ok' IS DISTINCT FROM 'true'
+  OR v_result->>'pagamento_baixado' IS DISTINCT FROM 'false' THEN
+  RAISE EXCEPTION 'Observacao bancaria validada incorretamente: %',v_result;
+ END IF;
+
+ SELECT pg_get_triggerdef(t.oid) INTO v_trigger
+ FROM pg_trigger t
+ WHERE t.tgrelid='public.catalogo_asaas_transferencias_excepcionais_auditoria'::regclass
+ AND t.tgname='catalogo_asaas_serializar_evidencia_excepcional';
+ SELECT pg_get_functiondef(
+  'catalogo_private.catalogo_asaas_evidencia_excepcional_serializada()'::regprocedure
+ ) INTO v_function;
+ IF v_trigger NOT LIKE '%BEFORE INSERT%'
+ OR v_function NOT LIKE '%hashtextextended(''asaas-saque:''%'
+ OR v_function NOT LIKE '%v_valor IS DISTINCT FROM NEW.valor_centavos%' THEN
+  RAISE EXCEPTION 'Evidencia sem trava compartilhada de saldo/titular';
+ END IF;
+
+ BEGIN
+  INSERT INTO public.catalogo_asaas_saques(motoboy_id,valor_centavos)
+  VALUES(v_a,10000);
+  RAISE EXCEPTION 'Permitiu saque comum durante observacao bancaria';
+ EXCEPTION WHEN check_violation THEN v_blocks:=v_blocks+1;
+ END;
+ IF v_blocks<>3 THEN RAISE EXCEPTION 'Esperados 3 bloqueios; obtidos %',v_blocks; END IF;
+ RAISE NOTICE 'PASS: banco exige mesmo lock, titular, valor e bloqueia reserva duplicada';
+END $bank_evidence_serialized$;
+
 ROLLBACK;
