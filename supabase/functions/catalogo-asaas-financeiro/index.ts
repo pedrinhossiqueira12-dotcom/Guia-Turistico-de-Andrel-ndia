@@ -493,6 +493,20 @@ async function listarRegularizacoesSaidaAdmin(uid:string){
  if(error)throw new Failure("Não foi possível listar regularizações financeiras.",503);
  return respond({success:true,solicitacoes:data||[]});
 }
+// Somente conferencia de valores. NUNCA autoriza ou inicia uma transferencia.
+async function preconferirExcepcionalAdmin(uid:string,body:Record<string,unknown>){
+ if(uid!==ADMIN_USER_ID)throw new Failure("Acesso restrito à administração.",403);
+ const id=value(body.solicitacao_id,70);
+ const tipo=value(body.tipo,15);
+ check(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id),
+  "Identificador da solicitação inválido.",400);
+ check(tipo==="residual"||tipo==="saida","Tipo de solicitação inválido.",400);
+ const resultado=await rpc("catalogo_asaas_preconferir_pagamento_excepcional",{
+  p_tipo:tipo,p_solicitacao:id
+ });
+ return respond({success:true,conferencia:resultado,
+  mensagem:"Pré-conferência somente de leitura. Não autoriza pagamento nem substitui comprovante do banco."});
+}
 async function revisarRegularizacaoSaidaAdmin(uid:string,body:Record<string,unknown>){
  if(uid!==ADMIN_USER_ID)throw new Failure("Acesso restrito à administração.",403);
  const id=value(body.solicitacao_id,70);
@@ -883,6 +897,7 @@ Deno.serve(async (request:Request)=>{
    case "listar_analises_residuais_admin":return await listarAnalisesResiduais(user.id);
    case "listar_regularizacoes_saida_admin":return await listarRegularizacoesSaidaAdmin(user.id);
    case "revisar_regularizacao_saida_admin":return await revisarRegularizacaoSaidaAdmin(user.id,body);
+   case "preconferir_pagamento_excepcional_admin":return await preconferirExcepcionalAdmin(user.id,body);
    case "revisar_analise_residual_admin":return await revisarAnaliseResidual(user.id,body);
    case "solicitar_saque":return await withdraw(user.id);
    case "auditar_saque_sandbox":return await auditPendingSandboxTransfer(user.id);
