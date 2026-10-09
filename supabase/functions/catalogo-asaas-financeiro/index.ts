@@ -509,12 +509,13 @@ async function preconferirExcepcionalAdmin(uid:string,body:Record<string,unknown
 }
 // Auditoria do Asaas via GET, exclusivamente Sandbox. Não cria transferência,
 // não atesta destinatário, não baixa créditos e não marca a análise como paga.
-async function observarTransferenciaExcepcionalSandboxAdmin(uid:string,body:Record<string,unknown>){
- if(uid!==ADMIN_USER_ID)throw new Failure("Acesso restrito à administração.",403);
+// Consulta compartilhada por admin e webhook. Sempre faz novo GET autenticado
+// do Asaas Sandbox; nenhum status do cliente ou webhook é aceito como prova.
+async function consultarERegistrarTransferenciaExcepcionalSandbox(
+ tipo:string,solicitacaoId:string,transferenciaId:string
+){
  if(ENVIRONMENT!=="sandbox")throw new Failure("Auditoria excepcional disponível somente no Sandbox.",403);
  if(!ASAAS_TOKEN)throw new Failure("Credencial Asaas Sandbox não configurada.",503);
- const tipo=value(body.tipo,15),solicitacaoId=value(body.solicitacao_id,70);
- const transferenciaId=value(body.transferencia_id,130);
  check(["residual","saida"].includes(tipo),"Tipo de solicitação inválido.",400);
  check(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(solicitacaoId),
   "Identificador da solicitação inválido.",400);
@@ -525,7 +526,6 @@ async function observarTransferenciaExcepcionalSandboxAdmin(uid:string,body:Reco
   .select("id,motoboy_id,saldo_snapshot_centavos,status").eq("id",solicitacaoId).maybeSingle();
  if(error||!solicitacao)throw new Failure("Solicitação financeira não encontrada.",404);
 
- // GET vincula somente dados obtidos da API Asaas. Nunca confiar no status do cliente.
  const t=await asaas("/transfers/"+encodeURIComponent(transferenciaId));
  const externalReference="guia-exc:"+tipo+":"+solicitacaoId;
  check(t.id===transferenciaId&&t.externalReference===externalReference,
@@ -536,11 +536,16 @@ async function observarTransferenciaExcepcionalSandboxAdmin(uid:string,body:Reco
  const status=value(t.status,40);
  check(["PENDING","IN_BANK_PROCESSING","BLOCKED","DONE","FAILED","CANCELLED"].includes(status),
   "Estado bancário desconhecido. Registro suspenso para revisão.",409);
-
- const evidencia=await rpc("catalogo_asaas_registrar_observacao_excepcional",{
+ return await rpc("catalogo_asaas_registrar_observacao_excepcional",{
   p_tipo:tipo,p_solicitacao:solicitacaoId,p_transferencia:transferenciaId,
   p_referencia:externalReference,p_valor_centavos:valor,p_estado:status
  });
+}
+async function observarTransferenciaExcepcionalSandboxAdmin(uid:string,body:Record<string,unknown>){
+ if(uid!==ADMIN_USER_ID)throw new Failure("Acesso restrito à administração.",403);
+ const tipo=value(body.tipo,15),solicitacaoId=value(body.solicitacao_id,70);
+ const transferenciaId=value(body.transferencia_id,130);
+ const evidencia=await consultarERegistrarTransferenciaExcepcionalSandbox(tipo,solicitacaoId,transferenciaId);
  return respond({success:true,observacao:evidencia,
   mensagem:"Estado consultado no Asaas Sandbox e registrado. Destinatário ainda não validado; nenhum saldo foi baixado nem Pix foi enviado."});
 }
@@ -899,8 +904,17 @@ async function webhook(request:Request){
   const transferId=value(resource.id,150);
   const {data:saque}=await db.from("catalogo_asaas_saques")
    .select("id").eq("transferencia_id",transferId).maybeSingle();
-  if(!saque)return respond({success:true,ignorado:true});
-  await reconcileTransfer(String(saque.id),transferId);
+  if(saque){
+   await reconcileTransfer(String(saque.id),transferId);
+  } else {
+   // Sem saque normal: observar apenas referencias excepcionais no Sandbox.
+   // Nunca usar diretamente o estado relatado no webhook.
+   const ref=value(resource.externalReference,180);
+   const match=/^guia-exc:(residual|saida):([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i.exec(ref);
+   if(ENVIRONMENT!=="sandbox"||!match)
+    return respond({success:true,ignorado:true});
+   await consultarERegistrarTransferenciaExcepcionalSandbox(match[1],match[2],transferId);
+  }
  } else return respond({success:true,ignorado:true});
  const {error}=await db.from("catalogo_asaas_webhook_eventos")
   .insert({id,evento:event,recurso_id:value(resource.id,180)});
