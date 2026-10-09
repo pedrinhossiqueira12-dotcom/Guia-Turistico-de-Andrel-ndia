@@ -270,7 +270,8 @@ test("revisão residual: pedido privado abaixo de R$ 100 nunca cria transferênc
  assert.doesNotMatch(fn,/asaas\("\/transfers"|catalogo_asaas_reservar_saque|catalogo_asaas_atualizar_saque/);
  assert.match(ui,/motoboyResidualForm/);
  assert.match(html,/id="motoboyResidualForm"/);
- assert.match(edge,/const eligible=records\.length>0 && records\.length<=1000/);
+ assert.match(edge,/db\.rpc\("catalogo_asaas_validar_reserva_saque",\{p_saque:ref\}\)/);
+ assert.doesNotMatch(edge,/const eligible=records\.length>0 && records\.length<=1000/);
 });
 
 
@@ -307,4 +308,37 @@ test("fatura anterior pode ser quitada sem novo aceite; novas vendas continuam p
  assert.match(merchant,/const motivoFinanceiro=\["Comissão de pagamentos presenciais vencida\."/);
  assert.match(merchant,/!\(resultado\.bloqueado && motivoFinanceiro\)/);
  assert.match(orders,/await requireTermsForNewOrders\(userId,comercioId\)/);
+});
+
+
+test("saque multi-meses: ausência de limite de linhas, teto monetário e prova agregada SQL",()=>{
+ const mig=read("supabase/pending-migrations/20261009170000_asaas_saque_total_acumulado_sem_corte_registros.sql");
+ const residual=read("supabase/pending-migrations/20261009171000_asaas_evitar_residuo_apos_teto_pix.sql");
+ const ui=read("js/motoboy.js");
+ const html=read("pages/motoboy.html");
+ const reserve=mig.slice(mig.indexOf("CREATE OR REPLACE FUNCTION public.catalogo_asaas_reservar_saque"),mig.indexOf("-- Consulta o saque como UM objeto JSON"));
+ assert.match(reserve,/WITH elegiveis AS MATERIALIZED/);
+ assert.match(reserve,/FOR UPDATE OF r/);
+ assert.match(reserve,/pg_advisory_xact_lock/);
+ assert.match(reserve,/sum\(valor_centavos::bigint\) OVER \(ORDER BY id\)/);
+ assert.match(reserve,/v_limite_transferencia constant bigint:=500000/);
+ assert.match(reserve,/IF v_total<10000/);
+ assert.doesNotMatch(reserve,/\bLIMIT\s+(?:100|1000)\b/);
+ assert.match(mig,/CREATE OR REPLACE FUNCTION public\.catalogo_asaas_validar_reserva_saque/);
+ assert.match(mig,/bool_and\(/);
+ assert.match(mig,/v_ativos=v_qtd/);
+ assert.match(mig,/v_total=v_saque\.valor_centavos/);
+ assert.match(mig,/coalesce\(sum\(r\.valor_centavos::bigint\),0\)/);
+ assert.match(mig,/REVOKE ALL ON FUNCTION public\.catalogo_asaas_validar_reserva_saque\(uuid\) FROM PUBLIC,anon,authenticated/);
+ assert.match(residual,/t\.soma_total-v_limite_transferencia<10000/);
+ assert.match(residual,/t\.soma_total-10000/);
+ assert.match(edge,/const SAQUE_MAXIMO_PIX_CENTAVOS=500000/);
+ assert.match(edge,/saque_maximo_por_pix_centavos:SAQUE_MAXIMO_PIX_CENTAVOS/);
+ assert.match(edge,/total_comissoes_disponiveis:Number\(balance\.creditos\|\|0\)/);
+ assert.match(edge,/db\.rpc\("catalogo_asaas_validar_reserva_saque",\{p_saque:ref\}\)/);
+ assert.doesNotMatch(edge,/records\.length<=1000/);
+ assert.doesNotMatch(edge,/\.from\("catalogo_asaas_saque_itens"\)\.select\("ativo,remuneracao_id,/);
+ assert.match(ui,/motoboyCreditoContagem/);
+ assert.match(ui,/Math\.min\(/);
+ assert.match(html,/id="motoboyCreditoContagem"/);
 });
