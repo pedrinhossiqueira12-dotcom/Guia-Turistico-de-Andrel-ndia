@@ -303,4 +303,67 @@ BEGIN
  RAISE NOTICE 'PASS: preconferencia somente leitura, bloqueada para publico e sem autorizar pagamentos';
 END $preflight_check$;
 
+DO $evidence$
+DECLARE
+ v_uid uuid:='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+ v_request uuid;
+ v_first jsonb;
+ v_duplicate jsonb;
+ v_done jsonb;
+ v_mismatch jsonb;
+ v_n integer;
+BEGIN
+ SELECT id INTO v_request
+ FROM public.catalogo_asaas_regularizacoes_inativos
+ WHERE motoboy_id=v_uid AND status='pendente' AND saldo_snapshot_centavos=12500
+ LIMIT 1;
+ IF v_request IS NULL THEN RAISE EXCEPTION 'Solicitacao de saida da CI inexistente'; END IF;
+
+ SELECT public.catalogo_asaas_registrar_observacao_excepcional(
+  'saida',v_request,'sandbox_tx_ci_01',
+  'guia-exc:saida:'||v_request,12500,'PENDING') INTO v_first;
+ IF v_first->>'ok'<>'true' OR v_first->>'observacao_nova'<>'true'
+ THEN RAISE EXCEPTION 'Primeira observacao falhou: %',v_first; END IF;
+
+ SELECT public.catalogo_asaas_registrar_observacao_excepcional(
+  'saida',v_request,'sandbox_tx_ci_01',
+  'guia-exc:saida:'||v_request,12500,'PENDING') INTO v_duplicate;
+ IF v_duplicate->>'observacao_nova'<>'false' THEN
+  RAISE EXCEPTION 'Repeticao de evento nao foi idempotente'; END IF;
+
+ SELECT public.catalogo_asaas_registrar_observacao_excepcional(
+  'saida',v_request,'sandbox_tx_ci_01',
+  'guia-exc:saida:'||v_request,12500,'DONE') INTO v_done;
+ IF v_done->>'ok'<>'true' OR v_done->>'pagamento_baixado'<>'false'
+ OR v_done->>'requer_validacao_destinatario'<>'true' THEN
+  RAISE EXCEPTION 'DONE confundido com baixa financeira: %',v_done; END IF;
+
+ SELECT count(*) INTO v_n
+ FROM public.catalogo_asaas_observacoes_excepcionais_auditoria o
+ JOIN public.catalogo_asaas_transferencias_excepcionais_auditoria v ON v.id=o.vinculo_id
+ WHERE v.solicitacao_id=v_request;
+ IF v_n<>2 THEN RAISE EXCEPTION 'Duplicacao de observacoes de provedor: %',v_n; END IF;
+
+ SELECT public.catalogo_asaas_registrar_observacao_excepcional(
+  'saida',v_request,'sandbox_tx_ci_02',
+  'guia-exc:saida:'||v_request,12500,'DONE') INTO v_mismatch;
+ IF v_mismatch->>'ok'='true' THEN RAISE EXCEPTION 'Mesmo pedido aceitou outra transferencia'; END IF;
+ SELECT public.catalogo_asaas_registrar_observacao_excepcional(
+  'saida',v_request,'sandbox_tx_ci_01',
+  'guia-exc:saida:'||v_request,12501,'DONE') INTO v_mismatch;
+ IF v_mismatch->>'ok'='true' THEN RAISE EXCEPTION 'Valor divergente aceito'; END IF;
+
+ IF has_function_privilege('anon',
+    'public.catalogo_asaas_registrar_observacao_excepcional(text,uuid,text,text,bigint,text)','EXECUTE')
+ OR has_function_privilege('authenticated',
+    'public.catalogo_asaas_registrar_observacao_excepcional(text,uuid,text,text,bigint,text)','EXECUTE')
+ OR has_table_privilege('anon',
+    'public.catalogo_asaas_transferencias_excepcionais_auditoria','SELECT')
+ OR has_table_privilege('authenticated',
+    'public.catalogo_asaas_observacoes_excepcionais_auditoria','INSERT')
+ THEN RAISE EXCEPTION 'Auditoria bancaria exposta ao publico'; END IF;
+
+ RAISE NOTICE 'PASS: banco observado e idempotente, nunca baixa creditos ou autoriza Pix';
+END $evidence$;
+
 ROLLBACK;
