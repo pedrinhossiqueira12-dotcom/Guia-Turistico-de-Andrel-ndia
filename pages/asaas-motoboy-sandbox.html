@@ -83,7 +83,7 @@ async function request(slug,acao,extra={}){
  return json;
 }
 async function busy(id,fn){
- $(id).disabled=true;try{await fn();}catch(e){message(e?.message||"Falha ao processar.",true);}finally{$(id).disabled=false;}
+ $(id).disabled=true;try{await fn();}catch(e){message(e?.message||"Falha ao processar.",true);}finally{if(id!=="payout")$(id).disabled=false;}
 }
 async function wallet(){
  const result=await request("catalogo-asaas-financeiro","consultar_carteira");
