@@ -406,9 +406,20 @@
       definirAviso("Entregas atualizadas", "Ofertas e entregas mostram somente o que a conta está autorizada a receber.", "sucesso");
     } catch (erro) {
       if (erro.message === STALE_REQUEST) return;
-      if (erro.status === 403 || erro.status === 401) { limparDadosPrivados(); fecharConfirmacao(); }
+      if (erro.status === 401) { limparDadosPrivados(); fecharConfirmacao(); }
+      else if (erro.status === 403) {
+        // Desvinculacao impede ofertas/entregas, mas NUNCA apaga a carteira.
+        state.pedidos = [];
+        state.offset = 0;
+        state.hasMore = false;
+        fecharConfirmacao();
+        renderizarPedidos();
+      }
       if (!append && $("motoboyOrders")) $("motoboyOrders").innerHTML = "";
-      definirFeedback("motoboyOrdersFeedback", erro.message || "Não foi possível carregar suas entregas.", true);
+      definirFeedback("motoboyOrdersFeedback",
+        erro.status === 403
+          ? "Sem vínculo autorizado para novas entregas. Sua carteira de comissões históricas continua disponível."
+          : (erro.message || "Não foi possível carregar suas entregas."), true);
       definirAviso("Não foi possível atualizar", erro.message || "Verifique sua sessão e tente novamente.", "erro");
     } finally {
       if (generation === state.generation) {
@@ -636,8 +647,17 @@
       definirFeedback("motoboyEarningsFeedback", "Extrato atualizado pela fonte do servidor.");
     } catch (erro) {
       if (erro.message === STALE_REQUEST) return;
-      if (erro.status === 401 || erro.status === 403) limparDadosPrivados();
-      definirFeedback("motoboyEarningsFeedback", erro.message || "Não foi possível consultar o extrato.", true);
+      if (erro.status === 401) limparDadosPrivados();
+      else if (erro.status === 403) {
+        // Extrato operacional da API de entregas pode exigir vinculo comercial.
+        // Nao descartar consulta independente da carteira e faturas da Asaas.
+        state.extrato = null;
+        if ($("motoboyEarnings")) $("motoboyEarnings").hidden = true;
+      }
+      definirFeedback("motoboyEarningsFeedback",
+        erro.status === 403
+          ? "Extrato operacional indisponível sem vínculo de entregas. Consulte a carteira financeira para seus créditos históricos."
+          : (erro.message || "Não foi possível consultar o extrato."), true);
     } finally {
       if (generation === state.generation) state.extractLoading = false;
     }
