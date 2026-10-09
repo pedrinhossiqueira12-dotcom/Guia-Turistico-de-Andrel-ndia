@@ -71,3 +71,12 @@ test("formulários e histórico mostram pedido sem prometer pagamento",()=>{
  assert.match(ci,/Regularizacao inconsistente/);
  assert.match(ci,/v_rejeicoes<>3/);
 });
+
+test("erro da carteira não apresenta saldo zero nem permite solicitação sem confirmação",()=>{
+ const errorSection=courier.slice(courier.indexOf("async function carregarCarteira()"),courier.indexOf("async function solicitarSaque()"));
+ assert.match(errorSection,/motoboyAsaasBalance"\)\) \$\("motoboyAsaasBalance"\)\.textContent = "Indisponível"/);
+ assert.match(errorSection,/motoboySaidaSubmit"\)\) \$\("motoboySaidaSubmit"\)\.disabled = true/);
+ assert.match(errorSection,/motoboyResidualSubmit"\)\) \$\("motoboyResidualSubmit"\)\.disabled = true/);
+ assert.match(errorSection,/motoboySaidaBloco"\)\) \$\("motoboySaidaBloco"\)\.hidden = true/);
+ assert.match(errorSection,/Isso não significa que seus créditos foram zerados/);
+});
