@@ -81,6 +81,60 @@
     }
     return solicitacoes.length;
   }
+  async function listarRegularizacoesSaida(){
+    const response=await api({acao:"listar_regularizacoes_saida_admin"});
+    const lista=$("listaRegularizacoesSaida");
+    lista.replaceChildren();
+    const solicitacoes=Array.isArray(response.solicitacoes)?response.solicitacoes:[];
+    if(!solicitacoes.length){
+      const li=document.createElement("li");
+      li.textContent="Nenhuma regularização financeira aguardando conferência.";
+      lista.appendChild(li);return 0;
+    }
+    for(const item of solicitacoes){
+      const li=document.createElement("li");li.className="item";
+      const titulo=document.createElement("strong");
+      titulo.textContent="Regularização "+String(item.id||"").slice(0,8)+" — "+money(item.saldo_snapshot_centavos);
+      const detalhe=document.createElement("p");detalhe.className="muted";
+      detalhe.textContent=(item.status==="em_analise"?"Em análise":"Pendente")+
+        " · Motoboy: "+String(item.motoboy_id||"").slice(0,8)+
+        " · Solicitação: "+(item.motivo==="inatividade"?"Inatividade":"Encerramento")+
+        " · Saldo registrado na data: "+money(item.saldo_snapshot_centavos);
+      const justificativa=document.createElement("textarea");
+      justificativa.placeholder="Justificativa de recusa (mínimo 20 caracteres)";
+      justificativa.maxLength=1000;
+      justificativa.setAttribute("aria-label","Justificativa da regularização "+String(item.id||""));
+      const acoes=document.createElement("div");acoes.className="row";
+      const analisar=document.createElement("button");analisar.type="button";
+      analisar.className="secondary";analisar.textContent="Colocar em análise";
+      analisar.hidden=item.status!=="pendente";
+      const recusar=document.createElement("button");recusar.type="button";
+      recusar.textContent="Recusar solicitação";
+      async function revisar(novo){
+        const texto=justificativa.value.trim();
+        if(novo==="recusada"&&(texto.length<20||texto.length>1000)){
+          aviso("A recusa exige justificativa de pelo menos 20 caracteres.",true);return;
+        }
+        if(!window.confirm(novo==="recusada"
+          ?"Recusar apenas o pedido administrativo? Os créditos continuam registrados e não serão cancelados."
+          :"Marcar regularização como em análise, sem transferir valores?"))return;
+        analisar.disabled=true;recusar.disabled=true;justificativa.disabled=true;
+        try{
+          const result=await api({acao:"revisar_regularizacao_saida_admin",
+            solicitacao_id:String(item.id||""),status_esperado:String(item.status||""),
+            novo_status:novo,justificativa:texto});
+          await atualizar();
+          aviso(result.mensagem||"Regularização atualizada.");
+        }catch(error){aviso(error.message||"Não foi possível revisar a solicitação.",true);}
+        finally{analisar.disabled=false;recusar.disabled=false;justificativa.disabled=false;}
+      }
+      analisar.addEventListener("click",()=>revisar("em_analise"));
+      recusar.addEventListener("click",()=>revisar("recusada"));
+      acoes.append(analisar,recusar);
+      li.append(titulo,detalhe,justificativa,acoes);lista.appendChild(li);
+    }
+    return solicitacoes.length;
+  }
   async function atualizar(){
     aviso("Carregando solicitações…");
     const response=await api({acao:"listar_encerramentos_admin"});
@@ -113,7 +167,9 @@
       li.append(title,detail,btn);lista.appendChild(li);
     }
     const analises=await listarAnalisesResiduais();
-    aviso(solicitacoes.length+" encerramento(s) e "+analises+" análise(s) de saldo residual aguardando revisão.");
+    const saidas=await listarRegularizacoesSaida();
+    aviso(solicitacoes.length+" encerramento(s), "+analises+
+      " análise(s) residual(is) e "+saidas+" regularização(ões) de entregadores.");
   }
   async function iniciar(){
     if(!client){aviso("Supabase indisponível.",true);return;}
