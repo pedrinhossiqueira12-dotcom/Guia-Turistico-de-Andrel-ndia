@@ -34,7 +34,8 @@
 - Quando o saldo excede R$ 5.000, o banco tenta preservar **ao menos R$ 100 no saldo remanescente** para o próximo saque. Exemplo: R$ 5.010 disponíveis → primeiro Pix R$ 4.910 e R$ 100 permanecem. Comissões individuais que ultrapassem o teto bancário não são debitadas ou divididas automaticamente; exigem tratamento específico com o provedor.
 - O saldo total da carteira permanece livre de um prazo de saque imposto pelo código. Não confundir com garantia legal ou contratual de custódia; a operação real exige revisão jurídica e provisão de caixa correspondente.
 - A tabela privada `catalogo_asaas_saldos_residuais` e a opção na carteira permitem solicitar **análise do saldo liberado de R$ 0,01 até R$ 99,99** em situações de encerramento ou interrupção de atividades. O pedido não realiza Pix, não altera a remuneração e é limitado a uma análise aberta por motoboy.
-- **Pendente:** mecanismo comprovado para efetivamente liquidar o saldo residual excepcional, com autorização financeira, prova de transferência e conciliação, além de contestação; não é permitido marcar `concluida` sem comprovante válido.
+- **Proteção de segurança adicionada e testada em STAGING:** `20261009185000_bloquear_conclusao_saldo_residual_sem_prova.sql` impede marcar uma análise como `concluida` antes de existir conciliação financeira comprovada, bloqueia alteração do titular/valor original, exige justificativa de recusa e preserva decisões finais. Os testes foram transacionais com `ROLLBACK` e não enviaram Pix.
+- **Pendente:** implementar mecanismo comprovado de pagamento excepcional, com autorização financeira, identificação da transferência, baixa transacional dos créditos, prova de liquidação no provedor, tratamento de divergências e contestação. A proteção atual impede encerramento fictício, mas **não faz o pagamento**.
 - Saldos residuais **não podem ser perdidos nem apagados**, independentemente do estado do cadastro.
 
 ## Encerramento de comércio com pendências
