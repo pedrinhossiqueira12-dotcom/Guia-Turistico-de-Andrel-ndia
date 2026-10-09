@@ -601,4 +601,104 @@ BEGIN
  RAISE NOTICE 'PASS: saldo historico sem vinculo depende exclusivamente de remuneracoes e nao vaza dados';
 END $historic_rights$;
 
+
+-- Fixture integralmente sintetica: comprovacao financeira de 7%, parcelas
+-- 5%/2%, ledger do titular, remocao do ultimo vinculo e revisao residual.
+-- Reproduzida em PostgreSQL DESCARTAVEL: transacao externa faz ROLLBACK.
+DO $positive_orphan_balance$
+DECLARE
+ v_uid uuid := 'caca0a0a-caca-4caa-8caa-caca0a0a0a01';
+ v_store text := 'ci-carteira-sem-vinculo-positivo';
+ v_pedido uuid; v_fechamento uuid; v_residual uuid;
+ v_before jsonb;v_after jsonb;v_pending jsonb;
+BEGIN
+ INSERT INTO auth.users(id) VALUES(v_uid);
+ INSERT INTO public.comercios_publicados(local_id,status) VALUES(v_store,'ativo');
+ INSERT INTO public.catalogos(comercio_id,proprietario_id) VALUES(v_store,v_uid);
+ INSERT INTO public.catalogo_motoboys(
+  comercio_id,usuario_id,nome,email,ativo,autorizado_por
+ ) VALUES(v_store,v_uid,'Motoboy CI','ci-historico@example.invalid',true,v_uid);
+
+ INSERT INTO public.catalogo_pedidos(
+  comercio_id,referencia_externa,provedor,idempotency_key,status,
+  status_pagamento,modalidade,forma_pagamento,subtotal_produtos_centavos,
+  entrega_centavos,total_centavos,taxa_plataforma_centavos,
+  repasse_bruto_comercio_centavos,cliente_nome,cliente_telefone,
+  versao_financeira,taxa_motoboy_centavos,taxa_total_centavos,
+  entrega_status,metadata
+ ) VALUES(
+  v_store,'ci-historico-positivo-209905','offline',gen_random_uuid(),
+  'entregue','aprovado','entrega','dinheiro',10000,
+  0,10000,500,9300,'Cliente sintético','00000000000',
+  2,200,700,'entregue','{"ensaio":"financeiro-sem-vinculo"}'::jsonb
+ ) RETURNING id INTO v_pedido;
+
+ INSERT INTO public.catalogo_fechamentos_offline(
+  comercio_id,competencia,total_pedidos,total_comissao_centavos,status,pago_em
+ ) VALUES(v_store,date '2099-05-01',1,700,'pago',now())
+ RETURNING id INTO v_fechamento;
+
+ INSERT INTO public.catalogo_fatura_componentes_v2(
+  fechamento_id,pedido_id,tipo,valor_centavos
+ ) VALUES
+  (v_fechamento,v_pedido,'plataforma',500),
+  (v_fechamento,v_pedido,'logistica',200);
+
+ INSERT INTO public.catalogo_comissoes_offline(
+  pedido_id,comercio_id,competencia,subtotal_produtos_centavos,
+  taxa_percentual,valor_comissao_centavos,status,pago_em,
+  taxa_plataforma_centavos,taxa_motoboy_centavos,valor_total_centavos,
+  versao_financeira,motoboy_id,financiamento_logistica_comprovado
+ ) VALUES(v_pedido,v_store,date '2099-05-01',10000,
+  5,700,'paga',now(),500,200,700,2,v_uid,true);
+
+ INSERT INTO public.catalogo_fatura_cobrancas(
+  fechamento_id,comercio_id,competencia,gateway,
+  payment_id,status,valor_centavos,pago_em
+ ) VALUES(v_fechamento,v_store,date '2099-05-01','asaas',
+  'ci-pagamento-ficticio','pago',700,now());
+
+ IF NOT catalogo_private.catalogo_v2_financiado(v_pedido) THEN
+  RAISE EXCEPTION 'Fixture sem comprovacao integral do financiamento da comissao';
+ END IF;
+
+ INSERT INTO public.catalogo_remuneracoes_v2(
+  pedido_id,comercio_id,motoboy_id,valor_centavos,
+  status,financiamento_comprovado
+ ) VALUES(v_pedido,v_store,v_uid,200,'disponivel',true);
+
+ SELECT public.catalogo_asaas_saldo_historico(v_uid) INTO v_before;
+ IF (v_before->>'disponivel_centavos')::bigint<>200
+ OR (v_before->>'creditos')::bigint<>1 THEN
+  RAISE EXCEPTION 'Saldo positivo antes de desvincular nao encontrado: %',v_before;
+ END IF;
+
+ DELETE FROM public.catalogo_motoboys WHERE usuario_id=v_uid;
+ IF EXISTS(SELECT 1 FROM public.catalogo_motoboys WHERE usuario_id=v_uid) THEN
+  RAISE EXCEPTION 'Ainda existe vinculo comercial na fixture';
+ END IF;
+
+ SELECT public.catalogo_asaas_saldo_historico(v_uid) INTO v_after;
+ SELECT public.catalogo_asaas_pendencias_historicas(v_uid) INTO v_pending;
+ IF v_after IS DISTINCT FROM v_before OR v_pending<>'[]'::jsonb THEN
+  RAISE EXCEPTION 'Saldo positivo mudou apos ultimo vinculo removido: % -> % (%).',
+   v_before,v_after,v_pending;
+ END IF;
+
+ INSERT INTO public.catalogo_asaas_saldos_residuais(
+  motoboy_id,saldo_snapshot_centavos,motivo
+ ) VALUES(v_uid,200,'inatividade') RETURNING id INTO v_residual;
+
+ IF NOT EXISTS(
+  SELECT 1 FROM public.catalogo_asaas_saldos_residuais
+  WHERE id=v_residual AND status='pendente'
+ ) THEN RAISE EXCEPTION 'Pedido residual sem vinculo nao foi registrado'; END IF;
+
+ IF (public.catalogo_asaas_saldo_sacavel(v_uid)->>'disponivel_centavos')::bigint>0 THEN
+  RAISE EXCEPTION 'Ex-motoboy sem vinculo recebeu autorizacao de saque comum';
+ END IF;
+
+ RAISE NOTICE 'PASS: saldo positivo de 200 centavos financiado, 1 credito e pedido residual preservados SEM ultimo vinculo';
+END $positive_orphan_balance$;
+
 ROLLBACK;
