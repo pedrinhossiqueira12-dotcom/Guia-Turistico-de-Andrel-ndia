@@ -11,6 +11,10 @@ DECLARE
   v_rejected integer := 0;
   v_status text;
   v_rows integer;
+  v_historico_ativo jsonb;
+  v_historico_inativo jsonb;
+  v_pendencias_ativas jsonb;
+  v_pendencias_inativas jsonb;
 BEGIN
   IF to_regprocedure('public.catalogo_status_publicacao(text[])') IS NULL
     OR to_regprocedure('public.catalogo_asaas_saldo_sacavel(uuid)') IS NULL
@@ -36,6 +40,38 @@ BEGIN
     VALUES(v_id,'ativo');
   INSERT INTO public.catalogos(comercio_id,proprietario_id)
     VALUES(v_id,v_uid);
+
+  -- Simula um entregador vinculado ao catálogo e depois inativado.
+  -- Histórico financeiro não pode desaparecer só por desligamento.
+  INSERT INTO public.catalogo_motoboys
+    (comercio_id,usuario_id,nome,email,ativo,autorizado_por)
+  VALUES(v_id,v_uid,'Motoboy CI','motoboy-ci@example.invalid',true,v_uid);
+  IF to_regprocedure('public.catalogo_asaas_saldo_historico(uuid)') IS NULL
+    OR to_regprocedure('public.catalogo_asaas_pendencias_historicas(uuid)') IS NULL
+    OR has_function_privilege('anon',
+        'public.catalogo_asaas_saldo_historico(uuid)','EXECUTE')
+    OR has_function_privilege('authenticated',
+        'public.catalogo_asaas_pendencias_historicas(uuid)','EXECUTE')
+    OR NOT has_function_privilege('service_role',
+        'public.catalogo_asaas_saldo_historico(uuid)','EXECUTE')
+  THEN RAISE EXCEPTION 'RPC historicas inexistentes ou com privilegio indevido';
+  END IF;
+
+  SELECT public.catalogo_asaas_saldo_historico(v_uid)
+    INTO v_historico_ativo;
+  SELECT public.catalogo_asaas_pendencias_historicas(v_uid)
+    INTO v_pendencias_ativas;
+  UPDATE public.catalogo_motoboys SET ativo=false
+    WHERE comercio_id=v_id AND usuario_id=v_uid;
+  SELECT public.catalogo_asaas_saldo_historico(v_uid)
+    INTO v_historico_inativo;
+  SELECT public.catalogo_asaas_pendencias_historicas(v_uid)
+    INTO v_pendencias_inativas;
+  IF v_historico_ativo IS DISTINCT FROM v_historico_inativo
+    OR v_pendencias_ativas IS DISTINCT FROM v_pendencias_inativas
+    OR (public.catalogo_asaas_saldo_sacavel(v_uid)->>'disponivel_centavos')::bigint <> 0
+  THEN RAISE EXCEPTION 'Inativacao alterou carteira historica ou liberou saque';
+  END IF;
 
   INSERT INTO public.catalogo_encerramentos_comercio
     (comercio_id,solicitado_por,situacao)
