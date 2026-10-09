@@ -16,11 +16,14 @@
 - `20261009162000_bloquear_exclusao_debitos_e_finalizar_arquivamento.sql`: trigger consulta débitos e pedidos em andamento antes da despublicação; impede remoção física de histórico.
 - `20261009163000_impedir_reabertura_encerramento.sql`: impede reabertura de catálogo bloqueado e republicação de lojas antes `arquivado`.
 - **Novo:** `20261009183000_proteger_republicacao_legada_apos_encerramento.sql` faz a verificação de encerramento em **INSERT e UPDATE de status**, para qualquer situação aberta ou arquivada, independentemente do status anterior da publicação. Bloqueia também UPSERT. Usa lock na linha de `catalogos` para serializar com a solicitação de encerramento.
+- **Novo:** `20261009184000_bloquear_despublicacao_legada_qualquer_status.sql` impede `DELETE` e alterações para estado não ativo quando há fatura, comissão ou pedido pendente, **mesmo se o estado anterior da publicação era `deletado` ou `pendente`**. Mantém o gatilho existente e o bloqueio por linha do catálogo.
 - O frontend estático consulta a RPC pública e limitada `catalogo_status_publicacao`; um tombstone `arquivado` tem precedência sobre a cópia do JSON.
 
 ## Validação realizada no STAGING
 
 Em transação única com `ROLLBACK`, foi simulada uma publicação com `status='deletado'` e encerramento `pendente_arquivamento`. Tentativas de `UPDATE status='ativo'` e `INSERT ... ON CONFLICT DO UPDATE status='ativo'` foram ambas rejeitadas por SQLSTATE `23514`. A consulta posterior confirmou que o registro de encerramento temporário não permaneceu no banco.
+
+Um segundo teste, também completamente revertido, registrou uma fatura fictícia aberta de R$ 1,00 após marcar a publicação como `deletado`. Tentativas de `UPDATE status='arquivado'` e `DELETE` foram ambas rejeitadas por SQLSTATE `23514`; não ficaram faturas nem exclusões dessa simulação.
 
 Foi adicionado `tests/catalogo-encerramento-legado.test.cjs` para verificar os contratos de proteção no CI. Esses testes não exercem a Edge antiga real e **não substituem** testes integrados de produção.
 
