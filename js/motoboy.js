@@ -53,6 +53,7 @@
   const state = {
     client: null,
     session: null,
+    termosAceitos: false,
     sessionToken: "",
     userId: "",
     generation: 0,
@@ -420,7 +421,9 @@
   function renderizarCarteira() {
     const carteira = state.carteira || {};
     const saldo = Number(carteira.saldo_disponivel_centavos || 0);
-    const saldoValido = Number.isSafeInteger(saldo) && saldo > 0;
+    const minimo = Number(carteira.saque_minimo_centavos || 10000);
+    const saldoValido = Number.isSafeInteger(saldo) && saldo >= minimo;
+    if ($("motoboyWithdrawMinimo")) $("motoboyWithdrawMinimo").textContent = `Saque mínimo: ${formatarMoeda(minimo)} em créditos liberados.`;
     if ($("motoboyAsaasBalance")) $("motoboyAsaasBalance").textContent = formatarMoeda(saldo);
     const botao = $("motoboyWithdrawPix");
     if (botao) botao.disabled = !state.session || state.withdrawalLoading || !carteira.saque_habilitado || !saldoValido;
@@ -431,8 +434,15 @@
         return `<li><strong>${escapar(status)}</strong><span>${escapar(formatarData(saque.criado_em))}</span><b>${formatarMoeda(saque.valor_centavos)}</b></li>`;
       }).join("") : "";
     }
+    const pendencias = Array.isArray(carteira.pendencias_por_comercio) ? carteira.pendencias_por_comercio : [];
+    const lista = $("motoboyPendingByStore");
+    if (lista) lista.innerHTML = pendencias.length ? pendencias.map(item => {
+      const nome = state.commerceNames?.get(String(item.comercio_id)) || String(item.comercio_id || "Comércio");
+      const situacao = ({fatura_vencida:"Fatura vencida",aguardando_pagamento:"Aguardando pagamento da fatura",pagamento_em_conferencia:"Pagamento em conferência",aguardando_fechamento:"Aguardando fechamento mensal"})[item.situacao] || "Em análise";
+      return `<li><strong>${escapar(nome)}</strong><span>${escapar(situacao)} · ${escapar(String(item.competencia||""))}</span><b>${escapar(formatarMoeda(item.valor_centavos))}</b></li>`;
+    }).join("") : "<li>Nenhuma comissão de fatura pendente identificada.</li>";
     definirFeedback("motoboyWithdrawFeedback", carteira.saque_habilitado
-      ? saldoValido ? "Você pode solicitar o Pix diretamente pelo Guia Andrelândia." : "Sem créditos de faturas Asaas liquidadas disponíveis no momento."
+      ? saldoValido ? "Você pode solicitar o Pix diretamente pelo Guia Andrelândia." : `Faltam ${formatarMoeda(Math.max(0,minimo-saldo))} em créditos liberados para alcançar o saque mínimo.`
       : "O saque automático ainda não foi habilitado pela plataforma.");
   }
 
@@ -456,7 +466,7 @@
 
   async function solicitarSaque() {
     if (!state.session || state.withdrawalLoading || !state.carteira?.saque_habilitado ||
-        Number(state.carteira?.saldo_disponivel_centavos || 0) <= 0) return;
+        Number(state.carteira?.saldo_disponivel_centavos || 0) < Number(state.carteira?.saque_minimo_centavos || 10000)) return;
     if (typeof window.confirm === "function" &&
         !window.confirm("Confirmar saque via Pix para a chave cadastrada no seu perfil?")) return;
     const generation = state.generation, userId = state.userId;
@@ -770,6 +780,7 @@
   function limparSessaoVisual() {
     state.generation += 1;
     state.session = null;
+    state.termosAceitos = false;
     state.sessionToken = "";
     state.userId = "";
     state.loading = false;
@@ -796,6 +807,7 @@
     }
     state.generation += 1;
     state.session = session;
+    state.termosAceitos = false;
     state.sessionToken = token;
     state.userId = userId;
     state.loading = false;
@@ -806,7 +818,22 @@
     if ($("motoboyPanel")) $("motoboyPanel").hidden = false;
     if ($("motoboyLogout")) $("motoboyLogout").hidden = false;
     definirFeedback("motoboyLoginFeedback", "");
-    definirAviso("Sessão autenticada", "Consultando ofertas e extrato autorizados para esta conta…");
+    definirAviso("Sessão autenticada", "Verificando a ciência dos termos vigentes…");
+    try {
+      const termos = await chamarApi({acao:"consultar_termos",papel:"motoboy"},state.generation,state.userId,ASAAS_URL);
+      validarSessaoAtual(state.generation,state.userId);
+      if (!termos.aceito) {
+        $("motoboyPanel").hidden = true;
+        if (!$("motoboyTermsDialog").open) $("motoboyTermsDialog").showModal();
+        definirAviso("Termos obrigatórios", "Leia os termos para entregadores e a política de privacidade antes de utilizar o painel.");
+        return;
+      }
+      state.termosAceitos = true;
+    } catch (erro) {
+      $("motoboyPanel").hidden = true;
+      definirFeedback("motoboyLoginFeedback", erro.message || "Não foi possível verificar os termos.", true);
+      return;
+    }
     iniciarPolling();
     await Promise.all([carregarEntregas(), carregarExtrato(), carregarCarteira()]);
   }
@@ -875,7 +902,31 @@
     }
   }
 
+  async function aceitarTermosOperacionais(event) {
+    event.preventDefault();
+    if (!state.session || state.destroyed) return;
+    const aceitar = $("motoboyTermsAccepted")?.checked === true;
+    const privacidade = $("motoboyPrivacyAcknowledged")?.checked === true;
+    if (!aceitar || !privacidade) return;
+    const generation=state.generation,userId=state.userId;
+    try {
+      const resposta=await chamarApi({acao:"aceitar_termos",papel:"motoboy",aceito_termos:aceitar,
+        ciente_privacidade:privacidade},generation,userId,ASAAS_URL);
+      validarSessaoAtual(generation,userId);
+      if (!resposta.aceito) throw new Error("O aceite não pôde ser confirmado.");
+      state.termosAceitos = true;
+      $("motoboyTermsDialog")?.close();
+      $("motoboyPanel").hidden = false;
+      iniciarPolling();
+      await Promise.all([carregarEntregas(),carregarExtrato(),carregarCarteira()]);
+    } catch (erro) {
+      definirFeedback("motoboyTermsFeedback",erro.message || "Não foi possível registrar aceite.",true);
+    }
+  }
+
   function iniciarEventos() {
+    $("motoboyTermsForm")?.addEventListener("submit",aceitarTermosOperacionais);
+    $("motoboyTermsDialog")?.addEventListener("cancel",event => event.preventDefault());
     $("motoboyLoginForm")?.addEventListener("submit", fazerLogin);
     $("motoboySignupForm")?.addEventListener("submit", criarConta);
     $("motoboyLogout")?.addEventListener("click", sair);
@@ -898,7 +949,7 @@
     $("motoboyOccurrenceDialog")?.addEventListener("click", (event) => { if (event.target === $("motoboyOccurrenceDialog")) $("motoboyOccurrenceDialog").close(); });
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "hidden") pararPolling();
-      else if (state.session) {
+      else if (state.session && state.termosAceitos) {
         iniciarPolling();
         if (!$('motoboyConfirmDialog')?.open && !$('motoboyOccurrenceDialog')?.open && navigator.onLine) {
           carregarEntregas();
@@ -907,7 +958,7 @@
       }
     });
     window.addEventListener("online", () => {
-      if (state.session && document.visibilityState === "visible") { carregarEntregas(); carregarExtrato(); }
+      if (state.session && state.termosAceitos && document.visibilityState === "visible") { carregarEntregas(); carregarExtrato(); }
     });
     window.addEventListener("pagehide", () => {
       state.destroyed = true;
