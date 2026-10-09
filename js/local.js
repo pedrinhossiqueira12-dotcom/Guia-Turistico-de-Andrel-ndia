@@ -298,17 +298,15 @@ async function carregarLocal() {
         mostrarLocalIndisponivel("Não foi possível verificar a disponibilidade deste comércio. Tente novamente.");
         return;
       }
-      const { data: publicacao, error: erroPublicacao } = await cliente
-        .from("comercios_publicados")
-        .select("status")
-        .eq("local_id", String(encontrado.id))
-        .maybeSingle();
+      const { data: publicacoes, error: erroPublicacao } = await cliente
+        .rpc("catalogo_status_publicacao", { p_ids: [String(encontrado.id)] });
 
       if (erroPublicacao) {
         console.warn("Não foi possível conferir o status da publicação:", erroPublicacao);
         mostrarLocalIndisponivel("Não foi possível verificar a disponibilidade deste comércio. Tente novamente.");
         return;
       }
+      const publicacao = Array.isArray(publicacoes) ? publicacoes[0] : null;
       if (publicacao && String(publicacao.status || "").toLowerCase() !== "ativo") {
         mostrarLocalIndisponivel("Este estabelecimento foi despublicado do Guia.");
         return;
