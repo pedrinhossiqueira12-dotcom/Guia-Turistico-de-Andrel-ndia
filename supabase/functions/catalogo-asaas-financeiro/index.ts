@@ -913,6 +913,17 @@ async function authorizeWithdrawal(request:Request){
  if(!saque || saque.transferencia_id!==id ||
     (payloadRef && payloadRef!==saque.id))return approveResponse("REFUSED","Transferência desconhecida.");
  const ref=String(saque.id);
+
+ // Nenhuma decisão APPROVED é irrevogável: até o replay do webhook deve
+ // considerar holds posteriores, composição dos créditos e estado do saque.
+ // Se a consulta falha, a autorização falha fechada, sem executar POST/Pix.
+ const {data:revalidacao,error:revalidacaoError}=await db.rpc(
+  "catalogo_asaas_validar_reserva_saque",{p_saque:ref});
+ if(revalidacaoError || revalidacao?.ok!==true)
+  return approveResponse("REFUSED","Não foi possível revalidar a reserva financeira.");
+ if(revalidacao.elegivel!==true)
+  return approveResponse("REFUSED","Reserva suspensa ou créditos não elegíveis para autorização.");
+
  const {data:existing,error:existingError}=await db.from("catalogo_asaas_validacoes_saque")
    .select("decisao,motivo").eq("saque_id",ref).eq("transferencia_id",id).maybeSingle();
  if(existingError)throw new Failure("Erro ao recuperar autorização.",503);
