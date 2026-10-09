@@ -21,7 +21,7 @@ async function executar(cenario={}) {
     rpc: async (nome, params) => {
       consultas.push({ nome, ids: params.p_ids });
       if (cenario.excecao) throw new Error("Falha no banco");
-      return { data: cenario.resposta ?? [{local_id:"loja-ci",status:"ativo"}],
+      return { data: Object.hasOwn(cenario, "resposta") ? cenario.resposta : [{local_id:"loja-ci",status:"ativo"}],
         error: cenario.erro ?? null };
     },
   };
