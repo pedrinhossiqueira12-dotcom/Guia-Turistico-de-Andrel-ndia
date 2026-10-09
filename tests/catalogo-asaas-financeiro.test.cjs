@@ -156,3 +156,21 @@ test("fingerprint HMAC SHA-256 tem hash explícito e é calculado antes da reser
  const sig = new Uint8Array(await webcrypto.subtle.sign("HMAC",k,new TextEncoder().encode("guia-asaas-pix-v1:EVP:abc")));
  assert.equal(sig.length,32);
 });
+
+
+test("repasse confirmado via API registra operador automático sem atribuir falsamente ao motoboy", () => {
+ const sqlAuto = read("supabase/pending-migrations/20261009120000_asaas_repasse_automatico_registrador.sql");
+ assert.match(sqlAuto, /ALTER COLUMN registrado_por DROP NOT NULL/);
+ assert.match(sqlAuto, /ADD CONSTRAINT catalogo_repasses_v2_registro_automatico_check/);
+ assert.match(sqlAuto, /registrado_por IS NOT NULL OR/);
+ assert.match(sqlAuto, /metadata->>'origem' = 'asaas_pix_automatico'/);
+ assert.match(sqlAuto, /metadata->>'confirmacao' = 'consulta_asaas_DONE'/);
+ assert.match(sqlAuto, /metadata->>'transferencia_id' = substr\(referencia, 7\)/);
+ assert.match(sqlAuto, /INSERT INTO public\.catalogo_repasses_v2\(motoboy_id,valor_centavos,referencia,comprovante,registrado_por,metadata\)/);
+ assert.match(sqlAuto, /'Pix confirmado pela API Asaas',NULL/);
+ assert.match(sqlAuto, /'saque_asaas_id',v\.id/);
+ assert.match(sqlAuto, /GET DIAGNOSTICS v_atualizados=ROW_COUNT/);
+ assert.match(sqlAuto, /IF v_atualizados<>v_qtd THEN RAISE EXCEPTION/);
+ assert.match(sqlAuto, /REVOKE ALL ON FUNCTION public\.catalogo_asaas_atualizar_saque/);
+ assert.doesNotMatch(sqlAuto, /TRUNCATE|DELETE FROM public\.catalogo_/i);
+});
