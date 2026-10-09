@@ -16,6 +16,71 @@
     if(error||data?.success!==true)throw new Error(data?.mensagem||error?.message||"Operação não autorizada.");
     return data;
   }
+  async function listarAnalisesResiduais(){
+    const response=await api({acao:"listar_analises_residuais_admin"});
+    const lista=$("listaAnalisesResiduais");
+    lista.replaceChildren();
+    const solicitacoes=Array.isArray(response.solicitacoes)?response.solicitacoes:[];
+    if(!solicitacoes.length){
+      const li=document.createElement("li");
+      li.textContent="Nenhuma revisão de saldo residual pendente.";
+      lista.appendChild(li);
+      return 0;
+    }
+    for(const item of solicitacoes){
+      const li=document.createElement("li");li.className="item";
+      const titulo=document.createElement("strong");
+      titulo.textContent="Solicitação "+String(item.id||"").slice(0,8)+" — "+money(item.saldo_snapshot_centavos);
+      const detalhe=document.createElement("p");detalhe.className="muted";
+      const status=item.status==="em_analise"?"Em análise":"Pendente";
+      const data=item.solicitado_em?new Date(item.solicitado_em).toLocaleDateString("pt-BR"):"Data indisponível";
+      detalhe.textContent=status+" · Motivo: "+(item.motivo==="inatividade"?"Inatividade":"Encerramento")+
+        " · Recebida em "+data+" · Entregador: "+String(item.motoboy_id||"").slice(0,8);
+      const justificativa=document.createElement("textarea");
+      justificativa.placeholder="Justificativa obrigatória para recusar a análise (20 a 1.000 caracteres)";
+      justificativa.maxLength=1000;
+      justificativa.setAttribute("aria-label","Justificativa da análise "+String(item.id||""));
+      const linha=document.createElement("div");linha.className="row";
+      const recusar=document.createElement("button");recusar.type="button";
+      recusar.textContent="Recusar análise";
+      const analisar=document.createElement("button");analisar.type="button";
+      analisar.textContent="Colocar em análise";
+      analisar.className="secondary";
+      analisar.hidden=item.status!=="pendente";
+      async function revisar(novoStatus){
+        const texto=justificativa.value.trim();
+        if(novoStatus==="recusada"&&(texto.length<20||texto.length>1000)){
+          aviso("Explique o motivo da recusa com pelo menos 20 caracteres.",true);return;
+        }
+        const avisoConfirmacao=novoStatus==="recusada"
+          ?"Encerrar somente este pedido de revisão? A remuneração continuará devida e nenhum Pix será enviado."
+          :"Marcar esta solicitação como em análise, sem alterar créditos?";
+        if(!window.confirm(avisoConfirmacao))return;
+        recusar.disabled=true;analisar.disabled=true;justificativa.disabled=true;
+        try{
+          const result=await api({
+            acao:"revisar_analise_residual_admin",
+            solicitacao_id:String(item.id||""),
+            status_esperado:String(item.status||""),
+            novo_status:novoStatus,
+            justificativa:texto,
+          });
+          await atualizar();
+          aviso(result.mensagem||"Análise atualizada.");
+        }catch(error){
+          aviso(error.message||"A análise não pôde ser atualizada.",true);
+        }finally{
+          recusar.disabled=false;analisar.disabled=false;justificativa.disabled=false;
+        }
+      }
+      recusar.addEventListener("click",()=>revisar("recusada"));
+      analisar.addEventListener("click",()=>revisar("em_analise"));
+      linha.append(analisar,recusar);
+      li.append(titulo,detalhe,justificativa,linha);
+      lista.appendChild(li);
+    }
+    return solicitacoes.length;
+  }
   async function atualizar(){
     aviso("Carregando solicitações…");
     const response=await api({acao:"listar_encerramentos_admin"});
@@ -47,7 +112,8 @@
       });
       li.append(title,detail,btn);lista.appendChild(li);
     }
-    aviso(solicitacoes.length+" solicitação(ões) para conferir.");
+    const analises=await listarAnalisesResiduais();
+    aviso(solicitacoes.length+" encerramento(s) e "+analises+" análise(s) de saldo residual aguardando revisão.");
   }
   async function iniciar(){
     if(!client){aviso("Supabase indisponível.",true);return;}
