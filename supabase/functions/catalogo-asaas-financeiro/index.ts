@@ -253,6 +253,46 @@ async function reconcileTransfer(saqueId:string,transferId:string){
   {p_saque:saqueId,p_estado:"falhou",p_transferencia:transferId,p_mensagem:"Transferência recusada pelo Asaas"});
  return {ok:true,status:"enviado"};
 }
+// Consulta somente de leitura para investigar reservas sem ID Asaas.
+// Habilitada exclusivamente no Sandbox e para o titular da reserva.
+async function auditPendingSandboxTransfer(uid:string){
+ if(ENVIRONMENT!=="sandbox")throw new Failure("Auditoria de homologação indisponível em produção.",403);
+ if(!ASAAS_TOKEN)throw new Failure("Credencial Asaas Sandbox não configurada.",503);
+ const {data:row,error}=await db.from("catalogo_asaas_saques")
+  .select("id,motoboy_id,status,valor_centavos,transferencia_id,criado_em")
+  .eq("motoboy_id",uid).eq("status","revisao").is("transferencia_id",null)
+  .order("criado_em",{ascending:false}).limit(1).maybeSingle();
+ if(error)throw new Failure("Não foi possível consultar a reserva.",503);
+ if(!row)return respond({success:true,em_revisao:false,mensagem:"Não há reserva em revisão sem ID de transferência."});
+ const created=new Date(String(row.criado_em));
+ if(!Number.isFinite(created.getTime()))throw new Failure("Data da reserva inválida.",503);
+ const from=new Date(created.getTime()-86400000).toISOString().slice(0,10);
+ const matches:Array<{id:string,status:string,valor_centavos:number}>=[];
+ let checked=0;
+ for(let offset=0;offset<=4900;offset+=100){
+  const path="/transfers?limit=100&offset="+offset+"&dateCreated%5Bge%5D="+from;
+  const response=await fetch(API_BASE+path,{headers:{
+   "access_token":ASAAS_TOKEN,"accept":"application/json","User-Agent":"GuiaAndrelandia/1.0",
+  }});
+  if(!response.ok)throw new Failure("Asaas não permitiu consultar o histórico de transferências ("+response.status+").",502);
+  const result=input(await response.json().catch(()=>({})));
+  if(!Array.isArray(result.data))throw new Failure("Lista de transferências inválida: manter reserva para revisão.",503);
+  checked+=result.data.length;
+  for(const entry of result.data){
+   const t=input(entry);
+   if(value(t.externalReference,180)===String(row.id)){
+    matches.push({id:value(t.id,130),status:value(t.status,70),valor_centavos:cents(t.value)});
+   }
+  }
+  if(result.hasMore===false)return respond({success:true,em_revisao:true,saque_id:row.id,
+   valor_centavos:row.valor_centavos,consultadas:checked,listagem_completa:true,
+   transferencias:matches,mensagem:matches.length?
+   "Transferência localizada no Asaas. Não repetir; conciliação necessária.":
+   "Nenhuma transferência correspondente encontrada no histórico consultado do Asaas Sandbox. A reserva permanece bloqueada até a revisão."});
+  if(result.hasMore!==true)throw new Failure("Paginação Asaas inconclusiva. Reserva mantida.",503);
+ }
+ throw new Failure("Histórico Asaas extenso demais para auditoria automática. Reserva mantida.",503);
+}
 async function withdraw(uid:string){
  enabled("payouts");
  const {data:profile,error}=await db.from("catalogo_motoboy_perfis")
@@ -376,6 +416,7 @@ Deno.serve(async (request:Request)=>{
    case "consultar_cobranca":return await reconcileInvoice(user.id,body);
    case "consultar_carteira":return await wallet(user.id,true);
    case "solicitar_saque":return await withdraw(user.id);
+   case "auditar_saque_sandbox":return await auditPendingSandboxTransfer(user.id);
    case "listar_saques_admin":return await listAdminPayouts(user.id);
    case "conciliar_saque_admin":return await reconcileAdminTransfer(user.id,body);
    default:throw new Failure("Ação inválida.",400);
