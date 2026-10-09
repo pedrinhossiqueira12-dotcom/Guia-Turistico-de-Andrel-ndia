@@ -10,6 +10,9 @@ try { const keys = BUNDLE ? JSON.parse(BUNDLE) : null; serviceKey = keys?.defaul
 const db = createClient(SUPABASE_URL, serviceKey, {auth:{persistSession:false,autoRefreshToken:false}});
 const ASAAS_TOKEN = Deno.env.get("ASAAS_API_KEY") || "";
 const WEBHOOK_TOKEN = Deno.env.get("ASAAS_WEBHOOK_TOKEN") || "";
+// Token e flag próprios; não reutilizar o token do webhook de eventos comuns.
+const WITHDRAWAL_AUTH_TOKEN = Deno.env.get("ASAAS_SAQUE_VALIDACAO_TOKEN") || "";
+const WITHDRAWAL_AUTH_ON = Deno.env.get("ASAAS_SAQUE_VALIDACAO_ENABLED") === "true";
 const ENCRYPTION_KEY = Deno.env.get("CATALOGO_DATA_ENCRYPTION_KEY") || Deno.env.get("MP_OAUTH_ENCRYPTION_KEY") || "";
 const BILLING_ON = Deno.env.get("ASAAS_BILLING_ENABLED") === "true";
 const PAYOUTS_ON = Deno.env.get("ASAAS_PAYOUTS_ENABLED") === "true";
@@ -312,6 +315,18 @@ async function withdraw(uid:string){
  const pix=pixDestination(await decryptCourierPix(String(profile.chave_pix_enc),ENCRYPTION_KEY,uid));
  const reserved=await rpc("catalogo_asaas_reservar_saque",{p_motoboy:uid});
  const saqueId=String(reserved.saque_id),amount=Number(reserved.valor_centavos);
+ // Grava o fingerprint do destinatário ANTES de chamar POST /transfers.
+ // Se falhar, a reserva fica em revisão, nunca reenvia automaticamente.
+ const destinationHash=await pixFingerprint(pix.pixAddressKeyType,pix.pixAddressKey);
+ const {data:snapshot,error:snapshotError}=await db.from("catalogo_asaas_saques")
+  .update({pix_destino_sha256:destinationHash})
+  .eq("id",saqueId).eq("motoboy_id",uid).eq("status","reservado")
+  .is("pix_destino_sha256",null).select("id").maybeSingle();
+ if(snapshotError || !snapshot){
+  await rpc("catalogo_asaas_atualizar_saque",{p_saque:saqueId,p_estado:"revisao",
+   p_transferencia:null,p_mensagem:"Falha ao vincular destinatário ao saque. Não reenviar."});
+  throw new Failure("Saque reservado para revisão: destino não confirmado.",503);
+ }
  let transfer:Record<string,unknown>;
  try {
   transfer=await asaas("/transfers","POST",{
@@ -395,6 +410,133 @@ async function reconcileAdminTransfer(uid:string,body:Record<string,unknown>){
   p_estado:"revisao",p_transferencia:transferId,p_mensagem:"Transferência em processamento no Asaas"});
  return respond({success:true,status:"revisao",mensagem:"Transferência identificada, ainda não concluída. Saldo segue reservado."});
 }
+
+// O hash corresponde ao destino usado no POST, mesmo que a chave do perfil mude depois.
+// Não registrar a chave Pix em texto, logs ou auditoria.
+async function sha256Hex(source:string){
+ const bytes=new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(source)));
+ return Array.from(bytes,b=>b.toString(16).padStart(2,"0")).join("");
+}
+function canonicalPix(type:string,key:string){
+ const t=type.trim().toUpperCase(),raw=key.trim();
+ if(t==="EMAIL")return raw.toLowerCase();
+ if(t==="CPF"||t==="CNPJ"||t==="PHONE")return raw.replace(/\D/g,"");
+ if(t==="EVP")return raw.toLowerCase();
+ return "";
+}
+async function pixFingerprint(type:string,key:string){
+ const canon=canonicalPix(type,key);
+ if(!canon)throw new Failure("Destino Pix inválido.",400);
+ return sha256Hex("guia-asaas-pix-v1:"+type.toUpperCase()+":"+canon);
+}
+async function pixDestinationsMatch(fingerprint:string,transfers:Record<string,unknown>[]){
+ if(!/^[a-f0-9]{64}$/.test(fingerprint))return false;
+ let checked=0;
+ for(const transfer of transfers){
+  const bank=input(transfer.bankAccount);
+  const vals=[value(transfer.pixAddressKey,254),value(bank.pixAddressKey,254)].filter(Boolean);
+  const unique=[...new Set(vals)];
+  for(const key of unique){
+   checked++;
+   let match=false;
+   // No payload da Asaas a chave aparece em bankAccount.pixAddressKey
+   // sem informar necessariamente pixAddressKeyType.
+   for(const t of ["CPF","CNPJ","EMAIL","PHONE","EVP"]){
+    if((await pixFingerprint(t,key))===fingerprint){match=true;break;}
+   }
+   if(!match)return false;
+  }
+ }
+ return checked>0;
+}
+async function equalSecret(actual:string,expected:string){
+ if(expected.length<32||actual.length<32||actual.length>255)return false;
+ const [a,b]=await Promise.all([sha256Hex(actual),sha256Hex(expected)]);
+ let diff=0;
+ for(let i=0;i<a.length;i++)diff|=a.charCodeAt(i)^b.charCodeAt(i);
+ return diff===0;
+}
+const WITHDRAWAL_RESPONSE_HEADERS={"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store"};
+const approveResponse=(status:"APPROVED"|"REFUSED",reason?:string)=>new Response(
+ JSON.stringify(status==="APPROVED"?{status}:{status,refuseReason:reason||"Operação não autorizada"}),
+ {status:200,headers:WITHDRAWAL_RESPONSE_HEADERS});
+async function authorizeWithdrawal(request:Request){
+ // PROTEÇÃO: homologação exclusivamente Sandbox, com opt-in e token diferente do webhook de eventos.
+ if(ENVIRONMENT!=="sandbox" || !WITHDRAWAL_AUTH_ON || !PAYOUTS_ON || !ASAAS_TOKEN ||
+    WITHDRAWAL_AUTH_TOKEN.length<32)
+  return approveResponse("REFUSED","Validação de saída indisponível no ambiente.");
+ const actual=request.headers.get("asaas-access-token")||"";
+ if(!(await equalSecret(actual,WITHDRAWAL_AUTH_TOKEN)))
+   return new Response(JSON.stringify({error:"unauthorized"}),{status:401,headers:WITHDRAWAL_RESPONSE_HEADERS});
+ const raw=await request.text();
+ if(raw.length>32768)return approveResponse("REFUSED","Payload de validação fora do limite.");
+ let body:Record<string,unknown>;
+ try{body=input(JSON.parse(raw));}
+ catch{return approveResponse("REFUSED","JSON inválido.");}
+ if(body.type!=="TRANSFER")return approveResponse("REFUSED","Apenas transferências Pix do Guia são autorizadas.");
+ const incoming=input(body.transfer);
+ const id=value(incoming.id,120),ref=value(incoming.externalReference,80);
+ if(!/^[0-9a-f-]{36}$/i.test(id)||!/^[0-9a-f-]{36}$/i.test(ref))
+  return approveResponse("REFUSED","Transferência não identificada.");
+ const {data:saque,error:lookupError}=await db.from("catalogo_asaas_saques")
+   .select("id,motoboy_id,status,valor_centavos,transferencia_id,pix_destino_sha256")
+   .eq("id",ref).maybeSingle();
+ if(lookupError)throw new Failure("Erro ao verificar reserva.",503);
+ if(!saque || saque.transferencia_id!==id)return approveResponse("REFUSED","Transferência desconhecida.");
+ const {data:existing,error:existingError}=await db.from("catalogo_asaas_validacoes_saque")
+   .select("decisao,motivo").eq("saque_id",ref).eq("transferencia_id",id).maybeSingle();
+ if(existingError)throw new Failure("Erro ao recuperar autorização.",503);
+ if(existing)return approveResponse(existing.decisao==="APPROVED"?"APPROVED":"REFUSED",existing.motivo||undefined);
+ let decision:"APPROVED"|"REFUSED"="REFUSED",reason="Transferência não elegível.";
+ const localAmount=Number(saque.valor_centavos);
+ if(saque.status==="enviado" && Number.isSafeInteger(localAmount)&&localAmount>0 &&
+    /^[a-f0-9]{64}$/.test(value(saque.pix_destino_sha256,64)) &&
+    cents(incoming.value)===localAmount && value(incoming.operationType,12)==="PIX"){
+  // Confere por API autenticada para não confiar apenas nos dados do webhook.
+  const remote=await asaas("/transfers/"+encodeURIComponent(id));
+  if(remote.id===id && remote.externalReference===ref &&
+    cents(remote.value)===localAmount && value(remote.operationType,12)==="PIX" &&
+    !["DONE","FAILED","CANCELLED"].includes(value(remote.status,60)) &&
+    await pixDestinationsMatch(String(saque.pix_destino_sha256),[incoming,remote])){
+   const [profile,links,items]=await Promise.all([
+    db.from("catalogo_motoboy_perfis").select("apto,em_analise").eq("usuario_id",saque.motoboy_id).maybeSingle(),
+    db.from("catalogo_motoboys").select("usuario_id").eq("usuario_id",saque.motoboy_id).eq("ativo",true).limit(1),
+    db.from("catalogo_asaas_saque_itens").select("ativo,remuneracao_id,catalogo_remuneracoes_v2!inner(motoboy_id,status,valor_centavos,financiamento_comprovado,repasse_id)")
+      .eq("saque_id",ref).eq("ativo",true)
+   ]);
+   if(profile.error||links.error||items.error)throw new Failure("Falha de validação financeira.",503);
+   const records=items.data||[];
+   const sum=records.reduce((t,item)=>{
+    const rem=item.catalogo_remuneracoes_v2 as unknown as Record<string,unknown>;
+    return t+Number(rem?.valor_centavos||0);
+   },0);
+   const eligible=records.length>0 && records.length<=100 && records.every(item=>{
+    const r=item.catalogo_remuneracoes_v2 as unknown as Record<string,unknown>;
+    return r && r.motoboy_id===saque.motoboy_id &&
+      r.status==="disponivel" && r.financiamento_comprovado===true &&
+      r.repasse_id===null && Number.isSafeInteger(Number(r.valor_centavos)) &&
+      Number(r.valor_centavos)>0;
+   });
+   if(profile.data?.apto===true && profile.data?.em_analise===false &&
+      (links.data||[]).length>0 && eligible && sum===localAmount){
+    decision="APPROVED";reason="Saque conciliado com reserva e destino Pix.";
+   }else reason="Conta do motoboy ou créditos não elegíveis.";
+  }else reason="Identidade, valor, estado ou destino Pix divergente.";
+ }else reason="Reserva não habilitada, valor divergente ou operação não Pix.";
+ }
+ const {error:insertError}=await db.from("catalogo_asaas_validacoes_saque")
+   .insert({saque_id:ref,transferencia_id:id,decisao:decision,motivo:reason});
+ if(insertError && insertError.code!=="23505")throw new Failure("Falha ao registrar auditoria.",503);
+ if(insertError?.code==="23505"){
+  const {data:stored,error:e}=await db.from("catalogo_asaas_validacoes_saque")
+    .select("decisao,motivo").eq("saque_id",ref).eq("transferencia_id",id).maybeSingle();
+  if(e||!stored)throw new Failure("Falha ao conferir decisão duplicada.",503);
+  return approveResponse(stored.decisao==="APPROVED"?"APPROVED":"REFUSED",stored.motivo||undefined);
+ }
+ console.info("Asaas saque validado",{saque_id:ref,decision});
+ return approveResponse(decision,reason);
+}
+
 async function webhook(request:Request){
  if(!WEBHOOK_TOKEN)throw new Failure("Webhook não configurado.",503);
  const actual=request.headers.get("asaas-access-token")||"";
@@ -426,7 +568,9 @@ Deno.serve(async (request:Request)=>{
  if(request.method==="OPTIONS")return new Response("ok",{headers:JSON_HEADERS});
  if(request.method!=="POST")return respond({success:false,mensagem:"Use POST"},405);
  try {
-  if(new URL(request.url).pathname.endsWith("/webhook"))return await webhook(request);
+  const pathname=new URL(request.url).pathname;
+  if(pathname.endsWith("/saque-autorizacao"))return await authorizeWithdrawal(request);
+  if(pathname.endsWith("/webhook"))return await webhook(request);
   const user=await auth(request);
   const body=input(await request.json().catch(()=>({})));
   switch(value(body.acao,60)){
