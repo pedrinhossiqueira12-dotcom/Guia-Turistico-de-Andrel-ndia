@@ -715,6 +715,50 @@ async function withdraw(uid:string){
   mensagem:"Solicitação enviada ao Asaas. Consulte a carteira para acompanhar a confirmação."});
 }
 const ADMIN_USER_ID = "4b9a0233-6b72-4573-aebd-d596c5b15e1b";
+// Consulta de titularidade PIX somente no Sandbox (Asaas limita a uma chave
+// ficticia e mascara CPF/CNPJ). Resultado NUNCA aprova identidade ou saque.
+// GET e executado apenas quando a chave cifrada do titular corresponde ao
+// valor da chave de teste suportada pelo sandbox.
+async function consultarTitularidadePixSandboxAdmin(uid:string,body:Record<string,unknown>){
+ if(uid!==ADMIN_USER_ID)throw new Failure("Acesso restrito à administração.",403);
+ if(ENVIRONMENT!=="sandbox")throw new Failure("Consulta de titularidade disponível somente no Sandbox.",403);
+ if(!ASAAS_TOKEN)throw new Failure("Credencial Asaas Sandbox não configurada.",503);
+ const tipo=value(body.tipo,12),requestId=value(body.solicitacao_id,70);
+ check(tipo==="residual"||tipo==="saida","Tipo de solicitação inválido.",400);
+ check(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(requestId),
+  "Identificador de solicitação inválido.",400);
+ const tabela=tipo==="residual"?"catalogo_asaas_saldos_residuais":"catalogo_asaas_regularizacoes_inativos";
+ const {data:solicitacao,error:requestError}=await db.from(tabela)
+  .select("id,motoboy_id,status").eq("id",requestId).maybeSingle();
+ if(requestError||!solicitacao)throw new Failure("Solicitação financeira não encontrada.",404);
+ const {data:profile,error:profileError}=await db.from("catalogo_motoboy_perfis")
+  .select("chave_pix_enc,em_analise").eq("usuario_id",solicitacao.motoboy_id).maybeSingle();
+ if(profileError||!profile?.chave_pix_enc)throw new Failure("Chave Pix ainda não cadastrada.",409);
+ if(profile.em_analise)throw new Failure("Cadastro Pix está em análise.",409);
+ const pix=pixDestination(await decryptCourierPix(String(profile.chave_pix_enc),
+  ENCRYPTION_KEY,String(solicitacao.motoboy_id)));
+ const hash=await pixFingerprint(pix.pixAddressKeyType,pix.pixAddressKey);
+
+ // Nao consultar chave real de terceiro no ambiente de testes.
+ if(pix.pixAddressKeyType!=="PHONE"||pix.pixAddressKey!=="47996515839")
+  return respond({success:true,consulta_realizada:false,
+   chave_pix_fingerprint:hash,titularidade_confirmada:false,
+   pagamento_autorizado:false,
+   mensagem:"Sandbox só consulta a chave fictícia 47996515839. A titularidade deste motoboy não foi verificada."});
+
+ const result=await fetch(API_BASE+
+  "/pix/addressKeys/external?type=PHONE&key=47996515839",{
+   method:"GET",headers:{"access_token":ASAAS_TOKEN,"accept":"application/json",
+    "User-Agent":"GuiaAndrelandia/1.0"}
+  });
+ if(!result.ok)throw new Failure("Consulta Pix não concluída no Asaas Sandbox. Respeite os limites de consulta.",502);
+ const provider=input(await result.json().catch(()=>({})));
+ // Nao divulgar, armazenar nem logar dados pessoais do titular retornados pela API.
+ return respond({success:true,consulta_realizada:true,
+  chave_pix_fingerprint:hash,provedor_retornou_documento:Boolean(value(provider.cpfCnpj,30)),
+  titularidade_confirmada:false,pagamento_autorizado:false,
+  mensagem:"Chave de teste consultada no Asaas Sandbox. CPF/CNPJ mascarado não comprova identidade nem autoriza Pix."});
+}
 // Somente leitura: operações em revisão não podem disparar transferências
 // ou desbloquear créditos através deste endpoint administrativo.
 async function listAdminPayouts(uid:string){
@@ -980,6 +1024,7 @@ Deno.serve(async (request:Request)=>{
    case "listar_regularizacoes_saida_admin":return await listarRegularizacoesSaidaAdmin(user.id);
    case "revisar_regularizacao_saida_admin":return await revisarRegularizacaoSaidaAdmin(user.id,body);
    case "preconferir_pagamento_excepcional_admin":return await preconferirExcepcionalAdmin(user.id,body);
+   case "consultar_titularidade_pix_sandbox_admin":return await consultarTitularidadePixSandboxAdmin(user.id,body);
    case "observar_transferencia_excepcional_sandbox_admin":return await observarTransferenciaExcepcionalSandboxAdmin(user.id,body);
    case "revisar_analise_residual_admin":return await revisarAnaliseResidual(user.id,body);
    case "solicitar_saque":return await withdraw(user.id);
