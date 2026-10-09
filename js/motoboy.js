@@ -438,8 +438,11 @@
     const creditoContagem=Number(carteira.total_comissoes_disponiveis || 0);
     if ($("motoboyWithdrawMinimo")) $("motoboyWithdrawMinimo").textContent =
       `Mínimo: ${formatarMoeda(minimo)}. Teto de segurança por Pix: ${formatarMoeda(teto)}. Saldo excedente permanece na carteira, sem prazo de expiração operacional.`;
+    const separacao=carteira.separacao_contabil_excepcional||null;
     if ($("motoboyCreditoContagem")) $("motoboyCreditoContagem").textContent =
-      `${creditoContagem.toLocaleString("pt-BR")} comissões liberadas acumuladas, sem limite de quantidade por saque.`;
+      `${creditoContagem.toLocaleString("pt-BR")} comissões registradas`+
+      (separacao ? ` · ${Number(separacao.creditos||0)} separadas para revisão, no total de ${formatarMoeda(separacao.valor_centavos)} (ainda NÃO pagas)`
+        : ", sem limite de quantidade por saque.");
     if ($("motoboyAsaasBalance")) $("motoboyAsaasBalance").textContent = formatarMoeda(saldo);
     const botao = $("motoboyWithdrawPix");
     if (botao) {
@@ -467,25 +470,29 @@
     const residual=carteira.saldo_residual || null;
     const residualAberto=Boolean(residual&&["pendente","em_analise"].includes(residual.status));
     if(residualBloco)residualBloco.hidden=!(residualAberto ||
-      !saidaAberta&&!carteira.evidencia_bancaria_pendente&&saldo>0&&saldo<minimo);
+      !saidaAberta&&!carteira.evidencia_bancaria_pendente&&!separacao&&saldo>0&&saldo<minimo);
     const residualBtn=$("motoboyResidualSubmit");
-    if(residualBtn)residualBtn.disabled=residualAberto||saidaAberta||carteira.evidencia_bancaria_pendente||!state.termosAceitos;
+    if(residualBtn)residualBtn.disabled=residualAberto||saidaAberta||Boolean(separacao)||carteira.evidencia_bancaria_pendente||!state.termosAceitos;
     if(residualBloco)definirFeedback("motoboyResidualFeedback",
-      residualAberto ? "Sua solicitação está aguardando análise. O saldo continua disponível e nenhum Pix foi criado."
+      residualAberto ? (separacao
+        ? "Seus créditos foram separados contabilmente para revisão, sem Pix enviado ou pagamento concluído."
+        : "Sua solicitação está aguardando análise. Os créditos permanecem registrados e nenhum Pix foi criado.")
       : residual?.status==="concluida" ? "A solicitação anterior foi concluída. Consulte o suporte para conferir os documentos."
       : residual?.status==="recusada" ? "A solicitação anterior foi recusada. Entre em contato com o suporte para esclarecer."
       : "Peça análise somente se for interromper suas atividades. Esta ação não realiza transferência.");
     const saidaBloco=$("motoboySaidaBloco");
     if(saidaBloco)saidaBloco.hidden=!(saidaAberta||
-      !residualAberto&&!carteira.evidencia_bancaria_pendente&&carteira.entregador_ativo===false&&saldo>=minimo);
+      !residualAberto&&!separacao&&!carteira.evidencia_bancaria_pendente&&carteira.entregador_ativo===false&&saldo>=minimo);
     const saidaBtn=$("motoboySaidaSubmit");
-    if(saidaBtn)saidaBtn.disabled=saidaAberta||residualAberto||carteira.evidencia_bancaria_pendente||!state.termosAceitos;
+    if(saidaBtn)saidaBtn.disabled=saidaAberta||residualAberto||Boolean(separacao)||carteira.evidencia_bancaria_pendente||!state.termosAceitos;
     if(saidaBloco)definirFeedback("motoboySaidaFeedback",
       saidaAberta ? "Sua regularização está aguardando conferência administrativa. Nenhum pagamento foi iniciado."
       : saida?.status==="recusada" ? "Seu pedido anterior de regularização foi recusado. Seus créditos não foram eliminados; solicite esclarecimento à administração."
       : "Solicitação de conferência sem transferência, movimentação de créditos ou garantia de pagamento.");
     const situacaoSaque=carteira.evidencia_bancaria_pendente===true
       ? "Uma transferência bancária excepcional precisa ser conciliada. Seus créditos permanecem registrados, porém saques e novos pedidos financeiros estão temporariamente bloqueados. Procure a administração."
+      : separacao
+      ? `Há ${formatarMoeda(separacao.valor_centavos)} separados contabilmente para revisão financeira. Seus créditos não foram apagados, mas NÃO houve Pix nem quitação. Novos saques permanecem bloqueados.`
       : carteira.entregador_ativo===false
       ? saldo>0
         ? "Seu perfil de entregador está inativo. Seu saldo permanece registrado, mas o saque comum está suspenso até regularização administrativa."
