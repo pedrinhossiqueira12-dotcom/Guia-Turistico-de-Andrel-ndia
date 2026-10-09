@@ -341,6 +341,11 @@ async function wallet(uid:string,withReconcile=false){
   .select("id,status,valor_centavos,criado_em,concluido_em")
   .eq("motoboy_id",uid).order("criado_em",{ascending:false}).limit(20);
  if(error)throw new Failure("Histórico de saques indisponível.",503);
+ const {data:observacoesBancarias,error:evidenceError}=await db
+  .from("catalogo_asaas_transferencias_excepcionais_auditoria")
+  .select("id").eq("motoboy_id",uid).limit(1);
+ if(evidenceError)throw new Failure("Conciliação financeira indisponível. Saques suspensos por segurança.",503);
+ const evidenciaBancariaPendente=Boolean(observacoesBancarias?.length);
  // Indicacao de interface: a trava definitiva e transacional no PostgreSQL.
  const revisaoExcepcionalAberta=Boolean(
    (residual&&["pendente","em_analise"].includes(residual.status))||
@@ -349,7 +354,8 @@ async function wallet(uid:string,withReconcile=false){
  return respond({success:true,
    entregador_ativo:activeCourier,
    revisao_excepcional_aberta:revisaoExcepcionalAberta,
-   saque_habilitado:activeCourier&&!revisaoExcepcionalAberta&&ENVIRONMENT==="sandbox"&&PAYOUTS_ON&&WITHDRAWAL_AUTH_ON&&
+   evidencia_bancaria_pendente:evidenciaBancariaPendente,
+   saque_habilitado:activeCourier&&!revisaoExcepcionalAberta&&!evidenciaBancariaPendente&&ENVIRONMENT==="sandbox"&&PAYOUTS_ON&&WITHDRAWAL_AUTH_ON&&
      WITHDRAWAL_AUTH_TOKEN.length>=32&&Boolean(ASAAS_TOKEN),
    saque_minimo_centavos:SAQUE_MINIMO_CENTAVOS,
    saque_maximo_por_pix_centavos:SAQUE_MAXIMO_PIX_CENTAVOS,
