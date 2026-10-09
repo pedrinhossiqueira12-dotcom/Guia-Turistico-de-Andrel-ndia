@@ -316,6 +316,10 @@ async function wallet(uid:string,withReconcile=false){
  }
  const balance=await rpc("catalogo_asaas_saldo_sacavel",{p_motoboy:uid});
  const pendencias=await rpc("catalogo_asaas_pendencias_motoboy",{p_motoboy:uid});
+ const {data:residual,error:residualError}=await db.from("catalogo_asaas_saldos_residuais")
+   .select("id,status,saldo_snapshot_centavos,motivo,solicitado_em,detalhe_revisao")
+   .eq("motoboy_id",uid).order("solicitado_em",{ascending:false}).limit(1).maybeSingle();
+ if(residualError)throw new Failure("Consulta de saldo residual indisponível.",503);
  const {data:history,error}=await db.from("catalogo_asaas_saques")
   .select("id,status,valor_centavos,criado_em,concluido_em")
   .eq("motoboy_id",uid).order("criado_em",{ascending:false}).limit(20);
@@ -326,7 +330,44 @@ async function wallet(uid:string,withReconcile=false){
    saque_minimo_centavos:SAQUE_MINIMO_CENTAVOS,
    saldo_disponivel_centavos:balance.disponivel_centavos||0,
    pendencias_por_comercio:Array.isArray(pendencias)?pendencias:[],
+   saldo_residual:residual||null,
    saques:history||[]});
+}
+// Solicitação administrativa de saldo residual: não cria saque nem chama o Asaas.
+async function solicitarAnaliseResidual(uid:string,body:Record<string,unknown>){
+ await requireTerms(uid,"motoboy","");
+ const motivo=value(body.motivo,30);
+ check(motivo==="encerramento"||motivo==="inatividade",
+  "Informe o motivo do pedido de análise.",400);
+ const saldo=await rpc("catalogo_asaas_saldo_sacavel",{p_motoboy:uid});
+ const amount=Number(saldo.disponivel_centavos||0);
+ check(Number.isSafeInteger(amount)&&amount>0&&amount<SAQUE_MINIMO_CENTAVOS,
+  "A revisão de saldo residual exige valor liberado entre R$ 0,01 e R$ 99,99.",409);
+ const {data:pending,error:pendingError}=await db.from("catalogo_asaas_saldos_residuais")
+   .select("id,status").eq("motoboy_id",uid).in("status",["pendente","em_analise"])
+   .order("solicitado_em",{ascending:false}).limit(1).maybeSingle();
+ if(pendingError)throw new Failure("Falha ao consultar solicitações de revisão.",503);
+ if(pending)return respond({success:true,id:pending.id,status:pending.status,
+   mensagem:"Sua análise de saldo residual já está registrada. Nenhum Pix foi enviado."});
+ const {data,error}=await db.from("catalogo_asaas_saldos_residuais")
+   .insert({motoboy_id:uid,saldo_snapshot_centavos:amount,motivo})
+   .select("id,status").single();
+ if(error?.code==="23505")
+   return respond({success:true,status:"pendente",
+    mensagem:"Já existe uma análise de saldo residual para sua conta. Nenhum Pix foi enviado."});
+ if(error||!data)throw new Failure("Não foi possível registrar seu pedido de análise.",503);
+ return respond({success:true,id:data.id,status:data.status,
+   mensagem:"Solicitação de análise registrada. Não é uma transferência e não altera seu saldo disponível."});
+}
+async function listarAnalisesResiduais(uid:string){
+ if(uid!==ADMIN_USER_ID)throw new Failure("Acesso exclusivo da administração.",403);
+ const {data,error}=await db.from("catalogo_asaas_saldos_residuais")
+  .select("id,motoboy_id,status,saldo_snapshot_centavos,motivo,solicitado_em")
+  .in("status",["pendente","em_analise"])
+  .order("solicitado_em",{ascending:true}).limit(100);
+ if(error)throw new Failure("Fila de análise indisponível.",503);
+ return respond({success:true,solicitacoes:data||[],
+  mensagem:"Fila apenas de leitura. Nenhum repasse é iniciado por esta consulta."});
 }
 async function reconcileTransfer(saqueId:string,transferId:string){
  const transfer=await asaas("/transfers/"+encodeURIComponent(transferId));
@@ -685,6 +726,8 @@ Deno.serve(async (request:Request)=>{
    case "criar_cobranca":return await createInvoice(user.id,body,user.email||"");
    case "consultar_cobranca":return await reconcileInvoice(user.id,body);
    case "consultar_carteira":return await wallet(user.id,true);
+   case "solicitar_analise_residual":return await solicitarAnaliseResidual(user.id,body);
+   case "listar_analises_residuais_admin":return await listarAnalisesResiduais(user.id);
    case "solicitar_saque":return await withdraw(user.id);
    case "auditar_saque_sandbox":return await auditPendingSandboxTransfer(user.id);
    case "listar_saques_admin":return await listAdminPayouts(user.id);
