@@ -197,7 +197,21 @@ test("reserva Asaas trava também reabertura e adulteração de crédito já pag
 
 test("branch de homologação nunca envia transferência Asaas com ambiente production", () => {
  assert.match(edge, /async function withdraw\(uid:string\)\{\s*\/\/[^\n]*\n[^]*?if\(ENVIRONMENT!=="sandbox"\)/);
- assert.match(edge, /if\(method==="POST" && path==="\/transfers" && ENVIRONMENT!=="sandbox"\)/);
+ assert.match(edge, /if\(method==="POST" && path==="\/transfers"\)\{/);
  assert.match(edge, /throw new Failure\("Transferência Pix de produção não está liberada\.",503\)/);
  assert.match(edge, /if\(ENVIRONMENT!=="sandbox" \|\| !WITHDRAWAL_AUTH_ON/);
+});
+
+
+test("saques exigem flags e token de autorização ativos antes de reserva e POST Asaas", () => {
+ const withdraw=edge.slice(edge.indexOf("async function withdraw(uid:string)"),edge.indexOf("const ADMIN_USER_ID"));
+ const network=edge.slice(edge.indexOf("async function asaas("),edge.indexOf("function competence("));
+ const wallet=edge.slice(edge.indexOf("async function wallet("),edge.indexOf("async function reconcileTransfer("));
+ assert.match(withdraw,/if\(!WITHDRAWAL_AUTH_ON \|\| WITHDRAWAL_AUTH_TOKEN\.length<32\)/);
+ assert.ok(withdraw.indexOf("if(!WITHDRAWAL_AUTH_ON") < withdraw.indexOf('catalogo_asaas_reservar_saque'));
+ assert.ok(withdraw.indexOf('enabled("payouts")') < withdraw.indexOf("if(!WITHDRAWAL_AUTH_ON"));
+ assert.match(network,/if\(method==="POST" && path==="\/transfers"\)/);
+ assert.match(network,/if\(!WITHDRAWAL_AUTH_ON \|\| WITHDRAWAL_AUTH_TOKEN\.length<32\)/);
+ assert.match(wallet,/saque_habilitado:ENVIRONMENT==="sandbox"&&PAYOUTS_ON&&WITHDRAWAL_AUTH_ON&&/);
+ assert.match(wallet,/WITHDRAWAL_AUTH_TOKEN\.length>=32&&Boolean\(ASAAS_TOKEN\)/);
 });
