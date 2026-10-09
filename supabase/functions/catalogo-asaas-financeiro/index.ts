@@ -333,6 +333,10 @@ async function wallet(uid:string,withReconcile=false){
    .select("id,status,saldo_snapshot_centavos,motivo,solicitado_em,detalhe_revisao")
    .eq("motoboy_id",uid).order("solicitado_em",{ascending:false}).limit(1).maybeSingle();
  if(residualError)throw new Failure("Consulta de saldo residual indisponível.",503);
+ const {data:saida,error:saidaError}=await db.from("catalogo_asaas_regularizacoes_inativos")
+   .select("id,status,saldo_snapshot_centavos,motivo,solicitado_em,justificativa")
+   .eq("motoboy_id",uid).order("solicitado_em",{ascending:false}).limit(1).maybeSingle();
+ if(saidaError)throw new Failure("Consulta de regularização financeira indisponível.",503);
  const {data:history,error}=await db.from("catalogo_asaas_saques")
   .select("id,status,valor_centavos,criado_em,concluido_em")
   .eq("motoboy_id",uid).order("criado_em",{ascending:false}).limit(20);
@@ -347,6 +351,7 @@ async function wallet(uid:string,withReconcile=false){
    saldo_disponivel_centavos:balance.disponivel_centavos||0,
    pendencias_por_comercio:Array.isArray(pendencias)?pendencias:[],
    saldo_residual:residual||null,
+   regularizacao_saida:saida||null,
    saques:history||[]});
 }
 // Solicitação administrativa de saldo residual: não cria saque nem chama o Asaas.
@@ -375,6 +380,35 @@ async function solicitarAnaliseResidual(uid:string,body:Record<string,unknown>){
  if(error||!data)throw new Failure("Não foi possível registrar seu pedido de análise.",503);
  return respond({success:true,id:data.id,status:data.status,
    mensagem:"Solicitação de análise registrada. Não é uma transferência e não altera seu saldo disponível."});
+}
+// Registra direito de pedir regularização, sem liberar créditos/saques.
+// Só atende motoboy sem NENHUM vínculo ativo e com >=R$100 financiados.
+async function solicitarRegularizacaoSaida(uid:string,body:Record<string,unknown>){
+ await requireTerms(uid,"motoboy","",true);
+ const motivo=value(body.motivo,30);
+ check(["encerramento","inatividade"].includes(motivo),"Selecione o motivo do pedido.",400);
+ const {data:active,error:activeError}=await db.from("catalogo_motoboys")
+  .select("usuario_id").eq("usuario_id",uid).eq("ativo",true).limit(1);
+ if(activeError)throw new Failure("Falha ao verificar situação de entrega.",503);
+ check(!active?.length,"Seu perfil ainda possui vínculo ativo. Use o fluxo de saque regular quando estiver disponível.",409);
+ const saldo=await rpc("catalogo_asaas_saldo_historico",{p_motoboy:uid});
+ const amount=Number(saldo.disponivel_centavos||0);
+ check(Number.isSafeInteger(amount)&&amount>=SAQUE_MINIMO_CENTAVOS,
+  "Regularização de saída exige pelo menos R$ 100 em créditos disponíveis. Para valores menores, utilize análise residual.",409);
+ const {data:pending,error:pendingError}=await db.from("catalogo_asaas_regularizacoes_inativos")
+  .select("id,status").eq("motoboy_id",uid).in("status",["pendente","em_analise"])
+  .limit(1).maybeSingle();
+ if(pendingError)throw new Failure("Não foi possível conferir regularizações anteriores.",503);
+ if(pending)return respond({success:true,id:pending.id,status:pending.status,
+   mensagem:"Sua solicitação de regularização já está registrada. Nenhuma transferência foi iniciada."});
+ const {data,error}=await db.from("catalogo_asaas_regularizacoes_inativos")
+  .insert({motoboy_id:uid,saldo_snapshot_centavos:amount,motivo})
+  .select("id,status").single();
+ if(error?.code==="23505")return respond({success:true,status:"pendente",
+   mensagem:"Já existe uma regularização aberta. Nenhuma transferência foi iniciada."});
+ if(error||!data)throw new Failure("Falha ao registrar regularização financeira.",503);
+ return respond({success:true,id:data.id,status:data.status,
+  mensagem:"Regularização solicitada para conferência administrativa. Não é saque, Pix ou promessa de data de pagamento."});
 }
 // Leitura financeira do pedido de encerramento sem expor valores a terceiros.
 async function consultarEncerramento(uid:string,body:Record<string,unknown>){
@@ -443,6 +477,46 @@ async function revisarAnaliseResidual(uid:string,body:Record<string,unknown>){
    mensagem:destino==="recusada"
     ?"Análise encerrada com justificativa. O saldo do entregador permanece intacto; nenhum Pix foi enviado."
     :"Solicitação marcada para análise. Nenhum crédito foi movimentado."});
+}
+// Revisão administrativa não cria Pix nem representa quitação.
+// A recusa encerra apenas o pedido; as comissões e a dívida são preservadas.
+async function listarRegularizacoesSaidaAdmin(uid:string){
+ if(uid!==ADMIN_USER_ID)throw new Failure("Acesso restrito à administração.",403);
+ const {data,error}=await db.from("catalogo_asaas_regularizacoes_inativos")
+  .select("id,motoboy_id,saldo_snapshot_centavos,motivo,status,solicitado_em")
+  .in("status",["pendente","em_analise"])
+  .order("solicitado_em",{ascending:true}).limit(100);
+ if(error)throw new Failure("Não foi possível listar regularizações financeiras.",503);
+ return respond({success:true,solicitacoes:data||[]});
+}
+async function revisarRegularizacaoSaidaAdmin(uid:string,body:Record<string,unknown>){
+ if(uid!==ADMIN_USER_ID)throw new Failure("Acesso restrito à administração.",403);
+ const id=value(body.solicitacao_id,70);
+ check(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id),
+  "Identificador inválido.",400);
+ const esperado=value(body.status_esperado,20);
+ const destino=value(body.novo_status,20);
+ check(["pendente","em_analise"].includes(esperado),"Atualize a fila de solicitações.",409);
+ check(destino==="recusada"||(destino==="em_analise"&&esperado==="pendente"),
+  "Mudança de estado não autorizada.",409);
+ const justificativa=typeof body.justificativa==="string"?body.justificativa.trim():"";
+ check(justificativa.length<=1000,"Justificativa muito longa.",400);
+ if(destino==="recusada")
+  check(justificativa.length>=20,"Explique a recusa em pelo menos 20 caracteres.",400);
+ const agora=new Date().toISOString();
+ const {data,error}=await db.from("catalogo_asaas_regularizacoes_inativos")
+  .update({status:destino,justificativa:justificativa||null,
+    revisado_por:destino==="recusada"?uid:null,
+    finalizado_em:destino==="recusada"?agora:null,
+    atualizado_em:agora})
+  .eq("id",id).eq("status",esperado)
+  .select("id,status").maybeSingle();
+ if(error)throw new Failure("Não foi possível registrar decisão administrativa.",503);
+ if(!data)throw new Failure("A solicitação mudou; atualize a lista.",409);
+ return respond({success:true,id:data.id,status:data.status,
+  mensagem:destino==="recusada"
+   ?"Revisão administrativa encerrada. Os créditos continuam registrados e nenhum pagamento foi realizado."
+   :"Solicitação em análise. Nenhum crédito foi movimentado."});
 }
 async function reconcileTransfer(saqueId:string,transferId:string){
  const transfer=await asaas("/transfers/"+encodeURIComponent(transferId));
@@ -801,7 +875,10 @@ Deno.serve(async (request:Request)=>{
    case "consultar_cobranca":return await reconcileInvoice(user.id,body);
    case "consultar_carteira":return await wallet(user.id,true);
    case "solicitar_analise_residual":return await solicitarAnaliseResidual(user.id,body);
+   case "solicitar_regularizacao_saida":return await solicitarRegularizacaoSaida(user.id,body);
    case "listar_analises_residuais_admin":return await listarAnalisesResiduais(user.id);
+   case "listar_regularizacoes_saida_admin":return await listarRegularizacoesSaidaAdmin(user.id);
+   case "revisar_regularizacao_saida_admin":return await revisarRegularizacaoSaidaAdmin(user.id,body);
    case "revisar_analise_residual_admin":return await revisarAnaliseResidual(user.id,body);
    case "solicitar_saque":return await withdraw(user.id);
    case "auditar_saque_sandbox":return await auditPendingSandboxTransfer(user.id);
