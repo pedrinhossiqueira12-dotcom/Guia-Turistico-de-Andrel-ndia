@@ -422,11 +422,20 @@
     const carteira = state.carteira || {};
     const saldo = Number(carteira.saldo_disponivel_centavos || 0);
     const minimo = Number(carteira.saque_minimo_centavos || 10000);
+    const teto = Number(carteira.saque_maximo_por_pix_centavos || 500000);
     const saldoValido = Number.isSafeInteger(saldo) && saldo >= minimo;
-    if ($("motoboyWithdrawMinimo")) $("motoboyWithdrawMinimo").textContent = `Saque mínimo: ${formatarMoeda(minimo)} em créditos liberados.`;
+    const creditoContagem=Number(carteira.total_comissoes_disponiveis || 0);
+    if ($("motoboyWithdrawMinimo")) $("motoboyWithdrawMinimo").textContent =
+      `Mínimo: ${formatarMoeda(minimo)}. Teto de segurança por Pix: ${formatarMoeda(teto)}. Saldo excedente permanece na carteira, sem prazo de expiração operacional.`;
+    if ($("motoboyCreditoContagem")) $("motoboyCreditoContagem").textContent =
+      `${creditoContagem.toLocaleString("pt-BR")} comissões liberadas acumuladas, sem limite de quantidade por saque.`;
     if ($("motoboyAsaasBalance")) $("motoboyAsaasBalance").textContent = formatarMoeda(saldo);
     const botao = $("motoboyWithdrawPix");
-    if (botao) botao.disabled = !state.session || state.withdrawalLoading || !carteira.saque_habilitado || !saldoValido;
+    if (botao) {
+      botao.disabled = !state.session || state.withdrawalLoading || !carteira.saque_habilitado || !saldoValido;
+      botao.textContent = saldo>teto ? `Sacar até ${formatarMoeda(teto)} via Pix`
+        : `Sacar ${formatarMoeda(saldo)} via Pix`;
+    }
     const historico = $("motoboyWithdrawHistory");
     if (historico) {
       historico.innerHTML = Array.isArray(carteira.saques) ? carteira.saques.map((saque) => {
@@ -499,7 +508,10 @@
     if (!state.session || state.withdrawalLoading || !state.carteira?.saque_habilitado ||
         Number(state.carteira?.saldo_disponivel_centavos || 0) < Number(state.carteira?.saque_minimo_centavos || 10000)) return;
     if (typeof window.confirm === "function" &&
-        !window.confirm("Confirmar saque via Pix para a chave cadastrada no seu perfil?")) return;
+        !window.confirm(`Confirmar solicitação de saque de até ${formatarMoeda(Math.min(
+          Number(state.carteira.saldo_disponivel_centavos),
+          Number(state.carteira.saque_maximo_por_pix_centavos||500000)
+        ))} via Pix? O valor exato é reservado e validado pelo servidor; o restante continua na carteira.`)) return;
     const generation = state.generation, userId = state.userId;
     state.withdrawalLoading = true;
     if ($("motoboyWithdrawPix")) $("motoboyWithdrawPix").disabled = true;
