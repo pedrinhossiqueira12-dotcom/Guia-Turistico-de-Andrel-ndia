@@ -96,6 +96,58 @@ async function owner(uid:string,commerceId:string){
   .eq("comercio_id",commerceId).eq("proprietario_id",uid).maybeSingle();
  if(error||!data)throw new Failure("Você não administra este comércio.",403);
 }
+
+const TERMOS_VERSAO="2026-10-09";
+const SAQUE_MINIMO_CENTAVOS=10000;
+async function roleScope(uid:string,papel:string,store:string){
+ check(papel==="comercio"||papel==="motoboy","Perfil de aceite inválido.",400);
+ if(papel==="comercio"){
+  check(/^[a-z0-9-]{1,180}$/.test(store),"Comércio inválido.",400);
+  await owner(uid,store);return store;
+ }
+ const {data,error}=await db.from("catalogo_motoboys").select("usuario_id")
+  .eq("usuario_id",uid).eq("ativo",true).limit(1);
+ if(error)throw new Failure("Falha ao verificar autorização.",503);
+ check(Boolean(data?.length),"Seu perfil de entregador ainda não foi autorizado.",403);
+ return "";
+}
+async function termsStatus(uid:string,papel:string,store:string){
+ const scope=await roleScope(uid,papel,store);
+ const {data,error}=await db.from("catalogo_aceites_operacionais")
+  .select("documento").eq("usuario_id",uid).eq("papel",papel)
+  .eq("comercio_id",scope).eq("versao",TERMOS_VERSAO);
+ if(error)throw new Failure("Falha ao consultar aceite dos termos.",503);
+ const docs=new Set((data||[]).map(r=>r.documento));
+ return {papel,comercio_id:scope,versao:TERMOS_VERSAO,
+  termos_aceitos:docs.has("termos"),privacidade_ciente:docs.has("privacidade"),
+  aceito:docs.has("termos")&&docs.has("privacidade")};
+}
+async function requireTerms(uid:string,papel:string,store:string){
+ if(!(await termsStatus(uid,papel,store)).aceito)
+  throw new Failure("Leia e aceite os Termos de Uso e confirme a ciência da Política de Privacidade.",428);
+}
+async function acceptTerms(uid:string,body:Record<string,unknown>){
+ const papel=value(body.papel,15),store=papel==="comercio"?commerce(body.comercio_id):"";
+ await roleScope(uid,papel,store);
+ check(body.aceito_termos===true&&body.ciente_privacidade===true,
+  "Marque os dois campos para confirmar ciência.",400);
+ const rows=["termos","privacidade"].map(documento=>({
+  usuario_id:uid,papel,comercio_id:store,documento,versao:TERMOS_VERSAO
+ }));
+ const {error}=await db.from("catalogo_aceites_operacionais").upsert(rows,{
+  onConflict:"usuario_id,papel,comercio_id,documento,versao",ignoreDuplicates:true
+ });
+ if(error)throw new Failure("Não foi possível registrar seu aceite.",503);
+ return respond({success:true,...await termsStatus(uid,papel,store)});
+}
+async function requestClosure(uid:string,body:Record<string,unknown>){
+ const store=commerce(body.comercio_id);
+ await owner(uid,store);
+ const result=await rpc("catalogo_solicitar_encerramento_financeiro",{
+  p_comercio:store,p_usuario:uid
+ });
+ return respond({success:true,...result});
+}
 async function invoice(uid:string,body:Record<string,unknown>){
  const store=commerce(body.comercio_id),month=competence(body.competencia);
  await owner(uid,store);
@@ -177,6 +229,7 @@ async function reconcileInvoice(uid:string,body:Record<string,unknown>){
   mensagem:proof.estado==="pago"?"Pagamento reconhecido e fatura quitada. Créditos são disponibilizados somente quando houver remunerações elegíveis.":"Aguardando liquidação da cobrança."});
 }
 async function createInvoice(uid:string,body:Record<string,unknown>,email:string){
+ await requireTerms(uid,"comercio",commerce(body.comercio_id));
  enabled("billing");
  const {store,month,f,charge}=await invoice(uid,body);
  check(f&&["faturado","vencido","bloqueado"].includes(String(f.status))&&
@@ -263,6 +316,7 @@ async function wallet(uid:string,withReconcile=false){
  return respond({success:true,
    saque_habilitado:ENVIRONMENT==="sandbox"&&PAYOUTS_ON&&WITHDRAWAL_AUTH_ON&&
      WITHDRAWAL_AUTH_TOKEN.length>=32&&Boolean(ASAAS_TOKEN),
+   saque_minimo_centavos:SAQUE_MINIMO_CENTAVOS,
    saldo_disponivel_centavos:balance.disponivel_centavos||0,
    saques:history||[]});
 }
@@ -321,6 +375,7 @@ async function auditPendingSandboxTransfer(uid:string){
  throw new Failure("Histórico Asaas extenso demais para auditoria automática. Reserva mantida.",503);
 }
 async function withdraw(uid:string){
+ await requireTerms(uid,"motoboy","");
  // Defesa de homologação: nenhuma transferência pode partir desta função em produção,
  // mesmo se alguém ativar ASAAS_PAYOUTS_ENABLED por engano.
  if(ENVIRONMENT!=="sandbox")
@@ -338,6 +393,7 @@ async function withdraw(uid:string){
  const destinationHash=await pixFingerprint(pix.pixAddressKeyType,pix.pixAddressKey);
  const reserved=await rpc("catalogo_asaas_reservar_saque",{p_motoboy:uid});
  const saqueId=String(reserved.saque_id),amount=Number(reserved.valor_centavos);
+ check(amount>=SAQUE_MINIMO_CENTAVOS,"Saque mínimo de R$ 100,00 em créditos liberados.",409);
  // Grava o fingerprint ANTES de qualquer POST /transfers ao Asaas.
  const {data:snapshot,error:snapshotError}=await db.from("catalogo_asaas_saques")
   .update({pix_destino_sha256:destinationHash})
@@ -613,6 +669,10 @@ Deno.serve(async (request:Request)=>{
   const user=await auth(request);
   const body=input(await request.json().catch(()=>({})));
   switch(value(body.acao,60)){
+   case "consultar_termos":return respond({success:true,...await termsStatus(user.id,value(body.papel,15),
+     value(body.papel,15)==="comercio"?commerce(body.comercio_id):"")});
+   case "aceitar_termos":return await acceptTerms(user.id,body);
+   case "solicitar_encerramento":return await requestClosure(user.id,body);
    case "obter_fatura":return await showInvoice(user.id,body);
    case "criar_cobranca":return await createInvoice(user.id,body,user.email||"");
    case "consultar_cobranca":return await reconcileInvoice(user.id,body);
