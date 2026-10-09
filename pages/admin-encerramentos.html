@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#091d1c">
+<title>Encerramentos — Guia Andrelândia</title>
+<style>
+:root{--verde:#194138;--escuro:#091d1c;--fundo:#f5f3ef;--texto:#202522}
+*{box-sizing:border-box}body{margin:0;background:var(--fundo);color:var(--texto);font:16px/1.5 Roboto,Arial,sans-serif}
+header{padding:22px 4vw;background:var(--escuro);color:white}header a{color:white;text-decoration:none}
+main{max-width:960px;margin:0 auto;padding:24px 18px 72px}h1{font-size:clamp(1.5rem,4vw,2rem);margin:6px 0}
+h2{font-size:1.25rem}section,.item{background:white;border:1px solid #d9dfdc;border-radius:14px;padding:18px;margin:15px 0}
+input,button{font:inherit}input{padding:10px;border:1px solid #acbbb2;border-radius:8px;width:100%;margin:4px 0 10px}
+button{border:1px solid var(--verde);border-radius:9px;background:var(--verde);color:white;padding:10px 14px;cursor:pointer}
+button.secondary{background:transparent;color:var(--verde)}button:disabled{opacity:.55;cursor:not-allowed}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:center;justify-content:space-between}
+small,.muted{color:#64736b}.item strong{overflow-wrap:anywhere}#listaEncerramentos{list-style:none;margin:0;padding:0}
+#mensagem{min-height:1.5em}a{color:var(--verde)}[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<header><a href="entregas-operacao.html">← Operação do Guia</a><h1>Encerramentos de comércios</h1></header>
+<main>
+<p>Área restrita à administração. O encerramento mantém o histórico financeiro e impede novos pedidos. O arquivamento só é permitido depois que todas as faturas forem quitadas e os pedidos concluídos.</p>
+<section id="loginContainer">
+<h2>Acesso administrativo</h2>
+<p>Entre com a conta administrativa do Guia para consultar os pedidos.</p>
+<form id="loginForm">
+<label>E-mail<input id="loginEmail" type="email" autocomplete="email" required></label>
+<label>Senha<input id="loginPassword" type="password" autocomplete="current-password" required></label>
+<button type="submit">Entrar</button>
+</form>
+</section>
+<section id="painel" hidden>
+<div class="row"><h2>Solicitações pendentes</h2><div><button type="button" class="secondary" id="atualizar">Atualizar</button> <button type="button" class="secondary" id="sair">Sair</button></div></div>
+<p class="muted">A dívida exibida é a estimativa registrada na solicitação. O servidor recalcula todas as obrigações no momento do arquivamento.</p>
+<ul id="listaEncerramentos"></ul>
+</section>
+<p role="status" id="mensagem"></p>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../js/admin-encerramentos.js"></script>
+</body></html>
