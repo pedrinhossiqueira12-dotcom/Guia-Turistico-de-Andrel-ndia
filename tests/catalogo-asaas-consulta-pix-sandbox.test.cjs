@@ -30,7 +30,7 @@ test("sandbox não comprova CPF/CNPJ; nunca libera pagamento ou vaza dados",()=>
  assert.match(handler,/titularidade_confirmada:false/g);
  assert.match(handler,/pagamento_autorizado:false/g);
  assert.match(handler,/provedor_retornou_documento:Boolean\(value\(provider\.cpfCnpj,30\)\)/);
- assert.doesNotMatch(handler,/return respond\([\s\S]*?provider\.cpfCnpj[,}]/);
+ assert.doesNotMatch(handler,/cpfCnpj:\s*provider\.cpfCnpj|titularidade_confirmada:true|pagamento_autorizado:true/);
  assert.doesNotMatch(handler,/console\.log\(provider\)|console\.info\(provider\)/);
  assert.match(handler,/Respeite os limites de consulta/);
 });
