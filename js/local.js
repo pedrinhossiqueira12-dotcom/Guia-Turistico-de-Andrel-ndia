@@ -301,8 +301,8 @@ async function carregarLocal() {
       const { data: publicacoes, error: erroPublicacao } = await cliente
         .rpc("catalogo_status_publicacao", { p_ids: [String(encontrado.id)] });
 
-      if (erroPublicacao) {
-        console.warn("Não foi possível conferir o status da publicação:", erroPublicacao);
+      if (erroPublicacao || !Array.isArray(publicacoes)) {
+        console.warn("Não foi possível conferir o status da publicação:", erroPublicacao || "Resposta inválida");
         mostrarLocalIndisponivel("Não foi possível verificar a disponibilidade deste comércio. Tente novamente.");
         return;
       }
