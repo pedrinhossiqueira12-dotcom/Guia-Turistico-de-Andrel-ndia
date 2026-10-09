@@ -218,7 +218,7 @@ test("saques exigem flags e token de autorização ativos antes de reserva e POS
  assert.ok(withdraw.indexOf('enabled("payouts")') < withdraw.indexOf("if(!WITHDRAWAL_AUTH_ON"));
  assert.match(network,/if\(method==="POST" && path==="\/transfers"\)/);
  assert.match(network,/if\(!WITHDRAWAL_AUTH_ON \|\| WITHDRAWAL_AUTH_TOKEN\.length<32\)/);
- assert.match(wallet,/saque_habilitado:activeCourier&&ENVIRONMENT==="sandbox"&&PAYOUTS_ON&&WITHDRAWAL_AUTH_ON&&/);
+ assert.match(wallet,/saque_habilitado:activeCourier&&!revisaoExcepcionalAberta&&!evidenciaBancariaPendente&&ENVIRONMENT==="sandbox"&&PAYOUTS_ON&&WITHDRAWAL_AUTH_ON&&/);
  assert.match(wallet,/WITHDRAWAL_AUTH_TOKEN\.length>=32&&Boolean\(ASAAS_TOKEN\)/);
 });
 
