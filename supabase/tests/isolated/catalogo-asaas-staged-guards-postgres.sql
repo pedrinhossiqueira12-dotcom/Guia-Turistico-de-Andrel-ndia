@@ -40,7 +40,7 @@ BEGIN
   INSERT INTO public.catalogo_encerramentos_comercio
     (comercio_id,solicitado_por,situacao)
     VALUES(v_id,v_uid,'pendente_arquivamento');
-  UPDATE public.comercios_publicados SET status='deletado' WHERE local_id=v_id;
+  UPDATE public.comercios_publicados SET status='deletado', deletado_em=now() WHERE local_id=v_id;
 
   -- UPDATE e UPSERT jamais reabrem empresa com encerramento pendente.
   BEGIN
