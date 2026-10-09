@@ -10,7 +10,7 @@ const ui=read("js/admin-encerramentos.js");
 const courier=read("js/motoboy.js");
 const isolated=read("supabase/tests/isolated/catalogo-asaas-staged-guards-postgres.sql");
 const start=edge.indexOf("async function preconferirExcepcionalAdmin(");
-const end=edge.indexOf("async function observarTransferenciaExcepcionalSandboxAdmin(",start);
+const end=edge.indexOf("async function consultarERegistrarTransferenciaExcepcionalSandbox(",start);
 assert.ok(start>=0&&end>start,"Handler de pré-conferência existe");
 const handler=edge.slice(start,end);
 
