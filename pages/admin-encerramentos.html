@@ -10,11 +10,12 @@
 header{padding:22px 4vw;background:var(--escuro);color:white}header a{color:white;text-decoration:none}
 main{max-width:960px;margin:0 auto;padding:24px 18px 72px}h1{font-size:clamp(1.5rem,4vw,2rem);margin:6px 0}
 h2{font-size:1.25rem}section,.item{background:white;border:1px solid #d9dfdc;border-radius:14px;padding:18px;margin:15px 0}
-input,button{font:inherit}input{padding:10px;border:1px solid #acbbb2;border-radius:8px;width:100%;margin:4px 0 10px}
+input,button,textarea{font:inherit}input,textarea{padding:10px;border:1px solid #acbbb2;border-radius:8px;width:100%;margin:4px 0 10px}
+textarea{min-height:84px;resize:vertical} .item .row{justify-content:flex-start}.item button{margin-top:4px}
 button{border:1px solid var(--verde);border-radius:9px;background:var(--verde);color:white;padding:10px 14px;cursor:pointer}
 button.secondary{background:transparent;color:var(--verde)}button:disabled{opacity:.55;cursor:not-allowed}
 .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center;justify-content:space-between}
-small,.muted{color:#64736b}.item strong{overflow-wrap:anywhere}#listaEncerramentos{list-style:none;margin:0;padding:0}
+small,.muted{color:#64736b}.item strong{overflow-wrap:anywhere}#listaEncerramentos,#listaAnalisesResiduais{list-style:none;margin:0;padding:0}
 #mensagem{min-height:1.5em}a{color:var(--verde)}[hidden]{display:none!important}
 </style>
 </head>
@@ -35,6 +36,10 @@ small,.muted{color:#64736b}.item strong{overflow-wrap:anywhere}#listaEncerrament
 <div class="row"><h2>Solicitações pendentes</h2><div><button type="button" class="secondary" id="atualizar">Atualizar</button> <button type="button" class="secondary" id="sair">Sair</button></div></div>
 <p class="muted">A dívida exibida é a estimativa registrada na solicitação. O servidor recalcula todas as obrigações no momento do arquivamento.</p>
 <ul id="listaEncerramentos"></ul>
+<hr>
+<h2>Solicitações de saldo residual dos entregadores</h2>
+<p class="muted">Pedidos de revisão abaixo de R$ 100. Uma análise pode ser marcada como em andamento ou recusada com justificativa. <strong>Este painel não envia Pix, não dá baixa em créditos e não permite marcar pagamentos como concluídos.</strong> A recusa da análise não extingue o saldo devido.</p>
+<ul id="listaAnalisesResiduais" aria-label="Solicitações de análise de saldo residual"></ul>
 </section>
 <p role="status" id="mensagem"></p>
 </main>
