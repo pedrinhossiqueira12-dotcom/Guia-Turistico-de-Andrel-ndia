@@ -34,7 +34,7 @@ test("carteira mantém consulta e histórico em perfil inativo, mas não habilit
   assert.match(wallet,/\.eq\("usuario_id",uid\)\.limit\(1\)/);
   assert.match(wallet,/const activeCourier=Boolean\(active\?\.length\)/);
   assert.match(wallet,/entregador_ativo:activeCourier/);
-  assert.match(wallet,/saque_habilitado:activeCourier&&ENVIRONMENT==="sandbox"/);
+  assert.match(wallet,/saque_habilitado:activeCourier&&!revisaoExcepcionalAberta&&!evidenciaBancariaPendente&&ENVIRONMENT==="sandbox"/);
   assert.match(wallet,/\.eq\("ativo",true\)\.limit\(1\)/);
 });
 
