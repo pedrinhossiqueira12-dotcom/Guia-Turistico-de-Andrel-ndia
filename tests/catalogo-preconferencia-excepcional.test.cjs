@@ -60,10 +60,10 @@ test("painel oferece somente conferir valores, não libera pagamento",()=>{
 });
 
 test("carteira oculta formulario do outro tipo quando pedido concorrente está aberto",()=>{
- assert.match(courier,/residualAberto\|\|saidaAberta\|\|carteira\.evidencia_bancaria_pendente\|\|!state\.termosAceitos/);
- assert.match(courier,/saidaAberta\|\|residualAberto\|\|carteira\.evidencia_bancaria_pendente\|\|!state\.termosAceitos/);
- assert.match(courier,/!saidaAberta&&!carteira\.evidencia_bancaria_pendente&&saldo>0&&saldo<minimo/);
- assert.match(courier,/!residualAberto&&!carteira\.evidencia_bancaria_pendente&&carteira\.entregador_ativo===false&&saldo>=minimo/);
+ assert.match(courier,/residualAberto\|\|saidaAberta\|\|Boolean\(separacao\)\|\|carteira\.evidencia_bancaria_pendente\|\|!state\.termosAceitos/);
+ assert.match(courier,/saidaAberta\|\|residualAberto\|\|Boolean\(separacao\)\|\|carteira\.evidencia_bancaria_pendente\|\|!state\.termosAceitos/);
+ assert.match(courier,/!saidaAberta&&!carteira\.evidencia_bancaria_pendente&&!separacao&&saldo>0&&saldo<minimo/);
+ assert.match(courier,/!residualAberto&&!separacao&&!carteira\.evidencia_bancaria_pendente&&carteira\.entregador_ativo===false&&saldo>=minimo/);
 });
 
 const holdPreflight=read("supabase/pending-migrations/20261009225000_preconferencia_considerar_hold_bancario.sql");
