@@ -323,7 +323,7 @@ async function wallet(uid:string,withReconcile=false){
   }
  }
  const balance=await rpc("catalogo_asaas_saldo_historico",{p_motoboy:uid});
- const pendencias=await rpc("catalogo_asaas_pendencias_motoboy",{p_motoboy:uid});
+ const pendencias=await rpc("catalogo_asaas_pendencias_historicas",{p_motoboy:uid});
  const {data:residual,error:residualError}=await db.from("catalogo_asaas_saldos_residuais")
    .select("id,status,saldo_snapshot_centavos,motivo,solicitado_em,detalhe_revisao")
    .eq("motoboy_id",uid).order("solicitado_em",{ascending:false}).limit(1).maybeSingle();
