@@ -3286,7 +3286,9 @@ CARREGAR TODOS OS DADOS
 /* O JSON é a fonte editorial; o status da publicação no banco prevalece.
    Se a consulta falhar, o cadastro editorial permanece como fallback. */
 async function filtrarPublicacoesEncerradas(comercios) {
-  if (!supabaseClient || !comercios.length) return comercios;
+  if (!comercios.length) return comercios;
+  // Sem confirmação de status, evitar exibir comércio potencialmente arquivado.
+  if (!supabaseClient) return [];
   const ids = [...new Set(comercios.map((item) => String(item.id || "")).filter(Boolean))];
   const situacoes = new Map();
   try {
@@ -3302,7 +3304,7 @@ async function filtrarPublicacoesEncerradas(comercios) {
     }
   } catch (erro) {
     console.warn("Não foi possível consultar o status publicado:", erro);
-    return comercios;
+    return [];
   }
   return comercios.filter((item) =>
     !situacoes.has(String(item.id)) || situacoes.get(String(item.id)) === "ativo"
