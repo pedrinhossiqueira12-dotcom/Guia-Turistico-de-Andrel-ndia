@@ -27,4 +27,7 @@ END;
 $$;
 REVOKE ALL ON FUNCTION public.catalogo_status_publicacao(text[]) FROM PUBLIC,anon,authenticated;
 GRANT EXECUTE ON FUNCTION public.catalogo_status_publicacao(text[]) TO anon,authenticated;
+-- Alguns ambientes historicos possuem SELECT publico concedido por migrations legadas.
+-- A RPC e o unico acesso publico necessario; harmoniza STAGING e clones da CI.
+REVOKE SELECT ON TABLE public.comercios_publicados FROM PUBLIC,anon,authenticated;
 COMMIT;
