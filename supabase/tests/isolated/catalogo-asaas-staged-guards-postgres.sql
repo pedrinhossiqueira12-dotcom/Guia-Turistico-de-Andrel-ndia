@@ -513,4 +513,55 @@ BEGIN
  RAISE NOTICE 'PASS: evidencia bancaria preserva HOLD apos recusas e na concorrencia com saque normal';
 END $bank_evidence_hold$;
 
+DO $authorization_revalidation$
+DECLARE
+ v_uid uuid:='eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+ v_req uuid;
+ v_saque uuid;
+ v_first jsonb;
+ v_after jsonb;
+ v_event jsonb;
+BEGIN
+ INSERT INTO auth.users(id) VALUES(v_uid);
+ INSERT INTO public.catalogo_asaas_saldos_residuais
+   (motoboy_id,saldo_snapshot_centavos,motivo)
+ VALUES(v_uid,330,'inatividade') RETURNING id INTO v_req;
+ UPDATE public.catalogo_asaas_saldos_residuais
+ SET status='recusada',analisado_por=v_uid,finalizado_em=now(),
+     detalhe_revisao='Revisao sintética encerrada antes de reservar saque comum'
+ WHERE id=v_req;
+
+ INSERT INTO public.catalogo_asaas_saques(motoboy_id,valor_centavos)
+ VALUES(v_uid,10000) RETURNING id INTO v_saque;
+ SELECT public.catalogo_asaas_validar_reserva_saque(v_saque)
+ INTO v_first;
+ IF v_first->>'ok' IS DISTINCT FROM 'true'
+    OR v_first->>'bloqueio_excepcional' IS DISTINCT FROM 'false' THEN
+  RAISE EXCEPTION 'Reserva de teste previamente em HOLD: %',v_first;
+ END IF;
+
+ SELECT public.catalogo_asaas_registrar_observacao_excepcional(
+  'residual',v_req,'sandbox_late_auth_01',
+  'guia-exc:residual:'||v_req,330,'DONE') INTO v_event;
+ IF v_event->>'ok'<>'true' THEN RAISE EXCEPTION 'Evidencia bancaria de teste rejeitada'; END IF;
+
+ SELECT public.catalogo_asaas_validar_reserva_saque(v_saque)
+ INTO v_after;
+ IF v_after->>'ok' IS DISTINCT FROM 'true'
+    OR v_after->>'bloqueio_excepcional' IS DISTINCT FROM 'true'
+    OR v_after->>'elegivel' IS DISTINCT FROM 'false' THEN
+  RAISE EXCEPTION 'Replay de autorizacao poderia ignorar HOLD posterior: %',v_after;
+ END IF;
+
+ IF has_function_privilege('anon',
+   'public.catalogo_asaas_validar_reserva_saque(uuid)','EXECUTE')
+  OR has_function_privilege('authenticated',
+   'public.catalogo_asaas_validar_reserva_saque(uuid)','EXECUTE')
+  OR NOT has_function_privilege('service_role',
+   'public.catalogo_asaas_validar_reserva_saque(uuid)','EXECUTE')
+ THEN RAISE EXCEPTION 'Revalidacao de saque exposta a usuarios comuns'; END IF;
+
+ RAISE NOTICE 'PASS: replay de autorizacao nao ignora hold bancario posterior';
+END $authorization_revalidation$;
+
 ROLLBACK;
