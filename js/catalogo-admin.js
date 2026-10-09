@@ -119,11 +119,15 @@
         if (resultado.bloqueado) {
           $("lockedTitle").textContent = "Catálogo temporariamente bloqueado";
           const inadimplente=resultado.motivo_bloqueio==="Comissão de pagamentos presenciais vencida.";
-          $("lockedText").textContent = inadimplente
+          const encerrando=resultado.motivo_bloqueio==="Encerramento solicitado pelo proprietário";
+          $("lockedTitle").textContent=encerrando?"Encerramento solicitado":"Catálogo temporariamente bloqueado";
+          $("lockedText").textContent = encerrando
+            ? "A loja está suspensa para novos pedidos. Quite possíveis faturas anteriores para que a administração finalize o encerramento."
+            : inadimplente
             ? "Existem faturas vencidas. Novos pedidos estão suspensos, mas você pode consultar e pagar sua fatura abaixo."
             : "Este catálogo está bloqueado. Solicite orientação à administração do Guia.";
           if ($("catalogoPagamentoBloqueado"))
-            $("catalogoPagamentoBloqueado").hidden=!inadimplente;
+            $("catalogoPagamentoBloqueado").hidden=!(inadimplente||encerrando);
           $("linkContratacao").hidden = true;
         } else {
           $("lockedTitle").textContent = "Catálogo não liberado";
