@@ -20,7 +20,15 @@ BEGIN
     OR has_table_privilege('authenticated',
         'public.catalogo_asaas_saldos_residuais','UPDATE')
   THEN
-    RAISE EXCEPTION 'Politica RLS/RPC publica insegura ou incompleta';
+    RAISE EXCEPTION
+      'Permissoes: rpc=% carteira=% anon_rpc=% anon_select=% motoboy_update=%',
+      to_regprocedure('public.catalogo_status_publicacao(text[])') IS NOT NULL,
+      to_regprocedure('public.catalogo_asaas_saldo_sacavel(uuid)') IS NOT NULL,
+      has_function_privilege('anon',
+        'public.catalogo_status_publicacao(text[])','EXECUTE'),
+      has_table_privilege('anon','public.comercios_publicados','SELECT'),
+      has_table_privilege('authenticated',
+        'public.catalogo_asaas_saldos_residuais','UPDATE');
   END IF;
 
   INSERT INTO auth.users(id) VALUES(v_uid);
