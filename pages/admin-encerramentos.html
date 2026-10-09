@@ -15,7 +15,7 @@ textarea{min-height:84px;resize:vertical} .item .row{justify-content:flex-start}
 button{border:1px solid var(--verde);border-radius:9px;background:var(--verde);color:white;padding:10px 14px;cursor:pointer}
 button.secondary{background:transparent;color:var(--verde)}button:disabled{opacity:.55;cursor:not-allowed}
 .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center;justify-content:space-between}
-small,.muted{color:#64736b}.item strong{overflow-wrap:anywhere}#listaEncerramentos,#listaAnalisesResiduais{list-style:none;margin:0;padding:0}
+small,.muted{color:#64736b}.item strong{overflow-wrap:anywhere}#listaEncerramentos,#listaAnalisesResiduais,#listaRegularizacoesSaida{list-style:none;margin:0;padding:0}
 #mensagem{min-height:1.5em}a{color:var(--verde)}[hidden]{display:none!important}
 </style>
 </head>
@@ -40,6 +40,10 @@ small,.muted{color:#64736b}.item strong{overflow-wrap:anywhere}#listaEncerrament
 <h2>Solicitações de saldo residual dos entregadores</h2>
 <p class="muted">Pedidos de revisão abaixo de R$ 100. Uma análise pode ser marcada como em andamento ou recusada com justificativa. <strong>Este painel não envia Pix, não dá baixa em créditos e não permite marcar pagamentos como concluídos.</strong> A recusa da análise não extingue o saldo devido.</p>
 <ul id="listaAnalisesResiduais" aria-label="Solicitações de análise de saldo residual"></ul>
+<hr>
+<h2>Regularização de créditos de entregadores inativos</h2>
+<p class="muted">Pedidos de motoboys sem vínculo ativo, com R$ 100 ou mais em créditos já liberados. O valor apresentado é uma fotografia na data da solicitação, não um valor autorizado para pagamento. A revisão nunca cria transferência, baixa créditos ou marca como pago. A recusa encerra somente o pedido administrativo.</p>
+<ul id="listaRegularizacoesSaida" aria-label="Regularizações financeiras de entregadores inativos"></ul>
 </section>
 <p role="status" id="mensagem"></p>
 </main>
