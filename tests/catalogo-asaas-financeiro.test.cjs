@@ -87,3 +87,39 @@ test("telas antigas preservadas e opção de saque aparece apenas quando liberad
   assert.match(merchant, /invoke\("catalogo-asaas-financeiro"/);
   assert.match(merchantHtml, /id="competenciaOffline"/);
 });
+
+const validationSQL = read("supabase/pending-migrations/20261009100000_asaas_validacao_saque_webhook.sql");
+
+test("webhook de autorização isolado, exclusivo sandbox e recusando por padrão", () => {
+ assert.match(edge, /ASAAS_SAQUE_VALIDACAO_TOKEN/);
+ assert.match(edge, /ASAAS_SAQUE_VALIDACAO_ENABLED/);
+ assert.match(edge, /ENVIRONMENT!=="sandbox"/);
+ assert.match(edge, /pathname\.endsWith\("\/saque-autorizacao"\)/);
+ assert.match(edge, /pathname\.endsWith\("\/webhook"\)/);
+ assert.match(edge, /body\.type!=="TRANSFER"/);
+ assert.match(edge, /return approveResponse\("REFUSED"/);
+ assert.match(edge, /equalSecret\(actual,WITHDRAWAL_AUTH_TOKEN\)/);
+});
+
+test("aprovação compara ID, valor, destino e créditos com a API do Asaas", () => {
+ assert.match(edge, /crypto\.subtle\.sign\("HMAC"/);
+ assert.match(edge, /pix_destino_sha256/);
+ assert.match(edge, /if\(unique\.length===0\)return false/);
+ assert.match(edge, /await pixDestinationsMatch/);
+ assert.match(edge, /remote\.externalReference===ref/);
+ assert.match(edge, /cents\(remote\.value\)===localAmount/);
+ assert.match(edge, /saque\.transferencia_id!==id/);
+ assert.match(edge, /r\.financiamento_comprovado===true/);
+ assert.match(edge, /sum===localAmount/);
+});
+
+test("auditabilidade idempotente sem acesso público ou destruição do histórico", () => {
+ assert.match(validationSQL, /ADD COLUMN IF NOT EXISTS pix_destino_sha256/);
+ assert.match(validationSQL, /CREATE TABLE IF NOT EXISTS public\.catalogo_asaas_validacoes_saque/);
+ assert.match(validationSQL, /PRIMARY KEY \(saque_id, transferencia_id\)/);
+ assert.match(validationSQL, /ENABLE ROW LEVEL SECURITY/);
+ assert.match(validationSQL, /REVOKE ALL ON public\.catalogo_asaas_validacoes_saque/);
+ assert.match(edge, /if\(existing\)return approveResponse/);
+ assert.match(edge, /if\(insertError\?\.code==="23505"\)/);
+ assert.doesNotMatch(validationSQL, /TRUNCATE|DROP TABLE|DELETE FROM/i);
+});
