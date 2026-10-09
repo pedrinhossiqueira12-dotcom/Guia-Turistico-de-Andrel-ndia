@@ -111,7 +111,17 @@ async function roleScope(uid:string,papel:string,store:string,allowInactiveMotob
  if(!allowInactiveMotoboy)query=query.eq("ativo",true);
  const {data,error}=await query.limit(1);
  if(error)throw new Failure("Falha ao verificar autorização.",503);
- check(Boolean(data?.length),"Seu perfil de entregador ainda não foi autorizado.",403);
+ let historicoPermiteLeitura=false;
+ if(!data?.length && allowInactiveMotoboy){
+  // O ultimo vinculo pode ser excluido, mas a remuneracao retida/paga
+  // segue ligada ao auth.users(id). Nao ativa cadastro nem permite saque.
+  const {data:historico,error:historicoError}=await db.from("catalogo_remuneracoes_v2")
+   .select("id").eq("motoboy_id",uid).limit(1);
+  if(historicoError)throw new Failure("Falha ao verificar histórico financeiro.",503);
+  historicoPermiteLeitura=Boolean(historico?.length);
+ }
+ check(Boolean(data?.length)||historicoPermiteLeitura,
+  "Perfil de entregador não autorizado ou sem histórico financeiro.",403);
  return "";
 }
 async function termsStatus(uid:string,papel:string,store:string,allowInactiveMotoboy=false){
@@ -317,7 +327,17 @@ async function wallet(uid:string,withReconcile=false){
    .eq("ativo",true).limit(1)
  ]);
  if(e||activeError)throw new Failure("Falha ao verificar perfil de entregador.",503);
- if(!allowed?.length)throw new Failure("Perfil de entregador não autorizado.",403);
+ let titularHistorico=false;
+ if(!allowed?.length){
+  // Carteira de ex-entregador sem ultimo vinculo: somente autenticação +
+  // remuneracoes registradas para o proprio usuario permitem acesso.
+  const {data:credits,error:creditsError}=await db.from("catalogo_remuneracoes_v2")
+   .select("id").eq("motoboy_id",uid).limit(1);
+  if(creditsError)throw new Failure("Falha ao conferir histórico do entregador.",503);
+  titularHistorico=Boolean(credits?.length);
+ }
+ if(!allowed?.length&&!titularHistorico)
+  throw new Failure("Perfil de entregador não autorizado ou sem histórico financeiro.",403);
  const activeCourier=Boolean(active?.length);
  if(withReconcile){
   const {data:pending}=await db.from("catalogo_asaas_saques").select("id,transferencia_id")
