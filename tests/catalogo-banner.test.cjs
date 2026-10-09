@@ -28,7 +28,11 @@ function backend(options = {}) {
           return { data: null, error: null };
         },
         then(resolve, reject) {
-          const data = table === 'cadastros_comercios' ? (options.registrationOwner === false || state.filters.usuario_id !== OWNER ? [] : [{ id: 'cadastro', usuario_id: OWNER, nome: 'Loja teste', local_id: 'loja-teste', status: 'aprovado' }]) : null;
+          const data = table === 'catalogo_aceites_operacionais'
+            ? (options.accepted === false ? [] : [{documento:'termos'},{documento:'privacidade'}])
+            : table === 'cadastros_comercios'
+              ? (options.registrationOwner === false || state.filters.usuario_id !== OWNER ? [] : [{ id: 'cadastro', usuario_id: OWNER, nome: 'Loja teste', local_id: 'loja-teste', status: 'aprovado' }])
+              : null;
           return Promise.resolve({ data, error: null }).then(resolve, reject);
         }
       };
@@ -71,6 +75,13 @@ test('catálogo associado a outra conta não pode ser editado', async () => {
   const app = backend({ catalogOwner: OTHER });
   assert.equal((await app.call({ acao: 'salvar_banner', banner_url: URL_IMAGE })).status, 403);
   assert.equal(app.updates.length, 0);
+});
+
+test('banner não pode ser salvo sem aceite vigente dos termos', async () => {
+ const app=backend({accepted:false});
+ const result=await app.call({acao:'salvar_banner',banner_url:URL_IMAGE});
+ assert.equal(result.status,428);
+ assert.equal(app.updates.length,0);
 });
 
 test('foto válida persiste somente banner, sem alterar acesso ou comissão', async () => {
