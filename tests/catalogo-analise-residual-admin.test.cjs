@@ -33,7 +33,7 @@ test("revisão usa comparação atômica do estado e impede conclusão paga",()=
 test("recusa exige justificativa, preserva carteira, registra revisor e hora",()=>{
  assert.match(handler,/detalhe\.length<=1000/);
  assert.match(handler,/detalhe\.length>=20/);
- assert.match(handler,/analisado_por:uid,atualizado_em:agora/);
+ assert.match(handler,/analisado_por:destino==="recusada"\?uid:null,atualizado_em:agora/);
  assert.match(handler,/finalizado_em:destino==="recusada"\?agora:null/);
  assert.match(handler,/O saldo do entregador permanece intacto/);
  assert.doesNotMatch(handler,/\.delete\(|from\("catalogo_remuneracoes_v2"\)|wallet\(/);
