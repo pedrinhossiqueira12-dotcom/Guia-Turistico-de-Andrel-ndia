@@ -42,17 +42,26 @@ BEGIN
    AND NOT EXISTS (SELECT 1 FROM public.catalogo_asaas_saque_itens i
     WHERE i.remuneracao_id=r.id AND i.ativo)
   ORDER BY r.id FOR UPDATE OF r
+ ), totalizador AS (
+  SELECT coalesce(sum(valor_centavos::bigint),0) AS soma_total
+  FROM elegiveis
  ), acumulados AS (
   SELECT id,valor_centavos,
    sum(valor_centavos::bigint) OVER (ORDER BY id) AS acumulado
   FROM elegiveis
  ), selecionados AS (
-  SELECT id,valor_centavos FROM acumulados
-  WHERE acumulado<=v_limite_transferencia
+  SELECT a.id,a.valor_centavos FROM acumulados a CROSS JOIN totalizador t
+  WHERE a.acumulado <= CASE
+   -- Ex.: total R$5.020. Em vez de enviar R$5.000 e prender R$20,
+   -- separa até R$4.920 e preserva >=R$100 para a próxima transferência.
+   WHEN t.soma_total>v_limite_transferencia
+        AND t.soma_total-v_limite_transferencia<10000
+    THEN t.soma_total-10000
+   ELSE v_limite_transferencia END
  )
  SELECT (SELECT array_agg(id ORDER BY id) FROM selecionados),
         (SELECT coalesce(sum(valor_centavos::bigint),0) FROM selecionados),
-        (SELECT coalesce(sum(valor_centavos::bigint),0) FROM elegiveis)
+        (SELECT soma_total FROM totalizador)
  INTO v_ids,v_total,v_total_elegivel;
 
  IF v_total<10000 THEN
