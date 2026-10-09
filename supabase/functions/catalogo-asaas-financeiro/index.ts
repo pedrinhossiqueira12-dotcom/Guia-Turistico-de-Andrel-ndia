@@ -436,6 +436,9 @@ async function pixDestinationsMatch(fingerprint:string,transfers:Record<string,u
   const bank=input(transfer.bankAccount);
   const vals=[value(transfer.pixAddressKey,254),value(bank.pixAddressKey,254)].filter(Boolean);
   const unique=[...new Set(vals)];
+  // GET e webhook precisam, ambos, identificar o mesmo destino.
+  // Sem prova independente do destinatário, recusamos a autorização.
+  if(unique.length===0)return false;
   for(const key of unique){
    checked++;
    let match=false;
