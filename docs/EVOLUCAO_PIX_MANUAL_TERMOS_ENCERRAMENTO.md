@@ -39,7 +39,9 @@
 - O processo interrompe **novos pedidos**, guarda o pedido de encerramento e apura faturas não pagas, comissões abertas e pedidos em andamento.
 - Dívida e histórico não são apagados. O estado pode ficar em `aguardando_quitacao` ou `pendente_arquivamento`.
 - Com dívida, o proprietário pode pagar a fatura na área específica de regularização mesmo com o catálogo bloqueado.
-- **Pendente de integração:** remoção definitiva da vitrine pública e desabilitação do antigo endpoint `whatsapp-bot/marcar_meu_comercio_deletado`, cuja implementação não está no repositório atual. O novo botão não usa mais essa rota, mas o backend legado deve ser auditado e bloqueado antes do go-live.
+- **Implementado em STAGING:** função administrativa `catalogo_finalizar_encerramento_financeiro` reconta as faturas, comissões e pedidos, impede arquivamento com pendências e, quando quitado, altera `comercios_publicados.status` para `arquivado`, sem apagar o cadastro ou o histórico. O painel `pages/admin-encerramentos.html` só solicita a operação após autenticação administrativa.
+- Há triggers de banco para bloquear despublicação com dívida, exclusão física de histórico e reabertura automática de loja encerrada.
+- **Pendente de integração:** garantir a remoção do índice turístico/cadastro estático publicado no site. O serviço legado `whatsapp-bot/marcar_meu_comercio_deletado` não está no repositório atual; o novo botão não usa a rota, mas o backend legado deve ser auditado para impedir ações fora dessas verificações antes do go-live.
 - O estabelecimento pode sair da vitrine e encerrar novas vendas sem perder o direito de consultar/corrigir dados e contestar faturas.
 
 ## Lista de verificação antes de liberação real
@@ -48,7 +50,7 @@
 2. [ ] Verificar Edge Functions implantadas e fluxos com usuário de teste legítimo no STAGING.
 3. [ ] Revisar termos e Política de Privacidade com profissional habilitado; disponibilizar canal real de contestação.
 4. [ ] Testar migração de conta existente sem aceite (bloqueio de NOVAS operações, leitura e regularização continuam).
-5. [ ] Integrar e auditar o arquivamento público e o endpoint legado de exclusão.
+5. [ ] Testar o painel administrativo de encerramento com usuários de homologação; integrar retirada do índice turístico/cadastro estático e auditar o endpoint legado `whatsapp-bot/marcar_meu_comercio_deletado`. O arquivamento da publicação dinâmica já está implementado.
 6. [ ] Revisar pedidos de saldo residual já registrados e implementar liquidação excepcional comprovada inferior a R$ 100 em encerramentos; a fila de solicitação está pronta, a transferência excepcional não.
 7. [ ] Validar fechamento automático mensal: no STAGING `fechamento_offline_ativo=false` mesmo com o cron presente; manter desativado até uma homologação supervisionada.
 8. [ ] Obter autorização comercial e contratual Asaas, condições de tarifas e conta de produção PJ elegível para Pix Automático, se e quando for implantado.
