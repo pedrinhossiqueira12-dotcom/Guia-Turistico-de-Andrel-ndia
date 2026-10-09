@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="pt-BR"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Homologação motoboy — Asaas Sandbox</title>
+<style>
+:root{font-family:Roboto,Arial,sans-serif;color:#202522;background:#f5f3ef}
+*{box-sizing:border-box}body{margin:0}main{max-width:760px;margin:32px auto;padding:0 18px}
+header{background:#091d1c;color:white;border-radius:16px;padding:26px}
+h1{font-size:1.55rem;margin:10px 0}h2{font-size:1.1rem;margin:0 0 10px}
+header p{color:#dfebe6;line-height:1.5}section{background:white;border:1px solid #d8ded7;border-radius:16px;padding:22px;margin:16px 0}
+label{font-weight:600;display:block;margin-top:14px}input{width:100%;display:block;padding:12px;margin-top:6px;border-radius:9px;border:1px solid #bfc9c1;font:inherit}
+button{font:inherit;border-radius:9px;border:0;padding:12px 16px;background:#194138;color:white;font-weight:600;cursor:pointer}
+button:disabled{opacity:.55;cursor:wait}.secondary{background:#e5eee8;color:#194138}
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
+.muted{color:#617064;font-size:.92rem;line-height:1.5}.balance{font-size:2.2rem;font-weight:700;color:#194138;margin:8px 0}
+pre{white-space:pre-wrap;word-break:break-all;background:#f4f6f2;padding:12px;border-radius:9px}
+#status.error{color:#ad2a2a}#status.ok{color:#194138}[hidden]{display:none!important}
+</style></head>
+<body><main>
+<header><strong>GUIA ANDRELÂNDIA — AMBIENTE DE TESTES</strong>
+<h1>Carteira do motoboy · Asaas Sandbox</h1>
+<p>Esta página se conecta exclusivamente ao Supabase de testes. Não acessa o Guia publicado e não disponibiliza solicitações de saque ou Pix reais.</p></header>
+<section><h2>1. Entrar com a conta do motoboy de testes</h2>
+<form id="loginform"><label>E-mail<input type="email" id="email" autocomplete="username" required></label>
+<label>Senha<input type="password" id="password" autocomplete="current-password" required></label>
+<div class="actions"><button type="submit" id="signin">Entrar</button></div></form>
+<p id="user" class="muted">Não autenticado.</p><button type="button" id="signout" class="secondary" hidden>Sair</button>
+</section>
+<section id="wallet" hidden><h2>2. Carteira de homologação</h2>
+<div id="balance" class="balance">—</div>
+<p class="muted" id="details">Consulte o saldo para verificar a disponibilidade dos créditos.</p>
+<div class="actions"><button id="refresh" type="button">Consultar carteira</button></div>
+</section>
+<section id="pixarea" hidden><h2>3. Cadastrar chave Pix de teste</h2>
+<p class="muted">A chave é enviada somente à Edge Function de entregas e criptografada antes de ser salva. Não é exibida ou armazenada nesta página após o envio. Use uma chave que você esteja autorizado a testar. Não faça pagamentos reais.</p>
+<form id="pixform"><label>Chave Pix do motoboy<input type="password" id="pixkey" autocomplete="off" maxlength="254" placeholder="CPF, CNPJ, e-mail, +55 ou chave aleatória" required></label>
+<div class="actions"><button type="submit" id="savepix">Salvar chave com criptografia</button></div></form>
+<p class="muted">Se aparecer erro de proteção, verifique a existência do Secret <code>CATALOGO_DATA_ENCRYPTION_KEY</code> no Supabase de testes. Não compartilhe esse segredo ou a chave Pix aqui.</p>
+</section>
+<section><h2>Resultado</h2><p id="status" role="status" class="muted"></p>
+<p class="muted">Esta homologação mantém a transferência desativada. O crédito de R$ 2,00 só poderá ser testado em saque Pix depois da revisão da integração bancária.</p></section>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script>
+<script>
+(()=>{
+"use strict";
+const $=id=>document.getElementById(id);
+const EXPECTED_ID="cff7f0a2-e449-4f84-aeec-01f7f4482846";
+const HOST="https://jbttwihctuibchhcyqtl.supabase.co";
+const APIKEY="sb_publishable_W80rooaGpHP4voYiLwtz7w_-k32qHsF";
+const supa=window.supabase?.createClient(HOST,APIKEY,{auth:{persistSession:true,autoRefreshToken:true}});
+const message=(value,error=false)=>{$("status").textContent=value;$("status").className=error?"error":"ok";};
+const brl=n=>(Number(n||0)/100).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
+let current=null;
+async function refreshSession(){
+ if(!supa)return;
+ const {data}=await supa.auth.getUser();
+ current=data?.user?.id===EXPECTED_ID?data.user:null;
+ $("loginform").hidden=!!current;$("signout").hidden=!current;
+ $("wallet").hidden=!current;$("pixarea").hidden=!current;
+ $("user").textContent=current?"Motoboy autenticado no Supabase de testes: "+current.email:
+ data?.user?"Esta conta não corresponde ao motoboy de homologação. Saia e entre com o segundo usuário.":"Não autenticado.";
+}
+async function request(slug,acao,extra={}){
+ const {data,error}=await supa.auth.getSession();
+ if(error||!data?.session?.access_token||data.session.user.id!==EXPECTED_ID)throw Error("Entre com o usuário motoboy do Sandbox.");
+ const response=await fetch(HOST+"/functions/v1/"+slug,{
+  method:"POST",headers:{"Content-Type":"application/json",apikey:APIKEY,
+   Authorization:"Bearer "+data.session.access_token},
+  body:JSON.stringify({acao,...extra})
+ });
+ const json=await response.json().catch(()=>({}));
+ if(!response.ok||json.success!==true)throw Error(json.mensagem||"Erro na API do Sandbox ("+response.status+").");
+ return json;
+}
+async function busy(id,fn){
+ $(id).disabled=true;try{await fn();}catch(e){message(e?.message||"Falha ao processar.",true);}finally{$(id).disabled=false;}
+}
+async function wallet(){
+ const result=await request("catalogo-asaas-financeiro","consultar_carteira");
+ $("balance").textContent=brl(result.saldo_disponivel_centavos);
+ $("details").textContent="Saques registrados: "+(Array.isArray(result.saques)?result.saques.length:0)+
+ ". Saque habilitado no servidor: "+(result.saque_habilitado?"SIM (não é possível solicitar nesta página)":"NÃO")+".";
+ message("Carteira consultada. Nenhuma transferência foi iniciada.");
+}
+$("loginform").addEventListener("submit",e=>{e.preventDefault();busy("signin",async()=>{
+ if(!supa)throw Error("Não foi possível carregar Supabase JS.");
+ const {error}=await supa.auth.signInWithPassword({email:$("email").value.trim(),password:$("password").value});
+ $("password").value="";
+ if(error)throw Error("Credenciais incorretas para o ambiente de testes.");
+ await refreshSession();if(current)await wallet();
+});});
+$("signout").addEventListener("click",()=>busy("signout",async()=>{
+ await supa.auth.signOut();await refreshSession();$("balance").textContent="—";message("Sessão encerrada.");
+}));
+$("refresh").addEventListener("click",()=>busy("refresh",wallet));
+$("pixform").addEventListener("submit",e=>{e.preventDefault();busy("savepix",async()=>{
+ const key=$("pixkey").value.trim();
+ if(!key)throw Error("Informe uma chave Pix de teste.");
+ try{await request("catalogo-entregas","salvar_chave_pix",{chave_pix:key});}
+ finally{$("pixkey").value="";}
+ message("Chave Pix protegida e salva no perfil de testes. Nenhum saque foi solicitado.");
+ await wallet();
+});});
+if(!supa){message("Biblioteca de autenticação indisponível.",true);return;}
+refreshSession().then(()=>{if(current)wallet().catch(e=>message(e.message,true));}).catch(()=>message("Falha ao carregar sessão de testes.",true));
+})();
+</script></body></html>
