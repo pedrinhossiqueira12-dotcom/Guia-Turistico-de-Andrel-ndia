@@ -38,7 +38,7 @@ test("falha em aberto retém dinheiro; somente saques bancários encerrados libe
 
 test("browser bloqueia pedido de saque enquanto há revisão excepcional aberta",()=>{
  assert.match(edge,/revisao_excepcional_aberta:revisaoExcepcionalAberta/);
- assert.match(edge,/saque_habilitado:activeCourier&&!revisaoExcepcionalAberta&&!evidenciaBancariaPendente&&ENVIRONMENT==="sandbox"/);
+ assert.match(edge,/saque_habilitado:activeCourier&&!revisaoExcepcionalAberta&&!evidenciaBancariaPendente&&!separacaoContabil&&ENVIRONMENT==="sandbox"/);
  assert.match(ui,/carteira\.revisao_excepcional_aberta===true/);
  assert.match(ui,/saque comum ficará bloqueado até a decisão administrativa/);
  assert.match(ui,/botao\.disabled = !state\.session \|\| state\.withdrawalLoading \|\| !carteira\.saque_habilitado/);
@@ -69,7 +69,7 @@ test("evidencia bancaria mantém HOLD apesar de recusas e bloqueia conclusão co
 
 test("o painel deixa de habilitar Pix e novas análises enquanto banco estiver inconclusivo",()=>{
  assert.match(edge,/evidencia_bancaria_pendente:evidenciaBancariaPendente/);
- assert.match(edge,/saque_habilitado:activeCourier&&!revisaoExcepcionalAberta&&!evidenciaBancariaPendente&&ENVIRONMENT/);
+ assert.match(edge,/saque_habilitado:activeCourier&&!revisaoExcepcionalAberta&&!evidenciaBancariaPendente&&!separacaoContabil&&ENVIRONMENT/);
  assert.match(ui,/carteira\.evidencia_bancaria_pendente===true/);
  assert.match(ui,/Uma transferência bancária excepcional precisa ser conciliada/);
  assert.match(ui,/carteira\.evidencia_bancaria_pendente\|\|!state\.termosAceitos/);
