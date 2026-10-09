@@ -427,7 +427,15 @@ function canonicalPix(type:string,key:string){
 async function pixFingerprint(type:string,key:string){
  const canon=canonicalPix(type,key);
  if(!canon)throw new Failure("Destino Pix inválido.",400);
- return sha256Hex("guia-asaas-pix-v1:"+type.toUpperCase()+":"+canon);
+ // HMAC impede recuperar CPF, telefone ou e-mail por busca de hashes.
+ // A mesma chave privada de cifragem serve de raiz, separada por domínio de uso.
+ if(!/^[a-f0-9]{64}$/i.test(ENCRYPTION_KEY))
+  throw new Failure("Chave de proteção financeira não configurada.",503);
+ const raw=Uint8Array.from(ENCRYPTION_KEY.match(/.{2}/g)!,x=>parseInt(x,16));
+ const keyBytes=new Uint8Array(await crypto.subtle.digest("SHA-256",new Uint8Array([...raw,...new TextEncoder().encode("saque-asaas-pix-hmac-v1")])));
+ const hmac=await crypto.subtle.importKey("raw",keyBytes,"HMAC",false,["sign"]);
+ const signature=new Uint8Array(await crypto.subtle.sign("HMAC",hmac,new TextEncoder().encode("guia-asaas-pix-v1:"+type.toUpperCase()+":"+canon)));
+ return Array.from(signature,b=>b.toString(16).padStart(2,"0")).join("");
 }
 async function pixDestinationsMatch(fingerprint:string,transfers:Record<string,unknown>[]){
  if(!/^[a-f0-9]{64}$/.test(fingerprint))return false;
