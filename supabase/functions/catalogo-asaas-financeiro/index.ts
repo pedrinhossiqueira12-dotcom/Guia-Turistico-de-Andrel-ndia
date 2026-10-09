@@ -317,19 +317,21 @@ async function withdraw(uid:string){
   .select("chave_pix_enc,em_analise").eq("usuario_id",uid).maybeSingle();
  if(error||!profile||profile.em_analise||!profile.chave_pix_enc)throw new Failure("Cadastre sua chave Pix e confirme seu perfil.",409);
  const pix=pixDestination(await decryptCourierPix(String(profile.chave_pix_enc),ENCRYPTION_KEY,uid));
+ // Criptografia e validação locais ANTES de reservar créditos. Se falharem, nenhum saldo fica bloqueado.
+ const destinationHash=await pixFingerprint(pix.pixAddressKeyType,pix.pixAddressKey);
  const reserved=await rpc("catalogo_asaas_reservar_saque",{p_motoboy:uid});
  const saqueId=String(reserved.saque_id),amount=Number(reserved.valor_centavos);
- // Grava o fingerprint do destinatário ANTES de chamar POST /transfers.
- // Se falhar, a reserva fica em revisão, nunca reenvia automaticamente.
- const destinationHash=await pixFingerprint(pix.pixAddressKeyType,pix.pixAddressKey);
+ // Grava o fingerprint ANTES de qualquer POST /transfers ao Asaas.
  const {data:snapshot,error:snapshotError}=await db.from("catalogo_asaas_saques")
   .update({pix_destino_sha256:destinationHash})
   .eq("id",saqueId).eq("motoboy_id",uid).eq("status","reservado")
   .is("pix_destino_sha256",null).select("id").maybeSingle();
  if(snapshotError || !snapshot){
-  await rpc("catalogo_asaas_atualizar_saque",{p_saque:saqueId,p_estado:"revisao",
-   p_transferencia:null,p_mensagem:"Falha ao vincular destinatário ao saque. Não reenviar."});
-  throw new Failure("Saque reservado para revisão: destino não confirmado.",503);
+  // Banco local recusou snapshot; nenhuma chamada externa ainda ocorreu.
+  // Liberar somente esta reserva é seguro porque POST /transfers ainda não foi iniciado.
+  await rpc("catalogo_asaas_atualizar_saque",{p_saque:saqueId,p_estado:"falhou",
+   p_transferencia:null,p_mensagem:"Falha local antes de solicitar transferência Asaas. Nenhuma chamada externa enviada."});
+  throw new Failure("Não foi possível preparar o saque. Saldo preservado para nova tentativa.",503);
  }
  let transfer:Record<string,unknown>;
  try {
@@ -437,7 +439,7 @@ async function pixFingerprint(type:string,key:string){
   throw new Failure("Chave de proteção financeira não configurada.",503);
  const raw=Uint8Array.from(ENCRYPTION_KEY.match(/.{2}/g)!,x=>parseInt(x,16));
  const keyBytes=new Uint8Array(await crypto.subtle.digest("SHA-256",new Uint8Array([...raw,...new TextEncoder().encode("saque-asaas-pix-hmac-v1")])));
- const hmac=await crypto.subtle.importKey("raw",keyBytes,"HMAC",false,["sign"]);
+ const hmac=await crypto.subtle.importKey("raw",keyBytes,{name:"HMAC",hash:"SHA-256"},false,["sign"]);
  const signature=new Uint8Array(await crypto.subtle.sign("HMAC",hmac,new TextEncoder().encode("guia-asaas-pix-v1:"+type.toUpperCase()+":"+canon)));
  return Array.from(signature,b=>b.toString(16).padStart(2,"0")).join("");
 }
