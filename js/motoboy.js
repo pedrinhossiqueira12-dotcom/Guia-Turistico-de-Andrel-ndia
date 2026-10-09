@@ -477,6 +477,8 @@
       ? saldo>0
         ? "Seu perfil de entregador está inativo. Seu saldo permanece registrado, mas o saque comum está suspenso até regularização administrativa."
         : "Seu perfil de entregador está inativo. Consulte o histórico para acompanhar eventuais créditos."
+      : carteira.revisao_excepcional_aberta===true
+        ? "Há uma solicitação de revisão financeira em andamento. O saque comum ficará bloqueado até a decisão administrativa e a conciliação das reservas."
       : carteira.saque_habilitado
         ? saldoValido
           ? "Você pode solicitar o Pix diretamente pelo Guia Andrelândia."
