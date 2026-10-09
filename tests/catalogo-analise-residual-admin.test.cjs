@@ -9,7 +9,7 @@ const html=fs.readFileSync("pages/admin-encerramentos.html","utf8");
 const sql=fs.readFileSync("supabase/pending-migrations/20261009185000_bloquear_conclusao_saldo_residual_sem_prova.sql","utf8");
 
 const begin=edge.indexOf("async function revisarAnaliseResidual(");
-const end=edge.indexOf("async function reconcileTransfer(",begin);
+const end=edge.indexOf("async function listarRegularizacoesSaidaAdmin(",begin);
 assert.ok(begin>0&&end>begin,"O handler administrativo deve existir");
 const handler=edge.slice(begin,end);
 
