@@ -38,6 +38,14 @@ pre{white-space:pre-wrap;word-break:break-all;background:#f4f6f2;padding:12px;bo
 <div class="actions"><button type="submit" id="savepix">Salvar chave com criptografia</button></div></form>
 <p class="muted">Se aparecer erro de proteção, verifique a existência do Secret <code>CATALOGO_DATA_ENCRYPTION_KEY</code> no Supabase de testes. Não compartilhe esse segredo ou a chave Pix aqui.</p>
 </section>
+<section id="payoutarea" hidden>
+<h2>4. Simular saque no Asaas Sandbox</h2>
+<p class="muted">Esta ação solicita <strong>uma transferência Pix de teste</strong> pelo Asaas Sandbox, usando o saldo fictício e a chave Pix criptografada já cadastrada. Ative-a somente depois de verificar o ambiente, o saldo Sandbox e os eventos TRANSFER_DONE/TRANSFER_FAILED/TRANSFER_CANCELLED no Webhook.</p>
+<p class="muted"><strong>Não clique novamente se o resultado for inconclusivo.</strong> Consulte o histórico; solicitações em revisão ou enviadas permanecem reservadas.</p>
+<div class="actions"><button id="payout" type="button" disabled>Solicitar saque de teste (R$ 2,00)</button></div>
+<p id="payoutnote" class="muted">Consulte a carteira para conferir a habilitação.</p>
+<pre id="payoutlog" hidden></pre>
+</section>
 <section><h2>Resultado</h2><p id="status" role="status" class="muted"></p>
 <p class="muted">Esta homologação mantém a transferência desativada. O crédito de R$ 2,00 só poderá ser testado em saque Pix depois da revisão da integração bancária.</p></section>
 </main>
@@ -58,7 +66,7 @@ async function refreshSession(){
  const {data}=await supa.auth.getUser();
  current=data?.user?.id===EXPECTED_ID?data.user:null;
  $("loginform").hidden=!!current;$("signout").hidden=!current;
- $("wallet").hidden=!current;$("pixarea").hidden=!current;
+ $("wallet").hidden=!current;$("pixarea").hidden=!current;$("payoutarea").hidden=!current;
  $("user").textContent=current?"Motoboy autenticado no Supabase de testes: "+current.email:
  data?.user?"Esta conta não corresponde ao motoboy de homologação. Saia e entre com o segundo usuário.":"Não autenticado.";
 }
@@ -82,7 +90,15 @@ async function wallet(){
  $("balance").textContent=brl(result.saldo_disponivel_centavos);
  $("details").textContent="Saques registrados: "+(Array.isArray(result.saques)?result.saques.length:0)+
  ". Saque habilitado no servidor: "+(result.saque_habilitado?"SIM (não é possível solicitar nesta página)":"NÃO")+".";
- message("Carteira consultada. Nenhuma transferência foi iniciada.");
+ const available=Number(result.saldo_disponivel_centavos||0);
+ const pending=(Array.isArray(result.saques)?result.saques:[]).some(s=>["reservado","enviado","revisao"].includes(s.status));
+ const enabled=result.saque_habilitado===true;
+ $("payout").disabled=!enabled||available<200||pending;
+ $("payout").textContent="Solicitar saque de teste ("+brl(available)+")";
+ $("payoutnote").textContent=!enabled?"Transferências desativadas no backend (correto até habilitar ASAAS_PAYOUTS_ENABLED=true no Sandbox).":
+ pending?"Há uma transferência pendente/em revisão. Não solicite outra.":available<200?"Sem saldo disponível para este teste.":"A transferência Sandbox está habilitada. Use somente após conferir a conta e o saldo Sandbox.";
+ $("details").textContent+=" Créditos: "+(result.saques?.length||0)+" saques registrados.";
+ message("Carteira consultada; nenhum saque foi iniciado por esta consulta.");
 }
 $("loginform").addEventListener("submit",e=>{e.preventDefault();busy("signin",async()=>{
  if(!supa)throw Error("Não foi possível carregar Supabase JS.");
@@ -95,6 +111,19 @@ $("signout").addEventListener("click",()=>busy("signout",async()=>{
  await supa.auth.signOut();await refreshSession();$("balance").textContent="—";message("Sessão encerrada.");
 }));
 $("refresh").addEventListener("click",()=>busy("refresh",wallet));
+$("payout").addEventListener("click",()=>busy("payout",async()=>{
+ if(!current)throw Error("Entre com o usuário de testes.");
+ if(!window.confirm("CONFIRMAR: solicitar UMA transferência Pix de R$ 2,00 exclusivamente no Asaas Sandbox? Não repetir caso o resultado seja inconclusivo."))return;
+ $("payout").disabled=true;
+ try{
+  const out=await request("catalogo-asaas-financeiro","solicitar_saque");
+  $("payoutlog").hidden=false;
+  $("payoutlog").textContent=JSON.stringify({sucesso:out.success,saque_id:out.saque_id,mensagem:out.mensagem},null,2);
+  message(out.mensagem||"Solicitação registrada no Sandbox.");
+ } finally {
+  await wallet().catch(e=>message("Consulte o histórico no Supabase antes de tentar novamente: "+e.message,true));
+ }
+}));
 $("pixform").addEventListener("submit",e=>{e.preventDefault();busy("savepix",async()=>{
  const key=$("pixkey").value.trim();
  if(!key)throw Error("Informe uma chave Pix de teste.");
