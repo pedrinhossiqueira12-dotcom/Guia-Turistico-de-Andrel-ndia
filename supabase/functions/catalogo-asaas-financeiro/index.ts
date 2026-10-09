@@ -213,6 +213,7 @@ async function loadOrCreateCustomer(store:string,body:Record<string,unknown>,ema
 async function showInvoice(uid:string,body:Record<string,unknown>){
  const {f,charge}=await invoice(uid,body);
  return respond({success:true,fatura:f,cobranca_status:charge?.status||null,
+  metodo_cobranca:"pix_manual",pix_automatico_disponivel:false,
   valor_centavos:f?.total_comissao_centavos||0,provedor:charge?.gateway||"asaas",
   mensagem:charge?.gateway==="mercadopago"?
     "Existe uma fatura do Mercado Pago. Ela não será migrada ou cobrada duas vezes.":undefined});
@@ -230,6 +231,11 @@ async function reconcileInvoice(uid:string,body:Record<string,unknown>){
 }
 async function createInvoice(uid:string,body:Record<string,unknown>,email:string){
  await requireTerms(uid,"comercio",commerce(body.comercio_id));
+ const {data:method,error:methodError}=await db.from("catalogo_cobranca_preferencias")
+  .select("metodo").eq("comercio_id",commerce(body.comercio_id)).maybeSingle();
+ if(methodError)throw new Failure("Falha ao consultar modalidade de cobrança.",503);
+ if(method?.metodo==="pix_automatico")
+  throw new Failure("Pix Automático ainda não está liberado. Solicite orientação para pagamento da fatura.",503);
  enabled("billing");
  const {store,month,f,charge}=await invoice(uid,body);
  check(f&&["faturado","vencido","bloqueado"].includes(String(f.status))&&
@@ -309,6 +315,7 @@ async function wallet(uid:string,withReconcile=false){
   }
  }
  const balance=await rpc("catalogo_asaas_saldo_sacavel",{p_motoboy:uid});
+ const pendencias=await rpc("catalogo_asaas_pendencias_motoboy",{p_motoboy:uid});
  const {data:history,error}=await db.from("catalogo_asaas_saques")
   .select("id,status,valor_centavos,criado_em,concluido_em")
   .eq("motoboy_id",uid).order("criado_em",{ascending:false}).limit(20);
@@ -318,6 +325,7 @@ async function wallet(uid:string,withReconcile=false){
      WITHDRAWAL_AUTH_TOKEN.length>=32&&Boolean(ASAAS_TOKEN),
    saque_minimo_centavos:SAQUE_MINIMO_CENTAVOS,
    saldo_disponivel_centavos:balance.disponivel_centavos||0,
+   pendencias_por_comercio:Array.isArray(pendencias)?pendencias:[],
    saques:history||[]});
 }
 async function reconcileTransfer(saqueId:string,transferId:string){
