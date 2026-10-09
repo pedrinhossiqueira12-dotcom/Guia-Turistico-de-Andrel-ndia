@@ -3283,6 +3283,32 @@ function obterHospedagensDosComercios() {
 CARREGAR TODOS OS DADOS
 ========================================================= */
 
+/* O JSON é a fonte editorial; o status da publicação no banco prevalece.
+   Se a consulta falhar, o cadastro editorial permanece como fallback. */
+async function filtrarPublicacoesEncerradas(comercios) {
+  if (!supabaseClient || !comercios.length) return comercios;
+  const ids = [...new Set(comercios.map((item) => String(item.id || "")).filter(Boolean))];
+  const situacoes = new Map();
+  try {
+    for (let inicio = 0; inicio < ids.length; inicio += 100) {
+      const { data, error } = await supabaseClient
+        .from("comercios_publicados")
+        .select("local_id,status")
+        .in("local_id", ids.slice(inicio, inicio + 100));
+      if (error) throw error;
+      for (const registro of data || []) {
+        situacoes.set(String(registro.local_id), String(registro.status || "").toLowerCase());
+      }
+    }
+  } catch (erro) {
+    console.warn("Não foi possível consultar o status publicado:", erro);
+    return comercios;
+  }
+  return comercios.filter((item) =>
+    !situacoes.has(String(item.id)) || situacoes.get(String(item.id)) === "ativo"
+  );
+}
+
 async function carregarDados() {
   const resultados = await Promise.all([
     carregarJSON("./DATA/locais.json", "locais.json"),
@@ -3290,9 +3316,11 @@ async function carregarDados() {
   ]);
 
   dadosLocais = resultados[0];
-  dadosComercios = Array.isArray(resultados[1])
-    ? resultados[1].filter(AndrelandiaComercioUtils.estaAtivo)
-    : [];
+  dadosComercios = await filtrarPublicacoesEncerradas(
+    Array.isArray(resultados[1])
+      ? resultados[1].filter(AndrelandiaComercioUtils.estaAtivo)
+      : []
+  );
 
   await carregarAvaliacoes();
   dadosHospedagem = obterHospedagensDosComercios();
