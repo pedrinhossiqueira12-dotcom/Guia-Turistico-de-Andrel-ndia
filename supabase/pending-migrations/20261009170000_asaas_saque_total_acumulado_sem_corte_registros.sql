@@ -34,7 +34,7 @@ BEGIN
   JOIN public.catalogo_fatura_cobrancas b ON b.fechamento_id=f.id
   WHERE r.motoboy_id=p_motoboy AND r.status='disponivel'
    AND r.financiamento_comprovado AND r.repasse_id IS NULL
-   AND r.valor_centavos>0
+   AND r.valor_centavos>0 AND r.valor_centavos<=v_limite_transferencia
    AND p.provedor='offline' AND p.entrega_status='entregue'
    AND NOT p.reembolso_pendente AND NOT p.pagamento_revisao_pendente
    AND c.status='paga' AND f.status='pago'
