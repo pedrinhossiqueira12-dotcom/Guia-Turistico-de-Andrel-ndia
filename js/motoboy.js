@@ -456,9 +456,9 @@
     const residual=carteira.saldo_residual || null;
     const residualAberto=Boolean(residual&&["pendente","em_analise"].includes(residual.status));
     if(residualBloco)residualBloco.hidden=!(residualAberto ||
-      !saidaAberta&&saldo>0&&saldo<minimo);
+      !saidaAberta&&!carteira.evidencia_bancaria_pendente&&saldo>0&&saldo<minimo);
     const residualBtn=$("motoboyResidualSubmit");
-    if(residualBtn)residualBtn.disabled=residualAberto||saidaAberta||!state.termosAceitos;
+    if(residualBtn)residualBtn.disabled=residualAberto||saidaAberta||carteira.evidencia_bancaria_pendente||!state.termosAceitos;
     if(residualBloco)definirFeedback("motoboyResidualFeedback",
       residualAberto ? "Sua solicitação está aguardando análise. O saldo continua disponível e nenhum Pix foi criado."
       : residual?.status==="concluida" ? "A solicitação anterior foi concluída. Consulte o suporte para conferir os documentos."
@@ -466,14 +466,16 @@
       : "Peça análise somente se for interromper suas atividades. Esta ação não realiza transferência.");
     const saidaBloco=$("motoboySaidaBloco");
     if(saidaBloco)saidaBloco.hidden=!(saidaAberta||
-      !residualAberto&&carteira.entregador_ativo===false&&saldo>=minimo);
+      !residualAberto&&!carteira.evidencia_bancaria_pendente&&carteira.entregador_ativo===false&&saldo>=minimo);
     const saidaBtn=$("motoboySaidaSubmit");
-    if(saidaBtn)saidaBtn.disabled=saidaAberta||residualAberto||!state.termosAceitos;
+    if(saidaBtn)saidaBtn.disabled=saidaAberta||residualAberto||carteira.evidencia_bancaria_pendente||!state.termosAceitos;
     if(saidaBloco)definirFeedback("motoboySaidaFeedback",
       saidaAberta ? "Sua regularização está aguardando conferência administrativa. Nenhum pagamento foi iniciado."
       : saida?.status==="recusada" ? "Seu pedido anterior de regularização foi recusado. Seus créditos não foram eliminados; solicite esclarecimento à administração."
       : "Solicitação de conferência sem transferência, movimentação de créditos ou garantia de pagamento.");
-    const situacaoSaque=carteira.entregador_ativo===false
+    const situacaoSaque=carteira.evidencia_bancaria_pendente===true
+      ? "Uma transferência bancária excepcional precisa ser conciliada. Seus créditos permanecem registrados, porém saques e novos pedidos financeiros estão temporariamente bloqueados. Procure a administração."
+      : carteira.entregador_ativo===false
       ? saldo>0
         ? "Seu perfil de entregador está inativo. Seu saldo permanece registrado, mas o saque comum está suspenso até regularização administrativa."
         : "Seu perfil de entregador está inativo. Consulte o histórico para acompanhar eventuais créditos."
@@ -490,7 +492,7 @@
   async function solicitarAnaliseSaldoResidual(event) {
     event.preventDefault();
     if(!state.session || !state.termosAceitos ||
-       ["pendente","em_analise"].includes(state.carteira?.regularizacao_saida?.status))return;
+       (["pendente","em_analise"].includes(state.carteira?.regularizacao_saida?.status)||state.carteira?.evidencia_bancaria_pendente))return;
     const generation=state.generation,uid=state.userId;
     const btn=$("motoboyResidualSubmit");
     if(btn)btn.disabled=true;
@@ -511,7 +513,7 @@
   async function solicitarRegularizacaoSaida(event) {
     event.preventDefault();
     if(!state.session||!state.termosAceitos||state.carteira?.entregador_ativo!==false||
-       ["pendente","em_analise"].includes(state.carteira?.saldo_residual?.status))return;
+       (["pendente","em_analise"].includes(state.carteira?.saldo_residual?.status)||state.carteira?.evidencia_bancaria_pendente))return;
     const generation=state.generation,uid=state.userId;
     const btn=$("motoboySaidaSubmit");
     if(btn)btn.disabled=true;
