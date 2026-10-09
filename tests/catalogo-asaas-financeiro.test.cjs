@@ -109,8 +109,11 @@ test("aprovação compara ID, valor, destino e créditos com a API do Asaas", ()
  assert.match(edge, /remote\.externalReference===ref/);
  assert.match(edge, /cents\(remote\.value\)===localAmount/);
  assert.match(edge, /saque\.transferencia_id!==id/);
- assert.match(edge, /r\.financiamento_comprovado===true/);
- assert.match(edge, /sum===localAmount/);
+ const provaSQL=read("supabase/pending-migrations/20261009170000_asaas_saque_total_acumulado_sem_corte_registros.sql");
+ assert.match(provaSQL, /AND r\.status='disponivel' AND r\.financiamento_comprovado/);
+ assert.match(provaSQL, /AND v_elegiveis AND v_total=v_saque\.valor_centavos/);
+ assert.match(edge, /prova\.elegivel===true/);
+ assert.match(edge, /Number\(prova\.valor_centavos\)===localAmount/);
 });
 
 test("auditabilidade idempotente sem acesso público ou destruição do histórico", () => {
