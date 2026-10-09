@@ -99,6 +99,8 @@ async function owner(uid:string,commerceId:string){
 
 const TERMOS_VERSAO="2026-10-09";
 const SAQUE_MINIMO_CENTAVOS=10000;
+// Teto por transação conservador para contas Asaas novas; não limita o saldo acumulado.
+const SAQUE_MAXIMO_PIX_CENTAVOS=500000;
 async function roleScope(uid:string,papel:string,store:string){
  check(papel==="comercio"||papel==="motoboy","Perfil de aceite inválido.",400);
  if(papel==="comercio"){
@@ -329,6 +331,8 @@ async function wallet(uid:string,withReconcile=false){
    saque_habilitado:ENVIRONMENT==="sandbox"&&PAYOUTS_ON&&WITHDRAWAL_AUTH_ON&&
      WITHDRAWAL_AUTH_TOKEN.length>=32&&Boolean(ASAAS_TOKEN),
    saque_minimo_centavos:SAQUE_MINIMO_CENTAVOS,
+   saque_maximo_por_pix_centavos:SAQUE_MAXIMO_PIX_CENTAVOS,
+   total_comissoes_disponiveis:Number(balance.creditos||0),
    saldo_disponivel_centavos:balance.disponivel_centavos||0,
    pendencias_por_comercio:Array.isArray(pendencias)?pendencias:[],
    saldo_residual:residual||null,
@@ -470,7 +474,8 @@ async function withdraw(uid:string){
  const destinationHash=await pixFingerprint(pix.pixAddressKeyType,pix.pixAddressKey);
  const reserved=await rpc("catalogo_asaas_reservar_saque",{p_motoboy:uid});
  const saqueId=String(reserved.saque_id),amount=Number(reserved.valor_centavos);
- check(amount>=SAQUE_MINIMO_CENTAVOS,"Saque mínimo de R$ 100,00 em créditos liberados.",409);
+ check(amount>=SAQUE_MINIMO_CENTAVOS&&amount<=SAQUE_MAXIMO_PIX_CENTAVOS,
+  "Saque fora dos limites configurados: mínimo R$ 100, máximo R$ 5.000 por transferência.",409);
  // Grava o fingerprint ANTES de qualquer POST /transfers ao Asaas.
  const {data:snapshot,error:snapshotError}=await db.from("catalogo_asaas_saques")
   .update({pix_destino_sha256:destinationHash})
@@ -511,7 +516,7 @@ async function withdraw(uid:string){
  await rpc("catalogo_asaas_atualizar_saque",{p_saque:saqueId,p_estado:"enviado",p_transferencia:tid,p_mensagem:null});
  // NÃO marcar como pago pela resposta do POST. Somente após GET e status DONE.
  try {await reconcileTransfer(saqueId,tid);} catch { /* Webhook / consulta futura conciliará. */ }
- return respond({success:true,saque_id:saqueId,
+ return respond({success:true,saque_id:saqueId,valor_centavos:amount,
   mensagem:"Solicitação enviada ao Asaas. Consulte a carteira para acompanhar a confirmação."});
 }
 const ADMIN_USER_ID = "4b9a0233-6b72-4573-aebd-d596c5b15e1b";
@@ -671,27 +676,21 @@ async function authorizeWithdrawal(request:Request){
     cents(remote.value)===localAmount && value(remote.operationType,12)==="PIX" &&
     !["DONE","FAILED","CANCELLED"].includes(value(remote.status,60)) &&
     await pixDestinationsMatch(String(saque.pix_destino_sha256),[incoming,remote])){
-   const [profile,links,items]=await Promise.all([
+   // RPC faz COUNT/SUM/BOOL_AND no PostgreSQL e retorna UM objeto JSON.
+   // Não aplica limite de 1000 linhas do PostgREST, mesmo com vários meses acumulados.
+   const [profile,links,composicao]=await Promise.all([
     db.from("catalogo_motoboy_perfis").select("apto,em_analise").eq("usuario_id",saque.motoboy_id).maybeSingle(),
     db.from("catalogo_motoboys").select("usuario_id").eq("usuario_id",saque.motoboy_id).eq("ativo",true).limit(1),
-    db.from("catalogo_asaas_saque_itens").select("ativo,remuneracao_id,catalogo_remuneracoes_v2!inner(motoboy_id,status,valor_centavos,financiamento_comprovado,repasse_id)")
-      .eq("saque_id",ref).eq("ativo",true)
+    db.rpc("catalogo_asaas_validar_reserva_saque",{p_saque:ref})
    ]);
-   if(profile.error||links.error||items.error)throw new Failure("Falha de validação financeira.",503);
-   const records=items.data||[];
-   const sum=records.reduce((t,item)=>{
-    const rem=item.catalogo_remuneracoes_v2 as unknown as Record<string,unknown>;
-    return t+Number(rem?.valor_centavos||0);
-   },0);
-   const eligible=records.length>0 && records.length<=1000 && records.every(item=>{
-    const r=item.catalogo_remuneracoes_v2 as unknown as Record<string,unknown>;
-    return r && r.motoboy_id===saque.motoboy_id &&
-      r.status==="disponivel" && r.financiamento_comprovado===true &&
-      r.repasse_id===null && Number.isSafeInteger(Number(r.valor_centavos)) &&
-      Number(r.valor_centavos)>0;
-   });
+   if(profile.error||links.error||composicao.error||composicao.data?.ok!==true)
+    throw new Failure("Falha de validação financeira da reserva.",503);
+   const prova=input(composicao.data);
+   const elegivel=prova.elegivel===true &&
+     Number.isSafeInteger(Number(prova.quantidade)) && Number(prova.quantidade)>0 &&
+     Number(prova.valor_centavos)===localAmount;
    if(profile.data?.apto===true && profile.data?.em_analise===false &&
-      (links.data||[]).length>0 && eligible && sum===localAmount){
+      (links.data||[]).length>0 && elegivel){
     decision="APPROVED";reason="Saque conciliado com reserva e destino Pix.";
    }else reason="Conta do motoboy ou créditos não elegíveis.";
   }else reason="Identidade, valor, estado ou destino Pix divergente.";
