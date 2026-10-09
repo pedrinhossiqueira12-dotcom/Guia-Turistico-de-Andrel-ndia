@@ -48,3 +48,29 @@ test("RPC de historico e pendencias so backend, sem permitir baixas",()=>{
  assert.match(newMigration,/TO service_role/);
  assert.doesNotMatch(newMigration,/UPDATE public\.catalogo_remuneracoes_v2|INSERT INTO public\.catalogo_repasses_v2|\/transfers/);
 });
+
+const ui=read("js/motoboy.js");
+test("403 em entregas não elimina a carteira do ex-motoboy",()=>{
+ const start=ui.indexOf("async function carregarEntregas(");
+ const end=ui.indexOf("function renderizarCarteira()",start);
+ assert.ok(start>=0&&end>start);
+ const deliveries=ui.slice(start,end);
+ assert.match(deliveries,/if \(erro\.status === 401\) \{ limparDadosPrivados\(\); fecharConfirmacao\(\); \}/);
+ assert.match(deliveries,/else if \(erro\.status === 403\) \{/);
+ assert.match(deliveries,/state\.pedidos = \[\]/);
+ assert.match(deliveries,/state\.hasMore = false/);
+ assert.match(deliveries,/Sua carteira de comissões históricas continua disponível/);
+ assert.doesNotMatch(deliveries,/erro\.status === 403 \|\| erro\.status === 401/);
+});
+
+test("403 em extrato operacional não limpa o saldo financeiro paralelo",()=>{
+ const start=ui.indexOf("async function carregarExtrato(");
+ const end=ui.indexOf("function fecharConfirmacao()",start);
+ assert.ok(start>=0&&end>start);
+ const extract=ui.slice(start,end);
+ assert.match(extract,/if \(erro\.status === 401\) limparDadosPrivados\(\)/);
+ assert.match(extract,/else if \(erro\.status === 403\) \{/);
+ assert.match(extract,/state\.extrato = null/);
+ assert.match(extract,/Consulte a carteira financeira para seus créditos históricos/);
+ assert.doesNotMatch(extract,/erro\.status === 401 \|\| erro\.status === 403\) limparDadosPrivados/);
+});
