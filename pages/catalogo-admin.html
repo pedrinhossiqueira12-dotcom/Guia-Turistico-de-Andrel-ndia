@@ -44,6 +44,20 @@
       <h2 id="lockedTitle">Catálogo não liberado</h2>
       <p id="lockedText">Para gerenciar produtos, conecte a conta Mercado Pago do comércio.</p>
       <a id="linkContratacao" class="button button-primary" href="#">Conhecer o catálogo digital</a>
+      <div id="catalogoPagamentoBloqueado" class="offline-invoice" hidden>
+        <h3>Regularizar fatura vencida</h3>
+        <p>O catálogo não recebe novos pedidos durante a suspensão. Você ainda pode quitar faturas anteriores; a confirmação ocorre pelo provedor de pagamento.</p>
+        <div class="statement-controls">
+          <label>Mês da fatura <input id="competenciaFaturaBloqueada" type="month"></label>
+          <label>Nome/razão social <input id="nomeFaturaBloqueada" maxlength="120"></label>
+          <label>CPF/CNPJ <input id="documentoFaturaBloqueada" maxlength="20" inputmode="numeric"></label>
+        </div>
+        <div class="statement-controls">
+          <button id="gerarFaturaBloqueada" class="button button-primary" type="button">Gerar Pix de regularização</button>
+          <button id="consultarFaturaBloqueada" class="button button-secondary" type="button">Verificar pagamento</button>
+        </div>
+        <div id="resultadoFaturaBloqueada" class="offline-statement-result"><p class="form-feedback">Selecione o mês da fatura vencida.</p></div>
+      </div>
     </section>
 
     <div id="painelCatalogo" hidden>
