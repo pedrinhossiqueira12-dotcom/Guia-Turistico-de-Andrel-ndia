@@ -359,6 +359,33 @@ async function solicitarAnaliseResidual(uid:string,body:Record<string,unknown>){
  return respond({success:true,id:data.id,status:data.status,
    mensagem:"Solicitação de análise registrada. Não é uma transferência e não altera seu saldo disponível."});
 }
+// Leitura financeira do pedido de encerramento sem expor valores a terceiros.
+async function consultarEncerramento(uid:string,body:Record<string,unknown>){
+ const store=commerce(body.comercio_id);
+ await owner(uid,store);
+ const {data,error}=await db.from("catalogo_encerramentos_comercio")
+   .select("situacao,divida_apurada_centavos,solicitado_em,atualizado_em")
+   .eq("comercio_id",store).maybeSingle();
+ if(error)throw new Failure("Não foi possível consultar seu encerramento.",503);
+ return respond({success:true,encerramento:data||null});
+}
+async function listarEncerramentosAdmin(uid:string){
+ if(uid!==ADMIN_USER_ID)throw new Failure("Acesso exclusivo do administrador.",403);
+ const {data,error}=await db.from("catalogo_encerramentos_comercio")
+  .select("comercio_id,situacao,divida_apurada_centavos,solicitado_em,atualizado_em")
+  .neq("situacao","arquivado").order("solicitado_em",{ascending:true}).limit(100);
+ if(error)throw new Failure("Não foi possível listar encerramentos.",503);
+ return respond({success:true,encerramentos:data||[]});
+}
+async function finalizarEncerramentoAdmin(uid:string,body:Record<string,unknown>){
+ if(uid!==ADMIN_USER_ID)throw new Failure("Acesso exclusivo do administrador.",403);
+ check(body.confirmacao===true,"Confirme que conferiu as faturas e os pedidos.",400);
+ const store=commerce(body.comercio_id);
+ const result=await rpc("catalogo_finalizar_encerramento_financeiro",{
+  p_comercio:store,p_admin:uid
+ });
+ return respond({success:true,...result});
+}
 async function listarAnalisesResiduais(uid:string){
  if(uid!==ADMIN_USER_ID)throw new Failure("Acesso exclusivo da administração.",403);
  const {data,error}=await db.from("catalogo_asaas_saldos_residuais")
@@ -722,6 +749,9 @@ Deno.serve(async (request:Request)=>{
      value(body.papel,15)==="comercio"?commerce(body.comercio_id):"")});
    case "aceitar_termos":return await acceptTerms(user.id,body);
    case "solicitar_encerramento":return await requestClosure(user.id,body);
+   case "consultar_encerramento":return await consultarEncerramento(user.id,body);
+   case "listar_encerramentos_admin":return await listarEncerramentosAdmin(user.id);
+   case "finalizar_encerramento_admin":return await finalizarEncerramentoAdmin(user.id,body);
    case "obter_fatura":return await showInvoice(user.id,body);
    case "criar_cobranca":return await createInvoice(user.id,body,user.email||"");
    case "consultar_cobranca":return await reconcileInvoice(user.id,body);
