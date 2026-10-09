@@ -218,7 +218,7 @@ test("saques exigem flags e token de autorização ativos antes de reserva e POS
  assert.ok(withdraw.indexOf('enabled("payouts")') < withdraw.indexOf("if(!WITHDRAWAL_AUTH_ON"));
  assert.match(network,/if\(method==="POST" && path==="\/transfers"\)/);
  assert.match(network,/if\(!WITHDRAWAL_AUTH_ON \|\| WITHDRAWAL_AUTH_TOKEN\.length<32\)/);
- assert.match(wallet,/saque_habilitado:ENVIRONMENT==="sandbox"&&PAYOUTS_ON&&WITHDRAWAL_AUTH_ON&&/);
+ assert.match(wallet,/saque_habilitado:activeCourier&&ENVIRONMENT==="sandbox"&&PAYOUTS_ON&&WITHDRAWAL_AUTH_ON&&/);
  assert.match(wallet,/WITHDRAWAL_AUTH_TOKEN\.length>=32&&Boolean\(ASAAS_TOKEN\)/);
 });
 
@@ -242,7 +242,7 @@ test("saque de R$ 100 e aceite versionado são exigidos pelo servidor", () => {
  assert.match(closures,/divida_apurada_centavos/);
  assert.doesNotMatch(closures,/DELETE FROM public\.(?:catalogo_fatura|catalogo_comissoes|catalogo_remuneracoes)/);
  assert.match(pending,/CREATE OR REPLACE FUNCTION public\.catalogo_asaas_pendencias_motoboy/);
- assert.match(edge,/async function requireTerms\(uid:string,papel:string,store:string\)/);
+ assert.match(edge,/async function requireTerms\(uid:string,papel:string,store:string,allowInactiveMotoboy=false\)/);
  assert.match(edge,/case "aceitar_termos":return await acceptTerms/);
  assert.match(edge,/case "solicitar_encerramento":return await requestClosure/);
  assert.match(edge,/SAQUE_MINIMO_CENTAVOS=10000/);
@@ -267,7 +267,7 @@ test("revisão residual: pedido privado abaixo de R$ 100 nunca cria transferênc
  assert.match(edge,/case "solicitar_analise_residual":return await solicitarAnaliseResidual\(user\.id,body\)/);
  assert.match(edge,/case "listar_analises_residuais_admin":return await listarAnalisesResiduais\(user\.id\)/);
  const fn=edge.slice(edge.indexOf("async function solicitarAnaliseResidual("),edge.indexOf("async function reconcileTransfer("));
- assert.match(fn,/await requireTerms\(uid,"motoboy",""\)/);
+ assert.match(fn,/await requireTerms\(uid,"motoboy","",true\)/);
  assert.match(fn,/amount>0&&amount<SAQUE_MINIMO_CENTAVOS/);
  assert.match(fn,/\.insert\(\{motoboy_id:uid,saldo_snapshot_centavos:amount,motivo\}\)/);
  assert.doesNotMatch(fn,/asaas\("\/transfers"|catalogo_asaas_reservar_saque|catalogo_asaas_atualizar_saque/);
