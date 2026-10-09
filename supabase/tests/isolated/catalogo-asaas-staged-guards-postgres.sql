@@ -610,7 +610,7 @@ DECLARE
  v_uid uuid := 'caca0a0a-caca-4caa-8caa-caca0a0a0a01';
  v_store text := 'ci-carteira-sem-vinculo-positivo';
  v_pedido uuid; v_fechamento uuid; v_residual uuid;
- v_before jsonb;v_after jsonb;v_pending jsonb;v_preflight jsonb;
+ v_before jsonb;v_after jsonb;v_pending jsonb;v_preflight jsonb;v_reserva jsonb;v_posreserva jsonb;
 BEGIN
  INSERT INTO auth.users(id) VALUES(v_uid);
  INSERT INTO public.comercios_publicados(local_id,status) VALUES(v_store,'ativo');
@@ -708,6 +708,20 @@ BEGIN
   RAISE EXCEPTION 'Preconferencia individual divergente ou autorizou pagamento: %',v_preflight;
  END IF;
 
+ SELECT public.catalogo_asaas_separar_creditos_excepcionais('residual',v_residual)
+ INTO v_reserva;
+ IF v_reserva->>'ok' IS DISTINCT FROM 'true'
+  OR v_reserva->>'creditos_separados' IS DISTINCT FROM '1'
+  OR v_reserva->>'valor_centavos' IS DISTINCT FROM '200'
+  OR v_reserva->>'pagamento_autorizado' IS DISTINCT FROM 'false' THEN
+  RAISE EXCEPTION 'Reserva residual abaixo de R$100 falhou: %',v_reserva;
+ END IF;
+ SELECT public.catalogo_asaas_preconferir_pagamento_excepcional('residual',v_residual)
+ INTO v_posreserva;
+ IF v_posreserva->>'separacoes_contabeis_sem_liquidacao' IS DISTINCT FROM '1'
+  OR v_posreserva->>'sem_impedimentos_identificados' IS DISTINCT FROM 'false' THEN
+  RAISE EXCEPTION 'HOLD residual não bloqueou nova pré-conferência: %',v_posreserva;
+ END IF;
  RAISE NOTICE 'PASS: saldo positivo de 200 centavos financiado, 1 credito e pedido residual preservados SEM ultimo vinculo';
 END $positive_orphan_balance$;
 
