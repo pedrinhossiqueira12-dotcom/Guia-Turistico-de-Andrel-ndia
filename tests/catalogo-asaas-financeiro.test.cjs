@@ -345,3 +345,68 @@ test("saque multi-meses: ausência de limite de linhas, teto monetário e prova 
  assert.match(ui,/Math\.min\(/);
  assert.match(html,/id="motoboyCreditoContagem"/);
 });
+
+
+test("PostgreSQL em memoria prova mais de 1000 comissoes e evita saldo preso",async()=>{
+ const {PGlite}=require("@electric-sql/pglite");
+ const db=new PGlite();
+ try {
+  const ddl=[
+   "CREATE SCHEMA catalogo_private",
+   "CREATE FUNCTION catalogo_private.catalogo_v2_autorizado(uuid) RETURNS boolean LANGUAGE sql IMMUTABLE AS $$SELECT true$$",
+   "CREATE FUNCTION catalogo_private.catalogo_v2_financiado(uuid) RETURNS boolean LANGUAGE sql IMMUTABLE AS $$SELECT true$$",
+   "CREATE TABLE catalogo_motoboy_perfis(usuario_id uuid PRIMARY KEY,chave_pix_enc text,em_analise boolean)",
+   "CREATE TABLE catalogo_pedidos(id uuid PRIMARY KEY,provedor text,entrega_status text,reembolso_pendente boolean,pagamento_revisao_pendente boolean)",
+   "CREATE TABLE catalogo_comissoes_offline(pedido_id uuid PRIMARY KEY,comercio_id text,competencia text,status text)",
+   "CREATE TABLE catalogo_fechamentos_offline(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),comercio_id text,competencia text,status text)",
+   "CREATE TABLE catalogo_fatura_cobrancas(fechamento_id uuid,gateway text,status text,pago_em timestamptz)",
+   "CREATE TABLE catalogo_remuneracoes_v2(id uuid PRIMARY KEY,pedido_id uuid,motoboy_id uuid,status text,financiamento_comprovado boolean,repasse_id uuid,valor_centavos integer)",
+   "CREATE TABLE catalogo_asaas_saques(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),motoboy_id uuid,valor_centavos integer,status text NOT NULL DEFAULT 'reservado')",
+   "CREATE TABLE catalogo_asaas_saque_itens(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),saque_id uuid,remuneracao_id uuid,ativo boolean NOT NULL DEFAULT true)",
+   "CREATE UNIQUE INDEX test_credito_ativo ON catalogo_asaas_saque_itens(remuneracao_id) WHERE ativo"
+  ].join(";\n")+";";
+  await db.exec(ddl);
+  const latest=read("supabase/pending-migrations/20261009171000_asaas_evitar_residuo_apos_teto_pix.sql");
+  const first=latest.indexOf("CREATE OR REPLACE FUNCTION public.catalogo_asaas_reservar_saque");
+  const end=latest.indexOf("REVOKE ALL ON FUNCTION",first);
+  assert(first>=0 && end>first);
+  await db.exec(latest.slice(first,end));
+  const base=read("supabase/pending-migrations/20261009170000_asaas_saque_total_acumulado_sem_corte_registros.sql");
+  const v=base.indexOf("CREATE OR REPLACE FUNCTION public.catalogo_asaas_validar_reserva_saque");
+  const e=base.indexOf("-- A carteira soma por BIGINT",v);
+  assert(v>=0 && e>v);
+  await db.exec(base.slice(v,e));
+  const riders=[
+   {id:"11111111-1111-4111-8111-111111111111",prefix:"centavos",qtd:1300,valor:50},
+   {id:"22222222-2222-4222-8222-222222222222",prefix:"limite",qtd:501,valor:1000}
+  ];
+  for(const c of riders){
+   await db.query("INSERT INTO catalogo_motoboy_perfis VALUES($1,'pix-ficticio',false)",[c.id]);
+   await db.query("INSERT INTO catalogo_fechamentos_offline(comercio_id,competencia,status) VALUES($1,'2026-09','pago')",["loja-"+c.prefix]);
+   await db.query("INSERT INTO catalogo_fatura_cobrancas SELECT id,'asaas','pago',now() FROM catalogo_fechamentos_offline WHERE comercio_id=$1",["loja-"+c.prefix]);
+   await db.query("INSERT INTO catalogo_pedidos SELECT md5($1||g::text)::uuid,'offline','entregue',false,false FROM generate_series(1,$2::int) g",[c.prefix,c.qtd]);
+   await db.query("INSERT INTO catalogo_comissoes_offline SELECT md5($1||g::text)::uuid,$2,'2026-09','paga' FROM generate_series(1,$3::int) g",[c.prefix,"loja-"+c.prefix,c.qtd]);
+   await db.query("INSERT INTO catalogo_remuneracoes_v2 SELECT md5('rem'||$1||g::text)::uuid,md5($1||g::text)::uuid,$2::uuid,'disponivel',true,NULL,$3::int FROM generate_series(1,$4::int) g",[c.prefix,c.id,c.valor,c.qtd]);
+  }
+  const row=await db.query("SELECT public.catalogo_asaas_reservar_saque($1::uuid) AS r",[riders[0].id]);
+  const a=row.rows[0].r;
+  assert.equal(a.ok,true);assert.equal(Number(a.valor_centavos),65000);
+  assert.equal(Number(a.creditos_incluidos),1300);
+  const items=await db.query("SELECT count(*)::int AS qtd FROM catalogo_asaas_saque_itens WHERE saque_id=$1::uuid",[a.saque_id]);
+  assert.equal(items.rows[0].qtd,1300,"Todas as 1300 comissoes devem ficar na mesma reserva");
+  const again=await db.query("SELECT public.catalogo_asaas_reservar_saque($1::uuid) AS r",[riders[0].id]);
+  assert.equal(again.rows[0].r.ok,false,"Não pode reservar duas vezes os mesmos creditos");
+  await db.query("UPDATE catalogo_asaas_saques SET status='enviado' WHERE id=$1::uuid",[a.saque_id]);
+  const validation=await db.query("SELECT public.catalogo_asaas_validar_reserva_saque($1::uuid) AS r",[a.saque_id]);
+  assert.equal(validation.rows[0].r.elegivel,true,"Validação deve percorrer mais de mil créditos");
+  assert.equal(Number(validation.rows[0].r.quantidade),1300);
+  const capped=await db.query("SELECT public.catalogo_asaas_reservar_saque($1::uuid) AS r",[riders[1].id]);
+  assert.equal(capped.rows[0].r.ok,true);
+  assert.equal(Number(capped.rows[0].r.valor_centavos),491000);
+  const last=await db.query("SELECT public.catalogo_asaas_reservar_saque($1::uuid) AS r",[riders[1].id]);
+  assert.equal(last.rows[0].r.ok,true);
+  assert.equal(Number(last.rows[0].r.valor_centavos),10000);
+  const counted=await db.query("SELECT count(*)::int AS qtd FROM catalogo_asaas_saque_itens WHERE saque_id IN ($1::uuid,$2::uuid)",[capped.rows[0].r.saque_id,last.rows[0].r.saque_id]);
+  assert.equal(counted.rows[0].qtd,501,"Nenhum credito pode ficar perdido na divisão");
+ }finally{await db.close();}
+});
