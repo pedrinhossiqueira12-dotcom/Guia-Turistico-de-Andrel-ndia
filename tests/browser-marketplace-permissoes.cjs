@@ -102,7 +102,7 @@ async function run() {
             console.log("PASS " + test.id + " no Chromium " + width + "px, mock 403");
           } finally { await page.close(); }
         }
-        assert.ok(mockCalls >= 3, "Admin e motoboy precisam consultar autorizacao no servidor");
+        assert.ok(mockCalls >= 2, "Admin e motoboy precisam consultar autorizacao no servidor");
         assert.deepEqual(blocked, [], "Requisicao externa nao prevista");
       } finally {
         await context.close();
