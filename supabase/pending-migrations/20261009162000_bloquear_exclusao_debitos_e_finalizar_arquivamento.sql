@@ -51,7 +51,7 @@ BEGIN
   divida_apurada_centavos=excluded.divida_apurada_centavos,atualizado_em=now();
  UPDATE public.catalogos SET bloqueado=true,
    motivo_bloqueio='Encerramento solicitado pelo proprietário'
- WHERE comercio_id=p_comercio AND motivo_bloqueio IS DISTINCT FROM 'Encerramento solicitado pelo proprietário';
+ WHERE comercio_id=p_comercio AND (bloqueado IS DISTINCT FROM true OR motivo_bloqueio IS DISTINCT FROM 'Encerramento solicitado pelo proprietário');
  RETURN jsonb_build_object('ok',true,'situacao',v_situacao,'divida_centavos',(v_p->>'divida_centavos')::bigint,
   'faturas_pendentes',(v_p->>'faturas_pendentes')::bigint,
   'pedidos_em_andamento',(v_p->>'pedidos_em_andamento')::bigint,
