@@ -19,6 +19,7 @@ const JSON_HEADERS = {"Content-Type":"application/json; charset=utf-8","Access-C
   "Access-Control-Allow-Headers":"authorization,apikey,content-type,x-client-info",
   "Access-Control-Allow-Methods":"POST,OPTIONS","Cache-Control":"no-store"};
 class Failure extends Error {constructor(message:string,public status=400){super(message)}}
+class SandboxTransferRejected extends Failure {}
 const respond=(payload:unknown,status=200)=>new Response(JSON.stringify(payload),{status,headers:JSON_HEADERS});
 const input=(x:unknown)=>x&&typeof x==="object"&&!Array.isArray(x)?x as Record<string,unknown>:{};
 const value=(x:unknown,max=200)=>typeof x==="string"?x.trim().slice(0,max):"";
@@ -51,7 +52,17 @@ async function asaas(path:string,method="GET",body?:unknown){
  });
  const result=await response.json().catch(()=>({}));
  if(!response.ok){
-  console.error("Asaas http error",{path:path.split("?")[0],status:response.status});
+  const details=input(result);
+  const errors=Array.isArray(details.errors)?details.errors:[];
+  // Registra somente códigos de erro, sem chave Pix, CPF, tokens ou detalhes de destinatário.
+  const codes=errors.map((item:unknown)=>value(input(item).code,70)).filter(Boolean).slice(0,3);
+  console.error("Asaas http error",{path:path.split("?")[0],status:response.status,codes});
+  // Somente resposta estruturada de validação (HTTP 400) do POST Asaas Sandbox
+  // é rejeição definitiva; timeout/5xx/erros não estruturados continuam em revisão.
+  if(ENVIRONMENT==="sandbox" && method==="POST" && path==="/transfers"
+    && response.status===400 && errors.length>0)
+    throw new SandboxTransferRejected(
+      "Asaas Sandbox rejeitou a transferência. Verifique a chave Pix fictícia e o saldo no Asaas; a reserva foi liberada.",422);
   throw new Failure("O provedor não confirmou a operação. Verifique o status antes de tentar novamente.",502);
  }
  return input(result);
@@ -308,6 +319,14 @@ async function withdraw(uid:string){
    description:"Comissões Guia Andrelândia",externalReference:saqueId,
   });
  } catch(e) {
+  if(e instanceof SandboxTransferRejected){
+   // O POST foi rejeitado pelo provedor com erro estruturado de validação.
+   // Esta exceção é exclusiva do Sandbox; nenhuma transferência foi aceita.
+   await rpc("catalogo_asaas_atualizar_saque",{p_saque:saqueId,p_estado:"falhou",
+    p_transferencia:null,p_mensagem:"SANDBOX: POST /transfers recusado, HTTP 400 com validação estruturada. Nenhuma transferência criada."});
+   throw e;
+  }
+  // Resultados ambíguos jamais reabrem o saldo sem conciliação.
   await rpc("catalogo_asaas_atualizar_saque",{p_saque:saqueId,p_estado:"revisao",
    p_transferencia:null,p_mensagem:"Resposta do provedor inconclusiva. Não reenviar sem conciliar."});
   throw e;
