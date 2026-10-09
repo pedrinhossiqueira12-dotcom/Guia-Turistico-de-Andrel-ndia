@@ -407,6 +407,37 @@ async function listarAnalisesResiduais(uid:string){
  return respond({success:true,solicitacoes:data||[],
   mensagem:"Fila apenas de leitura. Nenhum repasse é iniciado por esta consulta."});
 }
+// Decisão administrativa SEM movimentação de créditos, saque ou transferência.
+// Estados possíveis: pendente -> em_analise -> recusada; recusa também pode ser direta.
+// A recusa encerra apenas a solicitação de análise, não a obrigação financeira.
+async function revisarAnaliseResidual(uid:string,body:Record<string,unknown>){
+ if(uid!==ADMIN_USER_ID)throw new Failure("Acesso exclusivo da administração.",403);
+ const id=value(body.solicitacao_id,70);
+ check(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id),
+  "Identificador da solicitação inválido.",400);
+ const esperado=value(body.status_esperado,30);
+ const destino=value(body.novo_status,30);
+ check(["pendente","em_analise"].includes(esperado),"Atualize a fila antes de revisar.",409);
+ check(destino==="recusada"||(destino==="em_analise"&&esperado==="pendente"),
+  "Transição de análise não permitida.",409);
+ const detalhe=typeof body.justificativa==="string"?body.justificativa.trim():"";
+ check(detalhe.length<=1000,"A justificativa deve ter no máximo 1.000 caracteres.",400);
+ if(destino==="recusada")
+  check(detalhe.length>=20,"Explique a recusa com pelo menos 20 caracteres.",400);
+ const agora=new Date().toISOString();
+ const {data,error}=await db.from("catalogo_asaas_saldos_residuais")
+  .update({status:destino,detalhe_revisao:detalhe||null,
+    analisado_por:uid,atualizado_em:agora,
+    finalizado_em:destino==="recusada"?agora:null})
+  .eq("id",id).eq("status",esperado)
+  .select("id,status").maybeSingle();
+ if(error)throw new Failure("Não foi possível registrar a revisão.",503);
+ if(!data)throw new Failure("A solicitação mudou de estado. Atualize a fila antes de continuar.",409);
+ return respond({success:true,solicitacao_id:data.id,status:data.status,
+   mensagem:destino==="recusada"
+    ?"Análise encerrada com justificativa. O saldo do entregador permanece intacto; nenhum Pix foi enviado."
+    :"Solicitação marcada para análise. Nenhum crédito foi movimentado."});
+}
 async function reconcileTransfer(saqueId:string,transferId:string){
  const transfer=await asaas("/transfers/"+encodeURIComponent(transferId));
  check(transfer.id===transferId&&transfer.externalReference===saqueId,"Transferência de outro identificador.",409);
@@ -765,6 +796,7 @@ Deno.serve(async (request:Request)=>{
    case "consultar_carteira":return await wallet(user.id,true);
    case "solicitar_analise_residual":return await solicitarAnaliseResidual(user.id,body);
    case "listar_analises_residuais_admin":return await listarAnalisesResiduais(user.id);
+   case "revisar_analise_residual_admin":return await revisarAnaliseResidual(user.id,body);
    case "solicitar_saque":return await withdraw(user.id);
    case "auditar_saque_sandbox":return await auditPendingSandboxTransfer(user.id);
    case "listar_saques_admin":return await listAdminPayouts(user.id);
