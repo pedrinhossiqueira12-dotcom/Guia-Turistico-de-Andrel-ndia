@@ -38,8 +38,14 @@ pre{white-space:pre-wrap;word-break:break-all;background:#f4f6f2;padding:12px;bo
 <div class="actions"><button type="submit" id="savepix">Salvar chave com criptografia</button></div></form>
 <p class="muted">Se aparecer erro de proteção, verifique a existência do Secret <code>CATALOGO_DATA_ENCRYPTION_KEY</code> no Supabase de testes. Não compartilhe esse segredo ou a chave Pix aqui.</p>
 </section>
+<section id="auditarea" hidden>
+<h2>4. Auditar saque em revisão (somente leitura)</h2>
+<p class="muted">Quando o saldo fica bloqueado após uma falha, consulte o histórico do Asaas Sandbox. Esta ação <strong>não envia Pix, não libera créditos nem altera a reserva</strong>.</p>
+<div class="actions"><button id="audit" type="button">Consultar transferência no Asaas Sandbox</button></div>
+<pre id="auditlog" hidden></pre>
+</section>
 <section id="payoutarea" hidden>
-<h2>4. Simular saque no Asaas Sandbox</h2>
+<h2>5. Simular saque no Asaas Sandbox</h2>
 <p class="muted">Esta ação solicita <strong>uma transferência Pix de teste</strong> pelo Asaas Sandbox, usando o saldo fictício e a chave Pix criptografada já cadastrada. Ative-a somente depois de verificar o ambiente, o saldo Sandbox e os eventos TRANSFER_DONE/TRANSFER_FAILED/TRANSFER_CANCELLED no Webhook.</p>
 <p class="muted"><strong>Não clique novamente se o resultado for inconclusivo.</strong> Consulte o histórico; solicitações em revisão ou enviadas permanecem reservadas.</p>
 <div class="actions"><button id="payout" type="button" disabled>Solicitar saque de teste (R$ 2,00)</button></div>
@@ -66,7 +72,7 @@ async function refreshSession(){
  const {data}=await supa.auth.getUser();
  current=data?.user?.id===EXPECTED_ID?data.user:null;
  $("loginform").hidden=!!current;$("signout").hidden=!current;
- $("wallet").hidden=!current;$("pixarea").hidden=!current;$("payoutarea").hidden=!current;
+ $("wallet").hidden=!current;$("pixarea").hidden=!current;$("payoutarea").hidden=!current;$("auditarea").hidden=!current;
  $("user").textContent=current?"Motoboy autenticado no Supabase de testes: "+current.email:
  data?.user?"Esta conta não corresponde ao motoboy de homologação. Saia e entre com o segundo usuário.":"Não autenticado.";
 }
@@ -111,6 +117,20 @@ $("signout").addEventListener("click",()=>busy("signout",async()=>{
  await supa.auth.signOut();await refreshSession();$("balance").textContent="—";message("Sessão encerrada.");
 }));
 $("refresh").addEventListener("click",()=>busy("refresh",wallet));
+$("audit").addEventListener("click",()=>busy("audit",async()=>{
+ const result=await request("catalogo-asaas-financeiro","auditar_saque_sandbox");
+ const audit={
+  saque_id:result.saque_id||null,
+  reserva_em_revisao:!!result.em_revisao,
+  historico_completo:result.listagem_completa===true,
+  transferencias_encontradas:result.transferencias||[],
+  registros_consultados:result.consultadas||0,
+  mensagem:result.mensagem
+ };
+ $("auditlog").hidden=false;
+ $("auditlog").textContent=JSON.stringify(audit,null,2);
+ message("Auditoria de leitura concluída. A reserva não foi modificada.");
+}));
 $("payout").addEventListener("click",()=>busy("payout",async()=>{
  if(!current)throw Error("Entre com o usuário de testes.");
  if(!window.confirm("CONFIRMAR: solicitar UMA transferência Pix de R$ 2,00 exclusivamente no Asaas Sandbox? Não repetir caso o resultado seja inconclusivo."))return;
