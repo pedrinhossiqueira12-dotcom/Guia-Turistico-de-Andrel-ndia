@@ -174,3 +174,28 @@ test("repasse confirmado via API registra operador automático sem atribuir fals
  assert.match(sqlAuto, /REVOKE ALL ON FUNCTION public\.catalogo_asaas_atualizar_saque/);
  assert.doesNotMatch(sqlAuto, /TRUNCATE|DELETE FROM public\.catalogo_/i);
 });
+
+
+const creditoPagoSQL=read("supabase/pending-migrations/20261009130000_asaas_protecao_credito_pago.sql");
+
+test("reserva Asaas trava também reabertura e adulteração de crédito já pago", () => {
+ assert.match(creditoPagoSQL, /CREATE OR REPLACE FUNCTION catalogo_private\.catalogo_asaas_proteger_credito_reservado\(\)/);
+ assert.match(creditoPagoSQL, /IF OLD\.status='pago' THEN/);
+ assert.match(creditoPagoSQL, /'Crédito de saque Asaas liquidado; alteração financeira proibida'/);
+ assert.match(creditoPagoSQL, /IF NEW\.status<>'pago'/);
+ assert.match(creditoPagoSQL, /NEW\.valor_centavos IS DISTINCT FROM OLD\.valor_centavos/);
+ assert.match(creditoPagoSQL, /NEW\.motoboy_id IS DISTINCT FROM OLD\.motoboy_id/);
+ assert.match(creditoPagoSQL, /NEW\.financiamento_comprovado IS DISTINCT FROM OLD\.financiamento_comprovado/);
+ assert.match(creditoPagoSQL, /NEW\.metadata IS DISTINCT FROM OLD\.metadata/);
+ assert.match(creditoPagoSQL, /v_repasse_saque IS DISTINCT FROM v_reserva::text/);
+ assert.match(creditoPagoSQL, /BEFORE UPDATE ON public\.catalogo_remuneracoes_v2/);
+ assert.match(creditoPagoSQL, /REVOKE ALL ON FUNCTION catalogo_private\.catalogo_asaas_proteger_credito_reservado/);
+ assert.doesNotMatch(creditoPagoSQL, /DELETE FROM|TRUNCATE TABLE|DROP TABLE/i);
+});
+
+test("branch de homologação nunca envia transferência Asaas com ambiente production", () => {
+ assert.match(edge, /async function withdraw\(uid:string\)\{\s*\/\/[^\n]*\n[^]*?if\(ENVIRONMENT!=="sandbox"\)/);
+ assert.match(edge, /if\(method==="POST" && path==="\/transfers" && ENVIRONMENT!=="sandbox"\)/);
+ assert.match(edge, /throw new Failure\("Transferência Pix de produção não está liberada\.",503\)/);
+ assert.match(edge, /if\(ENVIRONMENT!=="sandbox" \|\| !WITHDRAWAL_AUTH_ON/);
+});
