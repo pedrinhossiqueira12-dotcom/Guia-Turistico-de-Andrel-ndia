@@ -47,6 +47,9 @@ async function rpc(name:string,args:Record<string,unknown>){
  return data;
 }
 async function asaas(path:string,method="GET",body?:unknown){
+ // Defesa independente, na saída HTTP: esta implementação não envia saques na produção.
+ if(method==="POST" && path==="/transfers" && ENVIRONMENT!=="sandbox")
+  throw new Failure("Transferência Pix de produção não está liberada.",503);
  // Permitir GET de uma transferência antiga mesmo se saques novos estiverem desativados.
  // POST /transfers continua bloqueado pela flag. A baixa exige status validado do Asaas.
  if(path.startsWith("/transfers") && method==="GET"){
@@ -312,6 +315,10 @@ async function auditPendingSandboxTransfer(uid:string){
  throw new Failure("Histórico Asaas extenso demais para auditoria automática. Reserva mantida.",503);
 }
 async function withdraw(uid:string){
+ // Defesa de homologação: nenhuma transferência pode partir desta função em produção,
+ // mesmo se alguém ativar ASAAS_PAYOUTS_ENABLED por engano.
+ if(ENVIRONMENT!=="sandbox")
+  throw new Failure("Saques Asaas ainda não liberados para produção.",503);
  enabled("payouts");
  const {data:profile,error}=await db.from("catalogo_motoboy_perfis")
   .select("chave_pix_enc,em_analise").eq("usuario_id",uid).maybeSingle();
