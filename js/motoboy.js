@@ -474,7 +474,7 @@
       if(erro.message!==STALE_REQUEST)
         definirFeedback("motoboyResidualFeedback",erro.message||"Não foi possível registrar análise.",true);
     }finally{
-      if(generation===state.generation&&btn)btn.disabled=false;
+      if(generation===state.generation&&btn)btn.disabled=Boolean(state.carteira?.saldo_residual && ["pendente","em_analise"].includes(state.carteira.saldo_residual.status));
     }
   }
   async function carregarCarteira() {
