@@ -461,6 +461,17 @@
       : residual?.status==="concluida" ? "A solicitação anterior foi concluída. Consulte o suporte para conferir os documentos."
       : residual?.status==="recusada" ? "A solicitação anterior foi recusada. Entre em contato com o suporte para esclarecer."
       : "Peça análise somente se for interromper suas atividades. Esta ação não realiza transferência.");
+    const saida=carteira.regularizacao_saida||null;
+    const saidaAberta=saida&&["pendente","em_analise"].includes(saida.status);
+    const saidaBloco=$("motoboySaidaBloco");
+    if(saidaBloco)saidaBloco.hidden=!(saidaAberta||
+      carteira.entregador_ativo===false&&saldo>=minimo);
+    const saidaBtn=$("motoboySaidaSubmit");
+    if(saidaBtn)saidaBtn.disabled=Boolean(saidaAberta)||!state.termosAceitos;
+    if(saidaBloco)definirFeedback("motoboySaidaFeedback",
+      saidaAberta ? "Sua regularização está aguardando conferência administrativa. Nenhum pagamento foi iniciado."
+      : saida?.status==="recusada" ? "Seu pedido anterior de regularização foi recusado. Seus créditos não foram eliminados; solicite esclarecimento à administração."
+      : "Solicitação de conferência sem transferência, movimentação de créditos ou garantia de pagamento.");
     const situacaoSaque=carteira.entregador_ativo===false
       ? saldo>0
         ? "Seu perfil de entregador está inativo. Seu saldo permanece registrado, mas o saque comum está suspenso até regularização administrativa."
@@ -493,6 +504,29 @@
       if(generation===state.generation&&btn)btn.disabled=Boolean(state.carteira?.saldo_residual && ["pendente","em_analise"].includes(state.carteira.saldo_residual.status));
     }
   }
+  async function solicitarRegularizacaoSaida(event) {
+    event.preventDefault();
+    if(!state.session||!state.termosAceitos||state.carteira?.entregador_ativo!==false)return;
+    const generation=state.generation,uid=state.userId;
+    const btn=$("motoboySaidaSubmit");
+    if(btn)btn.disabled=true;
+    definirFeedback("motoboySaidaFeedback","Enviando solicitação para conferência…");
+    try{
+      const resposta=await chamarApi({acao:"solicitar_regularizacao_saida",
+        motivo:$("motoboySaidaMotivo")?.value||""},generation,uid,ASAAS_URL);
+      validarSessaoAtual(generation,uid);
+      definirFeedback("motoboySaidaFeedback",resposta.mensagem||"Pedido registrado.");
+      await carregarCarteira();
+    }catch(erro){
+      if(erro.message!==STALE_REQUEST)
+        definirFeedback("motoboySaidaFeedback",erro.message||"Não foi possível registrar o pedido.",true);
+    }finally{
+      if(generation===state.generation&&btn)
+        btn.disabled=Boolean(state.carteira?.regularizacao_saida&&
+          ["pendente","em_analise"].includes(state.carteira.regularizacao_saida.status));
+    }
+  }
+
   async function carregarCarteira() {
     if (!state.session || !navigator.onLine || state.withdrawalLoading) return;
     const generation = state.generation;
@@ -985,6 +1019,7 @@
     $("motoboyRefresh")?.addEventListener("click", () => { carregarEntregas(); carregarExtrato(); carregarCarteira(); });
     $("motoboyWithdrawPix")?.addEventListener("click", solicitarSaque);
     $("motoboyResidualForm")?.addEventListener("submit",solicitarAnaliseSaldoResidual);
+    $("motoboySaidaForm")?.addEventListener("submit",solicitarRegularizacaoSaida);
     $("motoboyLoadMore")?.addEventListener("click", () => carregarEntregas({ append: true }));
     $("motoboyAvailability")?.addEventListener("change", definirDisponibilidade);
     $("motoboyPixForm")?.addEventListener("submit", salvarChavePix);
