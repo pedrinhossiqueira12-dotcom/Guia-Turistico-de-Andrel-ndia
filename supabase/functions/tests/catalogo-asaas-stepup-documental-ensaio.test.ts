@@ -41,6 +41,8 @@ function assertHold(value: Record<string, unknown>) {
 function fake(options: {
   after?: SessaoAferidaEmEnsaio | null;
   before?: SessaoAferidaEmEnsaio | null;
+  factorEligible?: boolean;
+  factorError?: boolean;
   issueError?: boolean;
   verifyError?: boolean;
   onVerify?: () => void;
@@ -52,6 +54,13 @@ function fake(options: {
       return token === "before" ? (options.before === undefined ? identity : options.before)
         : token === "after" ? (options.after === undefined ? after : options.after)
         : null;
+    },
+    async verificarFatorTotpAal1(args) {
+      calls.push({action:"preflight_factor",...args});
+      if (options.factorError) throw new Error("private Auth factor lookup offline");
+      return options.factorEligible !== false
+        && args.userId === reviewer && args.sessionId === session
+        && args.factorId === factor;
     },
     async criarDesafio(args) {
       calls.push({action:"challenge", ...args});
