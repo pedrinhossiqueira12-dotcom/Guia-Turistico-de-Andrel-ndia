@@ -34,6 +34,11 @@ function fakeServer(opts: {
   noAccessToken?: boolean;
   rejectUser?: boolean;
   wrongContentType?: boolean;
+  misleadingContentType?: boolean;
+  oversizedJson?: boolean;
+  exaggeratedContentLength?: boolean;
+  malformedJson?: boolean;
+  invalidUtf8?: boolean;
 } = {}) {
   const calls: {url: string; init: RequestInit}[] = [];
   const http: typeof fetch = async (input, init) => {
@@ -60,8 +65,16 @@ function fakeServer(opts: {
         : {access_token:AFTER,refresh_token:"SHOULD_NEVER_LEAK"};
       if (opts.rejectVerify) status=403;
     } else throw new Error("unknown GoTrue route");
-    return new Response(JSON.stringify(response),{
-      status,headers:{"content-type":ct},
+    const raw = opts.malformedJson ? "{" : JSON.stringify({
+      ...response,
+      ...(opts.oversizedJson ? { padding: "x".repeat(20000) } : {}),
+    });
+    const bodyPayload = opts.invalidUtf8 ? new Uint8Array([0xc3, 0x28]) : raw;
+    return new Response(bodyPayload,{
+      status,headers:{
+        "content-type": opts.misleadingContentType ? "text/plain; application/json" : ct,
+        ...(opts.exaggeratedContentLength ? {"content-length":"1000000"} : {}),
+      },
     });
   };
   return {http,calls};
@@ -183,4 +196,22 @@ Deno.test("nunca enviar OTP malformado, bearer com quebra de linha nem factor ID
  bad=false;try{await sdk.verificarDesafio({bearerToken:BEFORE,factorId:FACTOR,
    challengeId:CHALLENGE,otp:"12a456"})}catch{bad=true}
  assert(bad && calls.length===0,"bad OTP sent to auth");
+});
+
+Deno.test("GoTrue fake: corpo gigante, MIME disfarçado, JSON e UTF-8 inválidos falham fechado", async()=>{
+ for (const opts of [
+  {oversizedJson:true},
+  {exaggeratedContentLength:true},
+  {misleadingContentType:true},
+  {malformedJson:true},
+  {invalidUtf8:true},
+ ]) {
+  const {sdk,calls}=adapter(opts);
+  const result=await new SimuladorStepUpDocumental(sdk,()=>NOW,"isolated-ci")
+    .iniciar(makeIntent(),BEFORE);
+  assert(!result.ok, "Resposta falsa do Auth foi aceita: "+JSON.stringify(opts));
+  assert(calls.length===1 && calls[0].url.endsWith("/user"),
+    "Resposta suspeita nao bloqueou antes de criar challenge");
+  assertHold(result);
+ }
 });
