@@ -1701,6 +1701,28 @@ BEGIN
   OR v_contexto_status->>'movimenta_dinheiro' IS DISTINCT FROM 'false'
  THEN RAISE EXCEPTION 'AAL1/AAL2 documental nao vinculou ou moveu dinheiro: %',v_contexto_status; END IF;
 
+ -- AAL1 ativo nao e AAL2: a comparacao da mesma sessao deve falhar.
+ UPDATE auth.sessions SET aal='aal1',factor_id=NULL
+ WHERE id='fa733333-3333-4333-8333-333333333331'::uuid;
+ SELECT catalogo_private.catalogo_asaas_diagnosticar_vinculo_pre_mfa_nonce_inerte(
+  v_contexto_aal1,v_nonce_doc) INTO v_contexto_status;
+ IF v_contexto_status->>'vinculo_documental_compativel' IS DISTINCT FROM 'false'
+  OR v_contexto_status->>'pagamento_autorizado' IS DISTINCT FROM 'false'
+ THEN RAISE EXCEPTION 'Sessao downgrade AAL1 aceita em pareamento AAL2'; END IF;
+ UPDATE auth.sessions SET aal='aal2',
+  factor_id='fa744444-4444-4444-8444-444444444441'::uuid
+ WHERE id='fa733333-3333-4333-8333-333333333331'::uuid;
+
+ -- Sessao AAL2 com outro fator registrado nao serve para esse contexto.
+ UPDATE auth.sessions SET factor_id='fa744444-4444-4444-8444-444444444449'::uuid
+ WHERE id='fa733333-3333-4333-8333-333333333331'::uuid;
+ SELECT catalogo_private.catalogo_asaas_diagnosticar_vinculo_pre_mfa_nonce_inerte(
+  v_contexto_aal1,v_nonce_doc) INTO v_contexto_status;
+ IF v_contexto_status->>'vinculo_documental_compativel' IS DISTINCT FROM 'false'
+ THEN RAISE EXCEPTION 'Fator AAL2 divergente aceito em contexto AAL1'; END IF;
+ UPDATE auth.sessions SET factor_id='fa744444-4444-4444-8444-444444444441'::uuid
+ WHERE id='fa733333-3333-4333-8333-333333333331'::uuid;
+
  INSERT INTO public.catalogo_asaas_vinculos_pre_mfa_nonce_inertes(
    contexto_id,nonce,vinculado_em,resultado)
  VALUES(v_contexto_aal1,v_nonce_doc,now()-interval '5 years',
