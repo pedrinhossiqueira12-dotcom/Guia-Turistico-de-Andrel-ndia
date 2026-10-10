@@ -36,7 +36,16 @@ GRANT USAGE ON SCHEMA catalogo_mfa_ponte_ci_inerte TO catalogo_mfa_ponte_ci_iner
 -- exige EXECUTE exclusivo do papel NOLOGIN, sem nenhuma credencial criada.
 CREATE FUNCTION catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_reservar_principal_inerte(p_contexto uuid,p_usuario uuid,p_sessao uuid)
  RETURNS jsonb LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path=''
- AS $bridge$ SELECT catalogo_private.catalogo_asaas_reservar_inicio_principal_vinculado_inerte(p_contexto,p_usuario,p_sessao); $bridge$;
+ AS $bridge$ SELECT catalogo_private.catalogo_asaas_reservar_inicio_principal_vinculado_inerte(p_contexto,p_usuario,p_sessao) WHERE NOT EXISTS (
+   -- Verificado A CADA chamada para bloquear SET ROLE indireto concedido
+   -- apos a instalacao. Mesmo que a conta consiga usar a funcao,
+   -- vazamento de grants provoca NULL; nunca executa a funcao interna.
+   SELECT 1 FROM pg_catalog.pg_roles exposed
+   JOIN pg_catalog.pg_roles bridge
+     ON bridge.rolname='catalogo_mfa_ponte_ci_inerte'
+   WHERE exposed.rolname IN ('anon','authenticated','service_role','authenticator')
+     AND pg_catalog.pg_has_role(exposed.oid,bridge.oid,'MEMBER')
+  ); $bridge$;
 REVOKE ALL ON FUNCTION catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_reservar_principal_inerte(uuid,uuid,uuid)
  FROM PUBLIC,anon,authenticated,service_role;
 GRANT EXECUTE ON FUNCTION catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_reservar_principal_inerte(uuid,uuid,uuid)
@@ -47,7 +56,16 @@ GRANT EXECUTE ON FUNCTION catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_rese
 -- exige EXECUTE exclusivo do papel NOLOGIN, sem nenhuma credencial criada.
 CREATE FUNCTION catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_ler_contexto_inerte(p_contexto uuid)
  RETURNS jsonb LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path=''
- AS $bridge$ SELECT catalogo_private.catalogo_asaas_ler_contexto_prechallenge_inerte(p_contexto); $bridge$;
+ AS $bridge$ SELECT catalogo_private.catalogo_asaas_ler_contexto_prechallenge_inerte(p_contexto) WHERE NOT EXISTS (
+   -- Verificado A CADA chamada para bloquear SET ROLE indireto concedido
+   -- apos a instalacao. Mesmo que a conta consiga usar a funcao,
+   -- vazamento de grants provoca NULL; nunca executa a funcao interna.
+   SELECT 1 FROM pg_catalog.pg_roles exposed
+   JOIN pg_catalog.pg_roles bridge
+     ON bridge.rolname='catalogo_mfa_ponte_ci_inerte'
+   WHERE exposed.rolname IN ('anon','authenticated','service_role','authenticator')
+     AND pg_catalog.pg_has_role(exposed.oid,bridge.oid,'MEMBER')
+  ); $bridge$;
 REVOKE ALL ON FUNCTION catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_ler_contexto_inerte(uuid)
  FROM PUBLIC,anon,authenticated,service_role;
 GRANT EXECUTE ON FUNCTION catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_ler_contexto_inerte(uuid)
@@ -58,7 +76,16 @@ GRANT EXECUTE ON FUNCTION catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_ler_
 -- exige EXECUTE exclusivo do papel NOLOGIN, sem nenhuma credencial criada.
 CREATE FUNCTION catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_registrar_desafio_inerte(p_nonce uuid,p_challenge uuid,p_tentativa uuid)
  RETURNS jsonb LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path=''
- AS $bridge$ SELECT catalogo_private.catalogo_asaas_registrar_desafio_compartilhado_inerte(p_nonce,p_challenge,p_tentativa); $bridge$;
+ AS $bridge$ SELECT catalogo_private.catalogo_asaas_registrar_desafio_compartilhado_inerte(p_nonce,p_challenge,p_tentativa) WHERE NOT EXISTS (
+   -- Verificado A CADA chamada para bloquear SET ROLE indireto concedido
+   -- apos a instalacao. Mesmo que a conta consiga usar a funcao,
+   -- vazamento de grants provoca NULL; nunca executa a funcao interna.
+   SELECT 1 FROM pg_catalog.pg_roles exposed
+   JOIN pg_catalog.pg_roles bridge
+     ON bridge.rolname='catalogo_mfa_ponte_ci_inerte'
+   WHERE exposed.rolname IN ('anon','authenticated','service_role','authenticator')
+     AND pg_catalog.pg_has_role(exposed.oid,bridge.oid,'MEMBER')
+  ); $bridge$;
 REVOKE ALL ON FUNCTION catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_registrar_desafio_inerte(uuid,uuid,uuid)
  FROM PUBLIC,anon,authenticated,service_role;
 GRANT EXECUTE ON FUNCTION catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_registrar_desafio_inerte(uuid,uuid,uuid)
@@ -69,7 +96,16 @@ GRANT EXECUTE ON FUNCTION catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_regi
 -- exige EXECUTE exclusivo do papel NOLOGIN, sem nenhuma credencial criada.
 CREATE FUNCTION catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_ler_tentativa_inerte(p_tentativa uuid)
  RETURNS jsonb LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path=''
- AS $bridge$ SELECT catalogo_private.catalogo_asaas_ler_tentativa_prechallenge_inerte(p_tentativa); $bridge$;
+ AS $bridge$ SELECT catalogo_private.catalogo_asaas_ler_tentativa_prechallenge_inerte(p_tentativa) WHERE NOT EXISTS (
+   -- Verificado A CADA chamada para bloquear SET ROLE indireto concedido
+   -- apos a instalacao. Mesmo que a conta consiga usar a funcao,
+   -- vazamento de grants provoca NULL; nunca executa a funcao interna.
+   SELECT 1 FROM pg_catalog.pg_roles exposed
+   JOIN pg_catalog.pg_roles bridge
+     ON bridge.rolname='catalogo_mfa_ponte_ci_inerte'
+   WHERE exposed.rolname IN ('anon','authenticated','service_role','authenticator')
+     AND pg_catalog.pg_has_role(exposed.oid,bridge.oid,'MEMBER')
+  ); $bridge$;
 REVOKE ALL ON FUNCTION catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_ler_tentativa_inerte(uuid)
  FROM PUBLIC,anon,authenticated,service_role;
 GRANT EXECUTE ON FUNCTION catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_ler_tentativa_inerte(uuid)
@@ -80,7 +116,16 @@ GRANT EXECUTE ON FUNCTION catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_ler_
 -- exige EXECUTE exclusivo do papel NOLOGIN, sem nenhuma credencial criada.
 CREATE FUNCTION catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_consumir_desafio_inerte(p_nonce uuid,p_challenge uuid,p_tentativa uuid)
  RETURNS jsonb LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path=''
- AS $bridge$ SELECT catalogo_private.catalogo_asaas_consumir_desafio_compartilhado_inerte(p_nonce,p_challenge,p_tentativa); $bridge$;
+ AS $bridge$ SELECT catalogo_private.catalogo_asaas_consumir_desafio_compartilhado_inerte(p_nonce,p_challenge,p_tentativa) WHERE NOT EXISTS (
+   -- Verificado A CADA chamada para bloquear SET ROLE indireto concedido
+   -- apos a instalacao. Mesmo que a conta consiga usar a funcao,
+   -- vazamento de grants provoca NULL; nunca executa a funcao interna.
+   SELECT 1 FROM pg_catalog.pg_roles exposed
+   JOIN pg_catalog.pg_roles bridge
+     ON bridge.rolname='catalogo_mfa_ponte_ci_inerte'
+   WHERE exposed.rolname IN ('anon','authenticated','service_role','authenticator')
+     AND pg_catalog.pg_has_role(exposed.oid,bridge.oid,'MEMBER')
+  ); $bridge$;
 REVOKE ALL ON FUNCTION catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_consumir_desafio_inerte(uuid,uuid,uuid)
  FROM PUBLIC,anon,authenticated,service_role;
 GRANT EXECUTE ON FUNCTION catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_consumir_desafio_inerte(uuid,uuid,uuid)
