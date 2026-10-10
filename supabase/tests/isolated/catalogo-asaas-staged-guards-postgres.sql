@@ -1241,6 +1241,13 @@ DECLARE
  v_stepup_challenge uuid:='fa766666-6666-4666-8666-666666666661'::uuid;
  v_nonce_exp uuid;
  v_contexto_aal1 uuid;
+ v_contexto_aal1_2 uuid;
+ v_preinicio jsonb;
+ v_prereplay jsonb;
+ v_predesafio jsonb;
+ v_preconsumo jsonb;
+ v_prenonce uuid;
+ v_prenonce2 uuid;
  v_contexto_status jsonb;
  v_nonce_vinculado jsonb;
  v_nonce_result jsonb;
@@ -1640,6 +1647,139 @@ BEGIN
     AND c.expira_em=c.preparado_em+interval '2 minutes'
     AND c.estado='preparado_sem_challenge'
  ) THEN RAISE EXCEPTION 'Contexto AAL1 aceitou fotografia cliente adulterada'; END IF;
+
+ -- Owner-only PostgreSQL real: uma reserva GLOBAL antes do challenge,
+ -- desafio com challenge_id UNIQUE, consumo previo ao OTP, tudo sem Pix.
+ SELECT catalogo_private.catalogo_asaas_reservar_inicio_compartilhado_inerte(
+  v_contexto_aal1) INTO v_preinicio;
+ v_prenonce:=(v_preinicio->>'nonce')::uuid;
+ IF v_preinicio->>'ok' IS DISTINCT FROM 'true' OR v_prenonce IS NULL
+  OR v_preinicio->>'pagamento_autorizado' IS DISTINCT FROM 'false'
+  OR v_preinicio->>'challenge_go_true_verificado' IS DISTINCT FROM 'false'
+ THEN RAISE EXCEPTION 'Reserva SQL prechallenge nao passou HOLD: %',v_preinicio; END IF;
+ SELECT catalogo_private.catalogo_asaas_reservar_inicio_compartilhado_inerte(
+  v_contexto_aal1) INTO v_prereplay;
+ IF v_prereplay->>'ok' IS DISTINCT FROM 'false'
+  OR v_prereplay->>'motivo' IS DISTINCT FROM 'nonce_ja_reservado'
+ THEN RAISE EXCEPTION 'Contexto AAL1 aceitou nonce duplicado: %',v_prereplay; END IF;
+
+ SELECT catalogo_private.catalogo_asaas_registrar_desafio_compartilhado_inerte(
+  v_prenonce,'fa766666-6666-4666-8666-666666666671'::uuid,
+  'fa766666-6666-4666-8666-666666666681'::uuid
+ ) INTO v_predesafio;
+ IF v_predesafio->>'ok' IS DISTINCT FROM 'true'
+  OR v_predesafio->>'pagamento_autorizado' IS DISTINCT FROM 'false'
+ THEN RAISE EXCEPTION 'Challenge SQL nao registrou sem MFA: %',v_predesafio; END IF;
+ SELECT catalogo_private.catalogo_asaas_registrar_desafio_compartilhado_inerte(
+  v_prenonce,'fa766666-6666-4666-8666-666666666672'::uuid,
+  'fa766666-6666-4666-8666-666666666682'::uuid
+ ) INTO v_predesafio;
+ IF v_predesafio->>'ok' IS DISTINCT FROM 'false'
+  OR v_predesafio->>'motivo' IS DISTINCT FROM 'challenge_duplicado'
+ THEN RAISE EXCEPTION 'Segundo desafio no mesmo nonce foi aceito: %',v_predesafio; END IF;
+
+ SELECT catalogo_private.catalogo_asaas_consumir_desafio_compartilhado_inerte(
+  v_prenonce,'fa766666-6666-4666-8666-666666666671'::uuid,
+  'fa766666-6666-4666-8666-666666666689'::uuid
+ ) INTO v_preconsumo;
+ IF v_preconsumo->>'ok' IS DISTINCT FROM 'false'
+ THEN RAISE EXCEPTION 'Desafio de outra tentativa passou consumo: %',v_preconsumo; END IF;
+ SELECT catalogo_private.catalogo_asaas_consumir_desafio_compartilhado_inerte(
+  v_prenonce,'fa766666-6666-4666-8666-666666666671'::uuid,
+  'fa766666-6666-4666-8666-666666666681'::uuid
+ ) INTO v_preconsumo;
+ IF v_preconsumo->>'ok' IS DISTINCT FROM 'true'
+  OR v_preconsumo->>'challenge_go_true_verificado' IS DISTINCT FROM 'false'
+  OR v_preconsumo->>'pagamento_autorizado' IS DISTINCT FROM 'false'
+ THEN RAISE EXCEPTION 'Consumo SQL nao permaneceu inerte: %',v_preconsumo; END IF;
+ SELECT catalogo_private.catalogo_asaas_consumir_desafio_compartilhado_inerte(
+  v_prenonce,'fa766666-6666-4666-8666-666666666671'::uuid,
+  'fa766666-6666-4666-8666-666666666681'::uuid
+ ) INTO v_prereplay;
+ IF v_prereplay->>'ok' IS DISTINCT FROM 'false'
+  OR v_prereplay->>'motivo' IS DISTINCT FROM 'tentativa_ja_consumida'
+ THEN RAISE EXCEPTION 'Replay de consumo SQL foi aceito: %',v_prereplay; END IF;
+
+ -- Outra sessao AAL1 valida e CONTEXTO distinto. Mesmo challenge_id
+ -- nao pode ser reaproveitado no registro de outra operacao.
+ UPDATE auth.sessions SET aal='aal1',factor_id=NULL
+ WHERE id='fa733333-3333-4333-8333-333333333332'::uuid;
+ INSERT INTO public.catalogo_asaas_contextos_pre_mfa_inertes(
+  separacao_id,revisor_id,sessao_id,fator_id,
+  fingerprint_creditos_sha256,dossie_seq,dossie_hash_sha256,
+  matriz_hash_sha256,preparado_em,expira_em,estado
+ ) VALUES(
+  (v_reserva->>'separacao_id')::uuid,
+  'fa722222-2222-4222-8222-222222222221'::uuid,
+  'fa733333-3333-4333-8333-333333333332'::uuid,
+  'fa744444-4444-4444-8444-444444444441'::uuid,
+  repeat('f',64),999,repeat('f',64),repeat('f',64),
+  now(),now()+interval '2 minutes','preparado_sem_challenge'
+ ) RETURNING id INTO v_contexto_aal1_2;
+ SELECT catalogo_private.catalogo_asaas_reservar_inicio_compartilhado_inerte(
+  v_contexto_aal1_2) INTO v_preinicio;
+ v_prenonce2:=(v_preinicio->>'nonce')::uuid;
+ IF v_preinicio->>'ok' IS DISTINCT FROM 'true'
+  OR v_prenonce2 IS NULL OR v_prenonce2=v_prenonce
+ THEN RAISE EXCEPTION 'Segundo contexto AAL1 nao reservou nonce distinto'; END IF;
+ SELECT catalogo_private.catalogo_asaas_registrar_desafio_compartilhado_inerte(
+  v_prenonce2,'fa766666-6666-4666-8666-666666666671'::uuid,
+  'fa766666-6666-4666-8666-666666666682'::uuid
+ ) INTO v_predesafio;
+ IF v_predesafio->>'ok' IS DISTINCT FROM 'false'
+  OR v_predesafio->>'motivo' IS DISTINCT FROM 'challenge_duplicado'
+ THEN RAISE EXCEPTION 'Challenge ID escapou para outro nonce: %',v_predesafio; END IF;
+ SELECT catalogo_private.catalogo_asaas_registrar_desafio_compartilhado_inerte(
+  v_prenonce2,'fa766666-6666-4666-8666-666666666672'::uuid,
+  'fa766666-6666-4666-8666-666666666682'::uuid
+ ) INTO v_predesafio;
+ IF v_predesafio->>'ok' IS DISTINCT FROM 'true'
+ THEN RAISE EXCEPTION 'Challenge unico de segunda operacao foi bloqueado: %',v_predesafio; END IF;
+ UPDATE auth.sessions SET aal='aal2',
+  factor_id='fa744444-4444-4444-8444-444444444441'::uuid
+ WHERE id='fa733333-3333-4333-8333-333333333332'::uuid;
+ -- Upgrade AAL2 nao prova o challenge desta operacao e nao pode
+ -- reutilizar a sessao antiga para confirmar o challenge registrado.
+ SELECT catalogo_private.catalogo_asaas_consumir_desafio_compartilhado_inerte(
+  v_prenonce2,'fa766666-6666-4666-8666-666666666672'::uuid,
+  'fa766666-6666-4666-8666-666666666682'::uuid
+ ) INTO v_preconsumo;
+ IF v_preconsumo->>'ok' IS DISTINCT FROM 'false'
+ THEN RAISE EXCEPTION 'Consumo pre-OTP aceitou sessao alterada AAL2: %',v_preconsumo; END IF;
+
+ BEGIN
+  DELETE FROM public.catalogo_asaas_reservas_prechallenge_compartilhadas_inertes
+  WHERE contexto_id=v_contexto_aal1;
+  RAISE EXCEPTION 'Reserva prechallenge permitiu DELETE';
+ EXCEPTION WHEN check_violation THEN NULL;
+ END;
+ BEGIN
+  UPDATE public.catalogo_asaas_desafios_prechallenge_compartilhados_inertes
+  SET tentativa=gen_random_uuid() WHERE nonce=v_prenonce;
+  RAISE EXCEPTION 'Desafio prechallenge permitiu UPDATE';
+ EXCEPTION WHEN check_violation THEN NULL;
+ END;
+ BEGIN
+  DELETE FROM public.catalogo_asaas_consumos_prechallenge_compartilhados_inertes
+  WHERE nonce=v_prenonce;
+  RAISE EXCEPTION 'Consumo prechallenge permitiu DELETE';
+ EXCEPTION WHEN check_violation THEN NULL;
+ END;
+ IF has_table_privilege('authenticated',
+    'public.catalogo_asaas_reservas_prechallenge_compartilhadas_inertes','INSERT')
+  OR has_table_privilege('service_role',
+    'public.catalogo_asaas_desafios_prechallenge_compartilhados_inertes','SELECT')
+  OR has_table_privilege('anon',
+    'public.catalogo_asaas_consumos_prechallenge_compartilhados_inertes','SELECT')
+  OR has_function_privilege('authenticated',
+    'catalogo_private.catalogo_asaas_reservar_inicio_compartilhado_inerte(uuid)','EXECUTE')
+  OR has_function_privilege('service_role',
+    'catalogo_private.catalogo_asaas_registrar_desafio_compartilhado_inerte(uuid,uuid,uuid)','EXECUTE')
+  OR has_function_privilege('anon',
+    'catalogo_private.catalogo_asaas_consumir_desafio_compartilhado_inerte(uuid,uuid,uuid)','EXECUTE')
+ THEN RAISE EXCEPTION 'RPC ou tabela prechallenge compartilhada exposta ao cliente'; END IF;
+ RAISE NOTICE 'PASS: prechallenge real Postgres owner-only, nonce e challenge unicos, replay, sessoes, RLS e HOLD';
+
  BEGIN
   INSERT INTO public.catalogo_asaas_contextos_pre_mfa_inertes(
     separacao_id,sessao_id,fator_id,
