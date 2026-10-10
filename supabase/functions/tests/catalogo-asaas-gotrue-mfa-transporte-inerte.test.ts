@@ -73,7 +73,7 @@ function adapter(
   const {http,calls}=fakeServer(opts);
   const sdk = new GoTrueMfaTransporteInerte({
     projectUrl: PROJECT,publishableKey:KEY,http,
-    verificarAssinaturaJwtESessaoNoServidor: override ?? async token=>principal(token),
+    verificarAssinaturaJwtESessaoNoServidor: override ?? (async (token)=>principal(token)),
   });
   return {sdk,calls};
 }
