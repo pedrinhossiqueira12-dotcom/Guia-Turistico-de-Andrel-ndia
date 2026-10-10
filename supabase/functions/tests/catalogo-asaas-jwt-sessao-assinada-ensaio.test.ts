@@ -164,7 +164,10 @@ Deno.test("issuer, audience, role, anon, AAL, user e session errados sao negados
   assert(await verifier.verificar(await tokenSign(f,claims))===null,
     "unauthorized claims passed "+JSON.stringify(claims));
  }
- assert(requests.sessions===0,"invalid claims reached session DB");
+ // sub/session_id com UUID valido e assinatura valida precisam passar
+ // pela consulta Auth para provar divergencia; claims estruturalmente
+ // invalidas sao recusadas antes. Sao exatamente esses 2 casos.
+ assert(requests.sessions===2,"session mismatches require backend lookup");
 });
 
 Deno.test("JWT expirado, iat futuro/antigo e nbf futuro sao recusados",async()=>{
