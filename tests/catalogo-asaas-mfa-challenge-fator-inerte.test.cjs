@@ -47,6 +47,7 @@ test("SQL isolated real cobre prova de fator de outra conta, atual e obsoleta",(
  for(const msg of ["Desafio MFA de outro usuario aceito",
  "Challenge verificado no fator autorizou indevidamente",
  "Challenge MFA antigo aceito por JWT renovado",
+ "Desafio de outra sessao com mesmo fator virou autorizacao",
  "PASS: verified_at de factor recente e observavel"])
  assert.ok(fixture.includes(msg),msg);
  assert.match(fixture,/SET LOCAL ROLE authenticated/);
