@@ -4,6 +4,7 @@ import {
   type IntencaoDocumentalEmEnsaio,
   type PortaDeAutenticacaoFalsa,
   type SessaoAferidaEmEnsaio,
+  type PortaReservaCompartilhadaMfaEmEnsaio,
 } from "../_shared/catalogo-asaas-stepup-documental-ensaio.ts";
 
 function assert(v: unknown, m: string): asserts v { if (!v) throw new Error(m); }
@@ -316,4 +317,133 @@ Deno.test("confirmacao: Auth lento deixa challenge vencer sem enviar OTP",async(
  const retry=await flow.confirmar(issued.tentativa!,"before","123456");
  assert(!retry.ok,"tentativa expirada nao pode voltar");
  assertHold(result);assertHold(retry);
+});
+
+
+// Duas instancias de CI compartilham este lock sintetico; em backend real
+// teria de ser implementado com Postgres e politica transacional auditada.
+function gateCompartilhado(): {
+  gate: PortaReservaCompartilhadaMfaEmEnsaio;
+  chamadasInicio: Array<Record<string, unknown>>;
+  chamadasVerificacao: Array<Record<string, unknown>>;
+} {
+  const inicios = new Set<string>();
+  const verificacoes = new Set<string>();
+  const chamadasInicio: Array<Record<string, unknown>> = [];
+  const chamadasVerificacao: Array<Record<string, unknown>> = [];
+  const gate: PortaReservaCompartilhadaMfaEmEnsaio = {
+    async reservarInicio(args) {
+      chamadasInicio.push({...args});
+      if (inicios.has(args.nonce)) return false;
+      // A reserva acontece SINCRONAMENTE antes do yield de IO simulado.
+      inicios.add(args.nonce);
+      await Promise.resolve();
+      return true;
+    },
+    async reservarVerificacao(args) {
+      chamadasVerificacao.push({...args});
+      if (verificacoes.has(args.challengeId)) return false;
+      verificacoes.add(args.challengeId);
+      await Promise.resolve();
+      return true;
+    },
+  };
+  return {gate, chamadasInicio, chamadasVerificacao};
+}
+
+Deno.test("duas instancias com gate comum nao criam dois challenges do mesmo nonce", async()=>{
+  const {auth,calls}=fake();
+  const {gate,chamadasInicio,chamadasVerificacao}=gateCompartilhado();
+  const a=new SimuladorStepUpDocumental(auth,()=>NOW,"isolated-ci",gate);
+  const b=new SimuladorStepUpDocumental(auth,()=>NOW,"isolated-ci",gate);
+  const [r1,r2]=await Promise.all([a.iniciar(intent(),"before"),b.iniciar(intent(),"before")]);
+  assert(Number(r1.ok)+Number(r2.ok)===1,"dois processos venceram reserva global");
+  assert(calls.filter(c=>c.action==="challenge").length===1,"dois challenges emitidos");
+  assert(chamadasInicio.length===2,"gate nao consultado por ambas instancias");
+  for(const entry of chamadasInicio) {
+    assert(entry.userId===reviewer && entry.sessionId===session
+      && entry.factorId===factor && entry.separationId===escrow
+      && entry.evidenceHash==="a".repeat(64),"contexto da operacao adulterado");
+    assert(!("otp" in entry) && !("bearerToken" in entry)
+      && !("accessToken" in entry),"segredo enviado ao gate");
+  }
+  const winner=r1.ok ? {flow:a,result:r1} : {flow:b,result:r2};
+  const accepted=await winner.flow.confirmar(winner.result.tentativa!,"before","123456");
+  assert(accepted.ok,"gate impediu fluxo valido de laboratorio");
+  assert(chamadasVerificacao.length===1,"gate de verificacao nao foi usado");
+  assert(chamadasVerificacao[0].challengeId===challengeId
+    && chamadasVerificacao[0].nonce===nonce,"challenge/nonce errados no consumo global");
+  assert(!("otp" in chamadasVerificacao[0])
+    && !("bearerToken" in chamadasVerificacao[0]),"OTP chegou ao gate");
+  assertHold(r1);assertHold(r2);assertHold(accepted);
+});
+
+Deno.test("reservas compartilhadas negadas ou indisponiveis falham fechado",async()=>{
+  for(const kind of ["negado","erro"] as const) {
+    const {auth,calls}=fake();
+    const gate:PortaReservaCompartilhadaMfaEmEnsaio={
+      async reservarInicio() {
+        if(kind==="erro")throw Error("db offline");
+        return false;
+      },
+      async reservarVerificacao(){throw Error("nao deve chegar aqui");},
+    };
+    const flow=new SimuladorStepUpDocumental(auth,()=>NOW,"isolated-ci",gate);
+    const denied=await flow.iniciar(intent(),"before");
+    assert(!denied.ok && denied.motivo===(kind==="erro"
+      ?"reserva_compartilhada_inicio_indisponivel"
+      :"reserva_compartilhada_inicio_duplicada"),"gate permitiu iniciar");
+    assert(calls.length===0,"rede/OTP chamados apos erro da reserva inicial");
+    const retry=await flow.iniciar(intent(),"before");
+    assert(!retry.ok && retry.motivo==="intencao_ja_vinculada",
+      "erro da reserva reutilizou nonce local");
+    assertHold(denied);assertHold(retry);
+  }
+});
+
+Deno.test("mesmo challenge usado em outro nonce nao verifica duas operacoes",async()=>{
+  const {auth,calls}=fake();
+  const {gate}=gateCompartilhado();
+  const a=new SimuladorStepUpDocumental(auth,()=>NOW,"isolated-ci",gate);
+  const b=new SimuladorStepUpDocumental(auth,()=>NOW,"isolated-ci",gate);
+  const alternateNonce="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaab";
+  const [r1,r2]=await Promise.all([
+    a.iniciar(intent(),"before"),
+    b.iniciar({...intent(),nonce:alternateNonce},"before"),
+  ]);
+  assert(r1.ok && r2.ok,"intencoes distintas deveriam chegar ao mock");
+  const [v1,v2]=await Promise.all([
+    a.confirmar(r1.tentativa!,"before","123456"),
+    b.confirmar(r2.tentativa!,"before","123456"),
+  ]);
+  assert(Number(v1.ok)+Number(v2.ok)===1,
+    "challenge reutilizado em dois nonces escapou do gate global");
+  assert(calls.filter(c=>c.action==="verify").length===1,
+    "mesmo challenge enviou dois OTP ao fake Auth");
+  assertHold(v1);assertHold(v2);
+});
+
+Deno.test("gate de consumo indisponivel ou lento nunca envia OTP",async()=>{
+  for(const kind of ["false","throw","expira"] as const) {
+    let clock=NOW;
+    const {auth,calls}=fake();
+    const gate:PortaReservaCompartilhadaMfaEmEnsaio={
+      async reservarInicio(){return true;},
+      async reservarVerificacao(){
+        if(kind==="throw")throw Error("shared DB offline");
+        if(kind==="expira"){clock+=121_000;return true;}
+        return false;
+      },
+    };
+    const flow=new SimuladorStepUpDocumental(auth,()=>clock,"isolated-ci",gate);
+    const issued=await flow.iniciar(intent(),"before");
+    assert(issued.ok&&issued.tentativa,"nao iniciou challenge falso");
+    const denied=await flow.confirmar(issued.tentativa!,"before","123456");
+    assert(!denied.ok,"verificacao aceita apos gate recusado/expirado");
+    assert(calls.filter(c=>c.action==="verify").length===0,
+      "OTP foi enviado sem reserva global concluida");
+    const replay=await flow.confirmar(issued.tentativa!,"before","123456");
+    assert(!replay.ok,"tentativa rejeitada foi reaberta");
+    assertHold(denied);assertHold(replay);
+  }
 });
