@@ -108,9 +108,11 @@ jobs:
         with:
           deno-version: v2.x
       - name: Type-check Asaas financial Edge Function
-        run: deno check --node-modules-dir=auto supabase/functions/catalogo-asaas-financeiro/index.ts
+        run: |
+          deno check --node-modules-dir=auto supabase/functions/catalogo-asaas-financeiro/index.ts
+          deno check supabase/functions/_shared/catalogo-asaas-stepup-documental-ensaio.ts
       - name: Test financial snapshots without database access
-        run: deno test --no-check --allow-read=supabase/functions supabase/functions/tests/catalogo-financeiro.test.ts supabase/functions/tests/catalogo-checkouts-contract.test.ts supabase/functions/tests/catalogo-seguranca-pagamentos.test.ts supabase/functions/tests/catalogo-webhook-identificacao.test.ts supabase/functions/tests/catalogo-fatura-provedor.test.ts
+        run: deno test --no-check --allow-read=supabase/functions supabase/functions/tests/catalogo-financeiro.test.ts supabase/functions/tests/catalogo-checkouts-contract.test.ts supabase/functions/tests/catalogo-seguranca-pagamentos.test.ts supabase/functions/tests/catalogo-webhook-identificacao.test.ts supabase/functions/tests/catalogo-fatura-provedor.test.ts supabase/functions/tests/catalogo-asaas-stepup-documental-ensaio.test.ts
 
   edge-http-mock-tests:
     name: Real Edge HTTP handlers with fake provider and blocked network (Deno)
