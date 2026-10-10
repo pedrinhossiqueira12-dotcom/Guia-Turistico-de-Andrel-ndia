@@ -76,6 +76,29 @@ O teste de contrato
 impede remover acidentalmente restrições de RLS, unicidade,
 revogação de acesso e estado inerte.
 
+## Status verificado no STAGING
+
+Migração `asaas_stepup_challenge_duravel_sem_verificacao_pix_inerte_staging_20261010`
+aplicada **somente no projeto de homologação**
+`jbttwihctuibchhcyqtl` após o job PostgreSQL financeiro CI passar.
+
+As verificações após instalação confirmaram:
+
+- RLS ativo; `anon` não tem leitura, `authenticated` não tem
+  INSERT e `service_role` não tem SELECT nem INSERT.
+- Funções `catalogo_private.catalogo_asaas_preparar_stepup_desafio_inerte()`
+  e `catalogo_private.catalogo_asaas_stepup_desafio_imutavel()` sem
+  EXECUTE para `anon`, `authenticated` ou `service_role`.
+- Ambos os triggers ativados; **zero** políticas RLS que abram acesso.
+- **0 desafios, 0 nonces, 0 revisores, 0 pareceres** gravados.
+- Nenhuma Edge, transferência, pagamento ou usuário MFA criado.
+
+**Correção de teste:** `LEAST` é expressão especial do PostgreSQL,
+sem prefixo `pg_catalog.`; a primeira CI sinalizou a sintaxe
+equivocada no clone, corrigida antes da migração no STAGING.
+O teste estático foi atualizado com a sintaxe correta e também exige
+a verificação do fingerprint dos créditos e hash da matriz.
+
 ## Antes de qualquer uso real
 
 1. Habilitar cadastro dos revisores reais e política de MFA por papel;
