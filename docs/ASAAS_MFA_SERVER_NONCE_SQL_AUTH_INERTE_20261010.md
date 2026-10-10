@@ -96,3 +96,37 @@ Testes estáticos correspondentes:
 ou autenticação financeira aprovada.** Não conceder GRANT a service_role
 para tentar conectar a Edge; projetar backend privado com credenciais,
 métodos e auditoria independentes antes de habilitar MFA.
+
+
+## Incremento 14 — migration 19000 aplicada no STAGING e adaptador SQL parametrizado
+
+- Aplicada **somente no projeto de homologacao** `jbttwihctuibchhcyqtl`
+  com nome `asaas_prechallenge_leituras_owner_only_inertes_hold_staging_20261010`.
+- CI anterior ao deploy de homologacao: GitHub Actions run 38084774968
+  concluida **12/12 SUCCESS**, inclusive migrations reais no banco descartavel e pgTAP.
+- Auditoria posterior em PostgreSQL STAGING: duas funcoes SECURITY INVOKER,
+  EXECUTE permitido somente ao owner; NEGADO para `anon`, `authenticated` e
+  `service_role`. Confirmado tambem executando chamadas sob cada um desses
+  3 papéis em transacoes revertidas: acesso negado.
+- Leitura de contexto/tentativa inexistentes ou NULL retornou SQL NULL.
+  0 reservas, 0 desafios, 0 consumos e 0 fatores TOTP verificados.
+- O schema `catalogo_private` possui USAGE para `anon` e `authenticated`
+  herdado da configuracao existente; as duas funcoes novas **NAO** podem
+  ser executadas por esses papeis. Nao foram feitas revogacoes globais
+  capazes de quebrar outros fluxos.
+- Adicionado `supabase/functions/_shared/catalogo-asaas-livro-owner-sql-inerte.ts`.
+  E apenas tradutor para cinco SELECT com placeholders `$1::uuid` etc.,
+  e um executor injetado nos testes, que recusa databases fora dos clones
+  `catalogo_asaas_guards_ci`/`catalogo_asaas_race_ci`. Sem driver real,
+  rede, senha, token ou permissao para PostgREST/Edge.
+- Testes Deno `catalogo-asaas-livro-owner-sql-inerte.test.ts` exercitam
+  cinco operacoes bind-only, schema retornado, rejeicao de payload SQL
+  perigoso, status HOLD e tentativa de usar entradas nao UUID.
+
+Proximo bloqueio: criacao e revisao independentes de um processo
+privilegiado de minimo acesso para ler o PostgreSQL sem usar role
+administrativa no frontend/Edge e prova GoTrue TOTP REAL no STAGING.
+Nao ativar esta classe de testes diretamente em producao.
+
+**Sem mexer no Asaas, sem implantacao Edge, sem PROD, sem saque ou Pix real,
+sem merge. PR #39 DRAFT e HOLD_OBRIGATORIO.**
