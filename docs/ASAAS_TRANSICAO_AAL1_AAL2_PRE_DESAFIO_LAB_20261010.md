@@ -76,6 +76,31 @@ Função `catalogo_private.catalogo_asaas_ler_sessao_aal1_inerte(uuid)`:
   `tests/catalogo-asaas-aal1-aal2-transicao-inerte.test.cjs`
   impede regressão de privilégio SQL ou de separação das fases.
 
+## Resultado verificado em homologação e CI
+
+Migração
+`asaas_sessao_aal1_private_prechallenge_sem_pix_staging_20261010`
+aplicada **somente** no projeto Supabase STAGING
+`jbttwihctuibchhcyqtl`.
+
+Auditoria SQL posterior confirmou:
+- Função `catalogo_private.catalogo_asaas_ler_sessao_aal1_inerte(uuid)`
+  **SECURITY INVOKER**, sem permissão EXECUTE a
+  `anon`, `authenticated` ou `service_role`.
+- **3 sessões AAL1 existentes**, e o leitor identificou as **3**
+  como sessões básicas elegíveis *para a etapa de desafio*.
+  Nenhuma é AAL2 por esse fato.
+- **0 fatores MFA, 0 revisores, 0 desafios e 0 tentativas**.
+- UUID de sessão inexistente retorna `NULL`.
+- Security Advisor não criou novos alertas: permanecem os
+  alertas gerais conhecidos da RPC `catalogo_status_publicacao`
+  e da proteção de senha vazada, não relacionados à nova função.
+
+CI funcional do commit `27467bd2d298375e30db95ddb900790eb181a770`:
+[workflow 38073827909](https://github.com/pedrinhossiqueira12-dotcom/Guia-Turistico-de-Andrel-ndia/actions/runs/38073827909)
+**12/12 jobs aprovados**, incluindo **65/65 testes Deno**
+e os SQL de privacidade AAL1.
+
 ## Limites / bloqueadores
 
 **Continua um laboratório sem autorização financeira**, não uma
