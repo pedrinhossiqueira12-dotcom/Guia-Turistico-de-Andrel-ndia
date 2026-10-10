@@ -64,12 +64,16 @@ https://central.ajuda.asaas.com/hc/pt-br/articles/32059618254875-Como-funcionam-
 3. Planejar janela, backup e aplicação das migrations, com revisão humana.
 4. Configurar ambiente **produção**, credenciais e Webhooks separados, com
    flags `ASAAS_BILLING_ENABLED=false`,
+   `ASAAS_PRODUCTION_BILLING_APPROVED=false`,
    `ASAAS_PAYOUTS_ENABLED=false` e
    `ASAAS_SAQUE_VALIDACAO_ENABLED=false`.
 5. Implantar somente com autorização; validar acesso, Webhooks e leituras
    sem criar Pix real. Não reutilizar URLs nem IDs de homologação.
 6. Ativar emissão de faturas primeiro, sob janela monitorada e critérios
-   de aceite. Pix do motoboy permanece desligado.
+   de aceite. **Somente após autorização expressa** ativar também o
+   opt-in independente `ASAAS_PRODUCTION_BILLING_APPROVED=true`: a combinação
+   de `ASAAS_ENVIRONMENT=production` e `ASAAS_BILLING_ENABLED=true` não basta.
+   Pix do motoboy permanece desligado.
 7. **Saques reais só com aprovação adicional e específica**, após adaptar
    a barreira de código que proíbe `POST /transfers` fora do Sandbox.
    Criar limites e revisão independente antes do primeiro pagamento real.
