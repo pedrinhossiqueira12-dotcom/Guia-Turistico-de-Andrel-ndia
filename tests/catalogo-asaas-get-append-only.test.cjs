@@ -42,7 +42,7 @@ test("Edge registra UUID por GET da API e informa resumo individual sob admin",(
  assert.match(consult,/catalogo_asaas_registrar_consulta_get_excepcional/);
  assert.match(consult,/p_consulta_id:crypto\.randomUUID\(\)/);
  const m=edge.slice(edge.indexOf("async function matrizConciliacaoEscrowAdmin("),
-   edge.indexOf("// Dossie administrativo append-only."));
+   edge.indexOf("async function auditarHistoricoTransferenciasExcepcionaisSandboxAdmin("));
  assert.match(m,/uid!==ADMIN_USER_ID/);
  assert.match(m,/catalogo_asaas_diagnosticar_consultas_get_escrow/);
  assert.match(m,/consultas\.pagamento_autorizado===false/);
