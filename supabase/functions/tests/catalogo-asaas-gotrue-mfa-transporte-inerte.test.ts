@@ -74,6 +74,8 @@ function adapter(
   const sdk = new GoTrueMfaTransporteInerte({
     projectUrl: PROJECT,publishableKey:KEY,http,
     verificarAssinaturaJwtESessaoNoServidor: override ?? (async (token)=>principal(token)),
+    verificarFatorTotpAal1NoServidor: async ({userId,sessionId,factorId})=>
+      userId===UID && sessionId===SID && factorId===FACTOR,
   });
   return {sdk,calls};
 }
