@@ -990,6 +990,10 @@ DECLARE
  v_item uuid;
  v_qty bigint;
  v_sum bigint;
+ v_diagnostico jsonb;
+ v_diagnostico_banco jsonb;
+ v_diagnostico_reversao jsonb;
+ v_evidencia jsonb;
 BEGIN
  INSERT INTO auth.users(id) VALUES(v_uid);
  INSERT INTO public.comercios_publicados(local_id,status) VALUES(v_store,'ativo');
@@ -1113,6 +1117,48 @@ BEGIN
  OR has_table_privilege('service_role',
    'public.catalogo_asaas_separacoes_excepcionais_itens','INSERT')
  THEN RAISE EXCEPTION 'Permissões do escrow estão abertas demais'; END IF;
+ -- Diagnostico da separacao e SOMENTE LEITURA: nunca liberar/pagar.
+ SELECT public.catalogo_asaas_diagnosticar_separacao_excepcional(
+  (v_reserva->>'separacao_id')::uuid) INTO v_diagnostico;
+ IF v_diagnostico->>'composicao_inalterada_e_financiada' IS DISTINCT FROM 'true'
+  OR v_diagnostico->>'quantidade_encontrada' IS DISTINCT FROM '2'
+  OR v_diagnostico->>'saldo_separado_centavos' IS DISTINCT FROM '12000'
+  OR v_diagnostico->>'observacoes_bancarias_total' IS DISTINCT FROM '0'
+  OR v_diagnostico->>'liberacao_automatica_autorizada' IS DISTINCT FROM 'false'
+  OR v_diagnostico->>'quitacao_automatica_autorizada' IS DISTINCT FROM 'false'
+ THEN RAISE EXCEPTION 'Diagnostico sem banco nao reteve saldos: %',v_diagnostico; END IF;
+
+ -- Mesmo um DONE tardio deve aparecer como prova e NAO liberar creditos.
+ SELECT public.catalogo_asaas_registrar_observacao_excepcional(
+  'saida',v_saida,'ci_audit_frozen_120',
+  'guia-exc:saida:'||v_saida,12000,'DONE') INTO v_evidencia;
+ IF v_evidencia->>'ok' IS DISTINCT FROM 'true'
+ OR v_evidencia->>'pagamento_baixado' IS DISTINCT FROM 'false' THEN
+  RAISE EXCEPTION 'Evidencia bancaria deveria ser apenas auditoria: %',v_evidencia; END IF;
+ SELECT public.catalogo_asaas_diagnosticar_separacao_excepcional(
+  (v_reserva->>'separacao_id')::uuid) INTO v_diagnostico_banco;
+ IF v_diagnostico_banco->>'observacoes_bancarias_total' IS DISTINCT FROM '1'
+  OR v_diagnostico_banco->>'observacoes_done' IS DISTINCT FROM '1'
+  OR v_diagnostico_banco->>'liberacao_automatica_autorizada' IS DISTINCT FROM 'false'
+  OR v_diagnostico_banco->>'composicao_inalterada_e_financiada' IS DISTINCT FROM 'true'
+ THEN RAISE EXCEPTION 'Evidencia DONE nao reteve HOLD: %',v_diagnostico_banco; END IF;
+
+ -- Perda de financiamento de um dos 2 creditos: HOLD e alerta, nunca baixa.
+ UPDATE public.catalogo_remuneracoes_v2
+ SET status='retido',financiamento_comprovado=false WHERE id=v_item;
+ SELECT public.catalogo_asaas_diagnosticar_separacao_excepcional(
+  (v_reserva->>'separacao_id')::uuid) INTO v_diagnostico_reversao;
+ IF v_diagnostico_reversao->>'creditos_financeiramente_invalidos' IS DISTINCT FROM '1'
+  OR v_diagnostico_reversao->>'composicao_inalterada_e_financiada' IS DISTINCT FROM 'false'
+  OR v_diagnostico_reversao->>'liberacao_automatica_autorizada' IS DISTINCT FROM 'false'
+  OR v_diagnostico_reversao->>'quitacao_automatica_autorizada' IS DISTINCT FROM 'false'
+ THEN RAISE EXCEPTION 'Estorno nao identificado: %',v_diagnostico_reversao; END IF;
+
+ IF has_function_privilege('anon',
+ 'public.catalogo_asaas_diagnosticar_separacao_excepcional(uuid)','EXECUTE')
+ OR has_function_privilege('authenticated',
+ 'public.catalogo_asaas_diagnosticar_separacao_excepcional(uuid)','EXECUTE')
+ THEN RAISE EXCEPTION 'Diagnostico do escrow ficou publico'; END IF;
  RAISE NOTICE 'PASS: 2 itens (R$120), separação contábil bloqueia baixa, saque comum e duplicação; zero Pix';
 END $escrow_creditos$;
 
