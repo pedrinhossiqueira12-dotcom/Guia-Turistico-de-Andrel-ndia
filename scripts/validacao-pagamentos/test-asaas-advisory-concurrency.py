@@ -610,10 +610,15 @@ def issue_stepup_challenge_for_race() -> str:
         """,
         app="ci_stepup_challenge_issuer",
     )
-    ids = re.findall(r"(?m)^([0-9a-f]{8}-[0-9a-f-]{27})$", created)
-    if len(ids) != 1:
+    # Output do psql contem 3 SELECT set_config antes do INSERT.
+    # Tomar somente a ULTIMA linha, que e o RETURNING challenge_id.
+    candidate = created.strip().splitlines()[-1].strip()
+    if not re.fullmatch(
+        r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+        candidate,
+    ):
         raise AssertionError("Challenge de laboratorio nao persistido corretamente: " + created[-500:])
-    return ids[0]
+    return candidate
 
 
 def assert_waiting_stepup_advisory(app: str) -> None:
