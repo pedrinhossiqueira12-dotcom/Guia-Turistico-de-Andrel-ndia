@@ -110,6 +110,10 @@ function mesmoEstadoAntes(a: SessaoAferidaEmEnsaio, b: SessaoAferidaEmEnsaio): b
  */
 export class SimuladorStepUpDocumental {
   private readonly tentativas = new Map<string, Registro>();
+  // Uma reserva atomicamente síncrona por nonce ANTES de qualquer await.
+  // No simulador, falhas queimam o nonce: proibido retry silencioso.
+  // Em backend real, usar UNIQUE + transacao PostgreSQL, nao este Set.
+  private readonly noncesReservados = new Set<string>();
 
   constructor(
     private readonly provider: PortaDeAutenticacaoFalsa,
@@ -130,6 +134,13 @@ export class SimuladorStepUpDocumental {
       || intencao.expiresAt <= instante) {
       return resposta(false, "intencao_invalida_ou_expirada");
     }
+    // ANTES de autenticar o bearer, de consultar o fator ou de emitir
+    // challenge: bloquear duas chamadas concorrentes no mesmo processo.
+    // Inclui cenários com callbacks de rede pendentes/indisponíveis.
+    if (this.noncesReservados.has(intencao.nonce)) {
+      return resposta(false, "intencao_ja_vinculada");
+    }
+    this.noncesReservados.add(intencao.nonce);
     let sessao: SessaoAferidaEmEnsaio | null = null;
     try {
       sessao = await this.provider.autenticarToken(bearerToken, "inicio");
@@ -159,11 +170,12 @@ export class SimuladorStepUpDocumental {
         return resposta(false, "checagem_fator_totp_indisponivel");
       }
     }
-    // Nao aceitar duplicar desafio ativo para o mesmo nonce.
-    if ([...this.tentativas.values()].some(r => r.intencao.nonce === intencao.nonce)) {
-      return resposta(false, "intencao_ja_vinculada");
+    // A reserva é feita ANTES de todos os awaits; esse ponto não
+    // pode ser a primeira trava (Auth e factor preflight são async).
+    if (this.agora() >= Math.min(instante + 120_000, intencao.expiresAt)) {
+      return resposta(false, "desafio_ou_intencao_expirada");
     }
-    // Marcar ANTES do primeiro await de criacao para evitar duplo begin.
+    // Marcar o desafio antes de seu await para impedir reentrância.
     const tentativa = crypto.randomUUID();
     const registro: Registro = {
       tentativa, intencao: { ...intencao }, sessaoOriginal: { ...sessao },
