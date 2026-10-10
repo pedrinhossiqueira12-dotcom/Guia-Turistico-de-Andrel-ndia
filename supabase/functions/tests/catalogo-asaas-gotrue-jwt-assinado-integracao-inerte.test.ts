@@ -6,6 +6,7 @@
 import { ValidadorJwtSessaoInerte } from "../_shared/catalogo-asaas-jwt-sessao-assinada-ensaio.ts";
 import { GoTrueMfaTransporteInerte } from "../_shared/catalogo-asaas-gotrue-mfa-transporte-inerte.ts";
 import { SimuladorStepUpDocumental } from "../_shared/catalogo-asaas-stepup-documental-ensaio.ts";
+import { OrquestradorPrechallengeInerte, type LivroPrivadoPrechallengeInerte } from "../_shared/catalogo-asaas-mfa-orquestrador-prechallenge-inerte.ts";
 const PROJECT="https://abcdefghijklmnopqrst.supabase.co";
 const UID="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const SID="bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
@@ -106,7 +107,7 @@ async function prepareCrypto(revokeAfterVerify=false,corruptJwks=false){
   separationId:ESCROW,purpose:"consulta_documental_ensaio" as const,
   evidenceHash:"b".repeat(64),expiresAt:NOW+300000,consumed:false,
  };
- return {before,after,simulator,intent,audit,signedSession};
+ return {before,after,simulator,intent,audit,signedSession,transport};
 }
 function hold(result:Record<string,unknown>){
  for(const k of ["desafio_mfa_real_comprovado","pagamento_autorizado",
@@ -161,4 +162,82 @@ Deno.test("JWT de entrada AAL1 nao e aceito como JWT final AAL2",async()=>{
  const final=await signedSession.verificar(after);
  assert(final?.aal==="aal2" && final.factorId===FACTOR,
   "AAL2 signed token + factor cannot finish verification");
+});
+
+
+Deno.test("JWT ES256 assinado + GoTrue fake + nonce exclusivamente SQL atraves de duas instancias",async()=>{
+ const {before,transport,audit}=await prepareCrypto();
+ // Porta SQL EM MEMORIA apenas neste teste. A concorrencia SQL de verdade
+ // ja e testada separadamente com PostgreSQL de duas conexoes.
+ const contextId="abababab-abab-4bab-8bab-abababababab";
+ let nonceReserved=false;
+ let registered=false;
+ let consumed=false;
+ let tentativa="";
+ const result=(ok:boolean,reason:string,nonce:string|null=null)=>({
+  ok,motivo:reason,nonce,status_operacional:"HOLD_OBRIGATORIO",
+  pagamento_autorizado:false,challenge_go_true_verificado:false,
+  desafio_mfa_da_sessao_comprovado:false,pode_registrar_parecer:false,
+  dupla_aprovacao_financeira:false,liberacao_autorizada:false,
+  baixa_realizada:false,movimenta_dinheiro:false,
+ });
+ const ctx={
+  id:contextId,userId:UID,sessionId:SID,factorId:FACTOR,separationId:ESCROW,
+  evidenceHash:"b".repeat(64),expiresAt:NOW+120000,
+ };
+ const calls:string[]=[];
+ const sql:LivroPrivadoPrechallengeInerte={
+  async reservarInicio(id) {
+   calls.push("reserve");
+   if(id!==contextId||nonceReserved)return result(false,"nonce_ja_reservado");
+   nonceReserved=true;
+   return result(true,"nonce_reservado",NONCE);
+  },
+  async lerContexto(id){
+   calls.push("context");
+   return id===contextId ? {...ctx} : null;
+  },
+  async registrarDesafio(nonce,challenge,attempt) {
+   calls.push("register");
+   if(!nonceReserved||nonce!==NONCE||challenge!==CHALLENGE||registered)
+    return result(false,"challenge_duplicado");
+   registered=true;
+   tentativa=attempt;
+   return result(true,"challenge_registrado",NONCE);
+  },
+  async lerTentativa(attempt){
+   calls.push("attempt");
+   return registered && attempt===tentativa
+    ? {nonce:NONCE,tentativa,challengeId:CHALLENGE,contexto:{...ctx}} : null;
+  },
+  async consumirDesafio(nonce,challenge,attempt){
+   calls.push("consume");
+   if(!registered||nonce!==NONCE||challenge!==CHALLENGE||
+      attempt!==tentativa||consumed)
+    return result(false,"tentativa_ja_consumida");
+   consumed=true;
+   return result(true,"tentativa_documental_consumida",NONCE);
+  },
+ };
+ const first=new OrquestradorPrechallengeInerte(sql,transport,()=>NOW,"isolated-ci");
+ const second=new OrquestradorPrechallengeInerte(sql,transport,()=>NOW,"isolated-ci");
+ const issued=await first.iniciar(contextId,before);
+ assert(issued.ok&&issued.tentativa,"challenge nao ligado a nonce SQL");
+ assert(!("nonce" in issued)&&!("challengeId" in issued),"desafio saiu para browser");
+ hold(issued);
+ assert(calls.join(",")==="reserve,context,register","ordem DB ao emitir mudou");
+ const duplicate=await second.iniciar(contextId,before);
+ assert(!duplicate.ok && duplicate.motivo==="reserva_sql_recusada_ou_sem_hold",
+   "reserva persistente nao recusou repeticao");
+ const verified=await second.confirmar(issued.tentativa,before,"123456");
+ assert(verified.ok && verified.motivo==="protocolo_auth_conferido_sem_prova_financeira",
+   "JWT com assinatura real de teste nao chegou a AAL2");
+ hold(verified);
+ assert(calls.join(",").endsWith("attempt,consume"),"consumo nao consultou banco");
+ assert(audit.challenge===1&&audit.verify===1&&audit.getUser===3,
+   "GoTrue fake nao exerceu tres verificacoes da sessao");
+ const replay=await first.confirmar(issued.tentativa,before,"123456");
+ assert(!replay.ok&&audit.verify===1,
+   "replay entre instancias fez segundo mfa.verify");
+ hold(replay);
 });
