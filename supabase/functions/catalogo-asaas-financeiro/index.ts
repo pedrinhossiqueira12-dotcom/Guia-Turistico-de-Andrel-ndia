@@ -15,6 +15,8 @@ const WITHDRAWAL_AUTH_TOKEN = Deno.env.get("ASAAS_SAQUE_VALIDACAO_TOKEN") || "";
 const WITHDRAWAL_AUTH_ON = Deno.env.get("ASAAS_SAQUE_VALIDACAO_ENABLED") === "true";
 const ENCRYPTION_KEY = Deno.env.get("CATALOGO_DATA_ENCRYPTION_KEY") || Deno.env.get("MP_OAUTH_ENCRYPTION_KEY") || "";
 const BILLING_ON = Deno.env.get("ASAAS_BILLING_ENABLED") === "true";
+// Trava independente: uma chave produtiva e a flag geral NAO ligam cobranças reais.
+const PRODUCTION_BILLING_APPROVED = Deno.env.get("ASAAS_PRODUCTION_BILLING_APPROVED") === "true";
 const PAYOUTS_ON = Deno.env.get("ASAAS_PAYOUTS_ENABLED") === "true";
 const ENVIRONMENT = Deno.env.get("ASAAS_ENVIRONMENT") === "production" ? "production" : "sandbox";
 const API_BASE = ENVIRONMENT === "production" ? "https://api.asaas.com/v3" : "https://api-sandbox.asaas.com/v3";
@@ -31,6 +33,8 @@ const cents=(amount:unknown)=>typeof amount==="number"&&Number.isFinite(amount)?
 function enabled(kind:"billing"|"payouts"){
  if(!ASAAS_TOKEN || !(kind==="billing"?BILLING_ON:PAYOUTS_ON))
    throw new Failure("Integração Asaas ainda não ativada. Nenhum dinheiro foi movimentado.",503);
+ if(ENVIRONMENT==="production" && kind==="billing" && !PRODUCTION_BILLING_APPROVED)
+   throw new Failure("Cobranças reais ainda não autorizadas. Produção permanece bloqueada.",503);
 }
 function check(ok:unknown,msg:string,status=409):asserts ok {if(!ok)throw new Failure(msg,status);}
 async function auth(req:Request){
