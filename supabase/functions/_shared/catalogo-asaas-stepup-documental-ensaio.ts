@@ -219,6 +219,12 @@ export class SimuladorStepUpDocumental {
         r.estado = "recusada";
         return resposta(false, "sessao_de_confirmacao_divergente");
       }
+      // Auth pode demorar: não encaminhar OTP ao provedor depois do prazo.
+      // A validação inicial antes do await não basta para esta janela.
+      if (this.agora() >= r.expiraEm) {
+        r.estado = "recusada";
+        return resposta(false, "desafio_ou_intencao_expirada");
+      }
       const verificado = await this.provider.verificarDesafio({
         bearerToken, factorId: r.intencao.factorId,
         challengeId: r.challengeId, otp,
