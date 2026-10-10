@@ -46,6 +46,9 @@ function events(n){
 
 test("manifesto vazio e com 2 eventos reproduzem SHA e encadeamento independentes",()=>{
  const zero=make(),two=make(events(2));
+ // Vetor fixo produzido por SHA-256 UTF-8 do formato GAESCROW1 canônico.
+ assert.equal(zero.hash_ancora_sha256,
+  "bac61bae11a0ba0e861440a9f5fec65dcf7c78ca4832b7b93401e7662215b88d");
  assert.equal(validate(zero).eventos,0);
  assert.equal(validate(two).eventos,2);
  assert.equal(validate(two).hash,two.hash_ancora_sha256);
