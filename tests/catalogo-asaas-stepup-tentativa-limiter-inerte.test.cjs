@@ -70,3 +70,22 @@ test("regressao PostgreSQL exercita quota, replay, sessao, revogacao e HOLD",()=
  ])assert.ok(fixture.includes(phrase),"Missing SQL fixture: "+phrase);
  assert.match(fixture,/ROLLBACK;\s*$/);
 });
+
+test("dois processos reais exercitam lock do revisor e quota persistente sem dinheiro",()=>{
+ const race=fs.readFileSync("scripts/validacao-pagamentos/test-asaas-advisory-concurrency.py","utf8");
+ for(const name of [
+  "def scenario_stepup_attempts_concurrent_and_quota()",
+  "def assert_waiting_stepup_advisory(",
+  "Lock:advisory",
+  "STEPUP_FIRST_COMMITTED",
+  "STEPUP_SECOND_REJECTED",
+  "STEPUP_FIRST_ROLLBACK_DONE",
+  "STEPUP_SECOND_COMMIT_DONE",
+  "limite_tres_por_hora",
+  "count(DISTINCT nonce)",
+  "scenario_stepup_attempts_concurrent_and_quota()"
+ ])assert.ok(race.includes(name),"CI concurrency missing "+name);
+ assert.match(race,/EXPECTED_DB = "catalogo_asaas_race_ci"/);
+ assert.match(race,/PGPASSWORD": "local-ci-only"/);
+ assert.match(race,/SUPABASE_SERVICE_ROLE_KEY/);
+});
