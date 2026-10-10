@@ -210,7 +210,7 @@ Deno.test("JWKS ou banco indisponivel, JWT malformado/oversized: negar sem excec
 Deno.test("rejeita segredo simetrico HS256, projeto suspeito e configuracao negligente",async()=>{
  const f=await fixture("RS256");
  const src=await tokenSign(f);
- const {verifier}=makeVerifier([{kty:"oct",kid:f.kid,alg:"HS256",k:"secreto"}]);
+ const {verifier}=makeVerifier([{kty:"oct",kid:f.kid,alg:"HS256",k:"secreto"} as JsonWebKey]);
  assert(await verifier.verificar(src)===null,"symmetric key accepted");
  const backend=makeVerifier([f.publicJwk]).verifier;
  assert(backend !== null,"fixture broken");
