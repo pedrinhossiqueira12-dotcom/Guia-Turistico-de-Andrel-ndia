@@ -729,6 +729,9 @@ async function observarTransferenciaExcepcionalSandboxAdmin(uid:string,body:Reco
  const tipo=value(body.tipo,15),solicitacaoId=value(body.solicitacao_id,70);
  const transferenciaId=value(body.transferencia_id,130);
  const evidencia=await consultarERegistrarTransferenciaExcepcionalSandbox(tipo,solicitacaoId,transferenciaId);
+ check(evidencia?.ok===true&&evidencia.pagamento_baixado===false&&
+  evidencia.transferencia_gerada===false&&evidencia.requer_validacao_destinatario===true,
+  "Evidência do GET não foi registrada com segurança; manter HOLD.",409);
  return respond({success:true,observacao:evidencia,
   mensagem:"Estado consultado no Asaas Sandbox e registrado. Destinatário ainda não validado; nenhum saldo foi baixado nem Pix foi enviado."});
 }
