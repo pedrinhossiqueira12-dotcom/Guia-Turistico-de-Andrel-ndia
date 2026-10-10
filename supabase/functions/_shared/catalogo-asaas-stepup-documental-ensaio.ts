@@ -52,6 +52,36 @@ export interface PortaDeAutenticacaoFalsa {
   }): Promise<{ accessToken: string }>;
 }
 
+/**
+ * Contrato de auditoria apenas para CI: porta compartilhada entre instancias.
+ * Nao implementa armazenamento persistente nem abre acesso a Data API.
+ * Um backend real devera implementar estas reservas de forma transacional
+ * em PostgreSQL, com revalidacao server-side de sessao/acao/evidencias.
+ * Nunca recebe bearer, OTP, refresh_token ou segredo MFA.
+ */
+export interface PortaReservaCompartilhadaMfaEmEnsaio {
+  reservarInicio(args: Readonly<{
+    nonce: string;
+    userId: string;
+    sessionId: string;
+    factorId: string;
+    separationId: string;
+    evidenceHash: string;
+    expiresAt: number;
+  }>): Promise<boolean>;
+  reservarVerificacao(args: Readonly<{
+    nonce: string;
+    tentativa: string;
+    challengeId: string;
+    userId: string;
+    sessionId: string;
+    factorId: string;
+    separationId: string;
+    evidenceHash: string;
+    expiresAt: number;
+  }>): Promise<boolean>;
+}
+
 type Registro = {
   tentativa: string;
   intencao: IntencaoDocumentalEmEnsaio;
@@ -119,6 +149,7 @@ export class SimuladorStepUpDocumental {
     private readonly provider: PortaDeAutenticacaoFalsa,
     private readonly agora: () => number,
     private readonly ambiente: "isolated-ci",
+    private readonly reservaCompartilhada?: PortaReservaCompartilhadaMfaEmEnsaio,
   ) {
     if (ambiente !== "isolated-ci") throw new Error("MFA simulado proibido fora da CI");
   }
@@ -141,6 +172,30 @@ export class SimuladorStepUpDocumental {
       return resposta(false, "intencao_ja_vinculada");
     }
     this.noncesReservados.add(intencao.nonce);
+    // Uma reserva externa rejeita replay entre DUAS instancias simuladas.
+    // Se falhar ou ficar indisponivel, nao chamar Auth nem criar challenge.
+    // Em producao a reserva deve ser transacional e persistida, nao fake.
+    if (this.reservaCompartilhada) {
+      try {
+        const reservado = await this.reservaCompartilhada.reservarInicio({
+          nonce: intencao.nonce,
+          userId: intencao.userId,
+          sessionId: intencao.sessionId,
+          factorId: intencao.factorId,
+          separationId: intencao.separationId,
+          evidenceHash: intencao.evidenceHash,
+          expiresAt: intencao.expiresAt,
+        });
+        if (reservado !== true) {
+          return resposta(false, "reserva_compartilhada_inicio_duplicada");
+        }
+      } catch {
+        return resposta(false, "reserva_compartilhada_inicio_indisponivel");
+      }
+      if (this.agora() >= Math.min(instante + 120_000, intencao.expiresAt)) {
+        return resposta(false, "desafio_ou_intencao_expirada");
+      }
+    }
     let sessao: SessaoAferidaEmEnsaio | null = null;
     try {
       sessao = await this.provider.autenticarToken(bearerToken, "inicio");
@@ -213,6 +268,34 @@ export class SimuladorStepUpDocumental {
     // Consumir atomicamente no processo JS ANTES de qualquer chamada assíncrona.
     // Um endpoint futuro ainda exigira storage/locks compartilhados em Postgres.
     r.estado = "processando";
+    // Consumo global antes de qualquer OTP ou revalidacao via rede.
+    // A chave inclui nonce + challenge + identidade e evidencia originais.
+    if (this.reservaCompartilhada) {
+      try {
+        const reservado = await this.reservaCompartilhada.reservarVerificacao({
+          nonce: r.intencao.nonce,
+          tentativa: r.tentativa,
+          challengeId: r.challengeId,
+          userId: r.sessaoOriginal.userId,
+          sessionId: r.sessaoOriginal.sessionId,
+          factorId: r.intencao.factorId,
+          separationId: r.intencao.separationId,
+          evidenceHash: r.intencao.evidenceHash,
+          expiresAt: r.expiraEm,
+        });
+        if (reservado !== true) {
+          r.estado = "recusada";
+          return resposta(false, "reserva_compartilhada_verificacao_duplicada");
+        }
+      } catch {
+        r.estado = "recusada";
+        return resposta(false, "reserva_compartilhada_verificacao_indisponivel");
+      }
+      if (this.agora() >= r.expiraEm) {
+        r.estado = "recusada";
+        return resposta(false, "desafio_ou_intencao_expirada");
+      }
+    }
     try {
       const antes = await this.provider.autenticarToken(bearerToken, "inicio");
       if (!antes || !mesmoEstadoAntes(r.sessaoOriginal, antes)) {
