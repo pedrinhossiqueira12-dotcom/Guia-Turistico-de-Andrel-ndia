@@ -40,6 +40,9 @@ export interface GoTrueMfaConfigInerte {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const JWT_BEARER = /^[A-Za-z0-9_.~-]{6,8192}$/;
+// Respostas Auth inesperadas nao podem consumir memoria ilimitada.
+const MAX_AUTH_JSON_BYTES = 16 * 1024;
+
 function record(v: unknown): Record<string, unknown> | null {
   return !!v && typeof v === "object" && !Array.isArray(v)
     ? v as Record<string, unknown> : null;
@@ -107,10 +110,41 @@ export class GoTrueMfaTransporteInerte implements PortaDeAutenticacaoFalsa {
       throw new Error("Resposta GoTrue recusada");
     }
     const ct = response.headers.get("content-type") ?? "";
-    if (!ct.toLowerCase().includes("application/json")) {
+    if (!/^application\\/json(?:\\s*;|$)/i.test(ct)) {
       throw new Error("Resposta GoTrue nao-JSON");
     }
-    const parsed: unknown = await response.json();
+    const declared = response.headers.get("content-length");
+    if (declared !== null &&
+        (!/^\\d+$/.test(declared) || Number(declared) > MAX_AUTH_JSON_BYTES)) {
+      throw new Error("Resposta GoTrue excedeu limite permitido");
+    }
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error("Resposta GoTrue sem corpo valido");
+    const chunks: Uint8Array[] = [];
+    let received = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      received += value.byteLength;
+      if (received > MAX_AUTH_JSON_BYTES) {
+        await reader.cancel().catch(() => {});
+        throw new Error("Resposta GoTrue excedeu limite permitido");
+      }
+      chunks.push(value);
+    }
+    const bodyBytes = new Uint8Array(received);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bodyBytes.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    // UTF-8 estrito e JSON controlado; nunca registrar corpo/Auth secrets.
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bodyBytes));
+    } catch {
+      throw new Error("Resposta GoTrue JSON invalido");
+    }
     const obj = record(parsed);
     if (!obj) throw new Error("Payload GoTrue inesperado");
     return obj;
