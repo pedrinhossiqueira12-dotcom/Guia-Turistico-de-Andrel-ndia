@@ -31,6 +31,7 @@ const sql=(v:Flags):RespostaBancoPrechallengeInerte=>({
  status_operacional:"HOLD_OBRIGATORIO",
  pagamento_autorizado:v.unsafe??false,
  challenge_go_true_verificado:false,desafio_mfa_da_sessao_comprovado:false,
+ pode_registrar_parecer:false,dupla_aprovacao_financeira:false,
  liberacao_autorizada:false,baixa_realizada:false,movimenta_dinheiro:false,
 });
 function hold(v:Record<string,unknown>){
