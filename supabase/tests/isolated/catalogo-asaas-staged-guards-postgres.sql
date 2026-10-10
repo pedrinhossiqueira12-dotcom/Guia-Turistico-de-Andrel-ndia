@@ -1230,6 +1230,13 @@ DECLARE
  v_ancora_adulterada jsonb;
  v_parecer_diag jsonb;
  v_parecer_novo jsonb;
+ v_nonce_doc uuid;
+ v_nonce_doc2 uuid;
+ v_nonce_exp uuid;
+ v_nonce_result jsonb;
+ v_nonce_obs jsonb;
+ v_epoch bigint;
+ v_claims jsonb;
  v_revisores integer:=0;
 BEGIN
  INSERT INTO auth.users(id) VALUES(v_uid);
@@ -1575,6 +1582,146 @@ BEGIN
   OR v_parecer_diag->>'liberacao_autorizada' IS DISTINCT FROM 'false'
   OR v_parecer_diag->>'baixa_realizada' IS DISTINCT FROM 'false'
  THEN RAISE EXCEPTION 'Dois pareceres foram confundidos com pagamento: %',v_parecer_diag; END IF;
+
+ -- #42: NONCE documental (5 minutos), vinculado ao JWT/SESSION_ID do
+ -- revisor de laboratorio e ao hash de TODAS as evidencias da separacao.
+ -- Assinatura JWT NAO e validada pelo mock, somente pelo gateway real.
+ INSERT INTO auth.sessions(id,user_id,aal,factor_id,not_after) VALUES
+  ('fa733333-3333-4333-8333-333333333331'::uuid,
+   'fa722222-2222-4222-8222-222222222221'::uuid,
+   'aal2','fa744444-4444-4444-8444-444444444441'::uuid,
+   now()+interval '1 hour'),
+  ('fa733333-3333-4333-8333-333333333332'::uuid,
+   'fa722222-2222-4222-8222-222222222221'::uuid,
+   'aal2','fa744444-4444-4444-8444-444444444441'::uuid,
+   now()+interval '1 hour');
+
+ SELECT catalogo_private.catalogo_asaas_iniciar_intencao_mfa_documental_ensaio(
+  (v_reserva->>'separacao_id')::uuid) INTO v_nonce_result;
+ IF v_nonce_result->>'ok' IS DISTINCT FROM 'false'
+ THEN RAISE EXCEPTION 'Nonce de intencao aceitou ausencia de JWT real: %',v_nonce_result; END IF;
+
+ v_epoch:=(extract(epoch FROM now()))::bigint;
+ v_claims:=jsonb_build_object(
+  'sub','fa722222-2222-4222-8222-222222222221',
+  'role','authenticated','aal','aal2',
+  'session_id','fa733333-3333-4333-8333-333333333331',
+  'iat',v_epoch,'exp',v_epoch+1800,'is_anonymous',false);
+ PERFORM set_config('request.jwt.claim.sub',
+  'fa722222-2222-4222-8222-222222222221',true);
+ PERFORM set_config('request.jwt.claim.role','authenticated',true);
+ PERFORM set_config('request.jwt.claims',v_claims::text,true);
+
+ SELECT catalogo_private.catalogo_asaas_iniciar_intencao_mfa_documental_ensaio(
+  (v_reserva->>'separacao_id')::uuid) INTO v_nonce_result;
+ IF v_nonce_result->>'ok' IS DISTINCT FROM 'true'
+  OR v_nonce_result->>'desafio_mfa_da_sessao_comprovado' IS DISTINCT FROM 'false'
+  OR v_nonce_result->>'pagamento_autorizado' IS DISTINCT FROM 'false'
+ THEN RAISE EXCEPTION 'Nonce documental nao criado ou autorizou dinheiro: %',v_nonce_result; END IF;
+ v_nonce_doc:=(v_nonce_result->>'nonce')::uuid;
+ IF NOT EXISTS(
+  SELECT 1 FROM public.catalogo_asaas_intencoes_mfa_documentais_ensaio i
+  WHERE i.nonce=v_nonce_doc
+   AND i.revisor_id='fa722222-2222-4222-8222-222222222221'::uuid
+   AND i.sessao_id='fa733333-3333-4333-8333-333333333331'::uuid
+   AND i.finalidade='consulta_documental_ensaio'
+   AND i.fingerprint_creditos_sha256=v_reserva->>'fingerprint_sha256'
+   AND i.dossie_hash_sha256=v_note2->>'hash_sha256'
+   AND i.expira_em=i.gerado_em+interval '5 minutes'
+ ) THEN RAISE EXCEPTION 'Nonce do banco nao vinculou identidade/sessao/versao'; END IF;
+
+ -- Outra sessao valida AAL2 do MESMO revisor: NAO pode usar esse nonce.
+ PERFORM set_config('request.jwt.claims',
+  (v_claims||jsonb_build_object(
+    'session_id','fa733333-3333-4333-8333-333333333332'))::text,true);
+ SELECT catalogo_private.catalogo_asaas_observar_nonce_documental_ensaio(
+  v_nonce_doc) INTO v_nonce_obs;
+ IF v_nonce_obs->>'ok' IS DISTINCT FROM 'false'
+  OR v_nonce_obs->>'motivo' IS DISTINCT FROM 'sessao_ou_revisor_divergente'
+ THEN RAISE EXCEPTION 'Nonce da sessao A funcionou na sessao B: %',v_nonce_obs; END IF;
+ PERFORM set_config('request.jwt.claims',v_claims::text,true);
+
+ -- Primeiro uso de observacao documental (NAO consumacao financeira).
+ SELECT catalogo_private.catalogo_asaas_observar_nonce_documental_ensaio(
+  v_nonce_doc) INTO v_nonce_obs;
+ IF v_nonce_obs->>'ok' IS DISTINCT FROM 'true'
+  OR v_nonce_obs->>'nonce_observado_uma_vez' IS DISTINCT FROM 'true'
+  OR v_nonce_obs->>'desafio_mfa_da_sessao_comprovado' IS DISTINCT FROM 'false'
+  OR v_nonce_obs->>'pode_registrar_parecer' IS DISTINCT FROM 'false'
+  OR v_nonce_obs->>'pagamento_autorizado' IS DISTINCT FROM 'false'
+ THEN RAISE EXCEPTION 'Observacao de nonce liberou ou falhou: %',v_nonce_obs; END IF;
+ SELECT catalogo_private.catalogo_asaas_observar_nonce_documental_ensaio(
+  v_nonce_doc) INTO v_nonce_obs;
+ IF v_nonce_obs->>'ok' IS DISTINCT FROM 'false'
+  OR v_nonce_obs->>'motivo' IS DISTINCT FROM 'nonce_ja_observado'
+ THEN RAISE EXCEPTION 'Replay de nonce nao foi recusado: %',v_nonce_obs; END IF;
+
+ -- DBA apenas no CI insere nonce expirado para ensaiar limite temporal.
+ INSERT INTO public.catalogo_asaas_intencoes_mfa_documentais_ensaio(
+  nonce,separacao_id,revisor_id,sessao_id,finalidade,
+  fingerprint_creditos_sha256,dossie_seq,dossie_hash_sha256,
+  matriz_hash_sha256,gerado_em,expira_em)
+ SELECT gen_random_uuid(),separacao_id,revisor_id,sessao_id,finalidade,
+  fingerprint_creditos_sha256,dossie_seq,dossie_hash_sha256,
+  matriz_hash_sha256,now()-interval '10 minutes',now()-interval '5 minutes'
+ FROM public.catalogo_asaas_intencoes_mfa_documentais_ensaio WHERE nonce=v_nonce_doc
+ RETURNING nonce INTO v_nonce_exp;
+ SELECT catalogo_private.catalogo_asaas_observar_nonce_documental_ensaio(
+  v_nonce_exp) INTO v_nonce_obs;
+ IF v_nonce_obs->>'ok' IS DISTINCT FROM 'false'
+  OR v_nonce_obs->>'motivo' IS DISTINCT FROM 'nonce_expirado'
+ THEN RAISE EXCEPTION 'Nonce expirado foi aceito: %',v_nonce_obs; END IF;
+
+ SELECT catalogo_private.catalogo_asaas_iniciar_intencao_mfa_documental_ensaio(
+  (v_reserva->>'separacao_id')::uuid) INTO v_nonce_result;
+ v_nonce_doc2:=(v_nonce_result->>'nonce')::uuid;
+ IF v_nonce_result->>'ok' IS DISTINCT FROM 'true' OR v_nonce_doc2 IS NULL
+ THEN RAISE EXCEPTION 'Segundo nonce nao emitido em CI: %',v_nonce_result; END IF;
+ -- Modificacao do dossie invalida o snapshot do novo nonce. ROLLBACK
+ -- parcial preserva a prova original para todos os testes subsequentes.
+ BEGIN
+  SELECT public.catalogo_asaas_registrar_evento_dossie_escrow(
+   (v_reserva->>'separacao_id')::uuid,v_uid,
+   'fa755555-5555-4555-8555-555555555551'::uuid,'divergencia',
+   'Evento de teste descartavel que invalida a fotografia documental do nonce.'
+  ) INTO v_nonce_result;
+  IF v_nonce_result->>'ok' IS DISTINCT FROM 'true'
+  THEN RAISE EXCEPTION 'Fixture nao criou evento para invalidar nonce'; END IF;
+  SELECT catalogo_private.catalogo_asaas_observar_nonce_documental_ensaio(
+   v_nonce_doc2) INTO v_nonce_obs;
+  IF v_nonce_obs->>'ok' IS DISTINCT FROM 'false'
+   OR v_nonce_obs->>'motivo' IS DISTINCT FROM 'versao_evidencia_divergente'
+  THEN RAISE EXCEPTION 'Nonce permitiu evidencias alteradas: %',v_nonce_obs; END IF;
+  RAISE EXCEPTION 'CI: rollback de dossie temporario do nonce' USING ERRCODE='ZZ003';
+ EXCEPTION WHEN SQLSTATE 'ZZ003' THEN NULL;
+ END;
+
+ BEGIN
+  UPDATE public.catalogo_asaas_intencoes_mfa_documentais_ensaio
+  SET sessao_id='fa733333-3333-4333-8333-333333333332'::uuid
+  WHERE nonce=v_nonce_doc;
+  RAISE EXCEPTION 'Intencao permitiu adulteracao de sessao';
+ EXCEPTION WHEN check_violation THEN NULL;
+ END;
+ BEGIN
+  DELETE FROM public.catalogo_asaas_usos_nonce_documentais_ensaio
+  WHERE nonce=v_nonce_doc;
+  RAISE EXCEPTION 'Uso de nonce foi removido';
+ EXCEPTION WHEN check_violation THEN NULL;
+ END;
+ IF has_table_privilege('authenticated',
+    'public.catalogo_asaas_intencoes_mfa_documentais_ensaio','INSERT')
+  OR has_table_privilege('service_role',
+    'public.catalogo_asaas_usos_nonce_documentais_ensaio','INSERT')
+  OR has_function_privilege('authenticated',
+    'catalogo_private.catalogo_asaas_iniciar_intencao_mfa_documental_ensaio(uuid)','EXECUTE')
+  OR has_function_privilege('service_role',
+    'catalogo_private.catalogo_asaas_observar_nonce_documental_ensaio(uuid)','EXECUTE')
+ THEN RAISE EXCEPTION 'Funcoes ou tabelas de nonce abertas ao backend'; END IF;
+ PERFORM set_config('request.jwt.claim.sub','',true);
+ PERFORM set_config('request.jwt.claim.role','',true);
+ PERFORM set_config('request.jwt.claims','',true);
+ RAISE NOTICE 'PASS: nonce documental atrelado a sessao e versao, replay, expiry, mutacao e Pix negados';
 
  BEGIN
   INSERT INTO public.catalogo_asaas_escrow_pareceres_preliminares(
