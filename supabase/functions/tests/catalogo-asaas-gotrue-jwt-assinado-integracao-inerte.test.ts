@@ -188,9 +188,10 @@ Deno.test("JWT ES256 assinado + GoTrue fake + nonce exclusivamente SQL atraves d
  };
  const calls:string[]=[];
  const sql:LivroPrivadoPrechallengeInerte={
-  async reservarInicio(id) {
+  async reservarInicioVinculado(id,userId,sessionId) {
    calls.push("reserve");
-   if(id!==contextId||nonceReserved)return result(false,"nonce_ja_reservado");
+   if(id!==contextId || userId!==UID || sessionId!==SID || nonceReserved)
+    return result(false,"nonce_ja_reservado");
    nonceReserved=true;
    return result(true,"nonce_reservado",NONCE);
   },
@@ -235,8 +236,8 @@ Deno.test("JWT ES256 assinado + GoTrue fake + nonce exclusivamente SQL atraves d
    "JWT com assinatura real de teste nao chegou a AAL2");
  hold(verified);
  assert(calls.join(",").endsWith("attempt,consume"),"consumo nao consultou banco");
- assert(audit.challenge===1&&audit.verify===1&&audit.getUser===3,
-   "GoTrue fake nao exerceu tres verificacoes da sessao");
+ assert(audit.challenge===1&&audit.verify===1&&audit.getUser===4,
+   "GoTrue fake nao revalidou quatro vezes a sessao");
  const replay=await first.confirmar(issued.tentativa,before,"123456");
  assert(!replay.ok&&audit.verify===1,
    "replay entre instancias fez segundo mfa.verify");
