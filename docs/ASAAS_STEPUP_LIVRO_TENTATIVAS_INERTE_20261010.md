@@ -85,6 +85,35 @@ inclui cenário de duas conexões PostgreSQL `psql` reais, sem acesso
 Teste de contrato Node:
 `tests/catalogo-asaas-stepup-tentativa-limiter-inerte.test.cjs`.
 
+## Verificação de homologação e CI (10/10/2026)
+
+- STAGING `jbttwihctuibchhcyqtl`: migração
+  `asaas_stepup_tentativas_uma_por_desafio_tres_por_hora_inerte_staging_20261010`
+  aplicada com sucesso. RLS ativo, trigger append-only habilitado,
+  **nenhuma política RLS de acesso**, `anon` sem SELECT,
+  `authenticated` sem INSERT, `service_role` sem SELECT/INSERT,
+  e nenhuma das três roles pode executar a função privada.
+- **0 tentativas, 0 desafios, 0 revisores, 0 pareceres** reais
+  registrados após a aplicação. Não houve dados Auth de teste
+  criados na homologação, nem chamadas Asaas/Pix.
+- No PostgreSQL CI, testes de transação cobrindo replay, troca
+  de sessão, fator `unverified`, quota e imutabilidade passaram.
+- No banco concorrente descartável `catalogo_asaas_race_ci`,
+  teste Python usou **duas conexões reais**: com COMMIT da primeira,
+  a segunda aguardou no `Lock:advisory` e recebeu
+  `tentativa_ja_registrada`; com ROLLBACK da primeira, a segunda
+  prosseguiu. O livro reteve um único registro em ambos os cenários.
+  O teto de 3 reservas/hora foi verificado com múltiplos desafios,
+  quarta recusada e zero saques.
+- Logs **PASS** desses cenários no job financeiro da
+  [CI 38067887263](https://github.com/pedrinhossiqueira12-dotcom/Guia-Turistico-de-Andrel-ndia/actions/runs/38067887263),
+  commit `61abd2c362e875452883ce6a78579b28ed152e33`.
+  A falha de uma execução anterior estava na expressão Python que
+  extraía o UUID `RETURNING`; a correção extrai a última linha
+  do resultado do `psql`. O teste financeiro passou após isso.
+- **Não extrapolar os testes:** a assinatura JWT e a execução MFA
+  real continuam não verificadas; a demonstração usa Auth sintético.
+
 ## Próximo incremento — trabalho ainda pendente
 
 **Não existe fluxo real de `mfa.verify` ligado a essa tabela.**
