@@ -6,7 +6,7 @@ BEGIN
   OR pg_catalog.current_setting('app.catalogo_ci_mfa_mock',true) IS DISTINCT FROM 'enabled'
   OR pg_catalog.to_regclass('auth.sessions') IS NOT NULL
   OR pg_catalog.to_regprocedure('auth.jwt()') IS NOT NULL
-  OR pg_catalog.to_regclass('public.catalogo_asaas_saques') IS NULL
+  OR pg_catalog.to_regclass('public.catalogos') IS NULL
   OR pg_catalog.to_regclass('public.catalogo_asaas_escrow_pareceres_preliminares') IS NOT NULL
  THEN
   RAISE EXCEPTION 'Fixture Auth MFA apenas catalogo_asaas_guards_ci com baseline local e opt-in'
