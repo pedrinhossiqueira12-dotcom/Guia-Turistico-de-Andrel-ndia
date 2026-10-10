@@ -888,7 +888,7 @@ async function reconcileTransfer(saqueId:string,transferId:string){
  const transfer=await asaas("/transfers/"+encodeURIComponent(transferId));
  check(transfer.id===transferId&&transfer.externalReference===saqueId,"Transferência de outro identificador.",409);
  const {data:row,error}=await db.from("catalogo_asaas_saques")
-  .select("id,valor_centavos,transferencia_id,status,pix_destino_sha256").eq("id",saqueId).maybeSingle();
+  .select("id,valor_centavos,transferencia_id,status,pix_destino_sha256,pix_destino_registrado_em").eq("id",saqueId).maybeSingle();
  if(error||!row||row.transferencia_id!==transferId)throw new Failure("Transferência não vinculada.",409);
  check(cents(transfer.value)===Number(row.valor_centavos),"Valor da transferência divergente. Saque em revisão.",409);
  const status=value(transfer.status,60);
@@ -969,8 +969,10 @@ async function withdraw(uid:string){
  const {data:snapshot,error:snapshotError}=await db.from("catalogo_asaas_saques")
   .update({pix_destino_sha256:destinationHash})
   .eq("id",saqueId).eq("motoboy_id",uid).eq("status","reservado")
-  .is("pix_destino_sha256",null).select("id").maybeSingle();
- if(snapshotError || !snapshot){
+  .is("pix_destino_sha256",null).select("id,pix_destino_registrado_em").maybeSingle();
+ if(snapshotError || !snapshot ||
+  typeof snapshot.pix_destino_registrado_em!=="string" ||
+  !Number.isFinite(Date.parse(snapshot.pix_destino_registrado_em))){
   // Banco local recusou snapshot; nenhuma chamada externa ainda ocorreu.
   // Liberar somente esta reserva é seguro porque POST /transfers ainda não foi iniciado.
   await rpc("catalogo_asaas_atualizar_saque",{p_saque:saqueId,p_estado:"falhou",
@@ -1076,7 +1078,7 @@ async function reconcileAdminTransfer(uid:string,body:Record<string,unknown>){
  check(/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(saqueId)&&/^[A-Za-z0-9_-]{4,130}$/.test(transferId),
   "Informe os identificadores válidos do saque e da transferência.",400);
  const {data:row,error}=await db.from("catalogo_asaas_saques")
-  .select("id,valor_centavos,transferencia_id,status,pix_destino_sha256").eq("id",saqueId).maybeSingle();
+  .select("id,valor_centavos,transferencia_id,status,pix_destino_sha256,pix_destino_registrado_em").eq("id",saqueId).maybeSingle();
  if(error||!row)throw new Failure("Saque não encontrado.",404);
  if(["concluido","falhou"].includes(row.status))
   return respond({success:true,status:row.status,mensagem:"Saque já encerrado; nenhuma nova transferência foi criada."});
@@ -1163,7 +1165,10 @@ async function destinoPixConfirmadoParaBaixa(
  saque:Record<string,unknown>,transfer:Record<string,unknown>
 ){
  const hash=value(saque.pix_destino_sha256,64);
- if(!/^[a-f0-9]{64}$/.test(hash))return false;
+ // Saques antigos sem carimbo nao tem prova local prospectiva; manter HOLD.
+ const carimbo=saque.pix_destino_registrado_em;
+ if(!/^[a-f0-9]{64}$/.test(hash) ||
+  typeof carimbo!=="string" || !Number.isFinite(Date.parse(carimbo)))return false;
  if(value(transfer.operationType,12)!=="PIX")return false;
  return await pixDestinationsMatch(hash,[transfer]);
 }
@@ -1201,7 +1206,7 @@ async function authorizeWithdrawal(request:Request){
  if(!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id))
   return approveResponse("REFUSED","Transferência não identificada.");
  const {data:saque,error:lookupError}=await db.from("catalogo_asaas_saques")
-   .select("id,motoboy_id,status,valor_centavos,transferencia_id,pix_destino_sha256")
+   .select("id,motoboy_id,status,valor_centavos,transferencia_id,pix_destino_sha256,pix_destino_registrado_em")
    .eq("transferencia_id",id).maybeSingle();
  if(lookupError)throw new Failure("Erro ao verificar reserva.",503);
  if(!saque || saque.transferencia_id!==id ||
@@ -1226,6 +1231,8 @@ async function authorizeWithdrawal(request:Request){
  const localAmount=Number(saque.valor_centavos);
  if(saque.status==="enviado" && Number.isSafeInteger(localAmount)&&localAmount>0 &&
     /^[a-f0-9]{64}$/.test(value(saque.pix_destino_sha256,64)) &&
+    typeof saque.pix_destino_registrado_em==="string" &&
+    Number.isFinite(Date.parse(saque.pix_destino_registrado_em)) &&
     cents(incoming.value)===localAmount && value(incoming.operationType,12)==="PIX"){
   // Confere por API autenticada para não confiar apenas nos dados do webhook.
   const remote=await asaas("/transfers/"+encodeURIComponent(id));
