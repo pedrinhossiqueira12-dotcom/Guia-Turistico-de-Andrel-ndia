@@ -1228,6 +1228,9 @@ DECLARE
  v_ancora_zerada jsonb;
  v_ancora_dois jsonb;
  v_ancora_adulterada jsonb;
+ v_parecer_diag jsonb;
+ v_parecer_novo jsonb;
+ v_revisores integer:=0;
 BEGIN
  INSERT INTO auth.users(id) VALUES(v_uid);
  INSERT INTO public.comercios_publicados(local_id,status) VALUES(v_store,'ativo');
@@ -1456,6 +1459,134 @@ BEGIN
  OR v_auditoria_integridade->>'numero_eventos' IS DISTINCT FROM '2'
  OR v_auditoria_integridade->>'liberacao_autorizada' IS DISTINCT FROM 'false'
  THEN RAISE EXCEPTION 'Verificador acusou trilha integra como invalida: %',v_auditoria_integridade; END IF;
+
+ -- #42: dois pareceres tecnicos ficticios e independentes NAO sao aprovacao.
+ -- So PostgreSQL OWNER pode inserir: service_role nao tem INSERT nem UPDATE.
+ INSERT INTO auth.users(id) VALUES
+  ('fa722222-2222-4222-8222-222222222221'::uuid),
+  ('fa722222-2222-4222-8222-222222222222'::uuid);
+ BEGIN
+  INSERT INTO public.catalogo_asaas_escrow_pareceres_preliminares(
+   separacao_id,revisor_id,resultado,justificativa,
+   fingerprint_creditos_sha256,dossie_sequencia,dossie_hash_sha256,
+   matriz_hash_sha256,registrado_em,expira_em)
+  VALUES((v_reserva->>'separacao_id')::uuid,v_uid,'manter_hold',
+   'Proposta de autoavaliacao do titular que deve ser recusada pelo banco.',
+   repeat('f',64),2,repeat('f',64),repeat('f',64),now(),now()+interval '10 days');
+  RAISE EXCEPTION 'Titular se autoaprovou como revisor';
+ EXCEPTION WHEN check_violation THEN v_revisores:=v_revisores+1;
+ END;
+ IF v_revisores<>1 THEN
+  RAISE EXCEPTION 'Conflito de interesse nao bloqueado';
+ END IF;
+
+ INSERT INTO public.catalogo_asaas_escrow_pareceres_preliminares(
+  separacao_id,revisor_id,resultado,justificativa,
+  fingerprint_creditos_sha256,dossie_sequencia,dossie_hash_sha256,
+  matriz_hash_sha256,registrado_em,expira_em)
+ VALUES(
+  (v_reserva->>'separacao_id')::uuid,
+  'fa722222-2222-4222-8222-222222222221'::uuid,
+  'manter_hold','A documentacao de homologacao esta em revisao e ainda nao identifica beneficiario original.',
+  repeat('f',64),999,repeat('f',64),repeat('f',64),
+  now()-interval '20 years',now()+interval '100 years'
+ );
+ INSERT INTO public.catalogo_asaas_escrow_pareceres_preliminares(
+  separacao_id,revisor_id,resultado,justificativa,
+  fingerprint_creditos_sha256,dossie_sequencia,dossie_hash_sha256,
+  matriz_hash_sha256,registrado_em,expira_em)
+ VALUES(
+  (v_reserva->>'separacao_id')::uuid,
+  'fa722222-2222-4222-8222-222222222222'::uuid,
+  'solicitar_documentos','A segunda pessoa solicita comprovante independente e identidade da conta receptora.',
+  repeat('f',64),999,repeat('f',64),repeat('f',64),
+  now()-interval '20 years',now()+interval '100 years'
+ );
+ IF EXISTS(
+  SELECT 1 FROM public.catalogo_asaas_escrow_pareceres_preliminares p
+  WHERE p.separacao_id=(v_reserva->>'separacao_id')::uuid
+   AND (p.fingerprint_creditos_sha256 IS DISTINCT FROM
+     (SELECT e.fingerprint_sha256 FROM public.catalogo_asaas_separacoes_excepcionais e
+      WHERE e.id=p.separacao_id)
+    OR p.dossie_sequencia<>2
+    OR p.dossie_hash_sha256 IS DISTINCT FROM v_note2->>'hash_sha256'
+    OR p.matriz_hash_sha256=repeat('f',64)
+    OR p.registrado_em<now()-interval '1 hour'
+    OR p.expira_em<>p.registrado_em+interval '24 hours')
+ ) THEN RAISE EXCEPTION 'Parecer aceitou timestamp ou fotografia falsificada'; END IF;
+
+ SELECT public.catalogo_asaas_diagnosticar_dupla_conferencia_inerte(
+  (v_reserva->>'separacao_id')::uuid) INTO v_parecer_diag;
+ IF v_parecer_diag->>'ok' IS DISTINCT FROM 'true'
+  OR v_parecer_diag->>'pareceres_historicos' IS DISTINCT FROM '2'
+  OR v_parecer_diag->>'pareceres_da_versao_ainda_nao_expirados' IS DISTINCT FROM '2'
+  OR v_parecer_diag->>'revisores_distintos_da_mesma_versao' IS DISTINCT FROM '2'
+  OR v_parecer_diag->>'duas_conferencias_documentais_registradas' IS DISTINCT FROM 'true'
+  OR v_parecer_diag->>'dupla_aprovacao_financeira' IS DISTINCT FROM 'false'
+  OR v_parecer_diag->>'revisores_credenciados_e_autenticados' IS DISTINCT FROM 'false'
+  OR v_parecer_diag->>'pagamento_autorizado' IS DISTINCT FROM 'false'
+  OR v_parecer_diag->>'liberacao_autorizada' IS DISTINCT FROM 'false'
+  OR v_parecer_diag->>'baixa_realizada' IS DISTINCT FROM 'false'
+ THEN RAISE EXCEPTION 'Dois pareceres foram confundidos com pagamento: %',v_parecer_diag; END IF;
+
+ BEGIN
+  INSERT INTO public.catalogo_asaas_escrow_pareceres_preliminares(
+   separacao_id,revisor_id,resultado,justificativa,
+   fingerprint_creditos_sha256,dossie_sequencia,dossie_hash_sha256,
+   matriz_hash_sha256,registrado_em,expira_em)
+  VALUES((v_reserva->>'separacao_id')::uuid,
+   'fa722222-2222-4222-8222-222222222221'::uuid,'manter_hold',
+   'Tentativa de submeter novo parecer para a mesma pessoa e mesma evidencia.',
+   repeat('f',64),2,repeat('f',64),repeat('f',64),now(),now()+interval '24 hours');
+  RAISE EXCEPTION 'Replay de parecer sem idempotencia foi aceito';
+ EXCEPTION WHEN unique_violation THEN NULL;
+ END;
+ BEGIN
+  UPDATE public.catalogo_asaas_escrow_pareceres_preliminares
+  SET resultado='apontar_divergencia'
+  WHERE separacao_id=(v_reserva->>'separacao_id')::uuid;
+  RAISE EXCEPTION 'Parecer preliminar foi adulterado';
+ EXCEPTION WHEN check_violation THEN NULL;
+ END;
+ BEGIN
+  DELETE FROM public.catalogo_asaas_escrow_pareceres_preliminares
+  WHERE separacao_id=(v_reserva->>'separacao_id')::uuid;
+  RAISE EXCEPTION 'Parecer preliminar foi excluido';
+ EXCEPTION WHEN check_violation THEN NULL;
+ END;
+
+ -- Evento posterior muda o HEAD do dossie: a segunda conferencia anterior
+ -- nao pode continuar valendo para um conjunto de provas modificado.
+ BEGIN
+  SELECT public.catalogo_asaas_registrar_evento_dossie_escrow(
+   (v_reserva->>'separacao_id')::uuid,v_uid,
+   'fa722222-2222-4222-8222-222222222223'::uuid,'parecer_pendente',
+   'Nova evidencia puramente ficticia para invalidar a foto documental dos dois pareceres.'
+  ) INTO v_parecer_novo;
+  IF v_parecer_novo->>'ok' IS DISTINCT FROM 'true'
+  THEN RAISE EXCEPTION 'Nova evidencia nao foi registrada no ensaio'; END IF;
+  SELECT public.catalogo_asaas_diagnosticar_dupla_conferencia_inerte(
+   (v_reserva->>'separacao_id')::uuid) INTO v_parecer_diag;
+  IF v_parecer_diag->>'pareceres_historicos' IS DISTINCT FROM '2'
+   OR v_parecer_diag->>'pareceres_da_versao_ainda_nao_expirados' IS DISTINCT FROM '0'
+   OR v_parecer_diag->>'duas_conferencias_documentais_registradas' IS DISTINCT FROM 'false'
+   OR v_parecer_diag->>'pagamento_autorizado' IS DISTINCT FROM 'false'
+  THEN RAISE EXCEPTION 'Evento novo nao invalidou versao antiga: %',v_parecer_diag; END IF;
+  -- Exclusivamente para reverter o evento provisório, mantendo o teste original.
+  RAISE EXCEPTION 'rollback de nova evidencia sintetica' USING ERRCODE='ZZ001';
+ EXCEPTION WHEN SQLSTATE 'ZZ001' THEN NULL;
+ END;
+
+ IF has_table_privilege('service_role','public.catalogo_asaas_escrow_pareceres_preliminares','INSERT')
+  OR has_table_privilege('authenticated','public.catalogo_asaas_escrow_pareceres_preliminares','SELECT')
+  OR has_function_privilege('anon',
+    'public.catalogo_asaas_diagnosticar_dupla_conferencia_inerte(uuid)','EXECUTE')
+  OR has_function_privilege('authenticated',
+    'public.catalogo_asaas_diagnosticar_dupla_conferencia_inerte(uuid)','EXECUTE')
+  OR NOT has_function_privilege('service_role',
+    'public.catalogo_asaas_diagnosticar_dupla_conferencia_inerte(uuid)','EXECUTE')
+ THEN RAISE EXCEPTION 'Controle de acesso dos pareceres nao e restritivo'; END IF;
+ RAISE NOTICE 'PASS: 2 pareceres distintos e pendentes, replay/autoavaliacao bloqueados, versao caducada, nenhum Pix';
 
  BEGIN
   UPDATE public.catalogo_asaas_escrow_dossie_eventos SET descricao=
