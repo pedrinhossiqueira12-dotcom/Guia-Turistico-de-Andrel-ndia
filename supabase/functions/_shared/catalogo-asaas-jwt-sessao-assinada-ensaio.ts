@@ -70,7 +70,9 @@ function projectIssuer(projectUrl: string): string {
   return parsed.origin + "/auth/v1";
 }
 function isSafeJwk(k: JsonWebKey, alg: string, kid: string): boolean {
-  if (!k || k.kid !== kid || k.alg !== alg ||
+  // DOM JsonWebKey nao declara kid (JOSE), embora JWKS do GoTrue o inclua.
+  const jose = k as JsonWebKey & {kid?: string};
+  if (!k || jose.kid !== kid || k.alg !== alg ||
     (k.use !== undefined && k.use !== "sig") ||
     (k.key_ops !== undefined && (!Array.isArray(k.key_ops) ||
       !k.key_ops.includes("verify"))) || "d" in k ||
@@ -161,11 +163,15 @@ export class ValidadorJwtSessaoInerte {
         ? { name:"ECDSA", namedCurve:"P-256" } as EcKeyImportParams
         : { name:"RSASSA-PKCS1-v1_5", hash:"SHA-256" } as RsaHashedImportParams;
       const imported = await crypto.subtle.importKey("jwk",key,algorithm,false,["verify"]);
+      // Alguns runtimes usam Uint8Array<ArrayBufferLike>, mas WebCrypto
+      // requer BufferSource<ArrayBuffer>. Copia local sem SharedArrayBuffer.
+      const signatureBytes = new Uint8Array(new ArrayBuffer(signature.byteLength));
+      signatureBytes.set(signature);
       const verified = await crypto.subtle.verify(
         header.alg === "ES256"
           ? {name:"ECDSA",hash:"SHA-256"}
           : {name:"RSASSA-PKCS1-v1_5"},
-        imported,signature,enc.encode(h+"."+payload),
+        imported,signatureBytes,enc.encode(h+"."+payload),
       );
       if (!verified) return null;
 
