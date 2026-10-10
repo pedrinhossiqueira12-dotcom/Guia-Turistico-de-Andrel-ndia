@@ -746,6 +746,9 @@ jobs:
           psql -X -d catalogo_asaas_guards_ci -v ON_ERROR_STOP=1 \
             -c "SET app.catalogo_ci_mfa_test='enabled'" \
             -f supabase/tests/isolated/catalogo-asaas-aal1-pre-desafio-inerte-postgres.sql
+          psql -X -d catalogo_asaas_guards_ci -v ON_ERROR_STOP=1 \
+            -c "SET app.catalogo_ci_mfa_test='enabled'" \
+            -f supabase/tests/isolated/catalogo-asaas-fator-totp-aal1-owner-inerte-postgres.sql
           # Criar clone separado APOS os ensaios com ROLLBACK: as duas sessoes
           # concorrentes fazem COMMIT real (dados inteiramente ficticios).
           # Este banco e sempre destruido. Nao poluir catalogo_asaas_guards_ci.
