@@ -29,6 +29,13 @@ export interface GoTrueMfaConfigInerte {
   http: typeof fetch;
   /** NÃO usar parse JWT sem assinatura, nem so GET /user. */
   verificarAssinaturaJwtESessaoNoServidor: VerificadorServidorAssinaturaESessao;
+  // Backend privilegiado privado consulta auth.sessions + auth.mfa_factors.
+  // Nunca confiar em factorId fornecido pelo cliente sem esta prova.
+  verificarFatorTotpAal1NoServidor: (args: {
+    userId: string;
+    sessionId: string;
+    factorId: string;
+  }) => Promise<boolean>;
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -65,7 +72,8 @@ export class GoTrueMfaTransporteInerte implements PortaDeAutenticacaoFalsa {
     if (!cfg.publishableKey.startsWith("sb_publishable_") ||
       cfg.publishableKey.length < 23 ||
       typeof cfg.http !== "function" ||
-      typeof cfg.verificarAssinaturaJwtESessaoNoServidor !== "function") {
+      typeof cfg.verificarAssinaturaJwtESessaoNoServidor !== "function" ||
+      typeof cfg.verificarFatorTotpAal1NoServidor !== "function") {
       throw new Error("Configuracao de transporte MFA sem chave publica/verificador");
     }
     this.cfg = cfg;
@@ -120,6 +128,22 @@ export class GoTrueMfaTransporteInerte implements PortaDeAutenticacaoFalsa {
       || (fase === "apos_verificacao" && principal.aal !== "aal2")) return null;
     const gotrue = await this.request("GET", "/user", token);
     return gotrue.id === principal.userId ? principal : null;
+  }
+
+  async verificarFatorTotpAal1(args: {
+    userId: string;
+    sessionId: string;
+    factorId: string;
+  }): Promise<boolean> {
+    if (!UUID.test(args.userId) || !UUID.test(args.sessionId)
+      || !UUID.test(args.factorId)) return false;
+    // A resposta e obrigatoriamente um booleano estrito do backend
+    // isolado. O HTTP GoTrue sozinho nao substitui a consulta de titular.
+    try {
+      return await this.cfg.verificarFatorTotpAal1NoServidor(args) === true;
+    } catch {
+      return false;
+    }
   }
 
   async criarDesafio(args: {
