@@ -46,6 +46,10 @@ export class StagingMfaManual{
  }
  async call(method:"GET"|"POST",path:string,token?:string,body?:Json):Promise<Json>{
   const url=fixedStagingUrl(path);
+  // Nao permitir a antiga leitura GET /auth/v1/factors: GoTrue expõe
+  // a lista dos fatores no usuario autenticado GET /auth/v1/user.
+  check((method==="GET" && path==="/user") ||
+    (method==="POST" && path!=="/user"),"Metodo Auth nao autorizado");
   check(token===undefined||BEARER.test(token),"Bearer local invalido");
   const res=await this.http(url,{
    method,redirect:"error",cache:"no-store",credentials:"omit",
@@ -90,9 +94,21 @@ export class StagingMfaManual{
   return data.access_token;
  }
  async factors(token:string):Promise<Json[]>{
-  const data=await this.call("GET","/factors",token);
-  check(Array.isArray(data.totp),"Lista de fatores TOTP indisponivel");
-  return data.totp.map(record);
+  // O mfa.listFactors do Supabase Auth deriva de GET /user e user.factors;
+  // GET /auth/v1/factors nao e o endpoint de listagem do usuario.
+  const data=await this.call("GET","/user",token);
+  check(typeof data.id==="string"&&UUID.test(data.id),
+    "Usuario Auth invalido ao consultar fatores MFA");
+  check(data.factors===undefined || Array.isArray(data.factors),
+    "Fatores Auth em formato inesperado");
+  return ((data.factors??[]) as unknown[]).map(record)
+   .filter(f=>f.factor_type==="totp")
+   .map(f=>{
+    check(typeof f.id==="string"&&UUID.test(f.id)
+      &&(f.status==="verified"||f.status==="unverified"),
+      "Fator MFA sem UUID ou status valido");
+    return f;
+   });
  }
  async enroll(token:string):Promise<{id:string;secret:string}>{
   const data=await this.call("POST","/factors",token,{
