@@ -31,12 +31,29 @@ BEGIN
   'public.catalogo_asaas_preflight_sessao_revisor_inerte()','EXECUTE')
  OR has_function_privilege('service_role',
   'public.catalogo_asaas_preflight_sessao_revisor_inerte()','EXECUTE')
- OR NOT has_function_privilege('authenticated',
+ OR has_function_privilege('authenticated',
   'public.catalogo_asaas_preflight_sessao_revisor_inerte()','EXECUTE')
  THEN RAISE EXCEPTION 'Preflight expos uso anonimo ou service role'; END IF;
 END $guard$;
 
+-- Regra #42: RPC SECURITY DEFINER de ensaio agora esta fechada para
+-- qualquer token de cliente. O owner SQL continua a usá-la em funções
+-- internas, mas isso nao substitui validacao Auth real.
 SET LOCAL ROLE authenticated;
+DO $no_rpc$
+BEGIN
+ BEGIN
+  PERFORM public.catalogo_asaas_preflight_sessao_revisor_inerte();
+  RAISE EXCEPTION 'RPC preflight exposto indevidamente a authenticated';
+ EXCEPTION WHEN insufficient_privilege THEN NULL;
+ END;
+END $no_rpc$;
+RESET ROLE;
+
+-- Demais casos exercitam APENAS as condicoes internas, como owner do
+-- PostgreSQL descartavel, com claims sinteticas GUC nao assinadas.
+-- Nao representam chamadas de authenticated via PostgREST.
+
 DO $jwt_cases$
 DECLARE
  v_uid text:='fa900000-0000-4000-8000-000000000001';
@@ -120,7 +137,7 @@ VALUES
   'fa900000-0000-4000-8000-000000000021'::uuid,
   now()-interval '2 minutes',now()-interval '10 seconds');
 
-SET LOCAL ROLE authenticated;
+-- preflight owner-only: sem SET ROLE authenticated
 DO $wrong_user_challenge$
 DECLARE
  v_n bigint:=(extract(epoch FROM now()))::bigint;
@@ -149,7 +166,7 @@ VALUES
   'fa900000-0000-4000-8000-000000000020'::uuid,
   now()-interval '2 minutes',now()-interval '10 seconds');
 
-SET LOCAL ROLE authenticated;
+-- preflight owner-only: sem SET ROLE authenticated
 DO $mfa_recent_factor$
 DECLARE
  v_n bigint:=(extract(epoch FROM now()))::bigint;
@@ -187,7 +204,7 @@ VALUES('fa900000-0000-4000-8000-000000000011'::uuid,
  'aal2','fa900000-0000-4000-8000-000000000020'::uuid,
  now()+interval '3 hours');
 
-SET LOCAL ROLE authenticated;
+-- preflight owner-only: sem SET ROLE authenticated
 DO $same_factor_other_session$
 DECLARE
  v_n bigint:=(extract(epoch FROM now()))::bigint;
@@ -217,7 +234,7 @@ RESET ROLE;
 -- Mesmo fator, mas prova fora da janela: um JWT recem-renovado nao altera isso.
 UPDATE auth.mfa_challenges SET verified_at=now()-interval '15 minutes'
 WHERE id='fa900000-0000-4000-8000-000000000032'::uuid;
-SET LOCAL ROLE authenticated;
+-- preflight owner-only: sem SET ROLE authenticated
 DO $mfa_stale$
 DECLARE
  v_n bigint:=(extract(epoch FROM now()))::bigint;
@@ -248,7 +265,7 @@ INSERT INTO public.catalogo_asaas_revisores_escrow_ensaio(
  'Indicacao ficticia para demonstrar revogacao do preflight MFA sem aprovar Pix.',
  repeat('a',64),now(),now()+interval '30 days');
 
-SET LOCAL ROLE authenticated;
+-- preflight owner-only: sem SET ROLE authenticated
 DO $active$
 DECLARE
  v_now bigint:=(extract(epoch FROM now()))::bigint;
@@ -280,7 +297,7 @@ VALUES('fa900000-0000-4000-8000-000000000001'::uuid,
  'Revogacao ficticia de laboratorio que deve retirar indicacao vigente no preflight.',
  now()-interval '20 years');
 
-SET LOCAL ROLE authenticated;
+-- preflight owner-only: sem SET ROLE authenticated
 DO $revoked$
 DECLARE
  v_now bigint:=(extract(epoch FROM now()))::bigint;
