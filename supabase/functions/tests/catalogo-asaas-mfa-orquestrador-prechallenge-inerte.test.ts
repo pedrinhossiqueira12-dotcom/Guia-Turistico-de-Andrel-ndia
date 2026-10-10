@@ -58,11 +58,13 @@ function lab(opts:{
  const challengeMap=new Map<string,{nonce:string;tentativa:string}>();
  const consumed=new Set<string>();
  const gate:LivroPrivadoPrechallengeInerte={
-  async reservarInicio(id){
+  async reservarInicioVinculado(id,userId,sessionId){
    calls.push("sql-reserve");
    if(opts.failSql==="reserve")throw Error("db fake offline");
-   if(!contexts.has(id) || reserved.has(id))
-    return sql({ok:false,motivo:"contexto_invalido_ou_repetido"});
+   const existing=contexts.get(id);
+   if(!existing || existing.userId!==userId || existing.sessionId!==sessionId
+     || reserved.has(id))
+    return sql({ok:false,motivo:"contexto_ou_principal_divergente"});
    const nonce=crypto.randomUUID();
    reserved.set(id,nonce);
    return sql({ok:true,motivo:"nonce_reservado",nonce,unsafe:opts.sqlUnsafe});
@@ -142,7 +144,7 @@ Deno.test("duas instancias usam nonce do banco, guardam desafio e nunca repassam
  assert(initial.ok && typeof initial.tentativa==="string","nao iniciou tentativa");
  assert(!("nonce" in initial)&&!("challengeId" in initial),"nonce/challenge vazou ao cliente");
  hold(initial);
- assert(l.calls.indexOf("sql-reserve")<l.calls.indexOf("auth-inicio"),"Auth antes da reserva SQL");
+ assert(l.calls.indexOf("auth-inicio")<l.calls.indexOf("sql-reserve"),"nonce reservado antes de autenticar");
  assert(l.calls.indexOf("sql-register")>l.calls.indexOf("auth-challenge"),"registrou challenge antes do Auth");
  const dupe=await two.iniciar(CID,"before");
  assert(!dupe.ok&&dupe.motivo==="reserva_sql_recusada_ou_sem_hold","nonce duplicou");
@@ -170,7 +172,9 @@ Deno.test("identidade, sessao, AAL1, propriedade de fator e token sao exigidos",
   {...aal1,anonymous:true},{...aal2},
  ]) {
   const l=lab({before:mismatch}); const v=await l.ctor().iniciar(CID,"before");
-  assert(!v.ok&&v.motivo==="sessao_aal1_divergente","auth spoofing accepted");
+  assert(!v.ok&&["sessao_aal1_divergente","reserva_sql_recusada_ou_sem_hold"].includes(v.motivo),
+   "auth spoofing accepted");
+  assert(l.reserved.size===0,"um invasor conseguiu queimar reserva de outro revisor");
   assert(!l.calls.includes("auth-challenge"),"issued challenge for invalid session");
   hold(v);
  }
@@ -179,8 +183,9 @@ Deno.test("identidade, sessao, AAL1, propriedade de fator e token sao exigidos",
  assert(!l.calls.includes("auth-challenge"),"created challenge without factor ownership");
  const m=lab();const denied=await m.ctor().iniciar(CID,"foreign-bearer");
  assert(!denied.ok,"foreign bearer accepted");
+ assert(m.reserved.size===0,"Bearer forjado queimou nonce alheio");
  const retry=await m.ctor().iniciar(CID,"before");
- assert(!retry.ok,"reservation replay after unauthorized bearer not denied");
+ assert(retry.ok&&retry.tentativa,"revisor legitimo foi bloqueado por bearer alheio");
  hold(retry);
 });
 
