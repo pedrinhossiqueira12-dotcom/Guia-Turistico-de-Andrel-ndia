@@ -7,6 +7,8 @@ Cenarios:
      no lock por ID e depois rejeitar em 23514.
   B) saque regular (titular C) registra ID primeiro; evidencia do MESMO titular
      chega depois. Deve esperar no lock do titular e ser preservada, sem baixa.
+  C) duas sessoes diferentes usam o mesmo nonce documental: uma confirma,
+     a outra espera LOCK no header e recebe rejeicao de replay. Zero Pix.
 
 SO executar no banco local 'catalogo_asaas_race_ci', criado e removido pelo CI.
 """
@@ -96,14 +98,14 @@ class Session:
         self.proc.stdin.write(sql.encode("utf-8") + b"\n")
         self.proc.stdin.flush()
 
-    def until(self, marker: str, timeout: float = POLL_TIMEOUT_SECONDS) -> None:
+    def until(self, marker: str, timeout: float = POLL_TIMEOUT_SECONDS) -> str:
         assert self.proc.stdout is not None
         needle = marker.encode("ascii")
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             if needle in self.unread:
-                self.unread = self.unread.split(needle, 1)[1]
-                return
+                received, self.unread = self.unread.split(needle, 1)
+                return received.decode("utf-8", errors="replace")
             if self.proc.poll() is not None:
                 err = self.proc.stderr.read().decode("utf-8", errors="replace")
                 raise AssertionError(f"{self.name} encerrou antes de {marker}: {err[-700:]}")
@@ -287,11 +289,242 @@ def scenario_claim_first_late_evidence() -> None:
     print("PASS: duas sessoes, saque primeiro: evidencia tardia registrada sem baixa", flush=True)
 
 
+
+# Teste da etapa #42: os identificadores sao FICTICIOS, criados apenas no clone.
+NONCE_OWNER = "fd511111-1111-4111-8111-111111111111"
+NONCE_REVIEWER = "fd522222-2222-4222-8222-222222222222"
+NONCE_INDICATOR = "fd533333-3333-4333-8333-333333333333"
+NONCE_SESSION = "fd544444-4444-4444-8444-444444444444"
+NONCE_FACTOR = "fd555555-5555-4555-8555-555555555555"
+NONCE_STORE = "ci-nonce-race-commerce"
+
+
+def seed_document_nonce() -> str:
+    """Cria dois creditos reais do fixture, escrow congelado e nonce AAL2 de ensaio.
+
+    Sem provedores externos. Apenas no banco efemero que sera destruido pela CI.
+    """
+    query = f"""
+    BEGIN;
+    DO $nonce_seed$
+    DECLARE
+      v_owner uuid := '{NONCE_OWNER}'::uuid;
+      v_reviewer uuid := '{NONCE_REVIEWER}'::uuid;
+      v_indicator uuid := '{NONCE_INDICATOR}'::uuid;
+      v_store text := '{NONCE_STORE}';
+      v_competencia date;
+      v_pedido uuid;
+      v_fechamento uuid;
+      v_saida uuid;
+      v_reserva jsonb;
+      v_evento jsonb;
+      v_intencao jsonb;
+      v_escrow uuid;
+      v_i int;
+      v_epoch bigint;
+    BEGIN
+      INSERT INTO auth.users(id) VALUES(v_owner),(v_reviewer),(v_indicator);
+      INSERT INTO public.comercios_publicados(local_id,status)
+        VALUES(v_store,'ativo');
+      INSERT INTO public.catalogos(comercio_id,proprietario_id)
+        VALUES(v_store,v_owner);
+      INSERT INTO public.catalogo_motoboys(
+        comercio_id,usuario_id,nome,email,ativo,autorizado_por
+      ) VALUES(v_store,v_owner,'Entregador CI nonce','nonce@example.invalid',true,v_owner);
+      FOR v_i IN 1..2 LOOP
+        v_competencia:=make_date(2097,v_i,1);
+        INSERT INTO public.catalogo_pedidos(
+          comercio_id,referencia_externa,provedor,idempotency_key,status,
+          status_pagamento,modalidade,forma_pagamento,subtotal_produtos_centavos,
+          entrega_centavos,total_centavos,taxa_plataforma_centavos,
+          repasse_bruto_comercio_centavos,cliente_nome,cliente_telefone,
+          versao_financeira,taxa_motoboy_centavos,taxa_total_centavos,
+          entrega_status,metadata
+        ) VALUES(v_store,'ci-nonce-race-'||v_i,'offline',gen_random_uuid(),
+          'entregue','aprovado','entrega','dinheiro',300000,0,300000,15000,279000,
+          'Cliente sintético','00000000000',2,6000,21000,'entregue',
+          jsonb_build_object('ensaio','nonce_concorrente','mes',v_i))
+        RETURNING id INTO v_pedido;
+        INSERT INTO public.catalogo_fechamentos_offline(
+          comercio_id,competencia,total_pedidos,total_comissao_centavos,status,pago_em
+        ) VALUES(v_store,v_competencia,1,21000,'pago',now())
+        RETURNING id INTO v_fechamento;
+        INSERT INTO public.catalogo_fatura_componentes_v2(
+          fechamento_id,pedido_id,tipo,valor_centavos
+        ) VALUES(v_fechamento,v_pedido,'plataforma',15000),
+          (v_fechamento,v_pedido,'logistica',6000);
+        INSERT INTO public.catalogo_comissoes_offline(
+          pedido_id,comercio_id,competencia,subtotal_produtos_centavos,
+          taxa_percentual,valor_comissao_centavos,status,pago_em,
+          taxa_plataforma_centavos,taxa_motoboy_centavos,valor_total_centavos,
+          versao_financeira,motoboy_id,financiamento_logistica_comprovado
+        ) VALUES(v_pedido,v_store,v_competencia,300000,5,21000,'paga',now(),
+          15000,6000,21000,2,v_owner,true);
+        INSERT INTO public.catalogo_fatura_cobrancas(
+          fechamento_id,comercio_id,competencia,gateway,
+          payment_id,status,valor_centavos,pago_em
+        ) VALUES(v_fechamento,v_store,v_competencia,'asaas',
+          'ci-nonce-fatura-'||v_i,'pago',21000,now());
+        IF NOT catalogo_private.catalogo_v2_financiado(v_pedido) THEN
+          RAISE EXCEPTION 'CI: credito nonce sem financiamento';
+        END IF;
+        INSERT INTO public.catalogo_remuneracoes_v2(
+          pedido_id,comercio_id,motoboy_id,valor_centavos,
+          status,financiamento_comprovado
+        ) VALUES(v_pedido,v_store,v_owner,6000,'disponivel',true);
+      END LOOP;
+      DELETE FROM public.catalogo_motoboys WHERE usuario_id=v_owner;
+      INSERT INTO public.catalogo_asaas_regularizacoes_inativos(
+        motoboy_id,saldo_snapshot_centavos,motivo
+      ) VALUES(v_owner,12000,'inatividade') RETURNING id INTO v_saida;
+      v_reserva:=public.catalogo_asaas_separar_creditos_excepcionais('saida',v_saida);
+      IF v_reserva->>'ok' IS DISTINCT FROM 'true'
+        OR v_reserva->>'creditos_separados' IS DISTINCT FROM '2' THEN
+        RAISE EXCEPTION 'CI: escrow sintetico nao criado: %',v_reserva;
+      END IF;
+      v_escrow:=(v_reserva->>'separacao_id')::uuid;
+      v_evento:=public.catalogo_asaas_registrar_evento_dossie_escrow(
+        v_escrow,v_owner,'fd566666-6666-4666-8666-666666666666'::uuid,
+        'verificacao_banco',
+        'Evento ficticio de verificacao para concorrencia de nonce documental.'
+      );
+      IF v_evento->>'ok' IS DISTINCT FROM 'true' THEN
+        RAISE EXCEPTION 'CI: dossier inexistente: %',v_evento;
+      END IF;
+      INSERT INTO public.catalogo_asaas_revisores_escrow_ensaio(
+        revisor_id,indicado_por,justificativa,instrumento_sha256,
+        cadastrado_em,valido_ate
+      ) VALUES(v_reviewer,v_indicator,
+        'Revisor sintético e temporário para concorrencia real de nonce de CI.',
+        repeat('a',64),now(),now()+interval '1 hour');
+      INSERT INTO auth.sessions(id,user_id,aal,factor_id,not_after)
+        VALUES('{NONCE_SESSION}'::uuid,v_reviewer,'aal2',
+          '{NONCE_FACTOR}'::uuid,now()+interval '1 hour');
+      v_epoch:=(extract(epoch FROM now()))::bigint;
+      PERFORM set_config('request.jwt.claim.sub',v_reviewer::text,true);
+      PERFORM set_config('request.jwt.claim.role','authenticated',true);
+      PERFORM set_config('request.jwt.claims',jsonb_build_object(
+        'sub',v_reviewer::text,'role','authenticated','aal','aal2',
+        'session_id','{NONCE_SESSION}','iat',v_epoch,
+        'exp',v_epoch+1800,'is_anonymous',false)::text,true);
+      v_intencao:=catalogo_private.catalogo_asaas_iniciar_intencao_mfa_documental_ensaio(v_escrow);
+      IF v_intencao->>'ok' IS DISTINCT FROM 'true'
+        OR v_intencao->>'pagamento_autorizado' IS DISTINCT FROM 'false' THEN
+        RAISE EXCEPTION 'CI: nonce documental inerte nao emitido: %',v_intencao;
+      END IF;
+    END $nonce_seed$;
+    COMMIT;
+    """
+    run_sql(query, app="ci_nonce_seed")
+    nonce = run_sql(
+        f"SELECT nonce FROM public.catalogo_asaas_intencoes_mfa_documentais_ensaio "
+        f"WHERE revisor_id='{NONCE_REVIEWER}'"
+    )
+    if not re.fullmatch(r"[0-9a-f-]{36}", nonce):
+        raise AssertionError("Nonce sintético nao localizado no clone")
+    return nonce
+
+
+def context_for_nonce() -> str:
+    # SET sao executados so na conexao mock PostgreSQL sem JWT real.
+    return f"""
+        SELECT pg_catalog.set_config('request.jwt.claim.role','authenticated',false);
+        SELECT pg_catalog.set_config('request.jwt.claim.sub','{NONCE_REVIEWER}',false);
+        SELECT pg_catalog.set_config('request.jwt.claims',
+          pg_catalog.jsonb_build_object(
+           'sub','{NONCE_REVIEWER}','role','authenticated','aal','aal2',
+           'session_id','{NONCE_SESSION}',
+           'iat',(extract(epoch FROM now()))::bigint,
+           'exp',(extract(epoch FROM now()))::bigint+1800,
+           'is_anonymous',false
+          )::text,false);
+    """
+
+
+def assert_waiting_nonce_lock(app: str) -> None:
+    deadline = time.monotonic() + POLL_TIMEOUT_SECONDS
+    last = "not-started"
+    while time.monotonic() < deadline:
+        last = run_sql(
+          "SELECT COALESCE(wait_event_type,'none')||':'||COALESCE(wait_event,'none') "
+          f"FROM pg_stat_activity WHERE application_name='{app}' "
+          "AND datname=current_database() ORDER BY backend_start DESC LIMIT 1"
+        )
+        if last in ("Lock:transactionid", "Lock:tuple"):
+            return
+        time.sleep(0.10)
+    raise AssertionError(f"{app}: nao aguardou o lock de um nonce unico ({last})")
+
+
+def scenario_same_nonce_concurrent() -> None:
+    """Prova concorrencia entre 2 backends reais (nao duas calls em 1 transacao)."""
+    nonce = seed_document_nonce()
+    first = Session.start("ci_nonce_first_writer")
+    second = None
+    try:
+        first.send(context_for_nonce() + f"""
+          BEGIN;
+          SELECT catalogo_private.catalogo_asaas_observar_nonce_documental_ensaio('{nonce}'::uuid);
+          \\echo NONCE_FIRST_OBSERVED""")
+        observed1 = first.until("NONCE_FIRST_OBSERVED")
+        if '"ok": true' not in observed1 or '"nonce_observado_uma_vez": true' not in observed1:
+            raise AssertionError(f"Primeira observacao nao aconteceu: {observed1[-700:]}")
+
+        second = Session.start("ci_nonce_second_writer")
+        second.send(context_for_nonce() + f"""
+          SET lock_timeout='10s';
+          BEGIN;
+          SELECT catalogo_private.catalogo_asaas_observar_nonce_documental_ensaio('{nonce}'::uuid);
+          \\echo NONCE_SECOND_REJECTED""")
+        assert_waiting_nonce_lock(second.name)
+
+        first.send("COMMIT;\n\\echo NONCE_FIRST_COMMITTED")
+        first.until("NONCE_FIRST_COMMITTED")
+        observed2 = second.until("NONCE_SECOND_REJECTED")
+        if '"nonce_ja_observado"' not in observed2 or '"ok": false' not in observed2:
+            raise AssertionError(f"Segundo observador nao recebeu replay: {observed2[-700:]}")
+        second.send("COMMIT;\n\\echo NONCE_SECOND_COMMITTED")
+        second.until("NONCE_SECOND_COMMITTED")
+        second.finish()
+        second = None
+        first.finish()
+    finally:
+        if second is not None:
+            second.abort()
+        first.abort()
+
+    count = run_sql(
+        f"SELECT count(*)||'|'||max(resultado) "
+        "FROM public.catalogo_asaas_usos_nonce_documentais_ensaio "
+        f"WHERE nonce='{nonce}'"
+    )
+    if count != "1|vinculo_documental_observado":
+        raise AssertionError(f"Concorrencia inseriu usos de nonce duplicados: {count}")
+    status = run_sql(
+        "SELECT count(*)||'|'||coalesce(sum(valor_centavos),0) "
+        "FROM public.catalogo_remuneracoes_v2 "
+        f"WHERE motoboy_id='{NONCE_OWNER}' AND status='disponivel' "
+        "AND repasse_id IS NULL"
+    )
+    if status != "2|12000":
+        raise AssertionError(f"Concorrencia alterou ou baixou creditos retidos: {status}")
+    if run_sql(
+        f"SELECT count(*) FROM public.catalogo_asaas_saques WHERE motoboy_id='{NONCE_OWNER}'"
+    ) != "0":
+        raise AssertionError("Observacao de nonce gerou saque bancario")
+    print(
+        "PASS: duas sessoes concorrentes aguardaram Lock:transactionid/tuple; "
+        "uma unica observacao documental, replay recusado, 12000 centavos HOLD e zero Pix",
+        flush=True,
+    )
+
+
 def main() -> None:
     guard_environment()
     prepare()
     scenario_evidence_first_cross_owner()
     scenario_claim_first_late_evidence()
+    scenario_same_nonce_concurrent()
     print("PASS: concorrencia real com 2 sessoes, IDs e usuarios sinteticos, zero Pix", flush=True)
 
 
