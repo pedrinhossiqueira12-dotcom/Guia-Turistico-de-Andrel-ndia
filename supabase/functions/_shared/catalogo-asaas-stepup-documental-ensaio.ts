@@ -29,7 +29,9 @@ export interface IntencaoDocumentalEmEnsaio {
 export interface PortaDeAutenticacaoFalsa {
   // A implementacao da fixture simula sessao verificada pelo Auth.
   // Nenhum JWT decodificado sem assinatura deve virar principal real.
-  autenticarToken(token: string): Promise<SessaoAferidaEmEnsaio | null>;
+  // "inicio" pode ser sessao AAL1 (factorId ainda nulo em auth.sessions).
+  // "apos_verificacao" exige AAL2 + factorId correto. CI somente.
+  autenticarToken(token: string, fase?: "inicio" | "apos_verificacao"): Promise<SessaoAferidaEmEnsaio | null>;
   criarDesafio(args: {
     bearerToken: string;
     factorId: string;
@@ -85,9 +87,12 @@ function idCoerente(s: string): boolean {
 function hashCoerente(s: string): boolean {
   return /^[0-9a-f]{64}$/.test(s);
 }
-function sessaoIgual(a: SessaoAferidaEmEnsaio, b: SessaoAferidaEmEnsaio): boolean {
+function mesmaIdentidade(a: SessaoAferidaEmEnsaio, b: SessaoAferidaEmEnsaio): boolean {
   return a.userId === b.userId && a.sessionId === b.sessionId
-    && a.factorId === b.factorId && a.role === b.role && !b.anonymous;
+    && a.role === b.role && !b.anonymous;
+}
+function mesmoEstadoAntes(a: SessaoAferidaEmEnsaio, b: SessaoAferidaEmEnsaio): boolean {
+  return mesmaIdentidade(a,b) && a.aal === b.aal && a.factorId === b.factorId;
 }
 
 /**
@@ -119,13 +124,14 @@ export class SimuladorStepUpDocumental {
     }
     let sessao: SessaoAferidaEmEnsaio | null = null;
     try {
-      sessao = await this.provider.autenticarToken(bearerToken);
+      sessao = await this.provider.autenticarToken(bearerToken, "inicio");
     } catch {
       return resposta(false, "autenticacao_indisponivel");
     }
     if (!sessao || sessao.role !== "authenticated" || sessao.anonymous
       || sessao.userId !== intencao.userId || sessao.sessionId !== intencao.sessionId
-      || sessao.factorId !== intencao.factorId) {
+      || !(sessao.aal === "aal1" && sessao.factorId === null
+        || sessao.aal === "aal2" && sessao.factorId === intencao.factorId)) {
       return resposta(false, "sessao_ou_fator_divergente");
     }
     // Nao aceitar duplicar desafio ativo para o mesmo nonce.
@@ -171,8 +177,8 @@ export class SimuladorStepUpDocumental {
     // Um endpoint futuro ainda exigira storage/locks compartilhados em Postgres.
     r.estado = "processando";
     try {
-      const antes = await this.provider.autenticarToken(bearerToken);
-      if (!antes || !sessaoIgual(r.sessaoOriginal, antes)) {
+      const antes = await this.provider.autenticarToken(bearerToken, "inicio");
+      if (!antes || !mesmoEstadoAntes(r.sessaoOriginal, antes)) {
         r.estado = "recusada";
         return resposta(false, "sessao_de_confirmacao_divergente");
       }
@@ -186,8 +192,9 @@ export class SimuladorStepUpDocumental {
       }
       // O resultado confiavel DEVE vir de nova autenticacao pelo Auth
       // e comparar a mesma sessao; um JWT AAL2 alegado pelo cliente nao serve.
-      const depois = await this.provider.autenticarToken(verificado.accessToken);
-      if (!depois || !sessaoIgual(r.sessaoOriginal, depois)
+      const depois = await this.provider.autenticarToken(verificado.accessToken, "apos_verificacao");
+      if (!depois || !mesmaIdentidade(r.sessaoOriginal, depois)
+        || depois.factorId !== r.intencao.factorId
         || depois.aal !== "aal2"
         || this.agora() >= r.expiraEm) {
         r.estado = "recusada";
