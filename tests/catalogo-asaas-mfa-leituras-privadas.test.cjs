@@ -37,7 +37,7 @@ test("readers recuperam contexto e desafio do SQL original sem depender do brows
   "'challengeId',v_challenge::text",
   "'contexto',v_contexto"
  ])assert.ok(read.includes(part),"Missing persisted security gate "+part);
- for(const dangerous of ["mfa.verify", "POST /transfers", "access_token", "refresh_token", "Bearer "])
+ for(const dangerous of ["/auth/v1/factors/", "POST /transfers", "access_token", "refresh_token", "Bearer "])
   assert.ok(!read.includes(dangerous),"SQL migration should not handle bearer/OTP/money: "+dangerous);
 });
 
