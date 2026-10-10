@@ -236,3 +236,85 @@ Deno.test("claims user_metadata nunca decidem autoridade, so Auth sessions+facto
  const {verifier}=makeVerifier([f.publicJwk],null);
  assert(await verifier.verificar(source)===null,"user_metadata bypassed revoked session");
 });
+
+
+Deno.test("JWT AAL1 assinado so inicia MFA com sessao Auth AAL1 ativa, sem proof de fator",async()=>{
+ const f=await fixture("ES256");
+ const before=await tokenSign(f,{aal:"aal1"});
+ const after=await tokenSign(f);
+ const audits={basic:0,final:0};
+ const verifier=new ValidadorJwtSessaoInerte({
+  projectUrl:PROJECT,agoraMs:()=>NOW,maxIdadeTokenSegundos:300,
+  provedor:{
+   buscarJwksConfiavel:async()=>({keys:[f.publicJwk]}),
+   consultarSessaoBasica:async id=>{
+    audits.basic++;
+    assert(id===SESSION,"basic session lookup changed");
+    return {id:SESSION,userId:USER,aal:"aal1",notAfterMs:NOW+60000,
+      usuarioBloqueado:false};
+   },
+   consultarSessaoEFator:async id=>{
+    audits.final++;
+    assert(id===SESSION,"final session lookup changed");
+    return row();
+   }
+  }
+ });
+ assert(await verifier.verificar(before)===null,"AAL1 became final MFA proof");
+ assert(audits.basic===0&&audits.final===0,
+  "AAL1 must fail before JWT session reader in final mode");
+ const start=await verifier.verificarInicio(before);
+ assert(start?.aal==="aal1" && start.factorId===null
+   && start.userId===USER&&start.sessionId===SESSION,
+   "AAL1 signed session not admitted to challenge phase");
+ assert(audits.basic===1&&audits.final===0,
+   "AAL1 reached privileged AAL2 factor reader");
+ const end=await verifier.verificar(after);
+ assert(end?.aal==="aal2" && end.factorId===FACTOR&&audits.final===1,
+   "final AAL2 must verify TOTP factor session");
+});
+
+Deno.test("fase de inicio AAL1 falha fechada se nao houver reader privado ou se sessao for revogada",async()=>{
+ const f=await fixture("ES256");
+ const before=await tokenSign(f,{aal:"aal1"});
+ const a=makeVerifier([f.publicJwk]);
+ assert(await a.verifier.verificarInicio(before)===null,
+  "AAL1 admitted without basic session lookup");
+ assert(a.requests.sessions===0,"AAL1 queried AAL2 reader");
+ const basic={id:SESSION,userId:USER,aal:"aal1" as const,
+  notAfterMs:NOW+60000,usuarioBloqueado:false};
+ for(const wrong of [
+  null,{...basic,id:USER},{...basic,userId:SESSION},
+  {...basic,aal:"aal2" as const},{...basic,notAfterMs:NOW-1},
+  {...basic,usuarioBloqueado:true}
+ ]) {
+  const verifier=new ValidadorJwtSessaoInerte({
+   projectUrl:PROJECT,agoraMs:()=>NOW,maxIdadeTokenSegundos:300,
+   provedor:{
+    buscarJwksConfiavel:async()=>({keys:[f.publicJwk]}),
+    consultarSessaoBasica:async()=>wrong,
+    consultarSessaoEFator:async()=>{throw new Error("AAL2 reader accessed");}
+   }
+  });
+  assert(await verifier.verificarInicio(before)===null,
+   "invalid basic session admitted "+JSON.stringify(wrong));
+ }
+});
+
+Deno.test("fase AAL1 exige assinatura real, nao acessa Auth com token adulterado",async()=>{
+ const f=await fixture("ES256");
+ const token=await tokenSign(f,{aal:"aal1"});
+ const [h,p,sig]=token.split(".");
+ let lookups=0;
+ const verifier=new ValidadorJwtSessaoInerte({
+  projectUrl:PROJECT,agoraMs:()=>NOW,maxIdadeTokenSegundos:300,
+  provedor:{
+   buscarJwksConfiavel:async()=>({keys:[f.publicJwk]}),
+   consultarSessaoBasica:async()=>{lookups++;return null;},
+   consultarSessaoEFator:async()=>{lookups++;return null;}
+  }
+ });
+ const fake=h+"."+b64(utf(JSON.stringify({...baseClaims(),aal:"aal1",sub:SESSION})))+"."+sig;
+ assert(await verifier.verificarInicio(fake)===null,"forged AAL1 accepted");
+ assert(lookups===0,"unverified token reached Auth basic reader");
+});
