@@ -186,6 +186,70 @@
     }
     return solicitacoes.length;
   }
+  async function listarSeparacoesExcepcionais(){
+    const response=await api({acao:"listar_separacoes_congeladas_admin"});
+    const lista=$("listaSeparacoesExcepcionais");
+    lista.replaceChildren();
+    const separacoes=Array.isArray(response.separacoes)?response.separacoes:[];
+    if(!separacoes.length){
+      const item=document.createElement("li");
+      item.textContent="Nenhuma separação contábil congelada identificada.";
+      lista.appendChild(item);
+    }
+    for(const item of separacoes){
+      const li=document.createElement("li");li.className="item";
+      const title=document.createElement("strong");
+      title.textContent="Créditos NÃO pagos · "+money(item.valor_centavos)+
+        " · "+Number(item.creditos||0)+" comissão(ões)";
+      const detail=document.createElement("p");detail.className="muted";
+      detail.textContent=(item.tipo==="saida"?"Saída de entregador":"Saldo residual")+
+        " · Titular "+String(item.motoboy_id||"").slice(0,8)+
+        " · Separação "+String(item.id||"").slice(0,8)+
+        " · Congelada em "+(item.criado_em?
+          new Date(item.criado_em).toLocaleDateString("pt-BR"):"data indisponível");
+      const btn=document.createElement("button");
+      btn.type="button";btn.className="secondary";
+      btn.textContent="Diagnosticar sem desbloquear";
+      btn.addEventListener("click",async()=>{
+        btn.disabled=true;
+        try{
+          const result=await api({acao:"diagnosticar_separacao_congelada_admin",
+            separacao_id:String(item.id||"")});
+          const d=result.diagnostico;
+          if(d?.liberacao_automatica_autorizada!==false||
+            d?.quitacao_automatica_autorizada!==false||
+            d?.pode_reutilizar_creditos!==false)
+            throw new Error("Diagnóstico inesperado. Saldo permanece bloqueado.");
+          aviso("Diagnóstico SOMENTE LEITURA: "+
+            money(d.saldo_separado_centavos)+" congelados, "+
+            Number(d.quantidade_encontrada||0)+" de "+
+            Number(d.quantidade_esperada||0)+" créditos localizados; "+
+            (d.composicao_inalterada_e_financiada===true?
+              "composição contábil conferida":"COMPOSIÇÃO DIVERGENTE — analisar")+
+            "; créditos inválidos/revertidos "+
+            Number(d.creditos_financeiramente_invalidos||0)+
+            "; transferências bancárias observadas "+
+            Number(d.observacoes_bancarias_total||0)+
+            "; estados DONE observados "+Number(d.observacoes_done||0)+
+            "; saque regular em aberto "+Number(d.saques_comuns_abertos||0)+
+            ". Nenhum Pix criado, nenhuma baixa, nenhum desbloqueio. "+
+            String(d.aviso||"Requer conciliação bancária independente."),
+            d.composicao_inalterada_e_financiada!==true||
+            Number(d.observacoes_bancarias_total||0)>0);
+        }catch(erro){aviso(erro.message||"Diagnóstico indisponível; manter HOLD.",true);}
+        finally{btn.disabled=false;}
+      });
+      li.append(title,detail,btn);lista.appendChild(li);
+    }
+    if(response.ha_mais===true){
+      const avisoLimite=document.createElement("li");
+      avisoLimite.className="muted";
+      avisoLimite.textContent="Mostrando apenas as 100 separações mais recentes de "+
+        Number(response.total||0)+". O restante permanece armazenado e bloqueado; consulte relatório completo antes de conciliar.";
+      lista.appendChild(avisoLimite);
+    }
+    return Number(response.total??separacoes.length);
+  }
   async function atualizar(){
     aviso("Carregando solicitações…");
     const response=await api({acao:"listar_encerramentos_admin"});
@@ -219,8 +283,10 @@
     }
     const analises=await listarAnalisesResiduais();
     const saidas=await listarRegularizacoesSaida();
+    const separacoes=await listarSeparacoesExcepcionais();
     aviso(solicitacoes.length+" encerramento(s), "+analises+
-      " análise(s) residual(is) e "+saidas+" regularização(ões) de entregadores.");
+      " análise(s) residual(is), "+saidas+" regularização(ões) e "+
+      separacoes+" separação(ões) contábil(is) congelada(s), SEM Pix.");
   }
   async function iniciar(){
     if(!client){aviso("Supabase indisponível.",true);return;}
