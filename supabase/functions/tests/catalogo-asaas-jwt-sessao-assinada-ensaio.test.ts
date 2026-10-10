@@ -126,10 +126,23 @@ Deno.test("modificacao de payload e assinatura invalida nao podem consultar sess
  const source=await tokenSign(f);
  const [h,p,s]=source.split(".");
  const corrupted=h+"."+b64(utf(JSON.stringify({...baseClaims(),sub:SESSION})))+"."+s;
- const badSignature=h+"."+p+"."+s.slice(0,-2)+"ZZ";
+ // Mudar um BYTE real da assinatura. Mexer apenas na ultima
+ // sexteta Base64URL podia alterar bits de preenchimento, sem mudar bytes.
+ const signedBytes=Uint8Array.from(
+  atob(s.replace(/-/g,"+").replace(/_/g,"/").padEnd(Math.ceil(s.length/4)*4,"=")),
+  c=>c.charCodeAt(0));
+ signedBytes[0]^=1;
+ const badSignature=h+"."+p+"."+b64(signedBytes);
+ // Mesmo byte com escrita Base64URL NAO CANONICA: deve ser rejeitada.
+ const abc="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+ const last=abc.indexOf(s.at(-1)!);
+ assert(last>=0 && signedBytes.length===64,"unexpected ES256 signature fixture");
+ const changed=(last&~15)|((last+1)&15);
+ const noncanonical=h+"."+p+"."+s.slice(0,-1)+abc[changed];
  const {verifier,requests}=makeVerifier([f.publicJwk]);
  assert(await verifier.verificar(corrupted)===null,"payload forgery accepted");
  assert(await verifier.verificar(badSignature)===null,"signature forgery accepted");
+ assert(await verifier.verificar(noncanonical)===null,"noncanonical JWT accepted");
  assert(requests.sessions===0,"DB queried for unverified signature");
 });
 
