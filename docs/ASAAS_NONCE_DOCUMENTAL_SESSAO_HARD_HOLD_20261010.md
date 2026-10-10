@@ -99,10 +99,34 @@ step-up da operação específica.
   todos os registros de credenciais, escrows, usuários e saldos são
   fictícios e descartados por ROLLBACK. Proibidos tokens de produção
   e quaisquer chamadas externas.
-- Concorrência simultânea com **o mesmo nonce** deve ser validada
-  em duas sessões PostgreSQL reais antes de usar em sistemas mais sensíveis;
-  `UNIQUE` e `FOR UPDATE` são guardas de banco, não uma auditoria
-  completa de deadlocks.
+- **Concorrência real do mesmo nonce validada** no clone descartável
+  `catalogo_asaas_race_ci`, usando duas conexões `psql` independentes
+  e observando em `pg_stat_activity` a espera de bloqueio de linha /
+  transação (`Lock:transactionid` ou `Lock:tuple`).
+  Script: `scripts/validacao-pagamentos/test-asaas-advisory-concurrency.py`.
+  Foram executadas duas provas:
+  1. A transação A observa primeiro e **COMMIT**; B aguarda a trava,
+     recebe `nonce_ja_observado`, e apenas um uso fica persistido.
+     Os dois créditos fictícios de 6.000 centavos permanecem
+     `disponivel`/separados, sem repasse/saque.
+  2. A transação A observa primeiro e **ROLLBACK**; B aguarda a trava,
+     prossegue e grava a observação documental **uma única vez**.
+     Não pode haver perda nem duplicação após rollback.
+- O teste também exige `PGHOST=localhost`, `PGDATABASE=catalogo_ci`,
+  `PGUSER=postgres`, senha local de CI, ausência de variáveis de
+  credenciais remotas e nome exato do clone. Os dois fluxos não
+  acessam Asaas, Supabase remoto, API de Pix ou contas reais.
+- **CI funcional 12/12:** commit
+  `c5d8c97708dcb391cf9f04a52e2a3951ebc2f9f7`,
+  execução [38064302366](https://github.com/pedrinhossiqueira12-dotcom/Guia-Turistico-de-Andrel-ndia/actions/runs/38064302366):
+  o job PostgreSQL financeiro aprovou os dois cenários com logs
+  `PASS`; confirmação total do workflow depende do fechamento dos
+  demais jobs na mesma execução.
+- A prova testa atomicidade de **observação documental**, não valida
+  autenticação real: o CI simula claims JWT através de GUCs do
+  PostgreSQL local, executa a função como dono da base e nunca
+  comprova step-up MFA recente. Ainda é necessária revisão de
+  riscos de lock/deadlock para qualquer endpoint futuro.
 
 ## Bloqueios futuros da #42/#41
 
