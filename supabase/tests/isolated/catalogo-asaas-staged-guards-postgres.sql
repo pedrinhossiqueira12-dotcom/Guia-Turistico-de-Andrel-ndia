@@ -1234,6 +1234,10 @@ DECLARE
  v_nonce_doc2 uuid;
  v_nonce_doc3 uuid;
  v_stepup_id uuid;
+ v_stepup_attempt jsonb;
+ v_rate_nonce uuid;
+ v_rate_challenge uuid;
+ v_rate_idx integer;
  v_stepup_challenge uuid:='fa766666-6666-4666-8666-666666666661'::uuid;
  v_nonce_exp uuid;
  v_nonce_result jsonb;
@@ -1698,6 +1702,51 @@ BEGIN
 
 
 
+ -- A primeira tentativa nao valida OTP nem MFA real. E uso unico no DB.
+ PERFORM set_config('request.jwt.claims',
+  (v_claims||jsonb_build_object(
+   'session_id','fa733333-3333-4333-8333-333333333332'))::text,true);
+ SELECT catalogo_private.catalogo_asaas_reservar_tentativa_stepup_inerte(
+  v_stepup_challenge) INTO v_stepup_attempt;
+ IF v_stepup_attempt->>'ok' IS DISTINCT FROM 'false'
+  OR v_stepup_attempt->>'motivo' IS DISTINCT FROM 'sessao_revisor_ou_fator_invalido'
+ THEN RAISE EXCEPTION 'Tentativa de stepup trocou sessao: %',v_stepup_attempt; END IF;
+ PERFORM set_config('request.jwt.claims',v_claims::text,true);
+ SELECT catalogo_private.catalogo_asaas_reservar_tentativa_stepup_inerte(
+  v_stepup_challenge) INTO v_stepup_attempt;
+ IF v_stepup_attempt->>'ok' IS DISTINCT FROM 'true'
+  OR v_stepup_attempt->>'desafio_mfa_da_sessao_comprovado' IS DISTINCT FROM 'false'
+  OR v_stepup_attempt->>'verificacao_otp_realizada' IS DISTINCT FROM 'false'
+  OR v_stepup_attempt->>'pagamento_autorizado' IS DISTINCT FROM 'false'
+  OR v_stepup_attempt->>'movimenta_dinheiro' IS DISTINCT FROM 'false'
+ THEN RAISE EXCEPTION 'Reserva sem MFA validado confundida com pagamento: %',v_stepup_attempt; END IF;
+ SELECT catalogo_private.catalogo_asaas_reservar_tentativa_stepup_inerte(
+  v_stepup_challenge) INTO v_stepup_attempt;
+ IF v_stepup_attempt->>'motivo' IS DISTINCT FROM 'tentativa_ja_registrada'
+  OR v_stepup_attempt->>'ok' IS DISTINCT FROM 'false'
+ THEN RAISE EXCEPTION 'Replay de tentativa de challenge foi permitido: %',v_stepup_attempt; END IF;
+ BEGIN
+  UPDATE public.catalogo_asaas_stepup_tentativas_inertes
+  SET resultado='tentativa_reservada_sem_verificacao'
+  WHERE challenge_id=v_stepup_challenge;
+  RAISE EXCEPTION 'Tentativa de MFA ficticia sofreu UPDATE';
+ EXCEPTION WHEN check_violation THEN NULL;
+ END;
+ BEGIN
+  DELETE FROM public.catalogo_asaas_stepup_tentativas_inertes
+  WHERE challenge_id=v_stepup_challenge;
+  RAISE EXCEPTION 'Tentativa de MFA ficticia sofreu DELETE';
+ EXCEPTION WHEN check_violation THEN NULL;
+ END;
+ IF has_table_privilege('authenticated',
+   'public.catalogo_asaas_stepup_tentativas_inertes','INSERT')
+  OR has_table_privilege('service_role',
+   'public.catalogo_asaas_stepup_tentativas_inertes','SELECT')
+  OR has_function_privilege('service_role',
+   'catalogo_private.catalogo_asaas_reservar_tentativa_stepup_inerte(uuid)','EXECUTE')
+ THEN RAISE EXCEPTION 'Livro de tentativas MFA foi exposto a API'; END IF;
+ RAISE NOTICE 'PASS: tentativa de MFA unico so registra observacao e HOLD; replay negado';
+
  -- Outra sessao valida AAL2 do MESMO revisor: NAO pode usar esse nonce.
  PERFORM set_config('request.jwt.claims',
   (v_claims||jsonb_build_object(
@@ -1789,6 +1838,56 @@ BEGIN
  IF (SELECT count(*) FROM public.catalogo_asaas_stepup_desafios_documentais_ensaio
      WHERE nonce IN (v_nonce_doc,v_nonce_doc2)) <> 2
  THEN RAISE EXCEPTION 'Dois nonces validos nao receberam desafios distintos'; END IF;
+ 
+ -- Segundo desafio ainda nao observado. Um fator revogado falha
+ -- mesmo quando JWT AAL2 anterior continua presente na sessao mock.
+ BEGIN
+  UPDATE auth.mfa_factors SET status='unverified'
+  WHERE id='fa744444-4444-4444-8444-444444444441'::uuid;
+  SELECT catalogo_private.catalogo_asaas_reservar_tentativa_stepup_inerte(
+   'fa766666-6666-4666-8666-666666666665'::uuid) INTO v_stepup_attempt;
+  IF v_stepup_attempt->>'motivo' IS DISTINCT FROM 'sessao_revisor_ou_fator_invalido'
+  THEN RAISE EXCEPTION 'Fator nao verificado aceitou tentativa MFA: %',v_stepup_attempt; END IF;
+  RAISE EXCEPTION 'Reverter fator em fixture tentativa' USING ERRCODE='ZZ006';
+ EXCEPTION WHEN SQLSTATE 'ZZ006' THEN NULL;
+ END;
+ SELECT catalogo_private.catalogo_asaas_reservar_tentativa_stepup_inerte(
+  'fa766666-6666-4666-8666-666666666665'::uuid) INTO v_stepup_attempt;
+ IF v_stepup_attempt->>'ok' IS DISTINCT FROM 'true'
+  OR v_stepup_attempt->>'pagamento_autorizado' IS DISTINCT FROM 'false'
+ THEN RAISE EXCEPTION 'Segunda reserva nao continuou em HOLD: %',v_stepup_attempt; END IF;
+ 
+ -- Mais dois nonces demonstram teto de tres tentativas do MESMO revisor
+ -- na hora movel. Nao existe OTP nem senha passada ao banco.
+ FOR v_rate_idx IN 3..4 LOOP
+  SELECT catalogo_private.catalogo_asaas_iniciar_intencao_mfa_documental_ensaio(
+   (v_reserva->>'separacao_id')::uuid) INTO v_nonce_result;
+  v_rate_nonce:=(v_nonce_result->>'nonce')::uuid;
+  IF v_nonce_result->>'ok' IS DISTINCT FROM 'true'
+    OR v_rate_nonce IS NULL THEN
+   RAISE EXCEPTION 'Nonce de limite 3/h nao criado: %',v_nonce_result;
+  END IF;
+  INSERT INTO public.catalogo_asaas_stepup_desafios_documentais_ensaio(
+   nonce,challenge_id)
+  VALUES(v_rate_nonce,gen_random_uuid())
+  RETURNING challenge_id INTO v_rate_challenge;
+  SELECT catalogo_private.catalogo_asaas_reservar_tentativa_stepup_inerte(
+   v_rate_challenge) INTO v_stepup_attempt;
+  IF v_rate_idx=3 THEN
+   IF v_stepup_attempt->>'ok' IS DISTINCT FROM 'true'
+    OR v_stepup_attempt->>'verificacao_otp_realizada' IS DISTINCT FROM 'false'
+   THEN RAISE EXCEPTION 'Terceira tentativa falsa nao foi aceita: %',v_stepup_attempt; END IF;
+  ELSE
+   IF v_stepup_attempt->>'ok' IS DISTINCT FROM 'false'
+    OR v_stepup_attempt->>'motivo' IS DISTINCT FROM 'limite_tres_por_hora'
+   THEN RAISE EXCEPTION 'Quarta tentativa ultrapassou teto por revisor: %',v_stepup_attempt; END IF;
+  END IF;
+ END LOOP;
+ IF (SELECT count(*) FROM public.catalogo_asaas_stepup_tentativas_inertes
+     WHERE revisor_id='fa722222-2222-4222-8222-222222222221'::uuid)<>3
+ THEN RAISE EXCEPTION 'Teto de tentativas deixou entradas extras ou faltantes'; END IF;
+ RAISE NOTICE 'PASS: livro MFA do banco impede quarto uso em 1h, sem MFA/OTP/Pix';
+
  
  -- Nonce documental ja observado: nao pode servir a novo desafio.
  BEGIN
