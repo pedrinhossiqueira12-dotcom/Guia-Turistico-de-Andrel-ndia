@@ -117,7 +117,12 @@ export class SimuladorStepUpDocumental {
       || intencao.expiresAt <= instante) {
       return resposta(false, "intencao_invalida_ou_expirada");
     }
-    const sessao = await this.provider.autenticarToken(bearerToken);
+    let sessao: SessaoAferidaEmEnsaio | null = null;
+    try {
+      sessao = await this.provider.autenticarToken(bearerToken);
+    } catch {
+      return resposta(false, "autenticacao_indisponivel");
+    }
     if (!sessao || sessao.role !== "authenticated" || sessao.anonymous
       || sessao.userId !== intencao.userId || sessao.sessionId !== intencao.sessionId
       || sessao.factorId !== intencao.factorId) {
