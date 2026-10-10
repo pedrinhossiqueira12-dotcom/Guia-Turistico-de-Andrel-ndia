@@ -108,8 +108,15 @@ BEGIN
   RAISE EXCEPTION 'HMAC criado no mesmo ato do envio burlou limite anterior ao POST';
  EXCEPTION WHEN SQLSTATE '23514' THEN v_bloqueios:=v_bloqueios+1;
  END;
- IF v_bloqueios<>8 THEN
-  RAISE EXCEPTION 'Bloqueios de HMAC esperados 8, obtidos %',v_bloqueios;
+ -- Revisao legada nao pode ser encerrada como paga sem HMAC anterior.
+ UPDATE public.catalogo_asaas_saques SET status='revisao' WHERE id=v_sem_destino;
+ BEGIN
+  UPDATE public.catalogo_asaas_saques SET status='concluido' WHERE id=v_sem_destino;
+  RAISE EXCEPTION 'Saque legado em revisao conseguiu baixa sem HMAC prospectivo';
+ EXCEPTION WHEN SQLSTATE '23514' THEN v_bloqueios:=v_bloqueios+1;
+ END;
+ IF v_bloqueios<>9 THEN
+  RAISE EXCEPTION 'Bloqueios de HMAC esperados 9, obtidos %',v_bloqueios;
  END IF;
  IF has_function_privilege('anon',
   'public.catalogo_asaas_diagnosticar_compromisso_pix_saque(uuid)','EXECUTE')
