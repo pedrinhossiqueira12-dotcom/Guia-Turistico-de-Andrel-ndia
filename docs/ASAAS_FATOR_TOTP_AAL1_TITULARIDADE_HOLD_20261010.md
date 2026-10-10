@@ -77,6 +77,26 @@ pode executar a função.
   `tests/catalogo-asaas-fator-totp-prechallenge-owner-inerte.test.cjs`
   impede retirar esses gates de segurança.
 
+## Resultado verificado nesta rodada
+
+- Migration `asaas_fator_totp_prechallenge_owner_hold_staging_20261010`
+  **aplicada somente em STAGING** `jbttwihctuibchhcyqtl`.
+- Função `catalogo_private.catalogo_asaas_checar_fator_totp_aal1_inerte(uuid,uuid)`
+  confirmada `SECURITY INVOKER`; `anon`, `authenticated` e
+  `service_role` **sem EXECUTE**.
+- STAGING: **3 sessões AAL1**, todas reconhecidas pelo leitor prévio,
+  **0 fatores MFA**, **0 revisores, 0 desafios, 0 tentativas**.
+  UUIDs inválidos e `NULL` retornam `elegivel=false`,
+  `pagamento_autorizado=false`, `HOLD_OBRIGATORIO`.
+- O job financeiro Deno da [CI 38074842866](https://github.com/pedrinhossiqueira12-dotcom/Guia-Turistico-de-Andrel-ndia/actions/runs/38074842866)
+  passou **67 testes, 0 falhas**. CI financeira PostgreSQL
+  descartável também passou; inclui consultas negativas, histórico
+  e locks das migrações. Restava somente pgTAP nativo na última consulta.
+- A primeira tentativa da CI falhou exclusivamente porque a migração
+  usou `pg_catalog.coalesce`, quando `COALESCE` é construção
+  especial SQL. Foi corrigida para `coalesce` antes da implantação
+  de homologação. A execução posterior passou no job financeiro.
+
 ## Limites de segurança e decisão de implantação
 
 No Supabase STAGING `jbttwihctuibchhcyqtl` havia três
