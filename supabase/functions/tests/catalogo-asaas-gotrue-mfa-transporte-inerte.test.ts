@@ -22,7 +22,7 @@ function principal(token: string): SessaoAferidaEmEnsaio | null {
   if (token !== BEFORE && token !== AFTER) return null;
   return {
     userId: UID, sessionId: SID, role: "authenticated",
-    factorId: FACTOR, aal: token === AFTER ? "aal2" : "aal1",
+    factorId: token === AFTER ? FACTOR : null, aal: token === AFTER ? "aal2" : "aal1",
     anonymous: false,
   };
 }
