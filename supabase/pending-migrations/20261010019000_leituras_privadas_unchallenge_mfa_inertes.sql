@@ -32,7 +32,7 @@ BEGIN
   'factorId',v_c.fator_id::text,
   'separationId',v_c.separacao_id::text,
   'evidenceHash',v_c.fingerprint_creditos_sha256,
-  'expiresAt',(pg_catalog.extract(epoch FROM v_r.expira_em)*1000)::bigint
+  'expiresAt',(EXTRACT(EPOCH FROM v_r.expira_em)*1000)::bigint
  );
 EXCEPTION WHEN OTHERS THEN
  -- Falhas de Auth/snapshot/leitura NUNCA retornam contexto.
