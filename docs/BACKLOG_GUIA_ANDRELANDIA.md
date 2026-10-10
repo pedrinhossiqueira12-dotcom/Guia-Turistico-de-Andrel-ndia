@@ -88,4 +88,6 @@ As issues #48–#54 usam **PENDENTE** quando ainda não foi feita auditoria comp
 
 **Progresso técnico #41 (10/10/2026):** `20261010004000_proteger_compromisso_pix_saque_antes_post.sql` aplicada apenas em STAGING `jbttwihctuibchhcyqtl`; PostgreSQL carimba e torna imutável o HMAC do destino Pix do saque **regular futuro** antes do POST ao banco. Sem retrofit de histórico e sem destinatário excepcional comprovado. O PR #39 continua Draft, sem produção; CI 12/12 verde no commit `0cd8338448cea7030045ee0835eec3d372be7ac4`. Ver `docs/ASAAS_COMPROMISSO_PIX_ORIGINAL_20261010.md`.
 
+**Defesa de baixa adicional #41 (10/10/2026):** a Edge passou a exigir `pix_destino_registrado_em` nos saques, conciliação e Webhook de autorização; `20261010005000_impedir_baixa_saque_sem_compromisso_pix.sql` aplicada **somente em STAGING**, bloqueando `status='concluido'` sem HMAC original carimbado. Saques legados/escrow excepcional não adquirem prova retrospectiva. Titularidade e liquidação bancária externa continuam pendentes.
+
 **Atualizado em:** 10 de outubro de 2026. **Backlog dinâmico:** issues do GitHub prevalecem sobre este documento quando houver edição posterior.
