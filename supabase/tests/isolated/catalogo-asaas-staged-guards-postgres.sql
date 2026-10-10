@@ -84,20 +84,32 @@ BEGIN
  EXCEPTION WHEN SQLSTATE '23514' THEN v_bloqueios:=v_bloqueios+1;
  END;
 
- -- Nao criar compromisso tardio para saque ja enviado sem snapshot.
+ -- Saque sem snapshot nao pode nem ser marcado enviado nem
+ -- vincular um ID bancario, inclusive se tentar gravar HMAC junto.
  INSERT INTO public.catalogo_asaas_saques(motoboy_id,valor_centavos)
  VALUES(v_uid,10000) RETURNING id INTO v_sem_destino;
- UPDATE public.catalogo_asaas_saques
- SET status='enviado',transferencia_id='ci_hmac_immut_02'
- WHERE id=v_sem_destino;
  BEGIN
   UPDATE public.catalogo_asaas_saques
-  SET pix_destino_sha256=repeat('e',64) WHERE id=v_sem_destino;
-  RAISE EXCEPTION 'Saque enviado aceitou compromisso tardio';
+  SET status='enviado' WHERE id=v_sem_destino;
+  RAISE EXCEPTION 'Saque sem HMAC foi marcado enviado';
  EXCEPTION WHEN SQLSTATE '23514' THEN v_bloqueios:=v_bloqueios+1;
  END;
- IF v_bloqueios<>6 THEN
-  RAISE EXCEPTION 'Bloqueios de HMAC esperados 6, obtidos %',v_bloqueios;
+ BEGIN
+  UPDATE public.catalogo_asaas_saques
+  SET transferencia_id='ci_hmac_immut_02' WHERE id=v_sem_destino;
+  RAISE EXCEPTION 'Saque sem HMAC vinculou ID bancario';
+ EXCEPTION WHEN SQLSTATE '23514' THEN v_bloqueios:=v_bloqueios+1;
+ END;
+ BEGIN
+  UPDATE public.catalogo_asaas_saques
+  SET pix_destino_sha256=repeat('e',64),status='enviado',
+   transferencia_id='ci_hmac_immut_02'
+  WHERE id=v_sem_destino;
+  RAISE EXCEPTION 'HMAC criado no mesmo ato do envio burlou limite anterior ao POST';
+ EXCEPTION WHEN SQLSTATE '23514' THEN v_bloqueios:=v_bloqueios+1;
+ END;
+ IF v_bloqueios<>8 THEN
+  RAISE EXCEPTION 'Bloqueios de HMAC esperados 8, obtidos %',v_bloqueios;
  END IF;
  IF has_function_privilege('anon',
   'public.catalogo_asaas_diagnosticar_compromisso_pix_saque(uuid)','EXECUTE')
