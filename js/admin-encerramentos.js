@@ -262,10 +262,25 @@
       const consultar=document.createElement("button");consultar.type="button";
       consultar.className="secondary";consultar.textContent="Ver histórico";
       const registros=document.createElement("ul");
-      let chaveAtual=null,assinaturaAtual=null;
+      const seloIntegridade=document.createElement("p");seloIntegridade.className="muted";
+      seloIntegridade.textContent="Integridade ainda não verificada. Nenhum pagamento é permitido.";
+      let chaveAtual=null,assinaturaAtual=null,dossieComprometido=false;
       async function consultarDossie(){
+        dossieComprometido=true;
         const res=await api({acao:"listar_dossie_escrow_admin",separacao_id:String(item.id||"")});
         registros.replaceChildren();
+        const verificador=res.integridade||null;
+        dossieComprometido=verificador?.ok!==true||
+          verificador?.integridade_valida!==true||
+          verificador?.liberacao_autorizada!==false||
+          verificador?.pagamento_autorizado!==false;
+        seloIntegridade.textContent=dossieComprometido
+          ? "ALERTA: HISTÓRICO INCONSISTENTE OU INDISPONÍVEL. Não acrescentar registros nem liberar créditos. Primeira sequência sob suspeita: "+
+            String(verificador?.primeira_sequencia_incorreta??"desconhecida")
+          : "Cadeia SHA-256 local verificada ("+Number(verificador.numero_eventos||0)+
+            " eventos). Hash final: "+String(verificador.hash_final_registrado_sha256||"sem eventos")+
+            ". NÃO é prova bancária nem autorização de Pix; não há âncora externa.";
+        gravar.disabled=dossieComprometido;
         for(const e of res.eventos||[]){
           const linha=document.createElement("li");
           linha.textContent="#"+e.seq+" · "+e.categoria+" · "+e.descricao+
@@ -279,6 +294,7 @@
         }
       }
       gravar.addEventListener("click",async()=>{
+        if(dossieComprometido){aviso("Dossiê inconsistente: novas ocorrências bloqueadas.",true);return;}
         const descricao=nota.value.trim(),documento=hash.value.trim().toLowerCase();
         if(descricao.length<30||descricao.length>1000||
           (documento&&!/^[a-f0-9]{64}$/.test(documento))||
@@ -296,7 +312,7 @@
           chaveAtual=null;assinaturaAtual=null;nota.value="";hash.value="";
           await consultarDossie();
         }catch(e){aviso(e.message||"Registro não confirmado; repetição segura preservada.",true);}
-        finally{gravar.disabled=false;}
+        finally{gravar.disabled=dossieComprometido;}
       });
       consultar.addEventListener("click",async()=>{
         consultar.disabled=true;
@@ -304,7 +320,7 @@
         catch(e){aviso(e.message||"Histórico indisponível.",true);}
         finally{consultar.disabled=false;}
       });
-      area.append(cab,orientacao,tipo,nota,hash,gravar,consultar,registros);
+      area.append(cab,orientacao,seloIntegridade,tipo,nota,hash,gravar,consultar,registros);
       li.append(title,detail,btn,area);lista.appendChild(li);
     }
     if(response.ha_mais===true){
