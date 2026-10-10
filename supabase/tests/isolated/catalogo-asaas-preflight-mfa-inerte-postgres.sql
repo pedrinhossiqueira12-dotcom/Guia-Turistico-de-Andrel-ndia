@@ -41,7 +41,7 @@ DO $jwt_cases$
 DECLARE
  v_uid text:='fa900000-0000-4000-8000-000000000001';
  v_sid text:='fa900000-0000-4000-8000-000000000010';
- v_now bigint:=(pg_catalog.extract(epoch FROM now()))::bigint;
+ v_now bigint:=(extract(epoch FROM now()))::bigint;
  v_claims jsonb;
  v_result jsonb;
 BEGIN
@@ -117,7 +117,7 @@ INSERT INTO public.catalogo_asaas_revisores_escrow_ensaio(
 SET LOCAL ROLE authenticated;
 DO $active$
 DECLARE
- v_now bigint:=(pg_catalog.extract(epoch FROM now()))::bigint;
+ v_now bigint:=(extract(epoch FROM now()))::bigint;
  v_result jsonb;
 BEGIN
  PERFORM set_config('request.jwt.claim.role','authenticated',true);
@@ -149,7 +149,7 @@ VALUES('fa900000-0000-4000-8000-000000000001'::uuid,
 SET LOCAL ROLE authenticated;
 DO $revoked$
 DECLARE
- v_now bigint:=(pg_catalog.extract(epoch FROM now()))::bigint;
+ v_now bigint:=(extract(epoch FROM now()))::bigint;
  v_result jsonb;
 BEGIN
  PERFORM set_config('request.jwt.claim.role','authenticated',true);
