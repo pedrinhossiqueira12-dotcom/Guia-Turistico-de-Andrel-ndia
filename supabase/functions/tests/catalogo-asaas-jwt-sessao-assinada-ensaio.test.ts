@@ -267,10 +267,10 @@ Deno.test("JWT AAL1 assinado so inicia MFA com sessao Auth AAL1 ativa, sem proof
  assert(start?.aal==="aal1" && start.factorId===null
    && start.userId===USER&&start.sessionId===SESSION,
    "AAL1 signed session not admitted to challenge phase");
- assert(audits.basic===1&&audits.final===0,
+ assert(Number(audits.basic)===1&&Number(audits.final)===0,
    "AAL1 reached privileged AAL2 factor reader");
  const end=await verifier.verificar(after);
- assert(end?.aal==="aal2" && end.factorId===FACTOR&&audits.final===1,
+ assert(end?.aal==="aal2" && end.factorId===FACTOR&&Number(audits.final)===1,
    "final AAL2 must verify TOTP factor session");
 });
 
