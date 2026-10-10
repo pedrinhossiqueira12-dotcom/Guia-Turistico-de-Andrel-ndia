@@ -176,6 +176,14 @@ jobs:
           ! grep -R -F 'xdmbkflufsfqziixzpxc' \
             /tmp/guia-supabase-native-ci/supabase/config.toml \
             /tmp/guia-supabase-native-ci/supabase/migrations
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Typecheck and unit-test real LOCAL GoTrue MFA harness (offline)
+        run: |
+          deno check scripts/validacao-pagamentos/test-gotrue-mfa-real-local.ts
+          deno check scripts/validacao-pagamentos/test-gotrue-mfa-real-local.unit.test.ts
+          deno test --no-check scripts/validacao-pagamentos/test-gotrue-mfa-real-local.unit.test.ts
       - name: Verify available local CLI commands
         run: |
           supabase --version
@@ -197,6 +205,21 @@ jobs:
           grep -q 'All tests successful' /tmp/guia-native-pgtap.log
           grep -q 'Result: PASS' /tmp/guia-native-pgtap.log
           echo 'PASS: pgTAP ran natively against completely isolated Supabase local stack'
+          # Verificacao de Auth/GoTrue VERDADEIRO na stack inteiramente local:
+          # apenas ANON_KEY publica, nenhuma role administrativa ou segredo real.
+          # Nao imprimir "supabase status -o env": inclui chaves locais.
+          status_file=$(mktemp)
+          chmod 600 "$status_file"
+          supabase status -o env > "$status_file"
+          local_anon=$(grep -m1 '^ANON_KEY=' "$status_file" | cut -d= -f2- | tr -d '"')
+          rm -f "$status_file"
+          test "${#local_anon}" -gt 50
+          LOCAL_SUPABASE_ANON_KEY="$local_anon" deno run \
+            --allow-net=127.0.0.1:54321 --allow-env \
+            "$GITHUB_WORKSPACE/scripts/validacao-pagamentos/test-gotrue-mfa-real-local.ts" \
+            --native-ci-local-only
+          unset local_anon
+          echo 'PASS: GoTrue real local MFA enrollment/challenge/verify AAL2; zero Pix'
 
   legacy-baseline-smoke:
     name: Legacy baseline and first migration (disposable PostgreSQL)
