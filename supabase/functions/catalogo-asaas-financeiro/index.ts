@@ -617,6 +617,24 @@ async function registrarDossieEscrowAdmin(uid:string,body:Record<string,unknown>
   mensagem:gravacao.repetido?"Registro idempotente preservado. Nenhum crédito foi liberado.":
    "Evidência administrativa registrada, sem desbloquear, liquidar ou enviar Pix."});
 }
+// Gera somente manifestos legíveis por ferramentas offline. NUNCA grava
+// comprovante externo ou envia hashes a terceiros automaticamente.
+async function exportarAncoraEscrowAdmin(uid:string,body:Record<string,unknown>){
+ if(uid!==ADMIN_USER_ID)throw new Failure("Acesso restrito à administração.",403);
+ const id=value(body.separacao_id,70);
+ check(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id),
+   "Identificador da separação inválido.",400);
+ const manifesto=await rpc("catalogo_asaas_exportar_ancora_dossie",{p_separacao:id});
+ check(manifesto?.ok===true&&manifesto?.formato==="GAESCROW1"&&
+  manifesto?.cadeia_verificada_localmente===true&&
+  manifesto?.ancora_externa_efetuada===false&&
+  manifesto?.pagamento_autorizado===false&&
+  manifesto?.liberacao_autorizada===false&&
+  manifesto?.baixa_realizada===false,
+  manifesto?.mensagem||"Histórico inválido; exportação bloqueada.",409);
+ return respond({success:true,manifesto,
+  mensagem:"Manifesto somente leitura, sem dados de notas. Arquive uma cópia fora do Supabase para permitir comparação independente; não comprova Pix."});
+}
 // Somente conferencia de valores. NUNCA autoriza ou inicia uma transferencia.
 async function preconferirExcepcionalAdmin(uid:string,body:Record<string,unknown>){
  if(uid!==ADMIN_USER_ID)throw new Failure("Acesso restrito à administração.",403);
@@ -1160,6 +1178,7 @@ Deno.serve(async (request:Request)=>{
    case "preconferir_pagamento_excepcional_admin":return await preconferirExcepcionalAdmin(user.id,body);
    case "listar_separacoes_congeladas_admin":return await listarSeparacoesCongeladasAdmin(user.id);
    case "diagnosticar_separacao_congelada_admin":return await diagnosticarSeparacaoCongeladaAdmin(user.id,body);
+   case "exportar_ancora_dossie_admin":return await exportarAncoraEscrowAdmin(user.id,body);
    case "listar_dossie_escrow_admin":return await listarDossieEscrowAdmin(user.id,body);
    case "registrar_dossie_escrow_admin":return await registrarDossieEscrowAdmin(user.id,body);
    case "consultar_titularidade_pix_sandbox_admin":return await consultarTitularidadePixSandboxAdmin(user.id,body);
