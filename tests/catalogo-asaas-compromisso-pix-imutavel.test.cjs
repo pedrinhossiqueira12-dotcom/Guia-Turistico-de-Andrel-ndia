@@ -18,6 +18,7 @@ test("HMAC e horario de prova sao criados uma unica vez, antes da associacao ext
  assert.match(sql,/OLD\.transferencia_id IS NOT NULL/);
  assert.match(sql,/NEW\.transferencia_id IS NOT NULL/);
  assert.match(sql,/NEW\.pix_destino_registrado_em:=pg_catalog\.clock_timestamp\(\)/);
+ assert.match(sql,/Saque sem HMAC original imutavel nao pode ser enviado nem vinculado ao banco/);
  assert.match(sql,/Timestamp do compromisso Pix e imutavel/);
 });
 
@@ -60,7 +61,9 @@ test("PostgreSQL rollback cobre primeiro HMAC, repeticao, tentativa de adulterac
   "Timestamp do HMAC alterado indevidamente",
   "Novo saque aceitou HMAC retroativo no INSERT",
   "Destino Pix alterado depois de associar transferencia",
-  "Saque enviado aceitou compromisso tardio",
+  "Saque sem HMAC foi marcado enviado",
+  "Saque sem HMAC vinculou ID bancario",
+  "HMAC criado no mesmo ato do envio burlou limite anterior ao POST",
   "Diagnostico de prova Pix criou liberacao ou revelou HMAC",
  ])assert.ok(fixture.includes(marker),marker);
  assert.match(fixture,/END \$pix_compromisso_original\$;/);
