@@ -45,6 +45,46 @@ BEGIN
  THEN RAISE EXCEPTION 'A ponte MFA nao tem 5 wrappers DEFINER seguros'; END IF;
 END $preflight$;
 
+-- Prova de escalada INDIRETA: usuario authenticated -> grupo intermediario
+-- -> papel MFA. Esse caminho existe apesar de NOLOGIN e pode permitir
+-- SET ROLE; nao ha concessoes herdadas neste ensaio (INHERIT FALSE).
+-- Reverter o probe ANTES de exercitar os cinco wrappers.
+SAVEPOINT ponte_mfa_transitive_membership_probe;
+CREATE ROLE catalogo_ci_mfa_pivot_inerte NOLOGIN NOINHERIT;
+GRANT catalogo_mfa_ponte_ci_inerte TO catalogo_ci_mfa_pivot_inerte
+ WITH INHERIT FALSE, SET TRUE;
+GRANT catalogo_ci_mfa_pivot_inerte TO authenticated
+ WITH INHERIT FALSE, SET TRUE;
+DO $membership$
+BEGIN
+ IF NOT pg_catalog.pg_has_role(
+   'authenticated','catalogo_mfa_ponte_ci_inerte','MEMBER')
+  OR NOT pg_catalog.pg_has_role(
+   'authenticated','catalogo_mfa_ponte_ci_inerte','SET')
+ THEN RAISE EXCEPTION 'Prova: membership indireta nao foi detectada'; END IF;
+ IF EXISTS(
+  SELECT 1 FROM pg_catalog.pg_auth_members m
+  JOIN pg_catalog.pg_roles member ON member.oid=m.member
+  JOIN pg_catalog.pg_roles target ON target.oid=m.roleid
+  WHERE target.rolname='catalogo_mfa_ponte_ci_inerte'
+    AND member.rolname='authenticated'
+ ) THEN RAISE EXCEPTION 'Prova nao e indireta: grant direto inesperado'; END IF;
+ IF pg_catalog.has_function_privilege(
+   'authenticated',
+   'catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_ler_contexto_inerte(uuid)',
+   'EXECUTE')
+ THEN RAISE EXCEPTION 'Prova dependia de privilegio EXECUTE herdado'; END IF;
+ RAISE NOTICE 'PASS: SET ROLE indireto detectado apesar de NOLOGIN e EXECUTE direto negado';
+END $membership$;
+ROLLBACK TO SAVEPOINT ponte_mfa_transitive_membership_probe;
+DO $no_leak$
+BEGIN
+ IF pg_catalog.to_regrole('catalogo_ci_mfa_pivot_inerte') IS NOT NULL
+  OR pg_catalog.pg_has_role(
+    'authenticated','catalogo_mfa_ponte_ci_inerte','MEMBER')
+ THEN RAISE EXCEPTION 'Teste de membership contaminou o banco CI'; END IF;
+END $no_leak$;
+
 -- Testar invocacao real com SET ROLE, NAO autenticacao externa.
 SET LOCAL ROLE catalogo_mfa_ponte_ci_inerte;
 DO $bridge_role$
