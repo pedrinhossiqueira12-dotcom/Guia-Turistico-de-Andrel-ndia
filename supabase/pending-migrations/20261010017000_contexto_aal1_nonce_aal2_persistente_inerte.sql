@@ -225,7 +225,7 @@ RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=''
 AS $link$
 DECLARE v_result jsonb;
 BEGIN
- SELECT 1 FROM public.catalogo_asaas_contextos_pre_mfa_inertes c
+ PERFORM 1 FROM public.catalogo_asaas_contextos_pre_mfa_inertes c
  WHERE id=NEW.contexto_id FOR UPDATE;
  IF NOT FOUND THEN
   RAISE EXCEPTION 'Contexto AAL1 inexistente' USING ERRCODE='23514';
