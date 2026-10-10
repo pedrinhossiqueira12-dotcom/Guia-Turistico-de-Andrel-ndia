@@ -81,3 +81,15 @@ test("nenhuma cadeia indireta pode expor a ponte a papeis Data API",()=>{
  assert.match(pg,/ROLLBACK TO SAVEPOINT ponte_mfa_transitive_membership_probe/);
  for(const name of names) assert.match(pg,new RegExp("Ponte (?:executou|leu|registrou|consumiu) [^\\n]+apos membership indireta"));
 });
+
+test("a ponte temporaria exige ZERO membership de qualquer role",()=>{
+ assert.match(sql,/papel MFA deve permanecer sem NENHUM membro/);
+ assert.equal((sql.match(/JOIN pg_catalog\.pg_roles guarded_bridge/g)||[]).length,5,
+   "cinco wrappers devem recusar membership de qualquer role");
+ assert.equal((sql.match(/guarded_bridge\.oid=member_edge\.roleid/g)||[]).length,5,
+   "o bloqueio precisa depender do catálogo real de grants");
+ assert.match(pg,/CREATE ROLE catalogo_ci_mfa_role_desconhecida NOLOGIN/);
+ assert.match(pg,/GRANT catalogo_mfa_ponte_ci_inerte TO catalogo_ci_mfa_role_desconhecida/);
+ assert.match(pg,/Membro nao-Supabase ativou ponte documental/);
+ assert.match(pg,/ROLLBACK TO SAVEPOINT ponte_mfa_outro_papel_probe/);
+});
