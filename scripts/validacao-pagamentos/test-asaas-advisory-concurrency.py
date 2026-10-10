@@ -752,6 +752,218 @@ def scenario_stepup_attempts_concurrent_and_quota() -> None:
           "por challenge, rate 3/h e zero Pix",flush=True)
 
 
+
+
+# #42: seguranca de reserva prechallenge persistente entre DOIS processos reais
+# PostgreSQL. Somente fixtures no clone de CI, jamais mfa.verify/Pix.
+PRECHALLENGE_SESSION_2 = "fd544444-4444-4444-8444-444444444445"
+PRECHALLENGE_CHALLENGE_1 = "fd577777-7777-4777-8777-777777777771"
+PRECHALLENGE_CHALLENGE_2 = "fd577777-7777-4777-8777-777777777772"
+PRECHALLENGE_ATTEMPT_1 = "fd588888-8888-4888-8888-888888888881"
+PRECHALLENGE_ATTEMPT_2 = "fd588888-8888-4888-8888-888888888882"
+
+
+def seed_prechallenge_contexts() -> tuple[str, str]:
+    """Contextos PRE-AAL2 com TOTP fake, snapshot e escrow real do clone.
+
+    Os fatores nao sao cadastrados em STAGING/PROD. A fixture ja foi criada
+    por scenario_stepup_attempts_concurrent_and_quota, antes desta chamada.
+    """
+    query = f"""
+        BEGIN;
+        UPDATE auth.sessions SET aal='aal1',factor_id=NULL
+        WHERE id='{NONCE_SESSION}'::uuid;
+        INSERT INTO auth.sessions(id,user_id,aal,factor_id,not_after)
+        VALUES('{PRECHALLENGE_SESSION_2}'::uuid,'{NONCE_REVIEWER}'::uuid,
+               'aal1',NULL,now()+interval '30 minutes');
+        INSERT INTO public.catalogo_asaas_contextos_pre_mfa_inertes(
+            separacao_id,sessao_id,fator_id
+        )
+        SELECT id,'{NONCE_SESSION}'::uuid,'{NONCE_FACTOR}'::uuid
+        FROM public.catalogo_asaas_separacoes_excepcionais
+        WHERE motoboy_id='{NONCE_OWNER}';
+        INSERT INTO public.catalogo_asaas_contextos_pre_mfa_inertes(
+            separacao_id,sessao_id,fator_id
+        )
+        SELECT id,'{PRECHALLENGE_SESSION_2}'::uuid,'{NONCE_FACTOR}'::uuid
+        FROM public.catalogo_asaas_separacoes_excepcionais
+        WHERE motoboy_id='{NONCE_OWNER}';
+        COMMIT;
+        SELECT id FROM public.catalogo_asaas_contextos_pre_mfa_inertes
+        WHERE revisor_id='{NONCE_REVIEWER}'::uuid
+        ORDER BY sessao_id;
+    """
+    rows = [
+        line.strip() for line in run_sql(query, app="ci_prechallenge_seed").splitlines()
+        if re.fullmatch(r"[0-9a-f-]{36}", line.strip())
+    ]
+    if len(rows) != 2 or rows[0] == rows[1]:
+        raise AssertionError("Contextos AAL1 separados nao foram obtidos: " + repr(rows))
+    return rows[0], rows[1]
+
+
+def prechallenge_call(func: str, args: str) -> str:
+    return f"SELECT catalogo_private.catalogo_asaas_{func}_compartilhado_inerte({args});"
+
+
+def assert_prechallenge_response(output: str, *, accepted: bool, reason: str) -> None:
+    status = 'true' if accepted else 'false'
+    if ('"ok": ' + status) not in output or ('"motivo": "' + reason + '"') not in output:
+        raise AssertionError("Porta prechallenge retornou estado inesperado: " + output[-900:])
+    for denied in ('"pagamento_autorizado": false', '"challenge_go_true_verificado": false',
+                   '"movimenta_dinheiro": false', '"status_operacional": "HOLD_OBRIGATORIO"'):
+        if denied not in output:
+            raise AssertionError("Quebra de bloqueio financeiro em prechallenge: " + denied)
+
+
+def scenario_prechallenge_shared_reservation_and_challenge() -> None:
+    """Prova lock real por contexto, at-most-once challenge, consumo e rollback."""
+    context1, context2 = seed_prechallenge_contexts()
+    first = Session.start("ci_prechallenge_context_first")
+    second = None
+    nonce1 = None
+    try:
+        first.send("BEGIN;\n" + prechallenge_call("reservar_inicio", f"'{context1}'::uuid") +
+                   "\n\\echo PRECHALLENGE_FIRST_RESERVED")
+        result1 = first.until("PRECHALLENGE_FIRST_RESERVED")
+        assert_prechallenge_response(result1, accepted=True, reason="nonce_reservado")
+        match = re.search(r'"nonce": "([0-9a-f-]{36})"', result1)
+        if not match:
+            raise AssertionError("Nonce valido nao veio do PostgreSQL")
+        nonce1 = match.group(1)
+
+        second = Session.start("ci_prechallenge_context_second")
+        second.send("SET lock_timeout='10s';\nBEGIN;\n" +
+                    prechallenge_call("reservar_inicio", f"'{context1}'::uuid") +
+                    "\n\\echo PRECHALLENGE_SECOND_DENIED")
+        assert_waiting_nonce_lock(second.name)
+
+        first.send("COMMIT;\n\\echo PRECHALLENGE_FIRST_COMMITTED")
+        first.until("PRECHALLENGE_FIRST_COMMITTED")
+        result2 = second.until("PRECHALLENGE_SECOND_DENIED")
+        assert_prechallenge_response(result2, accepted=False, reason="nonce_ja_reservado")
+        second.send("COMMIT;\n\\echo PRECHALLENGE_SECOND_COMMITTED")
+        second.until("PRECHALLENGE_SECOND_COMMITTED")
+        second.finish()
+        second = None
+        first.finish()
+    finally:
+        if second:
+            second.abort()
+        first.abort()
+
+    count = run_sql(
+        "SELECT count(*) FROM public.catalogo_asaas_reservas_prechallenge_compartilhadas_inertes "
+        f"WHERE contexto_id='{context1}'::uuid"
+    )
+    if count != "1":
+        raise AssertionError("Reserva concorrente gerou nonces duplicados: " + count)
+
+    # Outra sessao real possui contexto e nonce proprios, mas tentar colar o
+    # challenge_id do primeiro contexto deve ser recusado GLOBALMENTE.
+    start2 = run_sql(prechallenge_call("reservar_inicio", f"'{context2}'::uuid"),
+                     app="ci_prechallenge_context_other")
+    assert_prechallenge_response(start2, accepted=True, reason="nonce_reservado")
+    match = re.search(r'"nonce": "([0-9a-f-]{36})"', start2)
+    if not match or match.group(1) == nonce1:
+        raise AssertionError("Segundo contexto nao possui nonce exclusivo")
+    nonce2 = match.group(1)
+
+    reg1 = run_sql(prechallenge_call("registrar_desafio",
+                      f"'{nonce1}'::uuid,'{PRECHALLENGE_CHALLENGE_1}'::uuid,"
+                      f"'{PRECHALLENGE_ATTEMPT_1}'::uuid"))
+    assert_prechallenge_response(reg1, accepted=True, reason="challenge_registrado")
+    duplicate = run_sql(prechallenge_call("registrar_desafio",
+                         f"'{nonce2}'::uuid,'{PRECHALLENGE_CHALLENGE_1}'::uuid,"
+                         f"'{PRECHALLENGE_ATTEMPT_2}'::uuid"))
+    assert_prechallenge_response(duplicate, accepted=False, reason="challenge_duplicado")
+
+    reg2 = run_sql(prechallenge_call("registrar_desafio",
+                      f"'{nonce2}'::uuid,'{PRECHALLENGE_CHALLENGE_2}'::uuid,"
+                      f"'{PRECHALLENGE_ATTEMPT_2}'::uuid"))
+    assert_prechallenge_response(reg2, accepted=True, reason="challenge_registrado")
+
+    # Testar consumo *real* do mesmo challenge por duas conexoes separadas.
+    first = Session.start("ci_prechallenge_consume_first")
+    second = None
+    try:
+        arguments = (f"'{nonce1}'::uuid,'{PRECHALLENGE_CHALLENGE_1}'::uuid,"
+                     f"'{PRECHALLENGE_ATTEMPT_1}'::uuid")
+        first.send("BEGIN;\n" + prechallenge_call("consumir_desafio", arguments) +
+                   "\n\\echo PRECHALLENGE_FIRST_CONSUMED")
+        result1 = first.until("PRECHALLENGE_FIRST_CONSUMED")
+        assert_prechallenge_response(result1, accepted=True,
+                                     reason="tentativa_documental_consumida")
+        second = Session.start("ci_prechallenge_consume_second")
+        second.send("SET lock_timeout='10s';\nBEGIN;\n" +
+                    prechallenge_call("consumir_desafio", arguments) +
+                    "\n\\echo PRECHALLENGE_SECOND_REJECTED")
+        assert_waiting_nonce_lock(second.name)
+        first.send("COMMIT;\n\\echo PRECHALLENGE_FIRST_CONSUME_COMMITTED")
+        first.until("PRECHALLENGE_FIRST_CONSUME_COMMITTED")
+        result2 = second.until("PRECHALLENGE_SECOND_REJECTED")
+        assert_prechallenge_response(result2, accepted=False,
+                                     reason="tentativa_ja_consumida")
+        second.send("COMMIT;\n\\echo PRECHALLENGE_SECOND_CONSUME_COMMITTED")
+        second.until("PRECHALLENGE_SECOND_CONSUME_COMMITTED")
+        second.finish()
+        second = None
+        first.finish()
+    finally:
+        if second:
+            second.abort()
+        first.abort()
+
+    if run_sql("SELECT count(*) FROM "
+               "public.catalogo_asaas_consumos_prechallenge_compartilhados_inertes") != "1":
+        raise AssertionError("Consumo duplicado ou sumido na concorrencia")
+    if run_sql(f"SELECT count(*) FROM public.catalogo_asaas_saques "
+               f"WHERE motoboy_id='{NONCE_OWNER}'") != "0":
+        raise AssertionError("Prechallenge provocou saque indevido")
+
+    # Em transacao abandonada, o segundo consumidor deve conseguir assumir.
+    arguments2 = (f"'{nonce2}'::uuid,'{PRECHALLENGE_CHALLENGE_2}'::uuid,"
+                  f"'{PRECHALLENGE_ATTEMPT_2}'::uuid")
+    first = Session.start("ci_prechallenge_rollback_first")
+    second = None
+    try:
+        first.send("BEGIN;\n" + prechallenge_call("consumir_desafio", arguments2) +
+                   "\n\\echo PRECHALLENGE_ROLLBACK_FIRST")
+        result1 = first.until("PRECHALLENGE_ROLLBACK_FIRST")
+        assert_prechallenge_response(result1, accepted=True,
+                                     reason="tentativa_documental_consumida")
+        second = Session.start("ci_prechallenge_rollback_second")
+        second.send("SET lock_timeout='10s';\nBEGIN;\n" +
+                    prechallenge_call("consumir_desafio", arguments2) +
+                    "\n\\echo PRECHALLENGE_ROLLBACK_SECOND")
+        assert_waiting_nonce_lock(second.name)
+        first.send("ROLLBACK;\n\\echo PRECHALLENGE_FIRST_ROLLED_BACK")
+        first.until("PRECHALLENGE_FIRST_ROLLED_BACK")
+        result2 = second.until("PRECHALLENGE_ROLLBACK_SECOND")
+        assert_prechallenge_response(result2, accepted=True,
+                                     reason="tentativa_documental_consumida")
+        second.send("COMMIT;\n\\echo PRECHALLENGE_ROLLBACK_SECOND_COMMITTED")
+        second.until("PRECHALLENGE_ROLLBACK_SECOND_COMMITTED")
+        second.finish()
+        second = None
+        first.finish()
+    finally:
+        if second:
+            second.abort()
+        first.abort()
+
+    if run_sql("SELECT count(*) FROM "
+               "public.catalogo_asaas_consumos_prechallenge_compartilhados_inertes") != "2":
+        raise AssertionError("ROLLBACK gerou consumo duplicado ou perdido")
+    if run_sql("SELECT count(*) FROM public.catalogo_asaas_saques "
+               f"WHERE motoboy_id='{NONCE_OWNER}'") != "0":
+        raise AssertionError("Teste prechallenge alterou carteira/saldo")
+
+    print("PASS: prechallenge PostgreSQL 2 sessoes, lock por contexto e desafio, "
+          "nonce/challenge globais, consumo at-most-once, COMMIT/ROLLBACK, "
+          "HOLD e zero Pix", flush=True)
+
+
 def main() -> None:
     guard_environment()
     prepare()
@@ -760,6 +972,7 @@ def main() -> None:
     scenario_same_nonce_concurrent()
     scenario_nonce_rollback_then_second_succeeds()
     scenario_stepup_attempts_concurrent_and_quota()
+    scenario_prechallenge_shared_reservation_and_challenge()
     print("PASS: concorrencia real com 2 sessoes, IDs e usuarios sinteticos, zero Pix", flush=True)
 
 
