@@ -165,26 +165,29 @@ export class SimuladorStepUpDocumental {
       || intencao.expiresAt <= instante) {
       return resposta(false, "intencao_invalida_ou_expirada");
     }
+    // Fazer snapshot ANTES da primeira espera async. O chamador nao
+    // pode trocar revisor, fator, nonce, escrow ou hash durante o IO.
+    const snapshot = Object.freeze({ ...intencao });
     // ANTES de autenticar o bearer, de consultar o fator ou de emitir
     // challenge: bloquear duas chamadas concorrentes no mesmo processo.
     // Inclui cenários com callbacks de rede pendentes/indisponíveis.
-    if (this.noncesReservados.has(intencao.nonce)) {
+    if (this.noncesReservados.has(snapshot.nonce)) {
       return resposta(false, "intencao_ja_vinculada");
     }
-    this.noncesReservados.add(intencao.nonce);
+    this.noncesReservados.add(snapshot.nonce);
     // Uma reserva externa rejeita replay entre DUAS instancias simuladas.
     // Se falhar ou ficar indisponivel, nao chamar Auth nem criar challenge.
     // Em producao a reserva deve ser transacional e persistida, nao fake.
     if (this.reservaCompartilhada) {
       try {
         const reservado = await this.reservaCompartilhada.reservarInicio({
-          nonce: intencao.nonce,
-          userId: intencao.userId,
-          sessionId: intencao.sessionId,
-          factorId: intencao.factorId,
-          separationId: intencao.separationId,
-          evidenceHash: intencao.evidenceHash,
-          expiresAt: intencao.expiresAt,
+          nonce: snapshot.nonce,
+          userId: snapshot.userId,
+          sessionId: snapshot.sessionId,
+          factorId: snapshot.factorId,
+          separationId: snapshot.separationId,
+          evidenceHash: snapshot.evidenceHash,
+          expiresAt: snapshot.expiresAt,
         });
         if (reservado !== true) {
           return resposta(false, "reserva_compartilhada_inicio_duplicada");
@@ -192,7 +195,7 @@ export class SimuladorStepUpDocumental {
       } catch {
         return resposta(false, "reserva_compartilhada_inicio_indisponivel");
       }
-      if (this.agora() >= Math.min(instante + 120_000, intencao.expiresAt)) {
+      if (this.agora() >= Math.min(instante + 120_000, snapshot.expiresAt)) {
         return resposta(false, "desafio_ou_intencao_expirada");
       }
     }
@@ -203,9 +206,9 @@ export class SimuladorStepUpDocumental {
       return resposta(false, "autenticacao_indisponivel");
     }
     if (!sessao || sessao.role !== "authenticated" || sessao.anonymous
-      || sessao.userId !== intencao.userId || sessao.sessionId !== intencao.sessionId
+      || sessao.userId !== snapshot.userId || sessao.sessionId !== snapshot.sessionId
       || !(sessao.aal === "aal1" && sessao.factorId === null
-        || sessao.aal === "aal2" && sessao.factorId === intencao.factorId)) {
+        || sessao.aal === "aal2" && sessao.factorId === snapshot.factorId)) {
       return resposta(false, "sessao_ou_fator_divergente");
     }
     // O JWT AAL1 não inclui fator associado à sessão: antes de permitir
@@ -216,7 +219,7 @@ export class SimuladorStepUpDocumental {
         const fatorElegivel = await this.provider.verificarFatorTotpAal1({
           userId: sessao.userId,
           sessionId: sessao.sessionId,
-          factorId: intencao.factorId,
+          factorId: snapshot.factorId,
         });
         if (fatorElegivel !== true) {
           return resposta(false, "fator_totp_nao_elegivel");
@@ -227,19 +230,19 @@ export class SimuladorStepUpDocumental {
     }
     // A reserva é feita ANTES de todos os awaits; esse ponto não
     // pode ser a primeira trava (Auth e factor preflight são async).
-    if (this.agora() >= Math.min(instante + 120_000, intencao.expiresAt)) {
+    if (this.agora() >= Math.min(instante + 120_000, snapshot.expiresAt)) {
       return resposta(false, "desafio_ou_intencao_expirada");
     }
     // Marcar o desafio antes de seu await para impedir reentrância.
     const tentativa = crypto.randomUUID();
     const registro: Registro = {
-      tentativa, intencao: { ...intencao }, sessaoOriginal: { ...sessao },
-      challengeId: "", expiraEm: Math.min(instante + 120_000, intencao.expiresAt),
+      tentativa, intencao: { ...snapshot }, sessaoOriginal: { ...sessao },
+      challengeId: "", expiraEm: Math.min(instante + 120_000, snapshot.expiresAt),
       estado: "processando",
     };
     this.tentativas.set(tentativa, registro);
     try {
-      const challenge = await this.provider.criarDesafio({ bearerToken, factorId: intencao.factorId });
+      const challenge = await this.provider.criarDesafio({ bearerToken, factorId: snapshot.factorId });
       if (!challenge || !idCoerente(challenge.id)
         || this.agora() >= registro.expiraEm) {
         registro.estado = "recusada";
