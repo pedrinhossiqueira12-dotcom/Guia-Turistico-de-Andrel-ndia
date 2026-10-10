@@ -620,12 +620,28 @@ BEGIN
  WHERE id=v_other_req;
  INSERT INTO public.catalogo_asaas_saques(motoboy_id,valor_centavos)
  VALUES(v_other,10000) RETURNING id INTO v_normal;
+ -- ID associado ANTES da evidencia: a prova descoberta tarde deve ser
+ -- gravada e reportada, nunca descartada por uma unicidade retroativa.
+ UPDATE public.catalogo_asaas_saques
+ SET pix_destino_sha256=repeat('a',64) WHERE id=v_normal;
+ UPDATE public.catalogo_asaas_saques
+ SET transferencia_id='ci_hold_late_01' WHERE id=v_normal;
  SELECT public.catalogo_asaas_registrar_observacao_excepcional(
   'residual',v_other_req,'ci_hold_late_01',
   'guia-exc:residual:'||v_other_req,250,'DONE'
  ) INTO v_evidence;
- IF v_evidence->>'pagamento_baixado'<>'false' THEN
+ IF v_evidence->>'ok' IS DISTINCT FROM 'true'
+  OR v_evidence->>'pagamento_baixado'<>'false' THEN
   RAISE EXCEPTION 'Observacao tardia liquidou saldo sem prova';
+ END IF;
+ IF NOT EXISTS(
+  SELECT 1 FROM public.catalogo_asaas_transferencias_excepcionais_auditoria e
+  JOIN public.catalogo_asaas_saques saque
+   ON saque.transferencia_id=e.transferencia_id
+  WHERE e.transferencia_id='ci_hold_late_01'
+   AND saque.id=v_normal
+ ) THEN
+  RAISE EXCEPTION 'Prova excepcional tardia com mesmo ID bancario foi descartada';
  END IF;
 
  BEGIN
@@ -637,6 +653,75 @@ BEGIN
  IF v_rejections<>4 THEN RAISE EXCEPTION 'Hold bancario falhou: %',v_rejections; END IF;
  RAISE NOTICE 'PASS: evidencia bancaria preserva HOLD apos recusas e na concorrencia com saque normal';
 END $bank_evidence_hold$;
+
+-- Nao reutilizar ID bancario de evidencia excepcional JA registrada.
+-- A prova recebida DEPOIS do saque permanece admitida no bloco anterior.
+DO $bank_id_claim$
+DECLARE
+ v_uid uuid:='edededed-eded-4ede-8ede-ededededed72';
+ v_saque uuid;
+ v_bloqueios integer:=0;
+BEGIN
+ INSERT INTO auth.users(id) VALUES(v_uid);
+ INSERT INTO public.catalogo_asaas_saques(motoboy_id,valor_centavos)
+ VALUES(v_uid,10000) RETURNING id INTO v_saque;
+ UPDATE public.catalogo_asaas_saques
+ SET pix_destino_sha256=repeat('b',64) WHERE id=v_saque;
+
+ BEGIN
+  UPDATE public.catalogo_asaas_saques
+  SET transferencia_id='ci_hold_bank_01' WHERE id=v_saque;
+  RAISE EXCEPTION 'Saque regular reutilizou ID de evidencia excepcional preexistente';
+ EXCEPTION WHEN SQLSTATE '23514' THEN v_bloqueios:=v_bloqueios+1;
+ END;
+ IF (SELECT transferencia_id FROM public.catalogo_asaas_saques WHERE id=v_saque)
+   IS NOT NULL THEN
+  RAISE EXCEPTION 'ID bancario conflitante foi persistido no saque';
+ END IF;
+
+ -- O mecanismo nao deve bloquear transferencia diferente e ainda nao usada.
+ UPDATE public.catalogo_asaas_saques
+ SET transferencia_id='ci_regular_unico_01' WHERE id=v_saque;
+ IF NOT EXISTS(
+  SELECT 1 FROM public.catalogo_asaas_saques
+  WHERE id=v_saque AND transferencia_id='ci_regular_unico_01'
+ ) THEN
+  RAISE EXCEPTION 'ID novo e distinto foi incorretamente recusado';
+ END IF;
+
+ BEGIN
+  UPDATE public.catalogo_asaas_saques
+  SET transferencia_id='ci_regular_unico_02' WHERE id=v_saque;
+  RAISE EXCEPTION 'ID bancario de saque alterado apos vinculo original';
+ EXCEPTION WHEN SQLSTATE '23514' THEN v_bloqueios:=v_bloqueios+1;
+ END;
+ BEGIN
+  UPDATE public.catalogo_asaas_saques
+  SET transferencia_id=NULL WHERE id=v_saque;
+  RAISE EXCEPTION 'ID bancario de saque apagado apos vinculo original';
+ EXCEPTION WHEN SQLSTATE '23514' THEN v_bloqueios:=v_bloqueios+1;
+ END;
+
+ BEGIN
+  UPDATE public.catalogo_asaas_transferencias_excepcionais_auditoria
+  SET valor_centavos=1
+  WHERE transferencia_id='ci_hold_bank_01';
+  RAISE EXCEPTION 'Evidencia excepcional alterada apos registro';
+ EXCEPTION WHEN SQLSTATE '23514' THEN v_bloqueios:=v_bloqueios+1;
+ END;
+ BEGIN
+  DELETE FROM public.catalogo_asaas_transferencias_excepcionais_auditoria
+  WHERE transferencia_id='ci_hold_bank_01';
+  RAISE EXCEPTION 'Evidencia excepcional apagada apos registro';
+ EXCEPTION WHEN SQLSTATE '23514' THEN v_bloqueios:=v_bloqueios+1;
+ END;
+
+ IF v_bloqueios<>5 THEN
+  RAISE EXCEPTION 'Esperados 5 bloqueios de reutilizacao, houve %',v_bloqueios;
+ END IF;
+ RAISE NOTICE 'PASS: ID bancario nao reutilizado pelo saque; prova excepcional tardia retida';
+END $bank_id_claim$;
+
 
 DO $authorization_revalidation$
 DECLARE
