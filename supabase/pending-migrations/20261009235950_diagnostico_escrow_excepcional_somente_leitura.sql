@@ -68,8 +68,8 @@ BEGIN
  JOIN public.catalogo_remuneracoes_v2 r ON r.id=i.remuneracao_id
  WHERE i.separacao_id=v_e.id;
 
- SELECT count(*)::bigint,
-  count(*) FILTER(WHERE o.estado_banco='DONE')::bigint
+ SELECT count(DISTINCT e.id)::bigint,
+  count(DISTINCT e.id) FILTER(WHERE o.estado_banco='DONE')::bigint
  INTO v_banco,v_banco_done
  FROM public.catalogo_asaas_transferencias_excepcionais_auditoria e
  LEFT JOIN public.catalogo_asaas_observacoes_excepcionais_auditoria o
