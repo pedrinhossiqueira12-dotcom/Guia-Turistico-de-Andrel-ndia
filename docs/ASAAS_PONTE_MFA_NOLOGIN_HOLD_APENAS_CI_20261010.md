@@ -107,3 +107,52 @@ não existe endpoint Auth MFA financeiro, credencial técnica real,
 delegação a Edge ou permissão de transferência. O status continua
 `HOLD_OBRIGATORIO`. Em especial, executar scripts de migração sem
 revisão em bancos de produção continua proibido.
+
+
+## Incremento 18 — concessoes transitivas e revoke dinamico (10/10/2026)
+
+A auditoria identificou um risco real do PostgreSQL 17: uma conta pode
+receber a capacidade de `SET ROLE` por uma **cadeia transitiva de grants**,
+mesmo que o alvo seja `NOLOGIN`, e ainda que o papel autenticado nao
+apresente `EXECUTE` herdado diretamente. Portanto, verificar apenas
+membros imediatos em `pg_auth_members` nao prova isolamento.
+
+A migration 21000 agora estabelece DUAS barreiras adicionais:
+
+1. **Instalacao** — recusa se a role da ponte tiver QUALQUER membro
+   (inclusive papel intermediario/role desconhecida). Tambem audita
+   explicitamente `pg_has_role(...,'MEMBER')` para os papeis Data API,
+   cobrindo grants indiretos.
+2. **Cada invocacao** — as cinco wrappers `SECURITY DEFINER` consultam
+   `pg_auth_members` para identificar QUALQUER concessao direta do
+   papel privilegiado a terceiros e usam `WHERE NOT EXISTS`. Caso alguem
+   crie uma associacao posteriormente, retornam `NULL` sem chamar a
+   funcao privada. A verificacao de membership transitiva para
+   `anon/authenticated/service_role/authenticator` tambem permanece
+   aplicada.
+
+Os novos testes PostgreSQL simulam uma cadeia
+`authenticated -> catalogo_ci_mfa_pivot_inerte -> ponte` com
+`SET TRUE` e `INHERIT FALSE`: `pg_has_role(...,'MEMBER')` e
+`pg_has_role(...,'SET')` detectam a possibilidade de impersonacao,
+mesmo quando `has_function_privilege(...,'EXECUTE')` nao revela
+heranca. Em seguida invocam **TODAS as cinco wrappers** sob papel da
+ponte, exigindo retorno SQL NULL. Outro teste concede membership a
+uma role *que nao pertence ao Supabase*, exigindo a mesma recusa.
+
+Todas as roles/grants maliciosos dos testes sao criados em banco de CI
+descartavel sob `SAVEPOINT` e revertidos, antes dos ensaios de resposta
+normal em `HOLD_OBRIGATORIO`. Teste estatico Node confere essas regras.
+
+**Decisao de design:** nesta fase a role ponte continua SEM MEMBROS,
+SEM LOGIN, SEM USUARIO DE SERVICO. Integrar backend real exigira
+uma migration diferente, auditoria de role/credencial propria, testes
+de revogacao e controle de alcance; **nao remover estes guards apenas
+para conseguir conectar o frontend/Edge**.
+
+Referencias de semantica PostgreSQL 17:
+https://www.postgresql.org/docs/17/sql-grant.html
+https://www.postgresql.org/docs/17/role-membership.html
+
+Status permanece `HOLD_OBRIGATORIO` e **migration 21000 nao foi
+aplicada em STAGING ou PROD**.
