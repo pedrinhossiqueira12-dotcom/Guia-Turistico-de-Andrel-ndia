@@ -1005,6 +1005,9 @@ DECLARE
  v_auditoria_integridade jsonb;
  v_falsificacao jsonb;
  v_nota_bloqueada jsonb;
+ v_ancora_zerada jsonb;
+ v_ancora_dois jsonb;
+ v_ancora_adulterada jsonb;
 BEGIN
  INSERT INTO auth.users(id) VALUES(v_uid);
  INSERT INTO public.comercios_publicados(local_id,status) VALUES(v_store,'ativo');
@@ -1128,6 +1131,17 @@ BEGIN
  OR has_table_privilege('service_role',
    'public.catalogo_asaas_separacoes_excepcionais_itens','INSERT')
  THEN RAISE EXCEPTION 'Permissões do escrow estão abertas demais'; END IF;
+ -- Historico vazio precisa exportar manifesto com hash genesis de 64 zeros.
+ SELECT public.catalogo_asaas_exportar_ancora_dossie(
+  (v_reserva->>'separacao_id')::uuid) INTO v_ancora_zerada;
+ IF v_ancora_zerada->>'ok' IS DISTINCT FROM 'true'
+  OR v_ancora_zerada->>'eventos_total' IS DISTINCT FROM '0'
+  OR v_ancora_zerada->>'hash_final_dossie_sha256' IS DISTINCT FROM repeat('0',64)
+  OR v_ancora_zerada->>'cadeia_verificada_localmente' IS DISTINCT FROM 'true'
+  OR v_ancora_zerada->>'ancora_externa_efetuada' IS DISTINCT FROM 'false'
+  OR v_ancora_zerada->>'pagamento_autorizado' IS DISTINCT FROM 'false'
+ THEN RAISE EXCEPTION 'Exportacao vazia insegura: %',v_ancora_zerada; END IF;
+
  -- Anotacoes humanas jamais podem se transformar em ordem de Pix.
  SELECT public.catalogo_asaas_registrar_evento_dossie_escrow(
   (v_reserva->>'separacao_id')::uuid,v_uid,
@@ -1194,6 +1208,17 @@ BEGIN
  OR has_table_privilege('service_role','public.catalogo_asaas_escrow_dossie_eventos','INSERT')
  THEN RAISE EXCEPTION 'Dossie admin possui permissao indevida'; END IF;
 
+ SELECT public.catalogo_asaas_exportar_ancora_dossie(
+  (v_reserva->>'separacao_id')::uuid) INTO v_ancora_dois;
+ IF v_ancora_dois->>'ok' IS DISTINCT FROM 'true'
+  OR v_ancora_dois->>'eventos_total' IS DISTINCT FROM '2'
+  OR jsonb_array_length(v_ancora_dois->'eventos_hashes')<>2
+  OR v_ancora_dois->>'hash_final_dossie_sha256' IS DISTINCT FROM v_note2->>'hash_sha256'
+  OR length(v_ancora_dois->>'hash_ancora_sha256')<>64
+  OR v_ancora_dois->>'ancora_externa_efetuada' IS DISTINCT FROM 'false'
+  OR v_ancora_dois->>'liberacao_autorizada' IS DISTINCT FROM 'false'
+ THEN RAISE EXCEPTION 'Manifesto com dois eventos inválido: %',v_ancora_dois; END IF;
+
  -- Valida cada evento reconstituindo JSONB canonico, hash e sequencia.
  SELECT public.catalogo_asaas_verificar_integridade_dossie_escrow(
   (v_reserva->>'separacao_id')::uuid) INTO v_auditoria_integridade;
@@ -1232,6 +1257,12 @@ BEGIN
  OR v_falsificacao->>'numero_eventos' IS DISTINCT FROM '3'
  OR v_falsificacao->>'liberacao_autorizada' IS DISTINCT FROM 'false'
  THEN RAISE EXCEPTION 'Dossie adulterado nao identificado: %',v_falsificacao; END IF;
+
+ SELECT public.catalogo_asaas_exportar_ancora_dossie(
+  (v_reserva->>'separacao_id')::uuid) INTO v_ancora_adulterada;
+ IF v_ancora_adulterada->>'ok' IS DISTINCT FROM 'false' THEN
+  RAISE EXCEPTION 'Dossie adulterado gerou manifesto confiavel: %',v_ancora_adulterada;
+ END IF;
 
  SELECT public.catalogo_asaas_registrar_evento_dossie_escrow(
   (v_reserva->>'separacao_id')::uuid,v_uid,
