@@ -106,6 +106,104 @@ BEGIN
 END $jwt_cases$;
 RESET ROLE;
 
+-- MFA verified_at vem por FATOR, nao por sessao. Outro usuario
+-- nao pode satisfazer o fator registrado na sessao do revisor.
+INSERT INTO auth.mfa_factors(id,user_id,factor_type,status)
+VALUES
+ ('fa900000-0000-4000-8000-000000000020'::uuid,
+  'fa900000-0000-4000-8000-000000000001'::uuid,'totp','verified'),
+ ('fa900000-0000-4000-8000-000000000021'::uuid,
+  'fa900000-0000-4000-8000-000000000002'::uuid,'totp','verified');
+INSERT INTO auth.mfa_challenges(id,factor_id,created_at,verified_at)
+VALUES
+ ('fa900000-0000-4000-8000-000000000031'::uuid,
+  'fa900000-0000-4000-8000-000000000021'::uuid,
+  now()-interval '2 minutes',now()-interval '10 seconds');
+
+SET LOCAL ROLE authenticated;
+DO $wrong_user_challenge$
+DECLARE
+ v_n bigint:=(extract(epoch FROM now()))::bigint;
+ v_r jsonb;
+BEGIN
+ PERFORM set_config('request.jwt.claim.role','authenticated',true);
+ PERFORM set_config('request.jwt.claim.sub',
+  'fa900000-0000-4000-8000-000000000001',true);
+ PERFORM set_config('request.jwt.claims',jsonb_build_object(
+  'sub','fa900000-0000-4000-8000-000000000001',
+  'role','authenticated','aal','aal2',
+  'session_id','fa900000-0000-4000-8000-000000000010',
+  'iat',v_n,'exp',v_n+1800,'is_anonymous',false
+ )::text,true);
+ SELECT public.catalogo_asaas_preflight_sessao_revisor_inerte() INTO v_r;
+ IF v_r->>'desafio_recente_observado_no_fator_sem_vinculo_sessao'
+    IS DISTINCT FROM 'false'
+  OR v_r->>'pagamento_autorizado' IS DISTINCT FROM 'false'
+ THEN RAISE EXCEPTION 'Desafio MFA de outro usuario aceito: %',v_r; END IF;
+END $wrong_user_challenge$;
+RESET ROLE;
+
+INSERT INTO auth.mfa_challenges(id,factor_id,created_at,verified_at)
+VALUES
+ ('fa900000-0000-4000-8000-000000000032'::uuid,
+  'fa900000-0000-4000-8000-000000000020'::uuid,
+  now()-interval '2 minutes',now()-interval '10 seconds');
+
+SET LOCAL ROLE authenticated;
+DO $mfa_recent_factor$
+DECLARE
+ v_n bigint:=(extract(epoch FROM now()))::bigint;
+ v_r jsonb;
+BEGIN
+ PERFORM set_config('request.jwt.claim.role','authenticated',true);
+ PERFORM set_config('request.jwt.claim.sub',
+  'fa900000-0000-4000-8000-000000000001',true);
+ PERFORM set_config('request.jwt.claims',jsonb_build_object(
+  'sub','fa900000-0000-4000-8000-000000000001',
+  'role','authenticated','aal','aal2',
+  'session_id','fa900000-0000-4000-8000-000000000010',
+  'iat',v_n,'exp',v_n+1800,'is_anonymous',false
+ )::text,true);
+ SELECT public.catalogo_asaas_preflight_sessao_revisor_inerte() INTO v_r;
+ IF v_r->>'desafio_recente_observado_no_fator_sem_vinculo_sessao'
+    IS DISTINCT FROM 'true'
+  OR v_r->>'desafio_recente_comprovado_na_sessao_atual'
+    IS DISTINCT FROM 'false'
+  OR v_r->>'mfa_com_desafio_recente_comprovado'
+    IS DISTINCT FROM 'false'
+  OR v_r->>'apto_a_registrar_parecer' IS DISTINCT FROM 'false'
+  OR v_r->>'pagamento_autorizado' IS DISTINCT FROM 'false'
+ THEN RAISE EXCEPTION 'Challenge verificado no fator autorizou indevidamente: %',v_r; END IF;
+ RAISE NOTICE 'PASS: verified_at de factor recente e observavel, nao prova session_id nem libera Pix';
+END $mfa_recent_factor$;
+RESET ROLE;
+
+-- Mesmo fator, mas prova fora da janela: um JWT recem-renovado nao altera isso.
+UPDATE auth.mfa_challenges SET verified_at=now()-interval '15 minutes'
+WHERE id='fa900000-0000-4000-8000-000000000032'::uuid;
+SET LOCAL ROLE authenticated;
+DO $mfa_stale$
+DECLARE
+ v_n bigint:=(extract(epoch FROM now()))::bigint;
+ v_r jsonb;
+BEGIN
+ PERFORM set_config('request.jwt.claim.role','authenticated',true);
+ PERFORM set_config('request.jwt.claim.sub',
+  'fa900000-0000-4000-8000-000000000001',true);
+ PERFORM set_config('request.jwt.claims',jsonb_build_object(
+  'sub','fa900000-0000-4000-8000-000000000001',
+  'role','authenticated','aal','aal2',
+  'session_id','fa900000-0000-4000-8000-000000000010',
+  'iat',v_n,'exp',v_n+1800,'is_anonymous',false
+ )::text,true);
+ SELECT public.catalogo_asaas_preflight_sessao_revisor_inerte() INTO v_r;
+ IF v_r->>'desafio_recente_observado_no_fator_sem_vinculo_sessao'
+    IS DISTINCT FROM 'false'
+  OR v_r->>'pagamento_autorizado' IS DISTINCT FROM 'false'
+ THEN RAISE EXCEPTION 'Challenge MFA antigo aceito por JWT renovado: %',v_r; END IF;
+END $mfa_stale$;
+RESET ROLE;
+
 -- Revisor da propria sessao indicado SOMENTE no CI, continua SEM poder financeiro.
 INSERT INTO public.catalogo_asaas_revisores_escrow_ensaio(
  revisor_id,indicado_por,justificativa,instrumento_sha256,cadastrado_em,valido_ate
