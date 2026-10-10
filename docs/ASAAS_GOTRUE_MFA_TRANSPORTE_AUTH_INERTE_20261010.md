@@ -90,3 +90,29 @@ Referências oficiais:
 - https://supabase.com/docs/reference/javascript/auth-mfa-verify
 - https://supabase.com/docs/guides/auth/auth-mfa
 - https://github.com/supabase/auth/blob/master/internal/api/api.go
+
+
+## Reforco de parsing HTTP do Auth — 10/10/2026
+
+O adaptador somente de laboratorio agora recebe JSON de GET /user,
+challenge e verify por leitura limitada a **16 KiB**. O limite e
+validado tanto pela declaracao Content-Length quanto pelos bytes
+efetivamente lidos do stream. Tambem exige media type application/json
+(permitindo charset) e UTF-8 estrito antes de analisar o JSON.
+
+Isto impede que uma resposta HTTP grande ou disfarçada se transforme
+em consumo descontrolado de memoria no fluxo MFA. O corpo, o OTP,
+o bearer e os tokens de atualizacao nao sao incluidos nas mensagens
+de erro. Qualquer erro interrompe o desafio ou sua confirmacao e
+mantem **HOLD_OBRIGATORIO**.
+
+A suite Deno offline injeta cinco respostas adversariais antes de
+emitir challenge: JSON acima do limite, Content-Length exagerado,
+text/plain; application/json enganoso, JSON malformado e bytes
+UTF-8 invalidos. Nenhuma dessas respostas permite prosseguir.
+
+**Limite explicito:** o teto de 16 KiB e uma restricao deste adaptador,
+nao uma garantia do servico Auth nem prova de MFA real. O codigo nao
+e importado por Edge publicada, nao cria revisor real, nao habilita
+parecer, Pix, baixa ou liberacao. O elo entre contexto AAL1, reserva
+persistente e mfa.verify efetivo ainda requer integracao segura.
