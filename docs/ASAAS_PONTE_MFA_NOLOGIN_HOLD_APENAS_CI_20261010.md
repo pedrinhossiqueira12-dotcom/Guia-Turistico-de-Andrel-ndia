@@ -156,3 +156,50 @@ https://www.postgresql.org/docs/17/role-membership.html
 
 Status permanece `HOLD_OBRIGATORIO` e **migration 21000 nao foi
 aplicada em STAGING ou PROD**.
+
+
+## Incremento 21 — adaptador privado do backend, CI inerte
+
+Foi criado `supabase/functions/_shared/catalogo-asaas-livro-ponte-nologin-inerte.ts`.
+É apenas a **tradução de contrato** de `LivroPrivadoPrechallengeInerte`
+para as CINCO wrappers da migration 21000, ainda confinadas ao clone
+`catalogo_asaas_guards_ci`. Nenhum driver PostgreSQL real, pool,
+credencial, endpoint, webhook ou Edge Function foi criado.
+
+A implementação exige `ExecutorPonteMfaNoLoginSomenteCi` injetado em
+modo `isolated-ci`, com `databaseName='catalogo_asaas_guards_ci'`
+e `currentRole='catalogo_mfa_ponte_ci_inerte'`, antes de aceitar uma
+consulta. Cada SQL gerado inclui também uma guarda avaliada **dentro
+do próprio statement e conexão**:
+`current_database()='catalogo_asaas_guards_ci'`,
+`current_user='catalogo_mfa_ponte_ci_inerte'` e
+`session_user='postgres'`. Não executa `SET ROLE`/DDL/DML, não concatena
+identificadores fornecidos pelo cliente, e usa somente `$1::uuid`
+a `$3::uuid` para parâmetros.
+
+O adaptador falha fechado se o resultado SQL for `NULL` em reserva,
+registro ou consumo, incluindo quando o wrapper negou algum grant
+indireto. Leituras `NULL` são tratadas exclusivamente como ausência
+de contexto/tentativa; respostas com qualquer flag financeira
+permissiva são recusadas, ainda que `ok=true`.
+
+Testes: `supabase/functions/tests/catalogo-asaas-livro-ponte-nologin-inerte.test.ts`
+com executor em memória sem conexões e casos de sucesso inerte,
+ambiente incorreto, role indevida, replay, SQL injection, registros
+múltiplos, valores NULL e respostas financeiras adulteradas.
+O workflow `database-tests.yml` executa `deno check` e
+`deno test` offline. Os testes SQL transacionais existentes continuam
+verificando permissões reais em PostgreSQL descartável.
+
+**Segurança:** `databaseName` e `currentRole` do executor são contratos
+de CI, **não** autenticação por si só. O futuro backend real deve
+autenticar assinatura JWKS de confiança, sessão GoTrue viva, titularidade
+do TOTP e vínculo temporal do challenge, com um usuário técnico de
+privilégio mínimo criado numa mudança **diferente** e revisada.
+Jamais reutilizar o papel `NOLOGIN` por meio de membership permanente
+para simplesmente destravar esta etapa; tal associação interrompe as
+cinco wrappers pela proteção instalada.
+
+A etapa de **conexão privada funcional STAGING** continua **PENDENTE**.
+A migration 21000 não deve ser aplicada a STAGING/PROD. Nenhuma
+movimentação financeira autorizada: `HOLD_OBRIGATORIO`.
