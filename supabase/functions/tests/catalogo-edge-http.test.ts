@@ -120,6 +120,130 @@ Deno.test("Asaas com validacao desativada recusa por HTTP sem consultar rede", a
   assert(forbiddenRequests===start, "Webhook Asaas desligado tentou rede");
 });
 
+// #41: exercita a Edge REAL com autenticação e histórico Asaas inteiramente
+// FICTÍCIOS. Nenhuma rede é permitida fora dos mocks da CI.
+Deno.test("varredura Asaas detecta referencias duplicadas sem transferir ou baixar saldo",async()=>{
+ const edge=handlers.get("asaas")!;
+ const separacaoId="ab100001-1111-4111-8111-111111111111";
+ const requestId="ab100002-1111-4111-8111-111111111111";
+ const motoboyId="edededed-eded-4ede-8ede-ededededed10";
+ const ref="guia-exc:saida:"+requestId;
+ const adminUid="4b9a0233-6b72-4573-aebd-d596c5b15e1b";
+ const calls:string[]=[];
+ try{
+  currentMockFetch=async (input:RequestInfo|URL,init?:RequestInit)=>{
+   const raw=typeof input==="string"?input:input instanceof URL?input.toString():input.url;
+   const u=new URL(raw);
+   const method=init?.method||"GET";
+   calls.push(method+" "+u.host+u.pathname);
+   assert(method==="GET","Auditoria realizou método com efeito colateral: "+method);
+   if(u.host==="ci-supabase.invalid"&&u.pathname==="/auth/v1/user")
+    return result({id:adminUid,aud:"authenticated",role:"authenticated",
+     app_metadata:{},user_metadata:{}});
+   if(u.host==="ci-supabase.invalid"&&
+      u.pathname==="/rest/v1/catalogo_asaas_separacoes_excepcionais")
+    return result({id:separacaoId,tipo:"saida",solicitacao_id:requestId,
+     motoboy_id:motoboyId,valor_centavos:12000,situacao:"congelada"});
+   if(u.host==="ci-supabase.invalid"&&
+      u.pathname==="/rest/v1/catalogo_asaas_transferencias_excepcionais_auditoria")
+    return result({transferencia_id:"ci-transfer-one",referencia_externa:ref,
+     valor_centavos:12000,motoboy_id:motoboyId});
+   if(u.host==="ci-supabase.invalid"&&
+      u.pathname==="/rest/v1/catalogo_asaas_saques")
+    return result(null);
+   if(u.host==="api-sandbox.asaas.com"&&u.pathname==="/v3/transfers"){
+    assert(u.searchParams.get("limit")==="100"&&u.searchParams.get("offset")==="0",
+      "Consulta não usou paginação segura");
+    return result({object:"list",offset:0,limit:100,totalCount:2,hasMore:false,
+     data:[
+      {id:"ci-transfer-one",externalReference:ref,value:120,status:"DONE",
+       pixAddressKey:"chave-pix-ficticia-que-nao-pode-ser-exposta"},
+      {id:"ci-transfer-two",externalReference:ref,value:130,status:"PENDING",
+       bankAccount:{cpfCnpj:"documento-ficticio-nao-expor"}},
+     ]});
+   }
+   throw new Error("Acesso de teste não mapeado: "+method+" "+u.host+u.pathname);
+  };
+  const request=post("/functions/v1/catalogo-asaas-financeiro",{
+   acao:"auditar_historico_transferencias_excepcionais_sandbox_admin",
+   separacao_id:separacaoId,
+  },{authorization:"Bearer ci-admin-test-token"});
+  const response=await edge(request);
+  assertions(response,200,"Varredura autenticada da Edge");
+  const payload=await response.json();
+  const audit=payload.relatorio;
+  assert(payload.success===true&&audit?.transferencias_distintas_com_mesma_referencia===2,
+   "Nao identificou 2 transferencias da mesma referencia");
+  assert(audit?.referencias_com_id_diferente_do_vinculado===1,
+   "Nao identificou ID diferente do esperado");
+  assert(audit?.divergencias_de_valor===1,
+   "Nao identificou valor divergente");
+  assert(audit?.conflito_identificado===true&&audit?.estados_done_encontrados===1,
+   "Nao manteve alerta de duplicidade com DONE");
+  assert(audit?.listagem_consultada_ate_o_fim===true,
+   "Uma pagina com hasMore=false foi marcada incompleta");
+  assert(audit?.pagamento_autorizado===false&&audit?.baixa_realizada===false&&
+   audit?.liberacao_autorizada===false&&
+   audit?.ausencia_de_pix_anterior_comprovada===false,
+   "Varredura criou autorizacao financeira insegura");
+  const serialized=JSON.stringify(payload);
+  assert(!serialized.includes("chave-pix-ficticia")&&
+   !serialized.includes("documento-ficticio"),
+   "Dados pessoais do provedor vazaram para o navegador");
+  assert(calls.some(x=>x.includes("api-sandbox.asaas.com/v3/transfers")),
+   "Nao consultou lista bancaria por GET");
+ }finally{currentMockFetch=denyNetwork;}
+});
+
+Deno.test("varredura de listagem incompleta preserva HOLD em 12 paginas",async()=>{
+ const edge=handlers.get("asaas")!;
+ const separacaoId="ab100001-1111-4111-8111-111111111111";
+ const requestId="ab100002-1111-4111-8111-111111111111";
+ const motoboyId="edededed-eded-4ede-8ede-ededededed10";
+ const adminUid="4b9a0233-6b72-4573-aebd-d596c5b15e1b";
+ let pages=0;
+ try{
+  currentMockFetch=async (input:RequestInfo|URL,init?:RequestInit)=>{
+   const raw=typeof input==="string"?input:input instanceof URL?input.toString():input.url;
+   const u=new URL(raw);
+   assert((init?.method||"GET")==="GET","Varredura tentou POST");
+   if(u.host==="ci-supabase.invalid"&&u.pathname==="/auth/v1/user")
+    return result({id:adminUid,aud:"authenticated",role:"authenticated",
+     app_metadata:{},user_metadata:{}});
+   if(u.host==="ci-supabase.invalid"&&
+      u.pathname==="/rest/v1/catalogo_asaas_separacoes_excepcionais")
+    return result({id:separacaoId,tipo:"saida",solicitacao_id:requestId,
+     motoboy_id:motoboyId,valor_centavos:12000,situacao:"congelada"});
+   if(u.host==="ci-supabase.invalid"&&
+      u.pathname==="/rest/v1/catalogo_asaas_transferencias_excepcionais_auditoria")
+    return result(null);
+   if(u.host==="api-sandbox.asaas.com"&&u.pathname==="/v3/transfers"){
+    assert(Number(u.searchParams.get("offset"))===pages*100,
+     "Deslocamento de paginação Asaas incorreto");
+    pages++;
+    return result({offset:(pages-1)*100,hasMore:true,
+     data:Array.from({length:100},(_,i)=>({
+      id:"ci-irrelevante-"+pages+"-"+i,externalReference:"outra-referencia",
+      status:"DONE",value:120
+     }))});
+   }
+   throw new Error("Caminho não esperado no teste: "+u.pathname);
+  };
+  const response=await edge(post("/functions/v1/catalogo-asaas-financeiro",{
+   acao:"auditar_historico_transferencias_excepcionais_sandbox_admin",
+   separacao_id:separacaoId
+  },{authorization:"Bearer ci-admin-test-token"}));
+  assertions(response,200,"Listagem incompleta");
+  const audit=(await response.json()).relatorio;
+  assert(pages===12&&audit?.pagina_limite===12,
+   "Não limitou varredura a 12 páginas");
+  assert(audit?.listagem_consultada_ate_o_fim===false&&
+   audit?.ausencia_de_pix_anterior_comprovada===false&&
+   audit?.pagamento_autorizado===false&&audit?.baixa_realizada===false,
+   "Varredura truncada não manteve HOLD");
+ }finally{currentMockFetch=denyNetwork;}
+});
+
 Deno.test("checkouts desligados recusam criacao HTTP antes de qualquer acesso externo", async () => {
   const start = forbiddenRequests;
   const pix = handlers.get("pix")!;
