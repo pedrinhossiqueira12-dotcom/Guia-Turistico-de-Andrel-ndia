@@ -35,7 +35,7 @@ test("MFA real local faz signup e challenge+verify e exige AAL2 da mesma sessao"
 });
 
 test("MFA habilitado exclusivamente em config.toml temporario, sem copiar config prod",()=>{
-  assert.match(build,/project_id = \\"guia-andrelandia-native-ci-isolado\\"/);
+  assert.match(build,/project_id = "guia-andrelandia-native-ci-isolado"/);
   assert.match(build,/'\[auth\.mfa\.totp\]\\n'/);
   assert.match(build,/'enroll_enabled = true\\n'/);
   assert.match(build,/'verify_enabled = true\\n'/);
