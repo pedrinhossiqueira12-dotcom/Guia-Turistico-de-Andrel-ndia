@@ -39,7 +39,7 @@ test("MFA habilitado exclusivamente em config.toml temporario, sem copiar config
   assert.match(build,/'\[auth\.mfa\.totp\]\\n'/);
   assert.match(build,/'enroll_enabled = true\\n'/);
   assert.match(build,/'verify_enabled = true\\n'/);
-  assert.match(build,/Never run the migrations from this script against a remote database/);
+  assert.match(build,/NEVER run the migrations from this script against a remote database/);
   assert.match(ci,/deno test --no-check scripts\/validacao-pagamentos\/test-gotrue-mfa-real-local\.unit\.test\.ts/);
   assert.match(ci,/--native-ci-local-only/);
 });
