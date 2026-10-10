@@ -20,7 +20,8 @@ function endpoint(path,{ actor=RIDER, membership=true, assignment=true, result={
       const q={select(){return q;},eq(){return q;},in(){return q;},order(){return q;},limit(){return q;},
         update(body){writes.push({name,body});return q;},
         maybeSingle:async()=>({data:name==='catalogos'?{proprietario_id:OWNER,bloqueado:false}:name==='catalogo_motoboys'?(membership?{usuario_id:actor}:null):(assignment?{pedido_id:ORDER}:null),error:null}),
-        then(resolve){return Promise.resolve({data:[],error:null}).then(resolve);}};
+        then(resolve){return Promise.resolve({data:name==='catalogo_aceites_operacionais'
+            ?[{documento:'termos'},{documento:'privacidade'}]:[],error:null}).then(resolve);}};
       return q;
     }};
   const source=fs.readFileSync(path,'utf8').replace(/^import[^;]+;\s*/gm,'');

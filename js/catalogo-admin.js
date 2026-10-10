@@ -102,13 +102,36 @@
       const resultado = await validarProprietario();
       comercio = await carregarComercio();
       $("nomeComercioAdmin").textContent = comercio?.nome || comercioId;
+      if (resultado.proprietario && !resultado.admin) {
+        const termos=await chamarFaturaPix({acao:"consultar_termos",papel:"comercio"});
+        // Quitar faturas existentes é permitido mesmo sem novo aceite.
+        // O bloqueio da loja permanece: não habilita produtos nem novas vendas.
+        const motivoFinanceiro=["Comissão de pagamentos presenciais vencida.",
+          "Encerramento solicitado pelo proprietário"].includes(resultado.motivo_bloqueio);
+        if (!termos.aceito && !(resultado.bloqueado && motivoFinanceiro)) {
+          $("painelCatalogo").hidden=true;
+          $("catalogoBloqueado").hidden=true;
+          if (!$("catalogoTermsDialog").open) $("catalogoTermsDialog").showModal();
+          setNotice("Aceite dos termos", "Leia e aceite as regras de cobrança mensal antes de utilizar o painel.");
+          return;
+        }
+      }
 
       if (!resultado.ativo && (!resultado.admin || resultado.proprietario)) {
         $("painelCatalogo").hidden = true;
         $("catalogoBloqueado").hidden = false;
         if (resultado.bloqueado) {
           $("lockedTitle").textContent = "Catálogo temporariamente bloqueado";
-          $("lockedText").textContent = "O administrador do Guia bloqueou este catálogo. Entre em contato pelo perfil do comércio para obter orientação.";
+          const inadimplente=resultado.motivo_bloqueio==="Comissão de pagamentos presenciais vencida.";
+          const encerrando=resultado.motivo_bloqueio==="Encerramento solicitado pelo proprietário";
+          $("lockedTitle").textContent=encerrando?"Encerramento solicitado":"Catálogo temporariamente bloqueado";
+          $("lockedText").textContent = encerrando
+            ? "A loja está suspensa para novos pedidos. Quite possíveis faturas anteriores para que a administração finalize o encerramento."
+            : inadimplente
+            ? "Existem faturas vencidas. Novos pedidos estão suspensos, mas você pode consultar e pagar sua fatura abaixo."
+            : "Este catálogo está bloqueado. Solicite orientação à administração do Guia.";
+          if ($("catalogoPagamentoBloqueado"))
+            $("catalogoPagamentoBloqueado").hidden=!(inadimplente||encerrando);
           $("linkContratacao").hidden = true;
         } else {
           $("lockedTitle").textContent = "Catálogo não liberado";
@@ -120,6 +143,7 @@
       }
 
       $("catalogoBloqueado").hidden = true;
+      if ($("catalogoPagamentoBloqueado")) $("catalogoPagamentoBloqueado").hidden = true;
       $("painelCatalogo").hidden = false;
       setNotice(resultado.admin ? "Acesso administrativo confirmado" : "Acesso confirmado", resultado.admin
         ? "Você está corrigindo o catálogo como administrador do Guia."
@@ -437,7 +461,7 @@
   }
 
   async function chamarFaturaPix(body) {
-    const { data, error } = await getClient().functions.invoke("catalogo-fatura-pix", { body: { ...body, comercio_id: comercioId } });
+    const { data, error } = await getClient().functions.invoke("catalogo-asaas-financeiro", { body: { ...body, comercio_id: comercioId } });
     if (error || !data?.success) throw new Error(data?.mensagem || error?.message || "Não foi possível processar o pagamento da fatura.");
     return data;
   }
@@ -448,7 +472,9 @@
     return competencia;
   }
 
-  function renderizarPixFatura(data) {
+  function renderizarPixFatura(data,containerId="faturaPixResultado") {
+    const container=$(containerId);
+    if (!container) return;
     const fatura = data.fatura || {};
     const pix = data.pix || {};
     const total = Number(data.valor_centavos ?? fatura.total_comissao_centavos ?? 0);
@@ -462,10 +488,10 @@
       if (pix.imageBase64) partes.push(`<img class="pix-qr" alt="QR Code Pix da fatura" src="data:image/png;base64,${pix.imageBase64}">`);
       partes.push(`<label class="pix-copy">Pix copia e cola<textarea readonly rows="3">${escapar(pix.code)}</textarea></label>`);
       partes.push('<button id="copiarPixFatura" class="small-button" type="button">Copiar código Pix</button>');
-      if (/^https:\/\//.test(pix.ticketUrl || "")) partes.push(`<p><a class="button button-secondary" href="${escapar(pix.ticketUrl)}" target="_blank" rel="noopener">Abrir no Mercado Pago</a></p>`);
+      if (/^https:\/\//.test(pix.ticketUrl || "")) partes.push(`<p><a class="button button-secondary" href="${escapar(pix.ticketUrl)}" target="_blank" rel="noopener">Abrir cobrança no provedor</a></p>`);
     }
-    $("faturaPixResultado").innerHTML = partes.join("");
-    const copiar = $("copiarPixFatura");
+    container.innerHTML = partes.join("");
+    const copiar = container.querySelector("#copiarPixFatura");
     if (copiar) copiar.addEventListener("click", async () => {
       try { await navigator.clipboard.writeText(pix.code); copiar.textContent = "Código copiado"; }
       catch { copiar.textContent = "Copie o código manualmente"; }
@@ -474,7 +500,7 @@
 
   async function gerarPixFatura() {
     $("faturaPixResultado").innerHTML = '<p class="form-feedback">Solicitando o Pix da fatura…</p>';
-    try { renderizarPixFatura(await chamarFaturaPix({ acao: "criar_cobranca", competencia: competenciaDaFatura() })); }
+    try { renderizarPixFatura(await chamarFaturaPix({ acao: "criar_cobranca", competencia: competenciaDaFatura(), nome_pagador: $("faturaAsaasNomePagador")?.value || "", documento: $("faturaAsaasDocumento")?.value || "" })); }
     catch (error) { $("faturaPixResultado").innerHTML = `<p class="form-feedback">${escapar(error.message || "Não foi possível gerar o Pix da fatura.")}</p>`; }
   }
 
@@ -482,6 +508,38 @@
     $("faturaPixResultado").innerHTML = '<p class="form-feedback">Verificando o pagamento da fatura…</p>';
     try { renderizarPixFatura(await chamarFaturaPix({ acao: "consultar_cobranca", competencia: competenciaDaFatura() })); }
     catch (error) { $("faturaPixResultado").innerHTML = `<p class="form-feedback">${escapar(error.message || "Não foi possível verificar o pagamento da fatura.")}</p>`; }
+  }
+
+  async function aceitarTermosComercio(event) {
+    event.preventDefault();
+    const aceitar=$("catalogoTermsAccepted")?.checked===true;
+    const ciente=$("catalogoPrivacyAcknowledged")?.checked===true;
+    if(!aceitar||!ciente)return;
+    const botao=$("catalogoTermsForm")?.querySelector('button[type="submit"]');
+    if(botao)botao.disabled=true;
+    try{
+      const resposta=await chamarFaturaPix({acao:"aceitar_termos",papel:"comercio",aceito_termos:aceitar,ciente_privacidade:ciente});
+      if(!resposta.aceito)throw new Error("O aceite ainda não foi confirmado.");
+      $("catalogoTermsDialog").close();
+      await entrarPainel();
+    }catch(error){
+      $("catalogoTermsFeedback").textContent=error.message||"Não foi possível registrar seu aceite.";
+    }finally{if(botao)botao.disabled=false;}
+  }
+  async function regularizarFaturaBloqueada(acao){
+    const competencia=$("competenciaFaturaBloqueada")?.value||"";
+    if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(competencia)){
+      $("resultadoFaturaBloqueada").textContent="Escolha o mês da fatura pendente.";
+      return;
+    }
+    $("resultadoFaturaBloqueada").textContent="Consultando cobrança…";
+    try{
+      const dados=await chamarFaturaPix({acao,competencia,
+        nome_pagador:$("nomeFaturaBloqueada")?.value||"",
+        documento:$("documentoFaturaBloqueada")?.value||""});
+      renderizarPixFatura(dados,"resultadoFaturaBloqueada");
+      if(dados.cobranca_status==="pago")await entrarPainel();
+    }catch(erro){$("resultadoFaturaBloqueada").textContent=erro.message||"Não foi possível consultar a fatura.";}
   }
 
   async function carregarDadosPainel() {
@@ -847,6 +905,10 @@
     });
     $("atualizarPedidosOffline").addEventListener("click", carregarPedidosOffline);
     $("consultarExtratoOffline").addEventListener("click", consultarExtratoOffline);
+    $("catalogoTermsForm")?.addEventListener("submit",aceitarTermosComercio);
+    $("catalogoTermsDialog")?.addEventListener("cancel",event=>event.preventDefault());
+    $("gerarFaturaBloqueada")?.addEventListener("click",()=>regularizarFaturaBloqueada("criar_cobranca"));
+    $("consultarFaturaBloqueada")?.addEventListener("click",()=>regularizarFaturaBloqueada("consultar_cobranca"));
     $("gerarPixFatura").addEventListener("click", gerarPixFatura);
     $("consultarPixFatura").addEventListener("click", consultarPixFatura);
     $("cancelamentoForm").addEventListener("submit", confirmarCancelamento);

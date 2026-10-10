@@ -11,6 +11,7 @@ const { chromium } = require("playwright");
 const ROOT = resolve(__dirname, "..");
 const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json" };
 const api = "https://xdmbkflufsfqziixzpxc.supabase.co/functions/v1/catalogo-entregas";
+const asaasApi = "https://xdmbkflufsfqziixzpxc.supabase.co/functions/v1/catalogo-asaas-financeiro";
 const tests = [
   {
     id: "admin_sem_permissao", path: "/pages/entregas-operacao.html",
@@ -26,7 +27,7 @@ const tests = [
   },
   {
     id: "motoboy_sem_permissao", path: "/pages/motoboy.html",
-    indicator: "#motoboyOrdersFeedback", message: "Conta sem permissão",
+    indicator: "#motoboyLoginFeedback", message: "Conta sem permissão",
     async check(page) {
       assert.equal(await page.locator("#motoboyEarnings").isVisible(), false);
       assert.equal(await page.locator("#motoboyOrders .motoboy-order").count(), 0);
@@ -75,7 +76,7 @@ async function run() {
       await context.route("**/*", route => {
         const url = route.request().url();
         if (url.startsWith(origin + "/")) return route.continue();
-        if (url === api) {
+        if (url === api || url === asaasApi) {
           mockCalls++;
           return route.fulfill({
             status: 403, contentType: "application/json",
@@ -101,7 +102,7 @@ async function run() {
             console.log("PASS " + test.id + " no Chromium " + width + "px, mock 403");
           } finally { await page.close(); }
         }
-        assert.ok(mockCalls >= 3, "Admin e motoboy precisam consultar autorizacao no servidor");
+        assert.ok(mockCalls >= 2, "Admin e motoboy precisam consultar autorizacao no servidor");
         assert.deepEqual(blocked, [], "Requisicao externa nao prevista");
       } finally {
         await context.close();

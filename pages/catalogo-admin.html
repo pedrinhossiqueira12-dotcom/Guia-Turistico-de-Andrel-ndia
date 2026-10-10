@@ -44,6 +44,20 @@
       <h2 id="lockedTitle">Catálogo não liberado</h2>
       <p id="lockedText">Para gerenciar produtos, conecte a conta Mercado Pago do comércio.</p>
       <a id="linkContratacao" class="button button-primary" href="#">Conhecer o catálogo digital</a>
+      <div id="catalogoPagamentoBloqueado" class="offline-invoice" hidden>
+        <h3>Regularizar fatura vencida</h3>
+        <p>O catálogo não recebe novos pedidos durante a suspensão. Você ainda pode quitar faturas anteriores; a confirmação ocorre pelo provedor de pagamento.</p>
+        <div class="statement-controls">
+          <label>Mês da fatura <input id="competenciaFaturaBloqueada" type="month"></label>
+          <label>Nome/razão social <input id="nomeFaturaBloqueada" maxlength="120"></label>
+          <label>CPF/CNPJ <input id="documentoFaturaBloqueada" maxlength="20" inputmode="numeric"></label>
+        </div>
+        <div class="statement-controls">
+          <button id="gerarFaturaBloqueada" class="button button-primary" type="button">Gerar Pix de regularização</button>
+          <button id="consultarFaturaBloqueada" class="button button-secondary" type="button">Verificar pagamento</button>
+        </div>
+        <div id="resultadoFaturaBloqueada" class="offline-statement-result"><p class="form-feedback">Selecione o mês da fatura vencida.</p></div>
+      </div>
     </section>
 
     <div id="painelCatalogo" hidden>
@@ -70,7 +84,12 @@
           <div id="extratoOffline" class="offline-statement-result"><p class="form-feedback">Escolha um mês para consultar o extrato.</p></div>
           <div class="offline-invoice" id="faturaPixBloco">
             <div class="section-title"><div><span class="eyebrow">PAGAMENTO DA FATURA</span><h3>Pagar fatura</h3></div></div>
-            <p>No fim de cada período, a plataforma reúne suas vendas e calcula o valor da fatura. O pagamento é feito por Pix. A quitação só é registrada depois da confirmação do pagamento.</p>
+            <p>No fim de cada período, a plataforma reúne suas vendas e calcula o valor da fatura. O pagamento mensal é feito via Pix pelo Asaas. No primeiro pagamento, informe nome e CPF/CNPJ do pagador. A quitação ocorre somente após confirmação do recebimento.</p>
+<p class="form-feedback">Método atual: <strong>Pix manual mensal</strong>. O Pix Automático poderá ser oferecido futuramente, mediante nova autorização no banco; não está ativado.</p>
+            <div class="statement-controls">
+              <label>Nome do pagador / razão social <input id="faturaAsaasNomePagador" maxlength="120" autocomplete="name" placeholder="Primeiro pagamento"></label>
+              <label>CPF ou CNPJ <input id="faturaAsaasDocumento" maxlength="20" inputmode="numeric" placeholder="Primeiro pagamento"></label>
+            </div>
             <div class="statement-controls">
               <button id="gerarPixFatura" class="button button-primary" type="button">Gerar Pix para pagamento</button>
               <button id="consultarPixFatura" class="button button-secondary" type="button">Verificar pagamento</button>
@@ -152,6 +171,18 @@
     </form>
   </dialog>
 
+
+  <dialog id="catalogoTermsDialog" class="admin-dialog" aria-labelledby="catalogoTermsTitle" style="width:min(520px,calc(100% - 30px));">
+    <form id="catalogoTermsForm">
+      <h2 id="catalogoTermsTitle">Termos para estabelecimentos</h2>
+      <p>Leia as regras de comissões, fechamento mensal, pagamento por Pix manual e encerramento. Seu aceite será registrado por estabelecimento e versão.</p>
+      <p><a href="termos-comercios.html" target="_blank" rel="noopener">Ler Termos para Estabelecimentos</a> · <a href="politica-privacidade.html" target="_blank" rel="noopener">Ler Política de Privacidade</a></p>
+      <label class="checkbox-line"><input id="catalogoTermsAccepted" type="checkbox" required> Li e aceito os Termos para Estabelecimentos, inclusive a fatura mensal de 7% sobre vendas elegíveis.</label>
+      <label class="checkbox-line"><input id="catalogoPrivacyAcknowledged" type="checkbox" required> Li e estou ciente da Política de Privacidade, sem aceitar marketing opcional.</label>
+      <p id="catalogoTermsFeedback" class="form-feedback" role="status"></p>
+      <div class="dialog-actions"><button class="button button-primary" type="submit">Aceitar e continuar</button></div>
+    </form>
+  </dialog>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="../js/login.js"></script>
   <script src="../js/catalogo-utils.js"></script>

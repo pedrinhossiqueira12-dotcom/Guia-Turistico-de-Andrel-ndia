@@ -95,6 +95,46 @@
           <div class="motoboy-balance-card"><span>Pago</span><strong id="motoboyBalancePago">R$ 0,00</strong></div>
           <div class="motoboy-balance-card"><span>Retido</span><strong id="motoboyBalanceRetido">R$ 0,00</strong></div>
         </div>
+        <div class="motoboy-balance-card" style="margin:16px 0;">
+          <span>Disponível para saque (faturas Asaas liquidadas)</span>
+          <strong id="motoboyAsaasBalance">R$ 0,00</strong>
+          <p id="motoboyCreditoContagem" class="motoboy-feedback">Comissões acumuladas liberadas: 0</p>
+          <button id="motoboyWithdrawPix" class="motoboy-button motoboy-button-primary" type="button" disabled>Sacar via Pix</button>
+          <p id="motoboyWithdrawFeedback" class="motoboy-feedback" role="status">Aguardando habilitação dos saques.</p>
+          <p id="motoboyWithdrawMinimo" class="motoboy-feedback">Saque mínimo: R$ 100,00 em créditos liberados.</p>
+          <div id="motoboyResidualBloco" hidden>
+            <h3>Saldo residual abaixo de R$ 100</h3>
+            <p>Se deixar de realizar entregas ou quiser encerrar suas atividades, solicite a análise do saldo liberado restante. A solicitação não efetua Pix nem reduz seu saldo.</p>
+            <form id="motoboyResidualForm" class="motoboy-form">
+              <label for="motoboyResidualMotivo">Motivo da solicitação</label>
+              <select id="motoboyResidualMotivo" required>
+                <option value="inatividade">Vou interromper minhas entregas</option>
+                <option value="encerramento">Quero encerrar minhas atividades</option>
+              </select>
+              <button id="motoboyResidualSubmit" class="motoboy-button motoboy-button-secondary" type="submit">Solicitar análise do saldo</button>
+            </form>
+            <p id="motoboyResidualFeedback" class="motoboy-feedback" role="status"></p>
+          </div>
+          <div id="motoboySaidaBloco" hidden>
+            <h3>Regularização de créditos após inatividade</h3>
+            <p>Se você não possui mais vínculos ativos com comércios e tem R$ 100 ou mais em créditos já liberados, poderá pedir uma conferência financeira. Esta opção não reativa sua conta e não efetua Pix nem confirma pagamento.</p>
+            <form id="motoboySaidaForm" class="motoboy-form">
+              <label for="motoboySaidaMotivo">Motivo da regularização</label>
+              <select id="motoboySaidaMotivo" required>
+                <option value="inatividade">Interrompi minhas entregas</option>
+                <option value="encerramento">Encerrei minhas atividades</option>
+              </select>
+              <button id="motoboySaidaSubmit" class="motoboy-button motoboy-button-secondary" type="submit">Solicitar regularização financeira</button>
+            </form>
+            <p id="motoboySaidaFeedback" class="motoboy-feedback" role="status"></p>
+          </div>
+          <ul id="motoboyWithdrawHistory" class="motoboy-history" aria-label="Histórico de saques"></ul>
+        </div>
+<section class="motoboy-card" aria-labelledby="motoboyPendingTitle">
+          <span class="eyebrow">TRANSPARÊNCIA FINANCEIRA</span><h3 id="motoboyPendingTitle">Comissões aguardando pagamento dos comércios</h3>
+          <p>Esses créditos ainda não estão disponíveis para saque. A situação indicada é baseada nas faturas de cada estabelecimento.</p>
+          <ul id="motoboyPendingByStore" class="motoboy-history" aria-live="polite"></ul>
+        </section>
         <p id="motoboyEarningsFeedback" class="motoboy-feedback" role="status"></p>
         <div class="motoboy-reliability">
           <div><span class="eyebrow">LEITURA PRUDENTE</span><h3>Confiabilidade</h3></div>
@@ -108,11 +148,11 @@
       </section>
 
       <section class="motoboy-card motoboy-profile-card" aria-labelledby="motoboyProfileTitle">
-        <span class="eyebrow">RECEBIMENTO OPCIONAL</span>
+        <span class="eyebrow">DADOS PARA SAQUE</span>
         <h2 id="motoboyProfileTitle">Chave Pix própria</h2>
-        <p>Informe somente uma chave sua. Ela é guardada pelo servidor para eventual repasse comprovado; a tela não envia identidade nem valor para criar remuneração.</p>
+        <p>Informe somente uma chave sua. Ela é protegida no servidor e utilizada somente para transferências Pix solicitadas por você. A chave deve ser de sua titularidade.</p>
         <form id="motoboyPixForm" class="motoboy-form motoboy-pix-form">
-          <label for="motoboyPixKey">Chave Pix <span class="motoboy-label-note">opcional</span></label>
+          <label for="motoboyPixKey">Chave Pix <span class="motoboy-label-note">obrigatória para sacar</span></label>
           <input id="motoboyPixKey" type="text" maxlength="120" autocomplete="off" placeholder="Deixe vazio para remover">
           <button id="motoboyPixButton" class="motoboy-button motoboy-button-secondary" type="submit">Salvar chave Pix</button>
           <p id="motoboyPixFeedback" class="motoboy-feedback" role="status"></p>
@@ -120,7 +160,7 @@
       </section>
     </section>
 
-    <p class="motoboy-footer-note">Este painel não exibe faturas, catálogo de produtos ou pedidos de outros usuários. Códigos e dados pessoais aparecem apenas na etapa autorizada da entrega. Repasses dependem de baixa e comprovação administrativa.</p>
+    <p class="motoboy-footer-note">Este painel não exibe faturas, catálogo de produtos ou pedidos de outros usuários. Códigos e dados pessoais aparecem apenas na etapa autorizada da entrega. Saques ficam disponíveis após entrega confirmada, fatura liquidada e autorização do provedor.</p>
   </main>
 
   <dialog id="motoboyConfirmDialog" class="motoboy-dialog" aria-labelledby="motoboyConfirmTitle">
@@ -169,7 +209,19 @@
     </form>
   </dialog>
 
+
+  <dialog id="motoboyTermsDialog" class="motoboy-dialog" aria-labelledby="motoboyTermsTitle" style="max-width:520px;width:calc(100% - 30px);padding:24px;border:1px solid #c7d8d0;border-radius:14px;">
+    <form id="motoboyTermsForm">
+      <h2 id="motoboyTermsTitle">Termos para entregadores</h2>
+      <p>Antes de utilizar as entregas e os saques, leia as regras de comissões, faturas e privacidade. O aceite fica registrado com a versão dos documentos.</p>
+      <p><a href="termos-motoboys.html" target="_blank" rel="noopener">Ler Termos para Entregadores</a> · <a href="politica-privacidade.html" target="_blank" rel="noopener">Ler Política de Privacidade</a></p>
+      <label class="motoboy-checkbox-label"><input id="motoboyTermsAccepted" type="checkbox" required><span>Li e aceito os Termos para Entregadores, incluindo o saque mínimo de R$ 100 e o pagamento condicionado à confirmação da fatura.</span></label>
+      <label class="motoboy-checkbox-label"><input id="motoboyPrivacyAcknowledged" type="checkbox" required><span>Li e estou ciente da Política de Privacidade (ciência, não autorização para marketing).</span></label>
+      <p class="motoboy-feedback" id="motoboyTermsFeedback" role="status"></p>
+      <button class="motoboy-button motoboy-button-primary" type="submit">Aceitar e continuar</button>
+    </form>
+  </dialog>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="../js/motoboy.js?v=motoboy-v2-20261006"></script>
+  <script src="../js/motoboy.js?v=motoboy-v2-asaas-20261008"></script>
 </body>
 </html>

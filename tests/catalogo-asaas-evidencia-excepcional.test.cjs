@@ -1,0 +1,64 @@
+"use strict";
+const test=require("node:test");
+const assert=require("node:assert/strict");
+const fs=require("node:fs");
+const read=p=>fs.readFileSync(p,"utf8");
+const sql=read("supabase/pending-migrations/20261009220500_evidencias_transferencia_excepcional_sandbox.sql");
+const edge=read("supabase/functions/catalogo-asaas-financeiro/index.ts");
+const ci=read("supabase/tests/isolated/catalogo-asaas-staged-guards-postgres.sql");
+const start=edge.indexOf("async function consultarERegistrarTransferenciaExcepcionalSandbox(");
+const end=edge.indexOf("async function revisarRegularizacaoSaidaAdmin(",start);
+assert.ok(start>=0&&end>start);
+const observation=edge.slice(start,end);
+test("identidade administrativa e sandbox são pré-requisitos para qualquer GET",()=>{
+ assert.match(observation,/uid!==ADMIN_USER_ID/);
+ assert.match(observation,/ENVIRONMENT!=="sandbox"/);
+ assert.match(observation,/!ASAAS_TOKEN/);
+ assert.match(observation,/const t=await asaas\("\/transfers\/"\+encodeURIComponent\(transferenciaId\)\)/);
+ assert.match(observation,/t\.id===transferenciaId&&t\.externalReference===externalReference/);
+ assert.match(observation,/cents\(t\.value\)/);
+ assert.match(observation,/valor===Number\(solicitacao\.saldo_snapshot_centavos\)/);
+ assert.match(edge,/case "observar_transferencia_excepcional_sandbox_admin":return await observarTransferenciaExcepcionalSandboxAdmin\(user\.id,body\)/);
+ assert.doesNotMatch(observation,/POST|\/transfers","POST"|p_estado:"concluido"/);
+});
+test("vinculo é único por solicitação e por transferência",()=>{
+ assert.match(sql,/transferencia_id text NOT NULL UNIQUE/);
+ assert.match(sql,/referencia_externa text NOT NULL UNIQUE/);
+ assert.match(sql,/UNIQUE\(tipo,solicitacao_id\)/);
+ assert.match(sql,/UNIQUE\(vinculo_id,estado_banco\)/);
+ assert.match(sql,/ON CONFLICT \(tipo,solicitacao_id\) DO NOTHING/);
+ assert.match(sql,/ON CONFLICT \(vinculo_id,estado_banco\) DO NOTHING/);
+ assert.match(sql,/pg_catalog\.pg_advisory_xact_lock/);
+ assert.match(sql,/v_transfer IS DISTINCT FROM p_transferencia/);
+});
+test("DONE é observação histórica, jamais baixa crédito nem autoriza pagamento",()=>{
+ assert.match(sql,/'pagamento_baixado',false/);
+ assert.match(sql,/'transferencia_gerada',false/);
+ assert.match(sql,/'requer_validacao_destinatario',true/);
+ assert.match(sql,/CREATE TABLE IF NOT EXISTS public\.catalogo_asaas_observacoes_excepcionais_auditoria/);
+ assert.doesNotMatch(sql,/UPDATE public\.catalogo_remuneracoes|UPDATE public\.catalogo_repasses_v2|INSERT INTO public\.catalogo_repasses_v2/);
+ assert.match(ci,/DONE confundido com baixa financeira/);
+ assert.match(ci,/Duplicacao de observacoes de provedor/);
+});
+test("RLS e grants impedem usuário comum de fabricar evento",()=>{
+ assert.match(sql,/ENABLE ROW LEVEL SECURITY/g);
+ assert.match(sql,/REVOKE ALL ON FUNCTION public\.catalogo_asaas_registrar_observacao_excepcional/);
+ assert.match(sql,/FROM PUBLIC,anon,authenticated/);
+ assert.match(sql,/GRANT EXECUTE ON FUNCTION public\.catalogo_asaas_registrar_observacao_excepcional/);
+ assert.match(sql,/TO service_role/);
+ assert.match(sql,/GRANT SELECT,INSERT ON public\.catalogo_asaas_observacoes_excepcionais_auditoria TO service_role/);
+ assert.match(ci,/Auditoria bancaria exposta ao publico/);
+});
+
+test("webhook excepcional não confia no payload e só observa estado via GET no sandbox",()=>{
+ const start=edge.indexOf("async function webhook(request:Request)");
+ const end=edge.indexOf("Deno.serve(",start);
+ assert.ok(start>=0&&end>start);
+ const wh=edge.slice(start,end);
+ assert.match(wh,/event\.startsWith\("TRANSFER_"\)/);
+ assert.match(wh,/if\(ENVIRONMENT!=="sandbox"\|\|!match\)/);
+ assert.match(wh,/guia-exc:\(residual\|saida\)/);
+ assert.match(wh,/consultarERegistrarTransferenciaExcepcionalSandbox\(match\[1\],match\[2\],transferId\)/);
+ assert.match(wh,/await reconcileTransfer\(String\(saque\.id\),transferId\)/);
+ assert.doesNotMatch(wh,/\/transfers","POST"|p_estado:"concluido"/);
+});

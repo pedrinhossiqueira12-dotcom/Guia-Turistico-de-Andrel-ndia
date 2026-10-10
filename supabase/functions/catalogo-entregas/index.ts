@@ -113,6 +113,16 @@ async function confirmDelivery(userId: string, body: Record<string, unknown>) {
     p_operador_id: userId, p_comercio_id: comercioId, p_pedido_id: pedidoId, p_codigo_hash: codeHash,
   });
 }
+async function requireOperationalTerms(userId:string,papel:"comercio"|"motoboy",comercioId=""){
+ if(userId===ADMIN_USER_ID && papel==="comercio")return;
+ const {data,error}=await db.from("catalogo_aceites_operacionais")
+  .select("documento").eq("usuario_id",userId).eq("papel",papel)
+  .eq("comercio_id",papel==="motoboy"?"":comercioId).eq("versao","2026-10-09");
+ if(error)throw new HttpError("Não foi possível verificar aceite dos termos.",503);
+ const docs=new Set((data||[]).map(r=>r.documento));
+ if(!docs.has("termos")||!docs.has("privacidade"))
+  throw new HttpError("Leia e aceite os termos do Guia antes de iniciar novas operações.",428);
+}
 async function run(userId: string, body: Record<string, unknown>) {
   const action = text(body.acao, 40);
   // Identidade e escopo vêm do JWT. Nunca encaminhar comercio_id para ampliar uma lista do motoboy.
@@ -131,6 +141,9 @@ async function run(userId: string, body: Record<string, unknown>) {
     registrar_ocorrencia: "registrar_ocorrencia", salvar_chave_pix: "salvar_chave_pix",
   };
   if (deliveryActions[action]) {
+    // Não bloquear a conclusão, ocorrência ou desistência de entrega já iniciada.
+    if (["aceitar_entrega","definir_disponibilidade","salvar_chave_pix"].includes(action))
+      await requireOperationalTerms(userId,"motoboy");
     const personal = action === "definir_disponibilidade" || action === "salvar_chave_pix";
     if (action === "definir_disponibilidade" && typeof body.disponivel !== "boolean") throw new HttpError("Informe sua disponibilidade.");
     const reason = text(body.motivo, 500);
@@ -175,6 +188,8 @@ async function run(userId: string, body: Record<string, unknown>) {
   const management = new Set(["listar_motoboys", "autorizar_motoboy", "suspender_motoboy", "atribuir_pedido", "listar_para_atribuicao"]);
   if (!management.has(action)) throw new HttpError("Ação não reconhecida.");
   const comercioId = commerce(body.comercio_id);
+  if (["autorizar_motoboy","atribuir_pedido"].includes(action))
+    await requireOperationalTerms(userId,"comercio",comercioId);
   if (action === "atribuir_pedido") {
     return json({ success: true, ...(await rpc("catalogo_operar_pedido_v2", {
       p_operador_id: userId, p_comercio_id: comercioId, p_pedido_id: uuid(body.pedido_id),

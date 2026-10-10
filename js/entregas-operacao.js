@@ -4,6 +4,7 @@
   const SUPABASE_URL = "https://xdmbkflufsfqziixzpxc.supabase.co";
   const SUPABASE_KEY = "sb_publishable_dvwNkLDf3oZrCqvZ5uAaRA_VsfiuZFy";
   const API_URL = `${SUPABASE_URL}/functions/v1/catalogo-entregas`;
+  const ASAAS_ADMIN_URL = `${SUPABASE_URL}/functions/v1/catalogo-asaas-financeiro`;
   const ADMIN_USER_ID = "4b9a0233-6b72-4573-aebd-d596c5b15e1b";
   const STALE_SESSION_REQUEST = "STALE_SESSION_REQUEST";
   const state = { client: null, session: null, userId: "", token: "", generation: 0, authorized: false, destroyed: false, lockedAfterLogout: false, loading: false, data: null, availableCredits: [] };
@@ -31,7 +32,7 @@
   function aviso(title, message, status = "") { $("operationNoticeTitle").textContent = title; $("operationNoticeText").textContent = message; $("operationNotice").classList.toggle("is-error", status === "erro"); $("operationNotice").classList.toggle("is-success", status === "sucesso"); }
   function validarSessao(generation = state.generation, userId = state.userId) { if (state.destroyed || generation !== state.generation || !state.session || state.userId !== userId) throw new Error(STALE_SESSION_REQUEST); }
 
-  async function chamarApi(acao, dados = {}, generation = state.generation, userId = state.userId) {
+  async function chamarApi(acao, dados = {}, generation = state.generation, userId = state.userId, endpoint = API_URL) {
     const client = obterCliente();
     if (!client?.auth) throw new Error("O serviço de login não está disponível.");
     const { data: sessionData, error } = await client.auth.getSession();
@@ -41,7 +42,7 @@
     if (!token) throw new Error("Sua sessão expirou. Entre novamente.");
     validarSessao(generation, userId);
     if (session.user?.id !== userId) throw new Error(STALE_SESSION_REQUEST);
-    const response = await fetch(API_URL, { method: "POST", headers: { "Content-Type": "application/json", apikey: SUPABASE_KEY, Authorization: `Bearer ${token}` }, body: JSON.stringify({ acao, ...dados }) });
+    const response = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json", apikey: SUPABASE_KEY, Authorization: `Bearer ${token}` }, body: JSON.stringify({ acao, ...dados }) });
     const result = await response.json().catch(() => ({}));
     validarSessao(generation, userId);
     if (!response.ok || result?.success !== true) { const failure = new Error(result?.mensagem || "A operação não foi autorizada."); failure.status = response.status; throw failure; }
@@ -59,6 +60,10 @@
     $("listaOcorrencias").innerHTML = "";
     $("listaRepasses").innerHTML = "";
     $("historicoRepasses").innerHTML = "";
+    if ($("listaSaquesAsaas")) $("listaSaquesAsaas").innerHTML = "";
+    feedback("saquesAsaasFeedback", "");
+    feedback("conciliarSaqueAsaasFeedback", "");
+    $("conciliarSaqueAsaasForm")?.reset();
     $("repassePreview").innerHTML = '<p class="empty-state">Selecione um crédito disponível para revisar as provas antes de registrar o repasse.</p>';
   }
 
@@ -111,6 +116,65 @@
     $("operationPanel").hidden = false;
   }
 
+  // Auditoria financeira sem expor chaves Pix nem permitir saque administrativo.
+  // Uma indisponibilidade da integração não retira o acesso às entregas.
+  async function carregarSaquesAsaas(generation = state.generation, userId = state.userId) {
+    if (!state.authorized || !$("listaSaquesAsaas")) return;
+    feedback("saquesAsaasFeedback", "Consultando histórico do provedor...");
+    try {
+      const result = await chamarApi("listar_saques_admin", {}, generation, userId, ASAAS_ADMIN_URL);
+      validarSessao(generation, userId);
+      if (!state.authorized) return;
+      const saques = Array.isArray(result.saques) ? result.saques : [];
+      const emissoes = Array.isArray(result.emissoes_pendentes) ? result.emissoes_pendentes : [];
+      const rows = saques.map((s) => {
+        const status = {reservado:"Reservado (sem confirmação externa)",enviado:"Transferência enviada",concluido:"Pix confirmado",falhou:"Transferência recusada",revisao:"Revisão obrigatória"}[s.status] || "Estado não reconhecido";
+        return `<article class="manager-row"><div class="manager-copy">
+          <strong>${escapar(status)} · ${escapar(reais(s.valor_centavos))}</strong>
+          <small>ID do saque: ${escapar(s.id)}</small>
+          <small>Motoboy: ${escapar(s.motoboy_id)} · solicitação: ${escapar(data(s.criado_em))}</small>
+          <small>Transferência Asaas: ${escapar(s.transferencia_id || "Não identificada")}</small>
+          ${s.mensagem ? `<small>Observação: ${escapar(s.mensagem)}</small>` : ""}
+          </div><span class="status-pill ${["revisao","reservado"].includes(s.status) ? "is-warning" : ""}">${escapar(s.status)}</span></article>`;
+      });
+      if (emissoes.length) rows.unshift(`<p class="empty-state">${emissoes.length} emissão(ões) de fatura reservada(s) ou pendente(s) de revisão. Confira a situação diretamente no Asaas antes de reemitir qualquer cobrança.</p>`);
+      $("listaSaquesAsaas").innerHTML = rows.length ? rows.join("") : '<p class="empty-state">Nenhum saque Asaas registrado até agora.</p>';
+      feedback("saquesAsaasFeedback", "Histórico consultado com autorização do servidor.");
+    } catch (error) {
+      if (error.message === STALE_SESSION_REQUEST) return;
+      if (!state.authorized) return;
+      $("listaSaquesAsaas").innerHTML = '<p class="empty-state">Auditoria Asaas indisponível neste ambiente.</p>';
+      feedback("saquesAsaasFeedback", "Este módulo só estará disponível após instalar a nova função financeira.", true);
+    }
+  }
+
+  async function conciliarSaqueAsaas(event) {
+    event.preventDefault();
+    if (!state.authorized) return;
+    const saqueId = $("saqueAsaasId")?.value.trim() || "";
+    const transferenciaId = $("transferenciaAsaasId")?.value.trim() || "";
+    if (!/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(saqueId) || !/^[A-Za-z0-9_-]{4,130}$/.test(transferenciaId)) {
+      feedback("conciliarSaqueAsaasFeedback", "Informe os IDs da solicitação e da transferência já existente.", true);
+      return;
+    }
+    const generation = state.generation, userId = state.userId;
+    const button = $("conciliarSaqueAsaas");
+    if (button) button.disabled = true;
+    feedback("conciliarSaqueAsaasFeedback", "Conferindo o estado bancário, sem criar transferência...");
+    try {
+      const result = await chamarApi("conciliar_saque_admin",
+        { saque_id: saqueId, transferencia_id: transferenciaId }, generation, userId, ASAAS_ADMIN_URL);
+      validarSessao(generation,userId);
+      feedback("conciliarSaqueAsaasFeedback", result.mensagem || "Consulta concluída no Asaas.");
+      await carregarSaquesAsaas(generation,userId);
+    } catch (error) {
+      if (error.message !== STALE_SESSION_REQUEST)
+        feedback("conciliarSaqueAsaasFeedback", error.message || "Falha na consulta. Nenhuma transferência adicional foi solicitada.", true);
+    } finally {
+      if (generation === state.generation && button) button.disabled = false;
+    }
+  }
+
   async function carregarOperacao() {
     if (!state.session || state.loading) return;
     const generation = state.generation;
@@ -127,6 +191,7 @@
       $("operationLoginCard").hidden = true;
       $("operationLogout").hidden = false;
       renderizarDados(result);
+      void carregarSaquesAsaas(generation,userId);
       aviso("Acesso administrativo confirmado", "Ocorrências e créditos foram liberados pelo backend; o painel não usa vínculo de comércio como privilégio.", "sucesso");
     } catch (error) {
       if (error.message === STALE_SESSION_REQUEST) return;
@@ -205,6 +270,7 @@
     $("atualizarOperacao").addEventListener("click", carregarOperacao);
     $("ocorrenciaForm").addEventListener("submit", resolverOcorrencia);
     $("repasseForm").addEventListener("submit", registrarRepasse);
+    $("conciliarSaqueAsaasForm")?.addEventListener("submit", conciliarSaqueAsaas);
     $("repasseCredito").addEventListener("change", (event) => selecionarCredito(event.target.value));
     $("listaRepasses").addEventListener("click", (event) => { const button = event.target.closest("[data-preview-credit]"); if (button) { $("repasseCredito").value = button.dataset.previewCredit; selecionarCredito(button.dataset.previewCredit); } });
     window.addEventListener("pagehide", () => { state.destroyed = true; state.generation += 1; state.session = null; state.userId = ""; state.token = ""; state.subscription?.unsubscribe?.(); state.subscription = null; limparDados(); });

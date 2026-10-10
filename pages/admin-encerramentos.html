@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#091d1c">
+<title>Encerramentos — Guia Andrelândia</title>
+<style>
+:root{--verde:#194138;--escuro:#091d1c;--fundo:#f5f3ef;--texto:#202522}
+*{box-sizing:border-box}body{margin:0;background:var(--fundo);color:var(--texto);font:16px/1.5 Roboto,Arial,sans-serif}
+header{padding:22px 4vw;background:var(--escuro);color:white}header a{color:white;text-decoration:none}
+main{max-width:960px;margin:0 auto;padding:24px 18px 72px}h1{font-size:clamp(1.5rem,4vw,2rem);margin:6px 0}
+h2{font-size:1.25rem}section,.item{background:white;border:1px solid #d9dfdc;border-radius:14px;padding:18px;margin:15px 0}
+input,button,textarea,select{font:inherit}input,textarea,select{padding:10px;border:1px solid #acbbb2;border-radius:8px;width:100%;margin:4px 0 10px}
+textarea{min-height:84px;resize:vertical} .item .row{justify-content:flex-start}.item button{margin-top:4px}
+button{border:1px solid var(--verde);border-radius:9px;background:var(--verde);color:white;padding:10px 14px;cursor:pointer}
+button.secondary{background:transparent;color:var(--verde)}button:disabled{opacity:.55;cursor:not-allowed}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:center;justify-content:space-between}
+details{border-top:1px solid #d9dfdc;padding-top:12px;margin-top:12px}details summary{cursor:pointer;font-weight:600}details ul{padding-left:20px;overflow-wrap:anywhere}
+small,.muted{color:#64736b}.item strong{overflow-wrap:anywhere}#listaEncerramentos,#listaAnalisesResiduais,#listaRegularizacoesSaida,#listaSeparacoesExcepcionais{list-style:none;margin:0;padding:0}
+#mensagem{min-height:1.5em}a{color:var(--verde)}[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<header><a href="entregas-operacao.html">← Operação do Guia</a><h1>Encerramentos de comércios</h1></header>
+<main>
+<p>Área restrita à administração. O encerramento mantém o histórico financeiro e impede novos pedidos. O arquivamento só é permitido depois que todas as faturas forem quitadas e os pedidos concluídos.</p>
+<section id="loginContainer">
+<h2>Acesso administrativo</h2>
+<p>Entre com a conta administrativa do Guia para consultar os pedidos.</p>
+<form id="loginForm">
+<label>E-mail<input id="loginEmail" type="email" autocomplete="email" required></label>
+<label>Senha<input id="loginPassword" type="password" autocomplete="current-password" required></label>
+<button type="submit">Entrar</button>
+</form>
+</section>
+<section id="painel" hidden>
+<div class="row"><h2>Solicitações pendentes</h2><div><button type="button" class="secondary" id="atualizar">Atualizar</button> <button type="button" class="secondary" id="sair">Sair</button></div></div>
+<p class="muted">A dívida exibida é a estimativa registrada na solicitação. O servidor recalcula todas as obrigações no momento do arquivamento.</p>
+<ul id="listaEncerramentos"></ul>
+<hr>
+<h2>Solicitações de saldo residual dos entregadores</h2>
+<p class="muted">Pedidos de revisão abaixo de R$ 100. Uma análise pode ser marcada como em andamento ou recusada com justificativa. <strong>Este painel não envia Pix, não dá baixa em créditos e não permite marcar pagamentos como concluídos.</strong> A recusa da análise não extingue o saldo devido.</p>
+<ul id="listaAnalisesResiduais" aria-label="Solicitações de análise de saldo residual"></ul>
+<hr>
+<h2>Regularização de créditos de entregadores inativos</h2>
+<p class="muted">Pedidos de motoboys sem vínculo ativo, com R$ 100 ou mais em créditos já liberados. O valor apresentado é uma fotografia na data da solicitação, não um valor autorizado para pagamento. A revisão nunca cria transferência, baixa créditos ou marca como pago. A recusa encerra somente o pedido administrativo.</p>
+<ul id="listaRegularizacoesSaida" aria-label="Regularizações financeiras de entregadores inativos"></ul>
+<hr>
+<h2>Créditos congelados para conciliação excepcional</h2>
+<p class="muted">Lista de separações contábeis, inclusive de pedidos administrativos já recusados. Os créditos <strong>não foram pagos</strong>. O diagnóstico mostra divergências, estornos e evidências bancárias observadas, mas <strong>não autoriza desbloqueio, quitação ou Pix</strong>. A regularização definitiva exige comprovação bancária e revisão independente.</p>
+<ul id="listaSeparacoesExcepcionais" aria-label="Reservas contábeis de créditos excepcionalmente congelados"></ul>
+</section>
+<p role="status" id="mensagem"></p>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../js/admin-encerramentos.js"></script>
+</body></html>
