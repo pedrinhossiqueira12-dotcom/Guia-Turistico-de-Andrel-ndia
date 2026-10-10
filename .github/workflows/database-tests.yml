@@ -723,11 +723,15 @@ jobs:
           done
           psql -X -d catalogo_asaas_guards_ci -v ON_ERROR_STOP=1 \
             -f supabase/tests/isolated/catalogo-asaas-staged-guards-postgres.sql
-          # PostgreSQL clone: duas conexoes psql INDEPENDENTES, um ID compartilhado,
-          # assertiva de espera real no advisory lock, rollback/commit e HOLD.
-          # Nunca roda contra STAGING remoto nem PostgreSQL de producao.
+          # Criar clone separado APOS os ensaios com ROLLBACK: as duas sessoes
+          # concorrentes fazem COMMIT real (dados inteiramente ficticios).
+          # Este banco e sempre destruido. Nao poluir catalogo_asaas_guards_ci.
+          createdb --template=catalogo_asaas_guards_ci catalogo_asaas_race_ci
+          trap 'dropdb --if-exists --force catalogo_asaas_race_ci; dropdb --if-exists --force catalogo_asaas_guards_ci' EXIT
           python3 scripts/validacao-pagamentos/test-asaas-advisory-concurrency.py \
-            --database catalogo_asaas_guards_ci
+            --database catalogo_asaas_race_ci
+          dropdb --if-exists --force catalogo_asaas_race_ci
+          trap 'dropdb --if-exists --force catalogo_asaas_guards_ci' EXIT
           test "$(psql -X -d catalogo_asaas_guards_ci -Atqc \
             "SELECT count(*) FROM public.catalogos WHERE comercio_id='ci-asaas-encerramento-guard'")" = 0
           test "$(psql -X -d catalogo_asaas_guards_ci -Atqc \
