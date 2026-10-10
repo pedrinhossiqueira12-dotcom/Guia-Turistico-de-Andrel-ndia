@@ -320,7 +320,40 @@
         catch(e){aviso(e.message||"Histórico indisponível.",true);}
         finally{consultar.disabled=false;}
       });
-      area.append(cab,orientacao,seloIntegridade,tipo,nota,hash,gravar,consultar,registros);
+      const exportar=document.createElement("button");exportar.type="button";
+      exportar.className="secondary";
+      exportar.textContent="Exportar âncora SHA-256 (JSON)";
+      exportar.addEventListener("click",async()=>{
+        exportar.disabled=true;
+        try{
+          const dados=await api({acao:"exportar_ancora_dossie_admin",
+            separacao_id:String(item.id||"")});
+          const manifesto=dados.manifesto||null;
+          if(manifesto?.ok!==true||manifesto.formato!=="GAESCROW1"||
+            manifesto.cadeia_verificada_localmente!==true||
+            manifesto.ancora_externa_efetuada!==false||
+            manifesto.pagamento_autorizado!==false||
+            manifesto.liberacao_autorizada!==false||
+            manifesto.baixa_realizada!==false)
+            throw new Error("Manifesto inesperado; exportação recusada.");
+          const arquivo=new Blob([JSON.stringify(manifesto,null,2)],
+            {type:"application/json;charset=utf-8"});
+          const url=URL.createObjectURL(arquivo);
+          const link=document.createElement("a");
+          link.href=url;
+          link.download="guia-escrow-"+String(item.id||"").toLowerCase()+
+            "-"+new Date().toISOString().replace(/[:.]/g,"-")+".json";
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          setTimeout(()=>URL.revokeObjectURL(url),1000);
+          aviso("Manifesto gerado. Guarde o JSON em local seguro, fora do Supabase, "+
+            "e compare cópias futuras com scripts/verificar-ancora-escrow.cjs. "+
+            "O arquivo contém identificadores financeiros e NÃO é prova de Pix.");
+        }catch(e){aviso(e.message||"Não foi possível exportar âncora. Manter saldo bloqueado.",true);}
+        finally{exportar.disabled=false;}
+      });
+      area.append(cab,orientacao,seloIntegridade,tipo,nota,hash,gravar,consultar,exportar,registros);
       li.append(title,detail,btn,area);lista.appendChild(li);
     }
     if(response.ha_mais===true){
