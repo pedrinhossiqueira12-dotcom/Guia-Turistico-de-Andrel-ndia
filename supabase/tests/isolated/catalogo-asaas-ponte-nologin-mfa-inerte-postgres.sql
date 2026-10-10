@@ -118,6 +118,39 @@ BEGIN
  THEN RAISE EXCEPTION 'Teste de membership contaminou o banco CI'; END IF;
 END $no_leak$;
 
+-- Nao basta proteger os QUATRO papeis conhecidos do Supabase:
+-- qualquer grupo/novo service_role tambem seria um caminho para SET ROLE.
+SAVEPOINT ponte_mfa_outro_papel_probe;
+CREATE ROLE catalogo_ci_mfa_role_desconhecida NOLOGIN;
+GRANT catalogo_mfa_ponte_ci_inerte TO catalogo_ci_mfa_role_desconhecida
+ WITH INHERIT FALSE, SET TRUE;
+DO $unknown_member$
+BEGIN
+ IF NOT EXISTS(
+  SELECT 1 FROM pg_catalog.pg_auth_members m
+  JOIN pg_catalog.pg_roles target ON target.oid=m.roleid
+  WHERE target.rolname='catalogo_mfa_ponte_ci_inerte'
+ ) THEN RAISE EXCEPTION 'Membership desconhecida nao apareceu na catalog'; END IF;
+ IF pg_catalog.pg_has_role(
+  'authenticated','catalogo_mfa_ponte_ci_inerte','MEMBER')
+ THEN RAISE EXCEPTION 'Teste de membro desconhecido contaminado'; END IF;
+END $unknown_member$;
+SET LOCAL ROLE catalogo_mfa_ponte_ci_inerte;
+DO $deny_unknown_member$
+BEGIN
+ IF catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_reservar_principal_inerte(
+  NULL,NULL,NULL) IS NOT NULL THEN
+  RAISE EXCEPTION 'Membro nao-Supabase ativou ponte documental'; END IF;
+ RAISE NOTICE 'PASS: qualquer membership desabilita wrappers (inclusive role nova)';
+END $deny_unknown_member$;
+RESET ROLE;
+ROLLBACK TO SAVEPOINT ponte_mfa_outro_papel_probe;
+DO $unknown_not_persisted$
+BEGIN
+ IF pg_catalog.to_regrole('catalogo_ci_mfa_role_desconhecida') IS NOT NULL
+ THEN RAISE EXCEPTION 'Probe desconhecido nao foi revertido'; END IF;
+END $unknown_not_persisted$;
+
 -- Testar invocacao real com SET ROLE, NAO autenticacao externa.
 SET LOCAL ROLE catalogo_mfa_ponte_ci_inerte;
 DO $bridge_role$
