@@ -11,6 +11,8 @@ Cenarios:
      a outra espera LOCK no header e recebe rejeicao de replay. Zero Pix.
   D) primeira observacao de outro nonce sofre ROLLBACK: a segunda,
      que estava aguardando o lock, conclui sem perder nem duplicar o uso.
+  E) tentativas step-up falsificadas: dois processos COMMIT/ROLLBACK com
+     LOCK advisory por revisor, quota 3/h, uma por challenge, zero Pix.
 
 SO executar no banco local 'catalogo_asaas_race_ci', criado e removido pelo CI.
 """
@@ -584,6 +586,167 @@ def scenario_nonce_rollback_then_second_succeeds() -> None:
     )
 
 
+
+def issue_stepup_challenge_for_race() -> str:
+    """Challenge falso ligado a novo nonce; autenticacao mock somente no clone."""
+    output = run_sql(
+        context_for_nonce() + f"""
+        SELECT catalogo_private.catalogo_asaas_iniciar_intencao_mfa_documental_ensaio(
+          (SELECT id FROM public.catalogo_asaas_separacoes_excepcionais
+           WHERE motoboy_id='{NONCE_OWNER}')
+        );
+        """,
+        app="ci_stepup_nonce_issuer",
+    )
+    match = re.search(r'"nonce": "([0-9a-f-]{36})"', output)
+    if not match:
+        raise AssertionError("CI nao emitiu nonce para o challenge sintético: " + output[-350:])
+    nonce = match.group(1)
+    created = run_sql(
+        context_for_nonce() + f"""
+        INSERT INTO public.catalogo_asaas_stepup_desafios_documentais_ensaio(
+          nonce,challenge_id)
+        VALUES('{nonce}'::uuid,gen_random_uuid()) RETURNING challenge_id;
+        """,
+        app="ci_stepup_challenge_issuer",
+    )
+    ids = re.findall(r"(?m)^([0-9a-f]{8}-[0-9a-f-]{27})$", created)
+    if len(ids) != 1:
+        raise AssertionError("Challenge de laboratorio nao persistido corretamente: " + created[-500:])
+    return ids[0]
+
+
+def assert_waiting_stepup_advisory(app: str) -> None:
+    deadline = time.monotonic() + POLL_TIMEOUT_SECONDS
+    last = "none"
+    while time.monotonic() < deadline:
+        last = run_sql(
+          "SELECT COALESCE(wait_event_type,'none')||':'||COALESCE(wait_event,'none') "
+          f"FROM pg_stat_activity WHERE application_name='{app}' "
+          "AND datname=current_database() ORDER BY backend_start DESC LIMIT 1"
+        )
+        if last == "Lock:advisory":
+            return
+        time.sleep(0.10)
+    raise AssertionError(f"Challenge stepup nao aguardou advisory por revisor ({last})")
+
+
+def scenario_stepup_attempts_concurrent_and_quota() -> None:
+    """Duas transacoes COMMIT/ROLLBACK + taxa real 3/h, sem OTP ou dinheiro."""
+    run_sql(
+        f"INSERT INTO auth.mfa_factors(id,user_id,factor_type,status) "
+        f"VALUES('{NONCE_FACTOR}'::uuid,'{NONCE_REVIEWER}'::uuid,'totp','verified')",
+        app="ci_stepup_factor_fake",
+    )
+    challenge = issue_stepup_challenge_for_race()
+    first = Session.start("ci_stepup_first_commit")
+    second = None
+    try:
+        first.send(context_for_nonce() + f"""
+          BEGIN;
+          SELECT catalogo_private.catalogo_asaas_reservar_tentativa_stepup_inerte('{challenge}'::uuid);
+          \\echo STEPUP_FIRST_RESERVED""")
+        a = first.until("STEPUP_FIRST_RESERVED")
+        if '"ok": true' not in a or '"verificacao_otp_realizada": false' not in a:
+            raise AssertionError("Primeiro claim stepup nao inerte: " + a[-550:])
+        second = Session.start("ci_stepup_second_replay")
+        second.send(context_for_nonce() + f"""
+          SET lock_timeout='10s';
+          BEGIN;
+          SELECT catalogo_private.catalogo_asaas_reservar_tentativa_stepup_inerte('{challenge}'::uuid);
+          \\echo STEPUP_SECOND_REJECTED""")
+        assert_waiting_stepup_advisory(second.name)
+        first.send("COMMIT;\n\\echo STEPUP_FIRST_COMMITTED")
+        first.until("STEPUP_FIRST_COMMITTED")
+        b = second.until("STEPUP_SECOND_REJECTED")
+        if '"ok": false' not in b or '"tentativa_ja_registrada"' not in b:
+            raise AssertionError("Outro processo reutilizou o challenge: " + b[-550:])
+        second.send("COMMIT;\n\\echo STEPUP_SECOND_COMMITTED")
+        second.until("STEPUP_SECOND_COMMITTED")
+        second.finish()
+        second = None
+        first.finish()
+    finally:
+        if second:
+            second.abort()
+        first.abort()
+    if run_sql(
+        "SELECT count(*) FROM public.catalogo_asaas_stepup_tentativas_inertes "
+        f"WHERE challenge_id='{challenge}'"
+    ) != "1":
+        raise AssertionError("Replay concorrente de MFA duplicou livro de tentativas")
+
+    # Primeiro observador faz rollback antes que o segundo leia a linha.
+    challenge2 = issue_stepup_challenge_for_race()
+    first = Session.start("ci_stepup_rollback_first")
+    second = None
+    try:
+        first.send(context_for_nonce() + f"""
+          BEGIN;
+          SELECT catalogo_private.catalogo_asaas_reservar_tentativa_stepup_inerte('{challenge2}'::uuid);
+          \\echo STEPUP_ROLLBACK_FIRST""")
+        a = first.until("STEPUP_ROLLBACK_FIRST")
+        if '"ok": true' not in a:
+            raise AssertionError("Primeiro claim stepup para rollback falhou: "+a[-500:])
+        second = Session.start("ci_stepup_rollback_second")
+        second.send(context_for_nonce() + f"""
+          SET lock_timeout='10s';
+          BEGIN;
+          SELECT catalogo_private.catalogo_asaas_reservar_tentativa_stepup_inerte('{challenge2}'::uuid);
+          \\echo STEPUP_ROLLBACK_SECOND""")
+        assert_waiting_stepup_advisory(second.name)
+        first.send("ROLLBACK;\n\\echo STEPUP_FIRST_ROLLBACK_DONE")
+        first.until("STEPUP_FIRST_ROLLBACK_DONE")
+        b = second.until("STEPUP_ROLLBACK_SECOND")
+        if '"ok": true' not in b or '"verificacao_otp_realizada": false' not in b:
+            raise AssertionError("Segundo claim nao prosseguiu apos rollback: "+b[-550:])
+        second.send("COMMIT;\n\\echo STEPUP_SECOND_COMMIT_DONE")
+        second.until("STEPUP_SECOND_COMMIT_DONE")
+        second.finish()
+        second = None
+        first.finish()
+    finally:
+        if second:
+            second.abort()
+        first.abort()
+    if run_sql(
+        "SELECT count(*) FROM public.catalogo_asaas_stepup_tentativas_inertes "
+        f"WHERE challenge_id='{challenge2}'"
+    ) != "1":
+        raise AssertionError("Rollback de desafio deixou registro duplo/ausente")
+
+    third = issue_stepup_challenge_for_race()
+    response = run_sql(
+        context_for_nonce() +
+        f"SELECT catalogo_private.catalogo_asaas_reservar_tentativa_stepup_inerte('{third}'::uuid);",
+        app="ci_stepup_third",
+    )
+    if '"ok": true' not in response or '"pagamento_autorizado": false' not in response:
+        raise AssertionError("Terceiro claim nao respeitou HOLD: "+response[-450:])
+
+    fourth = issue_stepup_challenge_for_race()
+    response = run_sql(
+        context_for_nonce() +
+        f"SELECT catalogo_private.catalogo_asaas_reservar_tentativa_stepup_inerte('{fourth}'::uuid);",
+        app="ci_stepup_fourth",
+    )
+    if '"limite_tres_por_hora"' not in response or '"ok": false' not in response:
+        raise AssertionError("Rate limit persistente nao recusou a quarta tentativa: "+response[-450:])
+    count = run_sql(
+        "SELECT count(*)||'|'||count(DISTINCT nonce) "
+        "FROM public.catalogo_asaas_stepup_tentativas_inertes "
+        f"WHERE revisor_id='{NONCE_REVIEWER}'"
+    )
+    if count != "3|3":
+        raise AssertionError("Rate limit persistente deveria manter tres usos distintos: "+count)
+    if run_sql(
+        f"SELECT count(*) FROM public.catalogo_asaas_saques WHERE motoboy_id='{NONCE_OWNER}'"
+    ) != "0":
+        raise AssertionError("Livro de tentativas gerou saque")
+    print("PASS: concorrencia stepup Lock:advisory COMMIT/ROLLBACK, unica tentativa "
+          "por challenge, rate 3/h e zero Pix",flush=True)
+
+
 def main() -> None:
     guard_environment()
     prepare()
@@ -591,6 +754,7 @@ def main() -> None:
     scenario_claim_first_late_evidence()
     scenario_same_nonce_concurrent()
     scenario_nonce_rollback_then_second_succeeds()
+    scenario_stepup_attempts_concurrent_and_quota()
     print("PASS: concorrencia real com 2 sessoes, IDs e usuarios sinteticos, zero Pix", flush=True)
 
 
