@@ -68,3 +68,24 @@ test("PostgreSQL CI cobre replay, uso cruzado, expiracao, prova nova, adulteraca
  ]) assert.ok(fixture.includes(msg),"Missing SQL CI assertion "+msg);
  assert.match(fixture,/ROLLBACK;\s*$/);
 });
+
+test("duas sessoes reais concorrentes usam mesmo nonce, commit vs rollback",()=>{
+ const race=fs.readFileSync("scripts/validacao-pagamentos/test-asaas-advisory-concurrency.py","utf8");
+ const ci=fs.readFileSync(".github/workflows/database-tests.yml","utf8");
+ for(const marker of [
+  "def scenario_same_nonce_concurrent()",
+  "def scenario_nonce_rollback_then_second_succeeds()",
+  "assert_waiting_nonce_lock(second.name)",
+  '"nonce_ja_observado"',
+  "ROLLBACK;",
+  "SELECT count(*)||'|'||max(resultado)",
+  "status != \"2|12000\"",
+  "Observacao de nonce gerou saque bancario",
+  "PGHOST\": \"localhost\"",
+  "PGPASSWORD\": \"local-ci-only\"",
+  "SUPABASE_SERVICE_ROLE_KEY",
+ ]) assert.ok(race.includes(marker),"race script missing "+marker);
+ assert.match(ci,/python3 scripts\/validacao-pagamentos\/test-asaas-advisory-concurrency\.py/);
+ assert.match(ci,/catalogo_asaas_race_ci/);
+ assert.match(ci,/dropdb --if-exists --force catalogo_asaas_race_ci/);
+});
