@@ -47,7 +47,7 @@ BEGIN
    v_session_id:=v_session_txt::uuid;
    v_iat:=v_iat_txt::bigint;
    v_exp:=v_exp_txt::bigint;
-   v_now:=pg_catalog.floor(pg_catalog.extract(epoch FROM pg_catalog.now()))::bigint;
+   v_now:=pg_catalog.floor(extract(epoch FROM pg_catalog.now()))::bigint;
    -- IAT recente demonstra JWT recem-emitido, nao fator MFA recem-verificado.
    v_fresh:=v_iat>=v_now-300 AND v_iat<=v_now+30 AND v_exp>v_now;
    IF NOT v_fresh THEN
