@@ -75,3 +75,35 @@ simplesmente porque um JWT apresenta AAL2.
 
 **HOLD_OBRIGATORIO. PR #39 continua DRAFT; nenhuma movimentação financeira,
 merge ou deploy desta ponte.**
+
+
+## Incremento 17 — guarda de instalacao (10/10/2026)
+
+**Bloqueio material acrescentado ao comeco da propria migration 21000**:
+antes de CREATE ROLE, schema ou wrapper, a migration executa
+`DO $ci_only_bridge$` e aborta toda a transacao caso algum criterio
+seja falso:
+
+- `current_database()='catalogo_asaas_guards_ci'`;
+- `current_setting('app.catalogo_ci_mfa_bridge',true)='enabled'`
+  configurado explicitamente para ESSA sessao psql de CI;
+- `session_user='postgres'` no container efemero de testes.
+
+Uma aplicacao acidental em STAGING/PROD usa o banco `postgres`,
+portanto falha mesmo que alguem repita o opt-in. Não transformar essa
+proteção num segredo; a garantia é não instalar em ambientes reais, não
+autenticar um requisitante HTTP.
+
+No workflow `database-tests.yml` o arquivo 21000 e o único cuja
+aplicação tem opt-in explícito. ANTES da aplicação normal o CI testa
+duas recusas reais: no clone autorizado sem opt-in; no banco
+`catalogo_ci` com opt-in. Ambos DEVEM gerar `CI_ONLY_MFA_BRIDGE`,
+e o papel NÃO pode existir depois das recusas. Somente após essas
+checagens o CI executa a migração no clone permitido e os testes
+SQL de papel, wrappers e grants.
+
+Este é um *fail-closed de engenharia*, não um canal privado operacional:
+não existe endpoint Auth MFA financeiro, credencial técnica real,
+delegação a Edge ou permissão de transferência. O status continua
+`HOLD_OBRIGATORIO`. Em especial, executar scripts de migração sem
+revisão em bancos de produção continua proibido.
