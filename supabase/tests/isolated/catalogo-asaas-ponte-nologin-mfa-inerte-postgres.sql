@@ -76,6 +76,39 @@ BEGIN
  THEN RAISE EXCEPTION 'Prova dependia de privilegio EXECUTE herdado'; END IF;
  RAISE NOTICE 'PASS: SET ROLE indireto detectado apesar de NOLOGIN e EXECUTE direto negado';
 END $membership$;
+-- Simular acesso aos wrappers APOS a concessao indireta, como se um
+-- backend/membro tivesse conseguido SET ROLE. O filtro do wrapper deve
+-- interromper a execucao SEM invocar nenhum dos cinco handlers internos.
+SET LOCAL ROLE catalogo_mfa_ponte_ci_inerte;
+DO $deny_after_membership$
+DECLARE v_resp jsonb;
+BEGIN
+ v_resp:=catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_reservar_principal_inerte(NULL,NULL,NULL);
+ IF v_resp IS NOT NULL THEN
+  RAISE EXCEPTION 'Ponte executou reserva apos membership indireta'; END IF;
+ v_resp:=catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_ler_contexto_inerte(
+  '11111111-1111-4111-8111-111111111111'::uuid);
+ IF v_resp IS NOT NULL THEN
+  RAISE EXCEPTION 'Ponte leu contexto apos membership indireta'; END IF;
+ v_resp:=catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_registrar_desafio_inerte(
+  '55555555-5555-4555-8555-555555555555'::uuid,
+  '66666666-6666-4666-8666-666666666666'::uuid,
+  '77777777-7777-4777-8777-777777777777'::uuid);
+ IF v_resp IS NOT NULL THEN
+  RAISE EXCEPTION 'Ponte registrou challenge apos membership indireta'; END IF;
+ v_resp:=catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_ler_tentativa_inerte(
+  '44444444-4444-4444-8444-444444444444'::uuid);
+ IF v_resp IS NOT NULL THEN
+  RAISE EXCEPTION 'Ponte leu tentativa apos membership indireta'; END IF;
+ v_resp:=catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_consumir_desafio_inerte(
+  '55555555-5555-4555-8555-555555555555'::uuid,
+  '66666666-6666-4666-8666-666666666666'::uuid,
+  '77777777-7777-4777-8777-777777777777'::uuid);
+ IF v_resp IS NOT NULL THEN
+  RAISE EXCEPTION 'Ponte consumiu challenge apos membership indireta'; END IF;
+ RAISE NOTICE 'PASS: 5 wrappers bloqueados com SET ROLE indireto via authenticated';
+END $deny_after_membership$;
+RESET ROLE;
 ROLLBACK TO SAVEPOINT ponte_mfa_transitive_membership_probe;
 DO $no_leak$
 BEGIN
