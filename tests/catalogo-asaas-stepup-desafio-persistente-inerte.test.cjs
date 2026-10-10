@@ -18,12 +18,14 @@ test("persistencia privada vincula challenge a nonce documental unico e sessao",
   "f.id=v_fator AND f.user_id=v_i.revisor_id",
   "f.factor_type::text='totp' AND f.status::text='verified'",
   "v_dossie->>'hash_final_registrado_sha256' IS DISTINCT FROM v_i.dossie_hash_sha256",
+  "v_matriz_hash IS DISTINCT FROM v_i.matriz_hash_sha256",
+  "v_e.fingerprint_sha256 IS DISTINCT FROM v_i.fingerprint_creditos_sha256",
   "v_financeiro->>'composicao_inalterada_e_financiada' IS DISTINCT FROM 'true'",
   "NEW.revisor_id:=v_i.revisor_id",
   "NEW.sessao_id:=v_i.sessao_id",
   "NEW.fator_id:=v_fator",
   "NEW.estado:='desafio_emitido_sem_verificacao'",
-  "NEW.expira_em:=pg_catalog.least(v_hora+interval '2 minutes',v_i.expira_em)"
+  "NEW.expira_em:=least(v_hora+interval '2 minutes',v_i.expira_em)"
  ])assert.ok(migration.includes(s),"Missing invariant "+s);
 });
 test("sem endpoint, MFA comprovado ou autorizacao financeira",()=>{
