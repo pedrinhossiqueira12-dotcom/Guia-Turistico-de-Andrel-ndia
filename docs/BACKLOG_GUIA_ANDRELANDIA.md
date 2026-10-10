@@ -30,7 +30,7 @@ Não marcar uma issue como concluída apenas porque possui commit. Registrar o h
 | Issue | Etapa | Estado | Dependência principal |
 |---|---|---|---|
 | [#40](https://github.com/pedrinhossiqueira12-dotcom/Guia-Turistico-de-Andrel-ndia/issues/40) | 1/6 — Âncora externa de auditoria | **EM TESTES** | Guardar e recuperar cópias independentes |
-| [#41](https://github.com/pedrinhossiqueira12-dotcom/Guia-Turistico-de-Andrel-ndia/issues/41) | 2/6 — Conciliação bancária e destinatário Pix | **PENDENTE** | Evidência oficial do provedor e titularidade |
+| [#41](https://github.com/pedrinhossiqueira12-dotcom/Guia-Turistico-de-Andrel-ndia/issues/41) | 2/6 — Conciliação bancária e destinatário Pix | **EM DESENVOLVIMENTO** | Matriz de conflitos em homologação; titularidade e prova bancária seguem pendentes |
 | [#42](https://github.com/pedrinhossiqueira12-dotcom/Guia-Turistico-de-Andrel-ndia/issues/42) | 3/6 — Autorização/dupla conferência | **PENDENTE** | #41, autorização apropriada |
 | [#43](https://github.com/pedrinhossiqueira12-dotcom/Guia-Turistico-de-Andrel-ndia/issues/43) | 4/6 — Liberação ou quitação de reserva | **PENDENTE** | #41–#42; prova bancária e consistência transacional |
 | [#44](https://github.com/pedrinhossiqueira12-dotcom/Guia-Turistico-de-Andrel-ndia/issues/44) | 5/6 — Testes finais de segurança | **PENDENTE** | #40–#43 |
@@ -83,7 +83,7 @@ As issues #48–#54 usam **PENDENTE** quando ainda não foi feita auditoria comp
 ## Próxima execução sugerida
 
 1. Completar #40 (armazenamento realmente independente das âncoras).
-2. Iniciar #41 com contrato técnico e evidência de identidade do destinatário, mantendo HOLD sempre que o provedor não comprovar os detalhes.
+2. Prosseguir #41: validar a matriz somente-leitura e a trilha de evidências; obter especificação e prova da identidade do destinatário original. Manter HOLD sempre que o provedor não comprovar os detalhes.
 3. Paralelizar revisão de #46, #47, #48 e #54 sem liberar produção.
 
 **Atualizado em:** 10 de outubro de 2026. **Backlog dinâmico:** issues do GitHub prevalecem sobre este documento quando houver edição posterior.
