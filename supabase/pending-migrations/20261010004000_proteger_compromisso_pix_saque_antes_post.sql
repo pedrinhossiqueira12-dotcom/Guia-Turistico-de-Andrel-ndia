@@ -15,11 +15,25 @@ BEGIN
  IF TG_OP='INSERT' THEN
   -- Não aceitar "prova" inserida retroativamente no mesmo INSERT do saque.
   IF NEW.pix_destino_sha256 IS NOT NULL
-   OR NEW.pix_destino_registrado_em IS NOT NULL THEN
+   OR NEW.pix_destino_registrado_em IS NOT NULL
+   OR NEW.status IS DISTINCT FROM 'reservado'
+   OR NEW.transferencia_id IS NOT NULL THEN
    RAISE EXCEPTION 'Compromisso Pix deve ser registrado apos criar reserva, antes da transferencia'
     USING ERRCODE='23514';
   END IF;
   RETURN NEW;
+ END IF;
+
+ -- A reserva recém-criada jamais pode associar uma transferência ou
+ -- passar a ENVIADO antes de ter um HMAC local com hora fixada. Este bloqueio
+ -- não equivale a confirmação do provedor, e os registros anteriores à migração
+ -- continuam como legados sem alegação de prova independente.
+ IF OLD.status='reservado' AND OLD.transferencia_id IS NULL
+  AND (NEW.transferencia_id IS NOT NULL
+       OR NEW.status IN ('enviado','concluido'))
+  AND (OLD.pix_destino_sha256 IS NULL OR OLD.pix_destino_registrado_em IS NULL) THEN
+  RAISE EXCEPTION 'Saque sem HMAC original imutavel nao pode ser enviado nem vinculado ao banco'
+   USING ERRCODE='23514';
  END IF;
 
  -- Nunca permitir que o cliente/admin invente ou mude a hora da prova.
@@ -74,7 +88,7 @@ BEGIN
   'compromisso_com_carimbo_prospectivo',
    v_s.pix_destino_sha256 IS NOT NULL AND
    v_s.pix_destino_registrado_em IS NOT NULL,
-  'registrado_antes_da_associacao_bancaria_local',
+  'registro_local_sem_transferencia_associada_agora',
    v_s.pix_destino_sha256 IS NOT NULL AND
    v_s.pix_destino_registrado_em IS NOT NULL AND
    v_s.transferencia_id IS NULL,
