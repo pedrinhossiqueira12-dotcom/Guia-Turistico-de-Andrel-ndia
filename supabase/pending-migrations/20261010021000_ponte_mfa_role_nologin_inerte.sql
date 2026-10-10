@@ -45,6 +45,11 @@ CREATE FUNCTION catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_reservar_princ
      ON bridge.rolname='catalogo_mfa_ponte_ci_inerte'
    WHERE exposed.rolname IN ('anon','authenticated','service_role','authenticator')
      AND pg_catalog.pg_has_role(exposed.oid,bridge.oid,'MEMBER')
+  ) AND NOT EXISTS (
+   SELECT 1 FROM pg_catalog.pg_auth_members member_edge
+   JOIN pg_catalog.pg_roles guarded_bridge
+     ON guarded_bridge.oid=member_edge.roleid
+   WHERE guarded_bridge.rolname='catalogo_mfa_ponte_ci_inerte'
   ); $bridge$;
 REVOKE ALL ON FUNCTION catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_reservar_principal_inerte(uuid,uuid,uuid)
  FROM PUBLIC,anon,authenticated,service_role;
@@ -65,6 +70,11 @@ CREATE FUNCTION catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_ler_contexto_i
      ON bridge.rolname='catalogo_mfa_ponte_ci_inerte'
    WHERE exposed.rolname IN ('anon','authenticated','service_role','authenticator')
      AND pg_catalog.pg_has_role(exposed.oid,bridge.oid,'MEMBER')
+  ) AND NOT EXISTS (
+   SELECT 1 FROM pg_catalog.pg_auth_members member_edge
+   JOIN pg_catalog.pg_roles guarded_bridge
+     ON guarded_bridge.oid=member_edge.roleid
+   WHERE guarded_bridge.rolname='catalogo_mfa_ponte_ci_inerte'
   ); $bridge$;
 REVOKE ALL ON FUNCTION catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_ler_contexto_inerte(uuid)
  FROM PUBLIC,anon,authenticated,service_role;
@@ -85,6 +95,11 @@ CREATE FUNCTION catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_registrar_desa
      ON bridge.rolname='catalogo_mfa_ponte_ci_inerte'
    WHERE exposed.rolname IN ('anon','authenticated','service_role','authenticator')
      AND pg_catalog.pg_has_role(exposed.oid,bridge.oid,'MEMBER')
+  ) AND NOT EXISTS (
+   SELECT 1 FROM pg_catalog.pg_auth_members member_edge
+   JOIN pg_catalog.pg_roles guarded_bridge
+     ON guarded_bridge.oid=member_edge.roleid
+   WHERE guarded_bridge.rolname='catalogo_mfa_ponte_ci_inerte'
   ); $bridge$;
 REVOKE ALL ON FUNCTION catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_registrar_desafio_inerte(uuid,uuid,uuid)
  FROM PUBLIC,anon,authenticated,service_role;
@@ -105,6 +120,11 @@ CREATE FUNCTION catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_ler_tentativa_
      ON bridge.rolname='catalogo_mfa_ponte_ci_inerte'
    WHERE exposed.rolname IN ('anon','authenticated','service_role','authenticator')
      AND pg_catalog.pg_has_role(exposed.oid,bridge.oid,'MEMBER')
+  ) AND NOT EXISTS (
+   SELECT 1 FROM pg_catalog.pg_auth_members member_edge
+   JOIN pg_catalog.pg_roles guarded_bridge
+     ON guarded_bridge.oid=member_edge.roleid
+   WHERE guarded_bridge.rolname='catalogo_mfa_ponte_ci_inerte'
   ); $bridge$;
 REVOKE ALL ON FUNCTION catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_ler_tentativa_inerte(uuid)
  FROM PUBLIC,anon,authenticated,service_role;
@@ -125,6 +145,11 @@ CREATE FUNCTION catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_consumir_desaf
      ON bridge.rolname='catalogo_mfa_ponte_ci_inerte'
    WHERE exposed.rolname IN ('anon','authenticated','service_role','authenticator')
      AND pg_catalog.pg_has_role(exposed.oid,bridge.oid,'MEMBER')
+  ) AND NOT EXISTS (
+   SELECT 1 FROM pg_catalog.pg_auth_members member_edge
+   JOIN pg_catalog.pg_roles guarded_bridge
+     ON guarded_bridge.oid=member_edge.roleid
+   WHERE guarded_bridge.rolname='catalogo_mfa_ponte_ci_inerte'
   ); $bridge$;
 REVOKE ALL ON FUNCTION catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_consumir_desafio_inerte(uuid,uuid,uuid)
  FROM PUBLIC,anon,authenticated,service_role;
@@ -147,6 +172,15 @@ BEGIN
   WHERE target.rolname='catalogo_mfa_ponte_ci_inerte'
     AND member.rolname IN ('anon','authenticated','service_role','authenticator'))
  THEN RAISE EXCEPTION 'CI: role MFA foi associado a Data API'; END IF;
+ -- Esta ponte ainda NAO deve ter nenhum login tecnico operacional.
+ -- Qualquer membro DIRETO (incluindo grupos intermediarios, contas de
+ -- operadores e papeis novos) transforma a role NOLOGIN em acessivel.
+ IF EXISTS(
+  SELECT 1 FROM pg_catalog.pg_auth_members m
+  JOIN pg_catalog.pg_roles bridge ON bridge.oid=m.roleid
+  WHERE bridge.rolname='catalogo_mfa_ponte_ci_inerte'
+ ) THEN RAISE EXCEPTION
+  'CI: papel MFA deve permanecer sem NENHUM membro'; END IF;
  -- pg_auth_members direto NAO basta: um papel pode chegar aqui
  -- por heranca ou SET ROLE atraves de membros INTERMEDIARIOS. Em PG17,
  -- NOLOGIN nao impede esse caminho; pg_has_role MEMBER segue toda a cadeia.
