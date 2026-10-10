@@ -1464,7 +1464,54 @@ BEGIN
  -- So PostgreSQL OWNER pode inserir: service_role nao tem INSERT nem UPDATE.
  INSERT INTO auth.users(id) VALUES
   ('fa722222-2222-4222-8222-222222222221'::uuid),
-  ('fa722222-2222-4222-8222-222222222222'::uuid);
+  ('fa722222-2222-4222-8222-222222222222'::uuid),
+  ('fa722222-2222-4222-8222-222222222224'::uuid);
+
+ -- Indicacao de laboratorio: NAO permite autenticar, autorizar ou pagar.
+ -- Somente root postgres da fixture pode gravar esses registros.
+ BEGIN
+  INSERT INTO public.catalogo_asaas_revisores_escrow_ensaio(
+   revisor_id,indicado_por,justificativa,instrumento_sha256,
+   cadastrado_em,valido_ate)
+  VALUES('fa722222-2222-4222-8222-222222222221'::uuid,
+   'fa722222-2222-4222-8222-222222222221'::uuid,
+   'Falso autocredenciamento documental de ensaio deve ser recusado pela trigger.',
+   repeat('c',64),now(),now()+interval '7 days');
+  RAISE EXCEPTION 'Revisor de ensaio conseguiu autocredenciamento';
+ EXCEPTION WHEN check_violation THEN NULL;
+ END;
+
+ INSERT INTO public.catalogo_asaas_revisores_escrow_ensaio(
+  revisor_id,indicado_por,justificativa,instrumento_sha256,
+  cadastrado_em,valido_ate)
+ VALUES
+  ('fa722222-2222-4222-8222-222222222221'::uuid,
+   'fa722222-2222-4222-8222-222222222224'::uuid,
+   'Indicacao ficticia para observar que pareceres devem caducar com revogacao.',
+   repeat('a',64),now()-interval '100 years',now()+interval '100 years'),
+  ('fa722222-2222-4222-8222-222222222222'::uuid,
+   'fa722222-2222-4222-8222-222222222224'::uuid,
+   'Segunda pessoa ficticia habilitada apenas em ensaio descartavel de dados.',
+   repeat('b',64),now()-interval '100 years',now()+interval '100 years');
+ IF EXISTS(
+  SELECT 1 FROM public.catalogo_asaas_revisores_escrow_ensaio
+  WHERE valido_ate<>cadastrado_em+interval '7 days'
+  OR cadastrado_em<now()-interval '1 hour'
+ ) THEN RAISE EXCEPTION 'Prazo de revisor de ensaio foi forjado'; END IF;
+
+ BEGIN
+  INSERT INTO public.catalogo_asaas_escrow_pareceres_preliminares(
+   separacao_id,revisor_id,resultado,justificativa,
+   fingerprint_creditos_sha256,dossie_sequencia,dossie_hash_sha256,
+   matriz_hash_sha256,registrado_em,expira_em)
+  VALUES((v_reserva->>'separacao_id')::uuid,
+   'fa722222-2222-4222-8222-222222222224'::uuid,'manter_hold',
+   'Tentativa de parecer de pessoa nao indicada deve ser bloqueada.',
+   repeat('f',64),2,repeat('f',64),repeat('f',64),now(),now()+interval '1 day');
+  RAISE EXCEPTION 'Pessoa nao indicada escreveu parecer';
+ EXCEPTION WHEN check_violation THEN NULL;
+ END;
+
  BEGIN
   INSERT INTO public.catalogo_asaas_escrow_pareceres_preliminares(
    separacao_id,revisor_id,resultado,justificativa,
@@ -1576,6 +1623,61 @@ BEGIN
   RAISE EXCEPTION 'rollback de nova evidencia sintetica' USING ERRCODE='ZZ001';
  EXCEPTION WHEN SQLSTATE 'ZZ001' THEN NULL;
  END;
+
+ -- A revogacao nao apaga pareceres antigos: derruba apenas quorum.
+ INSERT INTO public.catalogo_asaas_revisores_escrow_revogacoes_ensaio(
+  revisor_id,revogado_por,motivo,revogado_em)
+ VALUES('fa722222-2222-4222-8222-222222222221'::uuid,
+ 'fa722222-2222-4222-8222-222222222224'::uuid,
+ 'Revogacao imediata no ensaio para invalidar uma conferencia sem apagar historico.',
+ now()-interval '10 years');
+
+ IF EXISTS(
+  SELECT 1 FROM public.catalogo_asaas_revisores_escrow_revogacoes_ensaio
+  WHERE revogado_em<now()-interval '1 hour'
+ ) THEN RAISE EXCEPTION 'Timestamp de revogacao foi aceito da requisicao'; END IF;
+
+ SELECT public.catalogo_asaas_diagnosticar_dupla_conferencia_inerte(
+  (v_reserva->>'separacao_id')::uuid) INTO v_parecer_diag;
+ IF v_parecer_diag->>'pareceres_historicos' IS DISTINCT FROM '2'
+  OR v_parecer_diag->>'pareceres_da_versao_ainda_nao_expirados' IS DISTINCT FROM '1'
+  OR v_parecer_diag->>'revisores_distintos_da_mesma_versao' IS DISTINCT FROM '1'
+  OR v_parecer_diag->>'pareceres_com_revisor_revogado' IS DISTINCT FROM '1'
+  OR v_parecer_diag->>'duas_conferencias_documentais_registradas' IS DISTINCT FROM 'false'
+  OR v_parecer_diag->>'dupla_aprovacao_financeira' IS DISTINCT FROM 'false'
+  OR v_parecer_diag->>'mfa_recente_comprovado' IS DISTINCT FROM 'false'
+ THEN RAISE EXCEPTION 'Revogacao nao derrubou quorum: %',v_parecer_diag; END IF;
+
+ BEGIN
+  INSERT INTO public.catalogo_asaas_escrow_pareceres_preliminares(
+   separacao_id,revisor_id,resultado,justificativa,
+   fingerprint_creditos_sha256,dossie_sequencia,dossie_hash_sha256,
+   matriz_hash_sha256,registrado_em,expira_em)
+  VALUES((v_reserva->>'separacao_id')::uuid,
+   'fa722222-2222-4222-8222-222222222221'::uuid,'manter_hold',
+   'A pessoa revogada nao pode protocolar parecer novo, mesmo no ensaio local.',
+   repeat('f',64),2,repeat('f',64),repeat('f',64),now(),now()+interval '1 day');
+  RAISE EXCEPTION 'Revisor revogado conseguiu novo parecer';
+ EXCEPTION WHEN check_violation THEN NULL;
+ END;
+ BEGIN
+  UPDATE public.catalogo_asaas_revisores_escrow_revogacoes_ensaio
+  SET motivo='Tentativa de alterar motivo e prova de revogacao registrada no banco.'
+  WHERE revisor_id='fa722222-2222-4222-8222-222222222221'::uuid;
+  RAISE EXCEPTION 'Revogacao foi alterada';
+ EXCEPTION WHEN check_violation THEN NULL;
+ END;
+ BEGIN
+  DELETE FROM public.catalogo_asaas_revisores_escrow_ensaio
+  WHERE revisor_id='fa722222-2222-4222-8222-222222222222'::uuid;
+  RAISE EXCEPTION 'Cadastro de revisor foi apagado';
+ EXCEPTION WHEN check_violation THEN NULL;
+ END;
+
+ IF has_table_privilege('service_role','public.catalogo_asaas_revisores_escrow_ensaio','INSERT')
+  OR has_table_privilege('service_role','public.catalogo_asaas_revisores_escrow_revogacoes_ensaio','INSERT')
+  OR has_table_privilege('authenticated','public.catalogo_asaas_revisores_escrow_ensaio','SELECT')
+ THEN RAISE EXCEPTION 'Cadastros de ensaio de revisores estao acessiveis'; END IF;
 
  IF has_table_privilege('service_role','public.catalogo_asaas_escrow_pareceres_preliminares','INSERT')
   OR has_table_privilege('authenticated','public.catalogo_asaas_escrow_pareceres_preliminares','SELECT')
