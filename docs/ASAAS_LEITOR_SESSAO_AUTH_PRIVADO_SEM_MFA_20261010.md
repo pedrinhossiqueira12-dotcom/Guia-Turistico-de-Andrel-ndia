@@ -78,6 +78,38 @@ Migração:
 - Workflow financeiro executa as fixtures em banco descartável
   e a CI nativa do Supabase também aplica as migrações novas.
 
+## Aplicação e auditoria STAGING concluídas
+
+A migração `asaas_auth_sessao_owner_only_preflight_revoked_staging_20261010`
+foi aplicada com sucesso **somente** em
+`jbttwihctuibchhcyqtl`. Consultas read-only confirmaram:
+
+- `public.catalogo_asaas_preflight_sessao_revisor_inerte()`
+  continua `SECURITY DEFINER`, mas `anon`, `authenticated`
+  e `service_role` **não têm EXECUTE**.
+- `catalogo_private.catalogo_asaas_ler_sessao_fator_auth_inerte(uuid)`
+  é `SECURITY INVOKER` e também **não tem EXECUTE** para
+  nenhuma das três roles da API.
+- Das **3 sessões atuais**, **0 passaram** no leitor privado:
+  não há TOTP verificado em nenhuma delas.
+- A consulta de um UUID que não existe retorna `NULL`.
+- Tabelas de ensaio permanecem vazias: **0 revisores, 0 desafios,
+  0 tentativas**.
+- O Security Advisor atualizado **não aponta mais**
+  `authenticated_security_definer_function_executable` para
+  o preflight financeiro. Ainda sinaliza
+  `catalogo_status_publicacao` como função SECURITY DEFINER
+  executável por `anon` e `authenticated`, e sinaliza a
+  proteção contra senhas vazadas desativada. Esses alertas são
+  **anteriores, não foram corrigidos ou silenciados** nesta etapa.
+  [Documentação do alerta SECURITY DEFINER](https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable).
+
+A CI do commit de código `a444f95e59a0f169b2d77e88644bbacf6803ca45`
+confirmou o job PostgreSQL financeiro, o bloqueio de RPC e o
+teste de contrato. A confirmação do workflow inteiro é verificada
+separadamente, pois o último job nativo pode continuar em execução
+após os testes financeiros.
+
 ## Bloqueios restantes
 
 O endpoint JWKS real de homologação
