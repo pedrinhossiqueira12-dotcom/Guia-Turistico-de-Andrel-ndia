@@ -292,6 +292,49 @@
           aviso(e.message||"Conciliação não disponível. Manter HOLD.",true);
         }finally{confronto.disabled=false;}
       });
+      const varredura=document.createElement("button");
+      varredura.type="button";varredura.className="secondary";
+      varredura.textContent="Verificar transferências repetidas (Sandbox)";
+      const resultadoVarredura=document.createElement("p");resultadoVarredura.className="muted";
+      resultadoVarredura.textContent="Varredura não realizada. Nenhuma ausência de Pix foi comprovada.";
+      varredura.addEventListener("click",async()=>{
+        varredura.disabled=true;
+        try{
+          const r=await api({acao:"auditar_historico_transferencias_excepcionais_sandbox_admin",
+            separacao_id:String(item.id||"")});
+          const a=r.relatorio;
+          if(!a||a.liberacao_autorizada!==false||a.pagamento_autorizado!==false||
+            a.baixa_realizada!==false||a.movimenta_dinheiro!==false||
+            a.ausencia_de_pix_anterior_comprovada!==false||
+            a.destinatario_original_confirmado!==false)
+            throw new Error("Auditoria não garante HOLD financeiro.");
+          resultadoVarredura.textContent="HOLD OBRIGATÓRIO — "+
+            Number(a.paginas_examinadas||0)+" páginas, "+
+            Number(a.transferencias_examinadas||0)+" transferências examinadas. "+
+            (a.listagem_consultada_ate_o_fim===true?
+             "Listagem pontual percorrida; não comprova ausência de Pix. ":
+             "AMOSTRA INCOMPLETA; não comprova ausência de Pix. ")+
+            Number(a.referencias_iguais_encontradas||0)+" registro(s) da referência, "+
+            Number(a.transferencias_distintas_com_mesma_referencia||0)+
+            " ID(s) distintos, "+
+            Number(a.referencias_com_id_diferente_do_vinculado||0)+
+            " ID(s) incompatíveis com vínculo local, "+
+            Number(a.divergencias_de_valor||0)+" valor(es) divergente(s), "+
+            Number(a.ids_repetidos_na_listagem||0)+" ID(s) repetido(s), "+
+            Number(a.estados_done_encontrados||0)+" DONE(s). "+
+            (a.id_tambem_usado_em_saque_comum===true?
+             "ALERTA: ID também pertence a saque comum. ":"")+
+            (a.vinculo_local_nao_encontrado_na_listagem===true?
+             "ALERTA: vínculo local ausente da listagem. ":"")+
+            String(a.alerta||"Investigação bancária independente obrigatória.");
+          aviso(resultadoVarredura.textContent,
+            a.conflito_identificado===true||a.listagem_consultada_ate_o_fim!==true||
+            a.referencia_ja_encontrada_no_banco===true);
+        }catch(err){
+          resultadoVarredura.textContent="Auditoria do histórico indisponível ou inconclusiva. HOLD mantido.";
+          aviso(err.message||"Falha na consulta do histórico Asaas Sandbox.",true);
+        }finally{varredura.disabled=false;}
+      });
       const area=document.createElement("details");
       const cab=document.createElement("summary");cab.textContent="Dossiê de conciliação (sem Pix)";
       const orientacao=document.createElement("p");orientacao.className="muted";
@@ -407,7 +450,7 @@
         finally{exportar.disabled=false;}
       });
       area.append(cab,orientacao,seloIntegridade,tipo,nota,hash,gravar,consultar,exportar,registros);
-      li.append(title,detail,btn,confronto,situacaoConfronto,area);lista.appendChild(li);
+      li.append(title,detail,btn,confronto,situacaoConfronto,varredura,resultadoVarredura,area);lista.appendChild(li);
     }
     if(response.ha_mais===true){
       const avisoLimite=document.createElement("li");
