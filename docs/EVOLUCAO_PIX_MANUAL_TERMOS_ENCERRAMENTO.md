@@ -150,3 +150,12 @@
 9. [ ] Somente após autorização expressa implantar em produção, começando com flags de cobrança/saque **desligadas**.
 
 **Nunca realizar Pix real, ativar Pix Automático ou mesclar PR #39 automaticamente.**
+
+
+## Etapa 2/6 — primeira matriz de conciliação excepcional (10/10/2026)
+
+- **Em desenvolvimento, somente auditoria:** `20261010001000_matriz_conciliacao_escrow_somente_leitura.sql` cria RPC privada `catalogo_asaas_matriz_conciliacao_escrow(uuid)` (`service_role` somente) e a Edge `matriz_conciliacao_escrow_admin` exige autenticação do administrador. O painel `admin-encerramentos.html` possui **Conferir evidências bancárias (somente leitura)** junto às reservas congeladas.
+- O diagnóstico cruza **somente** transferências observadas ligadas a **tipo e solicitação ID originais** da separação. Confere referência `guia-exc:<tipo>:<solicitacao_uuid>`, valor, motoboy, fotografia dos créditos tomada quando houve GET, estados registrados (`DONE`, processamento, falha/cancelamento), eventual observação `DONE` com falha e colisão de `transferencia_id` com **saque comum**. Conta todas as evidências e observações, sem corte por 100 ou 1.000 registros, retornando quantidades sem identificação de chave Pix/CPF.
+- **Bloqueio incondicional:** retorno sempre `destino_pix_original_vinculado_com_prova:false`, `destino_pix_confirmado_no_provedor:false`, `ausencia_de_pix_anterior_comprovada:false`, `evidencia_suficiente_para_liquidar:false`, `evidencia_suficiente_para_liberar:false`, `pagamento_autorizado:false`, `baixa_realizada:false` e `movimenta_dinheiro:false`. O painel **não** possui botão para liquidar ou liberar. Um `DONE` do Asaas confirma o estado observado pelo provedor **mas não valida o beneficiário** e uma ausência de GET **não demonstra** ausência de Pix prévio.
+- **Validação:** fixture PostgreSQL do STAGING em `BEGIN/ROLLBACK` criou reserva sintética R$120 e conferiu os dois estados (nenhum GET; `DONE` observado), preservando HOLD, sem persistir dados de teste. Cobertura incluída nos testes Node e CI PostgreSQL descartável.
+- **Ainda faltam:** prova bancária do destinatário/conta **original**, comprovação independente da identidade/titularidade, cenários de transferência utilizada por dois fluxos em execução real, política para estados contraditórios e tratamento de incidentes, além das etapas #42–#45. **Este registro de progresso não encerra a issue #41 nem habilita pagamentos.**
