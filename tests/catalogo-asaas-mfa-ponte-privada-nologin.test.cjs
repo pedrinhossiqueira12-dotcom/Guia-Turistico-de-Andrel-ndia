@@ -67,3 +67,17 @@ test("migration privileged bridge refuses staging, prod, wrong database and opt-
  assert.match(wf,/case "\$migration" in/);
  assert.match(wf,/\$bridge_sql"\)/);
 });
+
+test("nenhuma cadeia indireta pode expor a ponte a papeis Data API",()=>{
+ assert.match(sql,/pg_catalog\.pg_has_role\(parent\.oid,bridge\.oid,'MEMBER'\)/);
+ assert.equal((sql.match(/pg_catalog\.pg_has_role\(exposed\.oid,bridge\.oid,'MEMBER'\)/g)||[]).length,5,
+   "cinco wrappers devem recusar grants indiretos mesmo feitos apos a instalacao");
+ assert.equal((sql.match(/WHERE NOT EXISTS \(/g)||[]).length,5,
+   "cada wrapper deve negar execucao apos grant de cadeia");
+ assert.match(pg,/CREATE ROLE catalogo_ci_mfa_pivot_inerte NOLOGIN NOINHERIT/);
+ assert.match(pg,/GRANT catalogo_mfa_ponte_ci_inerte TO catalogo_ci_mfa_pivot_inerte/);
+ assert.match(pg,/GRANT catalogo_ci_mfa_pivot_inerte TO authenticated/);
+ assert.match(pg,/pg_catalog\.pg_has_role\(\s*'authenticated','catalogo_mfa_ponte_ci_inerte','SET'\)/);
+ assert.match(pg,/ROLLBACK TO SAVEPOINT ponte_mfa_transitive_membership_probe/);
+ for(const name of names) assert.match(pg,new RegExp("Ponte (?:executou|leu|registrou|consumiu) [^\\n]+apos membership indireta"));
+});
