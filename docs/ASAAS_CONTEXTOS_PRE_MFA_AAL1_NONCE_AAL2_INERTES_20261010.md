@@ -231,3 +231,29 @@ identidades devem ser recalculados de fontes server-side dentro de
 transacao PostgreSQL, e a etapa de verify deve ter prova do GoTrue
 associada ao challenge correto. Nunca converter snapshot em
 permissao de parecer, pagamento ou baixa.
+
+
+## Contrato adicional: registrar challenge unico antes de liberar tentativa (10/10/2026)
+
+O contrato CI-only da porta compartilhada ganhou a etapa registrarDesafio,
+executada DEPOIS do challenge pelo Auth falso e ANTES de devolver uma
+tentativa utilizavel. A porta deve rejeitar challenge_id repetido ate
+entre nonces distintos. Salva apenas nonce, tentativa, identidade, sessao,
+fator, separacao, hash da evidencia e expiracao. Nao recebe OTP, bearer
+ou refresh_token.
+
+Ensaio Deno sem rede testa:
+- duas instancias recebendo o mesmo challenge_id para nonces distintos;
+  apenas uma registra o desafio e recebe tentativa;
+- erro, retorno falso ou vencimento durante registro: HOLD e sem verify;
+- verificacao exige challenge ligado a snapshot original da operacao;
+- Node confere ordem challenge -> registro compartilhado -> pendente.
+
+ATENCAO: a porta continua implementada com Set/Map falsos em memoria
+para ensaio offline, nao e uma reserva PostgreSQL real e NAO autoriza MFA,
+parecer, baixa ou Pix. Backend futuro ainda requer UNIQUE e transacao
+duravel, estado compartilhado entre Edge instancias e comprovacao GoTrue
+Auth vinculada a operacao, dupla conferencia independente e prova de
+destino bancario. Nenhuma migration, Edge ou producao mudou.
+
+PR #39 permanece DRAFT / HOLD_OBRIGATORIO.
