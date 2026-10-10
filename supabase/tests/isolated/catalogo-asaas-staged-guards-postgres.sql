@@ -1232,6 +1232,8 @@ DECLARE
  v_parecer_novo jsonb;
  v_nonce_doc uuid;
  v_nonce_doc2 uuid;
+ v_stepup_id uuid;
+ v_stepup_challenge uuid:='fa766666-6666-4666-8666-666666666661'::uuid;
  v_nonce_exp uuid;
  v_nonce_result jsonb;
  v_nonce_obs jsonb;
@@ -1596,6 +1598,12 @@ BEGIN
    'aal2','fa744444-4444-4444-8444-444444444441'::uuid,
    now()+interval '1 hour');
 
+ -- O mock minimo Auth tem fator verificado somente de laboratorio.
+ INSERT INTO auth.mfa_factors(id,user_id,factor_type,status)
+ VALUES('fa744444-4444-4444-8444-444444444441'::uuid,
+ 'fa722222-2222-4222-8222-222222222221'::uuid,'totp','verified');
+
+
  SELECT catalogo_private.catalogo_asaas_iniciar_intencao_mfa_documental_ensaio(
   (v_reserva->>'separacao_id')::uuid) INTO v_nonce_result;
  IF v_nonce_result->>'ok' IS DISTINCT FROM 'false'
@@ -1629,6 +1637,65 @@ BEGIN
    AND i.dossie_hash_sha256=v_note2->>'hash_sha256'
    AND i.expira_em=i.gerado_em+interval '5 minutes'
  ) THEN RAISE EXCEPTION 'Nonce do banco nao vinculou identidade/sessao/versao'; END IF;
+ 
+ -- Persistencia de desafio MFA totalmente INERTE, com estado unico
+ -- 'desafio_emitido_sem_verificacao', nunca prova MFA real.
+ INSERT INTO public.catalogo_asaas_stepup_desafios_documentais_ensaio(
+  nonce,challenge_id,revisor_id,sessao_id,fator_id,separacao_id,
+  dossie_hash_sha256,finalidade,estado,iniciado_em,expira_em
+ ) VALUES (
+  v_nonce_doc,v_stepup_challenge,
+  'fa722222-2222-4222-8222-222222222229'::uuid,
+  'fa733333-3333-4333-8333-333333333332'::uuid,
+  'fa744444-4444-4444-8444-444444444449'::uuid,
+  (v_reserva->>'separacao_id')::uuid,repeat('b',64),
+  'consulta_documental_ensaio','desafio_emitido_sem_verificacao',
+  now()-interval '3 days',now()+interval '3 days'
+ ) RETURNING id INTO v_stepup_id;
+ IF NOT EXISTS(
+  SELECT 1 FROM public.catalogo_asaas_stepup_desafios_documentais_ensaio s
+  JOIN public.catalogo_asaas_intencoes_mfa_documentais_ensaio n ON n.nonce=s.nonce
+  WHERE s.id=v_stepup_id AND s.revisor_id=n.revisor_id
+   AND s.sessao_id=n.sessao_id AND s.separacao_id=n.separacao_id
+   AND s.dossie_hash_sha256=n.dossie_hash_sha256
+   AND s.fator_id='fa744444-4444-4444-8444-444444444441'::uuid
+   AND s.iniciado_em>=now()-interval '2 minutes'
+   AND s.expira_em<=s.iniciado_em+interval '2 minutes'
+   AND s.expira_em<=n.expira_em
+   AND s.estado='desafio_emitido_sem_verificacao'
+ ) THEN RAISE EXCEPTION 'Persistencia step-up nao corrigiu sessao/revisor/fator/carimbo'; END IF;
+ BEGIN
+  INSERT INTO public.catalogo_asaas_stepup_desafios_documentais_ensaio(nonce,challenge_id)
+  VALUES(v_nonce_doc,'fa766666-6666-4666-8666-666666666662'::uuid);
+  RAISE EXCEPTION 'Nonce aceitou desafio MFA duplicado';
+ EXCEPTION WHEN unique_violation THEN NULL;
+ END;
+ BEGIN
+  UPDATE public.catalogo_asaas_stepup_desafios_documentais_ensaio
+  SET estado='desafio_emitido_sem_verificacao'
+  WHERE id=v_stepup_id;
+  RAISE EXCEPTION 'Desafio MFA de ensaio permitiu UPDATE';
+ EXCEPTION WHEN check_violation THEN NULL;
+ END;
+ BEGIN
+  DELETE FROM public.catalogo_asaas_stepup_desafios_documentais_ensaio
+  WHERE id=v_stepup_id;
+  RAISE EXCEPTION 'Desafio MFA de ensaio permitiu DELETE';
+ EXCEPTION WHEN check_violation THEN NULL;
+ END;
+ IF has_table_privilege('anon',
+    'public.catalogo_asaas_stepup_desafios_documentais_ensaio','SELECT')
+   OR has_table_privilege('authenticated',
+    'public.catalogo_asaas_stepup_desafios_documentais_ensaio','INSERT')
+   OR has_table_privilege('service_role',
+    'public.catalogo_asaas_stepup_desafios_documentais_ensaio','INSERT')
+   OR EXISTS(
+    SELECT 1 FROM pg_catalog.pg_policies p
+    WHERE p.schemaname='public'
+     AND p.tablename='catalogo_asaas_stepup_desafios_documentais_ensaio')
+ THEN RAISE EXCEPTION 'Persistencia step-up exposta via API'; END IF;
+
+
 
  -- Outra sessao valida AAL2 do MESMO revisor: NAO pode usar esse nonce.
  PERFORM set_config('request.jwt.claims',
@@ -1677,6 +1744,45 @@ BEGIN
  v_nonce_doc2:=(v_nonce_result->>'nonce')::uuid;
  IF v_nonce_result->>'ok' IS DISTINCT FROM 'true' OR v_nonce_doc2 IS NULL
  THEN RAISE EXCEPTION 'Segundo nonce nao emitido em CI: %',v_nonce_result; END IF;
+ -- Mesmo challenge_id nao pode atravessar a fronteira de um segundo nonce.
+ BEGIN
+  INSERT INTO public.catalogo_asaas_stepup_desafios_documentais_ensaio(nonce,challenge_id)
+  VALUES(v_nonce_doc2,v_stepup_challenge);
+  RAISE EXCEPTION 'Challenge MFA reutilizado em nonce diferente';
+ EXCEPTION WHEN unique_violation THEN NULL;
+ END;
+ -- Mesmo revisor em OUTRA sessao AAL2 nao pode registrar challenge neste nonce.
+ PERFORM set_config('request.jwt.claims',
+  (v_claims||jsonb_build_object(
+    'session_id','fa733333-3333-4333-8333-333333333332'))::text,true);
+ BEGIN
+  INSERT INTO public.catalogo_asaas_stepup_desafios_documentais_ensaio(nonce,challenge_id)
+  VALUES(v_nonce_doc2,'fa766666-6666-4666-8666-666666666663'::uuid);
+  RAISE EXCEPTION 'Challenge de outra sessao foi aceito';
+ EXCEPTION WHEN check_violation THEN NULL;
+ END;
+ PERFORM set_config('request.jwt.claims',v_claims::text,true);
+ -- Fator TOTP desabilitado deve bloquear o challenge do nonce 2.
+ BEGIN
+  UPDATE auth.mfa_factors SET status='unverified'
+  WHERE id='fa744444-4444-4444-8444-444444444441'::uuid;
+  BEGIN
+   INSERT INTO public.catalogo_asaas_stepup_desafios_documentais_ensaio(nonce,challenge_id)
+   VALUES(v_nonce_doc2,'fa766666-6666-4666-8666-666666666664'::uuid);
+   RAISE EXCEPTION 'Fator TOTP unverified aceitou desafio';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
+  RAISE EXCEPTION 'Reverter status de fator de laboratorio' USING ERRCODE='ZZ004';
+ EXCEPTION WHEN SQLSTATE 'ZZ004' THEN NULL;
+ END;
+ -- Um challenge pode ser guardado para o segundo nonce apos guardas.
+ INSERT INTO public.catalogo_asaas_stepup_desafios_documentais_ensaio(nonce,challenge_id)
+ VALUES(v_nonce_doc2,'fa766666-6666-4666-8666-666666666665'::uuid);
+ IF (SELECT count(*) FROM public.catalogo_asaas_stepup_desafios_documentais_ensaio
+     WHERE nonce IN (v_nonce_doc,v_nonce_doc2)) <> 2
+ THEN RAISE EXCEPTION 'Dois nonces validos nao receberam desafios distintos'; END IF;
+
+
  -- Modificacao do dossie invalida o snapshot do novo nonce. ROLLBACK
  -- parcial preserva a prova original para todos os testes subsequentes.
  BEGIN
