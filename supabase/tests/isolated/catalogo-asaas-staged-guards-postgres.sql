@@ -994,6 +994,14 @@ DECLARE
  v_diagnostico_banco jsonb;
  v_diagnostico_reversao jsonb;
  v_evidencia jsonb;
+ v_note1 jsonb;
+ v_repeat jsonb;
+ v_note2 jsonb;
+ v_replay_err jsonb;
+ v_notes bigint;
+ v_seq2 bigint;
+ v_prev_hash text;
+ v_hash1 text;
 BEGIN
  INSERT INTO auth.users(id) VALUES(v_uid);
  INSERT INTO public.comercios_publicados(local_id,status) VALUES(v_store,'ativo');
@@ -1117,6 +1125,72 @@ BEGIN
  OR has_table_privilege('service_role',
    'public.catalogo_asaas_separacoes_excepcionais_itens','INSERT')
  THEN RAISE EXCEPTION 'Permissões do escrow estão abertas demais'; END IF;
+ -- Anotacoes humanas jamais podem se transformar em ordem de Pix.
+ SELECT public.catalogo_asaas_registrar_evento_dossie_escrow(
+  (v_reserva->>'separacao_id')::uuid,v_uid,
+  'fafa1111-2222-4333-8444-555555555551'::uuid,
+  'verificacao_banco',
+  'Consulta administrativa ao historico bancario realizada: conferencia pendente de prova externa.'
+ ) INTO v_note1;
+ IF v_note1->>'ok' IS DISTINCT FROM 'true'
+  OR v_note1->>'seq' IS DISTINCT FROM '1'
+  OR v_note1->>'repetido' IS DISTINCT FROM 'false'
+  OR v_note1->>'pagamento_autorizado' IS DISTINCT FROM 'false'
+  OR v_note1->>'liberacao_autorizada' IS DISTINCT FROM 'false'
+ THEN RAISE EXCEPTION 'Registro sequencial inicial inseguro: %',v_note1; END IF;
+
+ SELECT public.catalogo_asaas_registrar_evento_dossie_escrow(
+  (v_reserva->>'separacao_id')::uuid,v_uid,
+  'fafa1111-2222-4333-8444-555555555551'::uuid,
+  'verificacao_banco',
+  'Consulta administrativa ao historico bancario realizada: conferencia pendente de prova externa.'
+ ) INTO v_repeat;
+ IF v_repeat->>'repetido' IS DISTINCT FROM 'true'
+  OR v_repeat->>'evento_id' IS DISTINCT FROM v_note1->>'evento_id'
+ THEN RAISE EXCEPTION 'Chave idempotente gerou duplicata: %',v_repeat; END IF;
+
+ SELECT public.catalogo_asaas_registrar_evento_dossie_escrow(
+  (v_reserva->>'separacao_id')::uuid,v_uid,
+  'fafa1111-2222-4333-8444-555555555551'::uuid,
+  'contestacao',
+  'Uma contestacao distinta nao pode reutilizar chave de outra ocorrencia.'
+ ) INTO v_replay_err;
+ IF v_replay_err->>'ok' IS DISTINCT FROM 'false' THEN
+  RAISE EXCEPTION 'Chave reaproveitada com conteudo diferente: %',v_replay_err; END IF;
+
+ SELECT public.catalogo_asaas_registrar_evento_dossie_escrow(
+  (v_reserva->>'separacao_id')::uuid,v_uid,
+  'fafa1111-2222-4333-8444-555555555552'::uuid,
+  'comprovante_externo',
+  'Documento recebido fora do aplicativo para conferir conta do beneficiario, sem confirmar pagamento.',
+  repeat('a',64)
+ ) INTO v_note2;
+ IF v_note2->>'seq' IS DISTINCT FROM '2'
+ OR v_note2->>'baixa_realizada' IS DISTINCT FROM 'false' THEN
+  RAISE EXCEPTION 'Segundo registro autorizou baixa ou perdeu ordem: %',v_note2;
+ END IF;
+
+ SELECT count(*)::bigint INTO v_notes
+ FROM public.catalogo_asaas_escrow_dossie_eventos
+ WHERE separacao_id=(v_reserva->>'separacao_id')::uuid;
+ SELECT seq,hash_anterior_sha256 INTO v_seq2,v_prev_hash
+ FROM public.catalogo_asaas_escrow_dossie_eventos
+ WHERE id=(v_note2->>'evento_id')::uuid;
+ SELECT evento_sha256 INTO v_hash1
+ FROM public.catalogo_asaas_escrow_dossie_eventos
+ WHERE id=(v_note1->>'evento_id')::uuid;
+ IF v_notes<>2 OR v_seq2<>2 OR v_prev_hash IS DISTINCT FROM v_hash1
+  OR length(v_hash1)<>64 THEN
+  RAISE EXCEPTION 'Encadeamento de auditoria incorreto: % % % %',
+   v_notes,v_seq2,v_prev_hash,v_hash1;
+ END IF;
+ IF has_function_privilege('anon',
+   'public.catalogo_asaas_registrar_evento_dossie_escrow(uuid,uuid,uuid,text,text,text)','EXECUTE')
+ OR has_function_privilege('authenticated',
+   'public.catalogo_asaas_registrar_evento_dossie_escrow(uuid,uuid,uuid,text,text,text)','EXECUTE')
+ OR has_table_privilege('service_role','public.catalogo_asaas_escrow_dossie_eventos','INSERT')
+ THEN RAISE EXCEPTION 'Dossie admin possui permissao indevida'; END IF;
+
  -- Diagnostico da separacao e SOMENTE LEITURA: nunca liberar/pagar.
  SELECT public.catalogo_asaas_diagnosticar_separacao_excepcional(
   (v_reserva->>'separacao_id')::uuid) INTO v_diagnostico;
