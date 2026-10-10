@@ -12,61 +12,66 @@ BEGIN;
 -- authenticator ou qualquer conta utilizada pela Data API.
 CREATE ROLE catalogo_mfa_ponte_ci_inerte NOLOGIN NOINHERIT NOSUPERUSER
  NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
-GRANT USAGE ON SCHEMA catalogo_private TO catalogo_mfa_ponte_ci_inerte;
+-- Um schema NOVO, dedicado somente a 5 wrappers, evita conceder
+-- USAGE sobre todas as demais funcoes privadas ja existentes.
+CREATE SCHEMA catalogo_mfa_ponte_ci_inerte AUTHORIZATION postgres;
+REVOKE ALL ON SCHEMA catalogo_mfa_ponte_ci_inerte
+ FROM PUBLIC,anon,authenticated,service_role;
+GRANT USAGE ON SCHEMA catalogo_mfa_ponte_ci_inerte TO catalogo_mfa_ponte_ci_inerte;
 
 -- Opcao documental do livro: catalogo_asaas_reservar_inicio_principal_vinculado_inerte.
 -- SECURITY DEFINER isola as leituras internas, mas acesso ao wrapper
 -- exige EXECUTE exclusivo do papel NOLOGIN, sem nenhuma credencial criada.
-CREATE FUNCTION catalogo_private.catalogo_asaas_ponte_reservar_principal_inerte(p_contexto uuid,p_usuario uuid,p_sessao uuid)
+CREATE FUNCTION catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_reservar_principal_inerte(p_contexto uuid,p_usuario uuid,p_sessao uuid)
  RETURNS jsonb LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path=''
  AS $bridge$ SELECT catalogo_private.catalogo_asaas_reservar_inicio_principal_vinculado_inerte(p_contexto,p_usuario,p_sessao); $bridge$;
-REVOKE ALL ON FUNCTION catalogo_private.catalogo_asaas_ponte_reservar_principal_inerte(uuid,uuid,uuid)
+REVOKE ALL ON FUNCTION catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_reservar_principal_inerte(uuid,uuid,uuid)
  FROM PUBLIC,anon,authenticated,service_role;
-GRANT EXECUTE ON FUNCTION catalogo_private.catalogo_asaas_ponte_reservar_principal_inerte(uuid,uuid,uuid)
+GRANT EXECUTE ON FUNCTION catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_reservar_principal_inerte(uuid,uuid,uuid)
  TO catalogo_mfa_ponte_ci_inerte;
 
 -- Opcao documental do livro: catalogo_asaas_ler_contexto_prechallenge_inerte.
 -- SECURITY DEFINER isola as leituras internas, mas acesso ao wrapper
 -- exige EXECUTE exclusivo do papel NOLOGIN, sem nenhuma credencial criada.
-CREATE FUNCTION catalogo_private.catalogo_asaas_ponte_ler_contexto_inerte(p_contexto uuid)
+CREATE FUNCTION catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_ler_contexto_inerte(p_contexto uuid)
  RETURNS jsonb LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path=''
  AS $bridge$ SELECT catalogo_private.catalogo_asaas_ler_contexto_prechallenge_inerte(p_contexto); $bridge$;
-REVOKE ALL ON FUNCTION catalogo_private.catalogo_asaas_ponte_ler_contexto_inerte(uuid)
+REVOKE ALL ON FUNCTION catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_ler_contexto_inerte(uuid)
  FROM PUBLIC,anon,authenticated,service_role;
-GRANT EXECUTE ON FUNCTION catalogo_private.catalogo_asaas_ponte_ler_contexto_inerte(uuid)
+GRANT EXECUTE ON FUNCTION catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_ler_contexto_inerte(uuid)
  TO catalogo_mfa_ponte_ci_inerte;
 
 -- Opcao documental do livro: catalogo_asaas_registrar_desafio_compartilhado_inerte.
 -- SECURITY DEFINER isola as leituras internas, mas acesso ao wrapper
 -- exige EXECUTE exclusivo do papel NOLOGIN, sem nenhuma credencial criada.
-CREATE FUNCTION catalogo_private.catalogo_asaas_ponte_registrar_desafio_inerte(p_nonce uuid,p_challenge uuid,p_tentativa uuid)
+CREATE FUNCTION catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_registrar_desafio_inerte(p_nonce uuid,p_challenge uuid,p_tentativa uuid)
  RETURNS jsonb LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path=''
  AS $bridge$ SELECT catalogo_private.catalogo_asaas_registrar_desafio_compartilhado_inerte(p_nonce,p_challenge,p_tentativa); $bridge$;
-REVOKE ALL ON FUNCTION catalogo_private.catalogo_asaas_ponte_registrar_desafio_inerte(uuid,uuid,uuid)
+REVOKE ALL ON FUNCTION catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_registrar_desafio_inerte(uuid,uuid,uuid)
  FROM PUBLIC,anon,authenticated,service_role;
-GRANT EXECUTE ON FUNCTION catalogo_private.catalogo_asaas_ponte_registrar_desafio_inerte(uuid,uuid,uuid)
+GRANT EXECUTE ON FUNCTION catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_registrar_desafio_inerte(uuid,uuid,uuid)
  TO catalogo_mfa_ponte_ci_inerte;
 
 -- Opcao documental do livro: catalogo_asaas_ler_tentativa_prechallenge_inerte.
 -- SECURITY DEFINER isola as leituras internas, mas acesso ao wrapper
 -- exige EXECUTE exclusivo do papel NOLOGIN, sem nenhuma credencial criada.
-CREATE FUNCTION catalogo_private.catalogo_asaas_ponte_ler_tentativa_inerte(p_tentativa uuid)
+CREATE FUNCTION catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_ler_tentativa_inerte(p_tentativa uuid)
  RETURNS jsonb LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path=''
  AS $bridge$ SELECT catalogo_private.catalogo_asaas_ler_tentativa_prechallenge_inerte(p_tentativa); $bridge$;
-REVOKE ALL ON FUNCTION catalogo_private.catalogo_asaas_ponte_ler_tentativa_inerte(uuid)
+REVOKE ALL ON FUNCTION catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_ler_tentativa_inerte(uuid)
  FROM PUBLIC,anon,authenticated,service_role;
-GRANT EXECUTE ON FUNCTION catalogo_private.catalogo_asaas_ponte_ler_tentativa_inerte(uuid)
+GRANT EXECUTE ON FUNCTION catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_ler_tentativa_inerte(uuid)
  TO catalogo_mfa_ponte_ci_inerte;
 
 -- Opcao documental do livro: catalogo_asaas_consumir_desafio_compartilhado_inerte.
 -- SECURITY DEFINER isola as leituras internas, mas acesso ao wrapper
 -- exige EXECUTE exclusivo do papel NOLOGIN, sem nenhuma credencial criada.
-CREATE FUNCTION catalogo_private.catalogo_asaas_ponte_consumir_desafio_inerte(p_nonce uuid,p_challenge uuid,p_tentativa uuid)
+CREATE FUNCTION catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_consumir_desafio_inerte(p_nonce uuid,p_challenge uuid,p_tentativa uuid)
  RETURNS jsonb LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path=''
  AS $bridge$ SELECT catalogo_private.catalogo_asaas_consumir_desafio_compartilhado_inerte(p_nonce,p_challenge,p_tentativa); $bridge$;
-REVOKE ALL ON FUNCTION catalogo_private.catalogo_asaas_ponte_consumir_desafio_inerte(uuid,uuid,uuid)
+REVOKE ALL ON FUNCTION catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_consumir_desafio_inerte(uuid,uuid,uuid)
  FROM PUBLIC,anon,authenticated,service_role;
-GRANT EXECUTE ON FUNCTION catalogo_private.catalogo_asaas_ponte_consumir_desafio_inerte(uuid,uuid,uuid)
+GRANT EXECUTE ON FUNCTION catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_consumir_desafio_inerte(uuid,uuid,uuid)
  TO catalogo_mfa_ponte_ci_inerte;
 
 -- Defensiva: sem TABLE GRANT, sem LOGIN, sem membership dos 4 papeis
@@ -85,6 +90,9 @@ BEGIN
   WHERE target.rolname='catalogo_mfa_ponte_ci_inerte'
     AND member.rolname IN ('anon','authenticated','service_role','authenticator'))
  THEN RAISE EXCEPTION 'CI: role MFA foi associado a Data API'; END IF;
+ IF has_schema_privilege('catalogo_mfa_ponte_ci_inerte','catalogo_private','USAGE')
+  OR has_schema_privilege('catalogo_mfa_ponte_ci_inerte','catalogo_mfa_ponte_ci_inerte','CREATE')
+ THEN RAISE EXCEPTION 'CI: role MFA ganhou acesso a schema bruto ou CREATE'; END IF;
  IF has_table_privilege('catalogo_mfa_ponte_ci_inerte',
     'public.catalogo_asaas_reservas_prechallenge_compartilhadas_inertes','SELECT')
   OR has_table_privilege('catalogo_mfa_ponte_ci_inerte',
