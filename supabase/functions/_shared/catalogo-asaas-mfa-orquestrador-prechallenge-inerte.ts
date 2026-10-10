@@ -41,6 +41,8 @@ export interface RespostaBancoPrechallengeInerte {
   pagamento_autorizado: boolean;
   challenge_go_true_verificado: boolean;
   desafio_mfa_da_sessao_comprovado: boolean;
+  pode_registrar_parecer: boolean;
+  dupla_aprovacao_financeira: boolean;
   liberacao_autorizada: boolean;
   baixa_realizada: boolean;
   movimenta_dinheiro: boolean;
@@ -86,6 +88,8 @@ function sqlHOLD(v: RespostaBancoPrechallengeInerte | null | undefined): v is Re
     && v.pagamento_autorizado === false
     && v.challenge_go_true_verificado === false
     && v.desafio_mfa_da_sessao_comprovado === false
+    && v.pode_registrar_parecer === false
+    && v.dupla_aprovacao_financeira === false
     && v.liberacao_autorizada === false
     && v.baixa_realizada === false
     && v.movimenta_dinheiro === false;
