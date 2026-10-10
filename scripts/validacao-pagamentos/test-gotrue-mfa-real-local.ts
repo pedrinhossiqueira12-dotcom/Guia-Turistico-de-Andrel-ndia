@@ -40,7 +40,9 @@ function b32(source: string): Uint8Array {
 export async function totp(secret: string, whenMs: number, digits = 6): Promise<string> {
   ensure(Number.isSafeInteger(whenMs) && whenMs >= 0, "relogio invalido");
   ensure(digits === 6 || digits === 8, "quantidade de digitos invalida");
-  const key = await crypto.subtle.importKey("raw", b32(secret),
+  // WebCrypto requer backing ArrayBuffer próprio (não SharedArrayBuffer).
+  const keyBytes: Uint8Array<ArrayBuffer> = new Uint8Array(b32(secret));
+  const key = await crypto.subtle.importKey("raw", keyBytes,
     { name: "HMAC", hash: "SHA-1" }, false, ["sign"]);
   let counter = BigInt(Math.floor(whenMs / 30000));
   const input = new Uint8Array(8);
