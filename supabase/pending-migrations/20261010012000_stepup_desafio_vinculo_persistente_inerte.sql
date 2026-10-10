@@ -109,7 +109,7 @@ BEGIN
  NEW.finalidade:='consulta_documental_ensaio';
  NEW.estado:='desafio_emitido_sem_verificacao';
  NEW.iniciado_em:=v_hora;
- NEW.expira_em:=pg_catalog.least(v_hora+interval '2 minutes',v_i.expira_em);
+ NEW.expira_em:=least(v_hora+interval '2 minutes',v_i.expira_em);
  IF NEW.expira_em<=NEW.iniciado_em THEN
   RAISE EXCEPTION 'Desafio emitido fora do prazo da intencao'
    USING ERRCODE='23514';
