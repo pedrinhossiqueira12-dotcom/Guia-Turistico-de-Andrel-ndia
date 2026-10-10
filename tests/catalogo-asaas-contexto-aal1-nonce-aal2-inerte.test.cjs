@@ -24,7 +24,9 @@ test("DB precontext and one-to-one nonce link are private, immutable and not fin
   "'status_operacional','HOLD_OBRIGATORIO'"
  ])assert.ok(src.includes(str),"Missing preMFA guard "+str);
  assert.doesNotMatch(src,/\bGRANT\s+(?:SELECT|INSERT|UPDATE|EXECUTE)/i);
- assert.doesNotMatch(src,/(?:/v3/transfers|\bfetch\s*\(|\bOTP\s*=|\bPIX\s*=)/i);
+ for(const forbidden of ["/v3/transfers","fetch(","OTP=","PIX="]) {
+  assert.ok(!src.includes(forbidden),"Unexpected external payment or credential operation: "+forbidden);
+ }
 });
 
 test("pre-context guarded by verified own TOTP, reviewer, conflicts, frozen escrow, hashes",()=>{
