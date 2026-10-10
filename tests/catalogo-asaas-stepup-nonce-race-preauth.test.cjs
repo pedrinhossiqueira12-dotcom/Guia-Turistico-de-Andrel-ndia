@@ -42,3 +42,27 @@ test("resultado positivo de mock nunca libera pagamentos",()=>{
  for(const flag of ["pagamento_autorizado","liberacao_autorizada","baixa_realizada"])
   assert.match(source,new RegExp(flag+": false"));
 });
+
+
+test("challenge_id do Auth deve ser associado ao nonce no gate antes de disponibilizar tentativa",()=>{
+ const begin=source.indexOf("async iniciar(intencao:");
+ const end=source.indexOf("async confirmar(",begin);
+ const flow=source.slice(begin,end);
+ const indexChallenge=flow.indexOf("this.provider.criarDesafio(");
+ const indexRegister=flow.indexOf("this.reservaCompartilhada.registrarDesafio(");
+ const indexAvailable=flow.indexOf('registro.estado = "pendente"');
+ assert.ok(indexChallenge>=0 && indexRegister>indexChallenge && indexAvailable>indexRegister,
+   "challenge must be bound to immutable snapshot before returning a usable attempt");
+ for(const field of ["nonce: snapshot.nonce","challengeId: challenge.id",
+    "userId: sessao.userId","sessionId: sessao.sessionId",
+    "factorId: snapshot.factorId","separationId: snapshot.separationId",
+    "evidenceHash: snapshot.evidenceHash"])
+  assert.ok(flow.slice(indexRegister,indexAvailable).includes(field),
+    "shared challenge binding missing "+field);
+ for(const msg of ["desafio_ja_vinculado_ou_invalido",
+     "registro_compartilhado_desafio_indisponivel","desafio_ou_intencao_expirada"])
+  assert.ok(flow.slice(indexRegister,indexAvailable).includes(msg),
+    "missing fail-closed result "+msg);
+ assert.match(suite,/desafio emitido sem persistencia compartilhada/);
+ assert.match(suite,/desafio retornado pelo Auth foi vinculado a dois nonces/);
+});
