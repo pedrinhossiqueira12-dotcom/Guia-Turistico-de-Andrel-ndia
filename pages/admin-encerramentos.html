@@ -15,7 +15,7 @@ textarea{min-height:84px;resize:vertical} .item .row{justify-content:flex-start}
 button{border:1px solid var(--verde);border-radius:9px;background:var(--verde);color:white;padding:10px 14px;cursor:pointer}
 button.secondary{background:transparent;color:var(--verde)}button:disabled{opacity:.55;cursor:not-allowed}
 .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center;justify-content:space-between}
-small,.muted{color:#64736b}.item strong{overflow-wrap:anywhere}#listaEncerramentos,#listaAnalisesResiduais,#listaRegularizacoesSaida{list-style:none;margin:0;padding:0}
+small,.muted{color:#64736b}.item strong{overflow-wrap:anywhere}#listaEncerramentos,#listaAnalisesResiduais,#listaRegularizacoesSaida,#listaSeparacoesExcepcionais{list-style:none;margin:0;padding:0}
 #mensagem{min-height:1.5em}a{color:var(--verde)}[hidden]{display:none!important}
 </style>
 </head>
@@ -44,6 +44,10 @@ small,.muted{color:#64736b}.item strong{overflow-wrap:anywhere}#listaEncerrament
 <h2>Regularização de créditos de entregadores inativos</h2>
 <p class="muted">Pedidos de motoboys sem vínculo ativo, com R$ 100 ou mais em créditos já liberados. O valor apresentado é uma fotografia na data da solicitação, não um valor autorizado para pagamento. A revisão nunca cria transferência, baixa créditos ou marca como pago. A recusa encerra somente o pedido administrativo.</p>
 <ul id="listaRegularizacoesSaida" aria-label="Regularizações financeiras de entregadores inativos"></ul>
+<hr>
+<h2>Créditos congelados para conciliação excepcional</h2>
+<p class="muted">Lista de separações contábeis, inclusive de pedidos administrativos já recusados. Os créditos <strong>não foram pagos</strong>. O diagnóstico mostra divergências, estornos e evidências bancárias observadas, mas <strong>não autoriza desbloqueio, quitação ou Pix</strong>. A regularização definitiva exige comprovação bancária e revisão independente.</p>
+<ul id="listaSeparacoesExcepcionais" aria-label="Reservas contábeis de créditos excepcionalmente congelados"></ul>
 </section>
 <p role="status" id="mensagem"></p>
 </main>
