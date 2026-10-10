@@ -77,6 +77,24 @@ diferente, usuário anônimo, indicação ausente, indicação sintética válid
 revogação. Todo ensaio executa `BEGIN/ROLLBACK`; não autentica pessoas reais
 nem se comunica com bancos/pagamentos.
 
+## Alerta do Security Advisor Supabase
+
+O Security Advisor do STAGING sinalizou
+`authenticated_security_definer_function_executable` para esta RPC:
+`SECURITY DEFINER` é invocável pelo papel `authenticated` via Data API.
+
+Esse sinal é **real e intencional apenas neste protótipo**: a função
+precisa ler `auth.sessions`, tabela privada, sem conceder leitura direta
+aos usuários. O código não aceita identificador-alvo em parâmetro,
+consulta somente o `auth.uid()` derivado do token autenticado e não
+possui DML financeira. `SET search_path=''` reduz shadowing de objetos.
+
+**O alerta não está “resolvido”**: ele exige revisão independente de
+`SECURITY DEFINER`, validação com tokens reais de teste controlado,
+teste de vazamento entre contas e eventual migração de acesso por um
+backend com autenticação própria antes de habilitar qualquer operação
+sensível. Não reclassificar este diagnóstico como autorização MFA.
+
 ## Requisitos antes da habilitação real (#42 e #43)
 
 1. Definir responsáveis autorizados, governança de duas pessoas, conflito
