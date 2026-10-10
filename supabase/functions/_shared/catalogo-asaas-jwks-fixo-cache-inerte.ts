@@ -62,6 +62,7 @@ export class ResolvedorJwksPinadoInerte implements ProvedorIdentidadeAssinadaIne
   private readonly endpoint:string;
   private cache:{keys:JsonWebKey[];venceEm:number}|null=null;
   private emCurso:Promise<{keys:JsonWebKey[]}>|null=null;
+  private ultimoRelogio=-Infinity;
   constructor(private readonly cfg:ConfigJwksPinadoInerte){
     this.endpoint=validarOrigem(cfg);
   }
@@ -73,9 +74,13 @@ export class ResolvedorJwksPinadoInerte implements ProvedorIdentidadeAssinadaIne
 
   async buscarJwksConfiavel():Promise<{keys:JsonWebKey[]}>{
     const now=this.cfg.agoraMs();
-    if (!Number.isFinite(now)) throw new Error("JWKS_relogio_invalido");
+    if (!Number.isFinite(now) || now<this.ultimoRelogio) {
+      this.cache=null;
+      throw new Error("JWKS_relogio_retrocedeu_ou_invalido");
+    }
+    this.ultimoRelogio=now;
     if (this.cache && now<this.cache.venceEm) {
-      return {keys:this.cache.keys.map(x=>({...x}))};
+      return {keys:structuredClone(this.cache.keys)};
     }
     // Expirou? Nunca usar chave velha enquanto a rede falha.
     this.cache=null;
@@ -131,9 +136,14 @@ export class ResolvedorJwksPinadoInerte implements ProvedorIdentidadeAssinadaIne
     const ids=keys.map(k=>(k as JwkComKid).kid);
     if (new Set(ids).size!==ids.length) throw new Error("JWKS_kid_duplicado");
     const fresh=this.cfg.agoraMs();
-    if (!Number.isFinite(fresh)) throw new Error("JWKS_relogio_invalido");
+    if (!Number.isFinite(fresh) || fresh<this.ultimoRelogio) {
+      this.cache=null;
+      throw new Error("JWKS_relogio_retrocedeu_ao_buscar");
+    }
+    this.ultimoRelogio=fresh;
     // Se request atravessou a expiração e demorou, nunca retroagir TTL.
-    this.cache={keys:keys.map(k=>({...k})),venceEm:fresh+this.cfg.ttlSegundos*1000};
-    return {keys:keys.map(k=>({...k}))};
+    // Cópias profundas impedem mutação de arrays como key_ops no cache.
+    this.cache={keys:structuredClone(keys),venceEm:fresh+this.cfg.ttlSegundos*1000};
+    return {keys:structuredClone(keys)};
   }
 }
