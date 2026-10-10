@@ -62,3 +62,37 @@ https://supabase.com/docs/reference/javascript/auth-mfa-challenge
 https://supabase.com/docs/reference/javascript/auth-mfa-verify
 https://supabase.com/docs/reference/javascript/auth-getclaims
 https://supabase.com/docs/guides/auth/auth-mfa
+
+
+## Incremento posterior — leitor owner-only duravel (10/10/2026)
+
+A nova migration pendente
+`20261010019000_leituras_privadas_unchallenge_mfa_inertes.sql`
+implementa as DUAS consultas que faltavam entre o orquestrador TypeScript
+e o livro PostgreSQL da migration 18000:
+
+- `catalogo_private.catalogo_asaas_ler_contexto_prechallenge_inerte(uuid)`:
+  verifica reserva ja existente, validade, sessão AAL1 e elegibilidade
+  independente e devolve apenas o snapshot imutavel com os nomes
+  `id`, `userId`, `sessionId`, `factorId`, `separationId`,
+  `evidenceHash` e `expiresAt` em milissegundos Unix.
+- `catalogo_private.catalogo_asaas_ler_tentativa_prechallenge_inerte(uuid)`:
+  relê exclusivamente o par `nonce`, `challengeId`, `tentativa`
+  documentado nas tabelas persistentes e o snapshot respectivo; devolve
+  NULL quando a tentativa ja tiver sido consumida, quando estiver
+  expirada ou quando a sessao original deixar de estar elegivel.
+
+AMBAS são SECURITY INVOKER em schema catalogo_private, EXECUTE
+revogado para PUBLIC, anon, authenticated e service_role. Não contêm
+OTP, bearer ou refresh_token e **não permitem acionamento pela Data API**.
+
+Testes no arquivo `supabase/tests/isolated/catalogo-asaas-staged-guards-postgres.sql`
+checando snapshot original, nonce/challenge exatos, lookup inválido,
+replay após consumo, sessao convertida a AAL2 e ausência de grants.
+Testes estáticos correspondentes:
+`tests/catalogo-asaas-mfa-leituras-privadas.test.cjs`.
+
+**Ainda não há implementacao de canal owner-only para Edge, nem TOTP real
+ou autenticação financeira aprovada.** Não conceder GRANT a service_role
+para tentar conectar a Edge; projetar backend privado com credenciais,
+métodos e auditoria independentes antes de habilitar MFA.
