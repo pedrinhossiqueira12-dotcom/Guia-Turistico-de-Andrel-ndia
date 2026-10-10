@@ -41,7 +41,7 @@ BEGIN
   WHERE ns.nspname='catalogo_mfa_ponte_ci_inerte'
    AND p.proname LIKE 'catalogo_asaas_ponte_%_inerte'
    AND p.prosecdef AND p.provolatile='v'
-   AND p.proconfig @> ARRAY['search_path=']::text[])<>5
+   AND p.proconfig @> ARRAY['search_path=""']::text[])<>5
  THEN RAISE EXCEPTION 'A ponte MFA nao tem 5 wrappers DEFINER seguros'; END IF;
 END $preflight$;
 
