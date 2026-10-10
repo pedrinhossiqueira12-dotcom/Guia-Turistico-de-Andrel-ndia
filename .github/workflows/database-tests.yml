@@ -113,8 +113,10 @@ jobs:
           deno check supabase/functions/_shared/catalogo-asaas-stepup-documental-ensaio.ts
           deno check supabase/functions/_shared/catalogo-asaas-gotrue-mfa-transporte-inerte.ts
           deno check supabase/functions/_shared/catalogo-asaas-jwt-sessao-assinada-ensaio.ts
+          deno check supabase/functions/_shared/catalogo-asaas-jwks-fixo-cache-inerte.ts
+          deno check supabase/functions/tests/catalogo-asaas-jwks-fixo-cache-inerte.test.ts
           deno check supabase/functions/tests/catalogo-asaas-jwt-sessao-assinada-ensaio.test.ts
-          deno check supabase/functions/tests/catalogo-asaas-gotrue-jwt-assinado-integracao-inerte.test.ts
+          deno check supabase/functions/tests/catalogo-asaas-gotrue-jwt-assinado-integracao-inerte.test.ts supabase/functions/tests/catalogo-asaas-jwks-fixo-cache-inerte.test.ts
       - name: Test financial snapshots without database access
         run: deno test --no-check --allow-read=supabase/functions supabase/functions/tests/catalogo-financeiro.test.ts supabase/functions/tests/catalogo-checkouts-contract.test.ts supabase/functions/tests/catalogo-seguranca-pagamentos.test.ts supabase/functions/tests/catalogo-webhook-identificacao.test.ts supabase/functions/tests/catalogo-fatura-provedor.test.ts supabase/functions/tests/catalogo-asaas-stepup-documental-ensaio.test.ts supabase/functions/tests/catalogo-asaas-gotrue-mfa-transporte-inerte.test.ts supabase/functions/tests/catalogo-asaas-jwt-sessao-assinada-ensaio.test.ts supabase/functions/tests/catalogo-asaas-gotrue-jwt-assinado-integracao-inerte.test.ts
 
