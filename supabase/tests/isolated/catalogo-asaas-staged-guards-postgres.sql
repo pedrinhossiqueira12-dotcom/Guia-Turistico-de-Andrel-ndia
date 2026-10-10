@@ -1248,6 +1248,8 @@ DECLARE
  v_preconsumo jsonb;
  v_prenonce uuid;
  v_prenonce2 uuid;
+ v_precontext jsonb;
+ v_preattempt jsonb;
  v_contexto_status jsonb;
  v_nonce_vinculado jsonb;
  v_nonce_result jsonb;
@@ -1657,6 +1659,32 @@ BEGIN
   OR v_preinicio->>'pagamento_autorizado' IS DISTINCT FROM 'false'
   OR v_preinicio->>'challenge_go_true_verificado' IS DISTINCT FROM 'false'
  THEN RAISE EXCEPTION 'Reserva SQL prechallenge nao passou HOLD: %',v_preinicio; END IF;
+ -- Leitura real do SNAPSHOT de contexto deve vir da linha SQL, e NUNCA
+ -- de userId/factor/hash enviados por browser. Sem challenge neste ponto.
+ SELECT catalogo_private.catalogo_asaas_ler_contexto_prechallenge_inerte(
+  v_contexto_aal1) INTO v_precontext;
+ IF v_precontext->>'id' IS DISTINCT FROM v_contexto_aal1::text
+  OR v_precontext->>'userId' IS DISTINCT FROM
+    'fa722222-2222-4222-8222-222222222221'
+  OR v_precontext->>'sessionId' IS DISTINCT FROM
+    'fa733333-3333-4333-8333-333333333331'
+  OR v_precontext->>'factorId' IS DISTINCT FROM
+    'fa744444-4444-4444-8444-444444444441'
+  OR v_precontext->>'separationId' IS DISTINCT FROM (v_reserva->>'separacao_id')
+  OR v_precontext->>'evidenceHash' IS DISTINCT FROM
+    (SELECT fingerprint_sha256 FROM public.catalogo_asaas_separacoes_excepcionais
+     WHERE id=(v_reserva->>'separacao_id')::uuid)
+  OR (v_precontext->>'expiresAt')::bigint IS NULL
+ THEN RAISE EXCEPTION 'Leitura SQL do contexto AAL1 nao confere com Auth/Escrow: %',v_precontext; END IF;
+ SELECT catalogo_private.catalogo_asaas_ler_contexto_prechallenge_inerte(
+  'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid) INTO v_preattempt;
+ IF v_preattempt IS NOT NULL THEN
+  RAISE EXCEPTION 'Leitura de contexto ficticio encontrou dados reais'; END IF;
+ SELECT catalogo_private.catalogo_asaas_ler_tentativa_prechallenge_inerte(
+  'fa766666-6666-4666-8666-666666666681'::uuid) INTO v_preattempt;
+ IF v_preattempt IS NOT NULL THEN
+  RAISE EXCEPTION 'Leitura antecipada revelou challenge ainda nao registrado'; END IF;
+
  SELECT catalogo_private.catalogo_asaas_reservar_inicio_compartilhado_inerte(
   v_contexto_aal1) INTO v_prereplay;
  IF v_prereplay->>'ok' IS DISTINCT FROM 'false'
@@ -1670,6 +1698,21 @@ BEGIN
  IF v_predesafio->>'ok' IS DISTINCT FROM 'true'
   OR v_predesafio->>'pagamento_autorizado' IS DISTINCT FROM 'false'
  THEN RAISE EXCEPTION 'Challenge SQL nao registrou sem MFA: %',v_predesafio; END IF;
+ -- Outra instancia devera reler por tentativa, SEM mapa em memoria.
+ SELECT catalogo_private.catalogo_asaas_ler_tentativa_prechallenge_inerte(
+  'fa766666-6666-4666-8666-666666666681'::uuid) INTO v_preattempt;
+ IF v_preattempt->>'nonce' IS DISTINCT FROM v_prenonce::text
+  OR v_preattempt->>'challengeId' IS DISTINCT FROM
+    'fa766666-6666-4666-8666-666666666671'
+  OR v_preattempt->>'tentativa' IS DISTINCT FROM
+    'fa766666-6666-4666-8666-666666666681'
+  OR v_preattempt->'contexto' IS DISTINCT FROM v_precontext
+ THEN RAISE EXCEPTION 'Leitura SQL da tentativa nao mantem nonce/challenge original: %',v_preattempt; END IF;
+ SELECT catalogo_private.catalogo_asaas_ler_tentativa_prechallenge_inerte(
+  '99999999-9999-4999-8999-999999999999'::uuid) INTO v_preattempt;
+ IF v_preattempt IS NOT NULL THEN
+  RAISE EXCEPTION 'Leitura de tentativa alheia nao foi negada'; END IF;
+
  SELECT catalogo_private.catalogo_asaas_registrar_desafio_compartilhado_inerte(
   v_prenonce,'fa766666-6666-4666-8666-666666666672'::uuid,
   'fa766666-6666-4666-8666-666666666682'::uuid
@@ -1692,6 +1735,11 @@ BEGIN
   OR v_preconsumo->>'challenge_go_true_verificado' IS DISTINCT FROM 'false'
   OR v_preconsumo->>'pagamento_autorizado' IS DISTINCT FROM 'false'
  THEN RAISE EXCEPTION 'Consumo SQL nao permaneceu inerte: %',v_preconsumo; END IF;
+ SELECT catalogo_private.catalogo_asaas_ler_tentativa_prechallenge_inerte(
+  'fa766666-6666-4666-8666-666666666681'::uuid) INTO v_preattempt;
+ IF v_preattempt IS NOT NULL THEN
+  RAISE EXCEPTION 'Tentativa ja consumida foi relida apos OTP'; END IF;
+
  SELECT catalogo_private.catalogo_asaas_consumir_desafio_compartilhado_inerte(
   v_prenonce,'fa766666-6666-4666-8666-666666666671'::uuid,
   'fa766666-6666-4666-8666-666666666681'::uuid
@@ -1738,6 +1786,10 @@ BEGIN
  UPDATE auth.sessions SET aal='aal2',
   factor_id='fa744444-4444-4444-8444-444444444441'::uuid
  WHERE id='fa733333-3333-4333-8333-333333333332'::uuid;
+ SELECT catalogo_private.catalogo_asaas_ler_tentativa_prechallenge_inerte(
+  'fa766666-6666-4666-8666-666666666682'::uuid) INTO v_preattempt;
+ IF v_preattempt IS NOT NULL THEN
+  RAISE EXCEPTION 'Snapshot AAL1 foi relido apos sessao ser promovida AAL2'; END IF;
  -- Upgrade AAL2 nao prova o challenge desta operacao e nao pode
  -- reutilizar a sessao antiga para confirmar o challenge registrado.
  SELECT catalogo_private.catalogo_asaas_consumir_desafio_compartilhado_inerte(
@@ -1777,6 +1829,18 @@ BEGIN
     'catalogo_private.catalogo_asaas_registrar_desafio_compartilhado_inerte(uuid,uuid,uuid)','EXECUTE')
   OR has_function_privilege('anon',
     'catalogo_private.catalogo_asaas_consumir_desafio_compartilhado_inerte(uuid,uuid,uuid)','EXECUTE')
+  OR has_function_privilege('anon',
+    'catalogo_private.catalogo_asaas_ler_contexto_prechallenge_inerte(uuid)','EXECUTE')
+  OR has_function_privilege('authenticated',
+    'catalogo_private.catalogo_asaas_ler_contexto_prechallenge_inerte(uuid)','EXECUTE')
+  OR has_function_privilege('service_role',
+    'catalogo_private.catalogo_asaas_ler_contexto_prechallenge_inerte(uuid)','EXECUTE')
+  OR has_function_privilege('anon',
+    'catalogo_private.catalogo_asaas_ler_tentativa_prechallenge_inerte(uuid)','EXECUTE')
+  OR has_function_privilege('authenticated',
+    'catalogo_private.catalogo_asaas_ler_tentativa_prechallenge_inerte(uuid)','EXECUTE')
+  OR has_function_privilege('service_role',
+    'catalogo_private.catalogo_asaas_ler_tentativa_prechallenge_inerte(uuid)','EXECUTE')
  THEN RAISE EXCEPTION 'RPC ou tabela prechallenge compartilhada exposta ao cliente'; END IF;
  RAISE NOTICE 'PASS: prechallenge real Postgres owner-only, nonce e challenge unicos, replay, sessoes, RLS e HOLD';
 
