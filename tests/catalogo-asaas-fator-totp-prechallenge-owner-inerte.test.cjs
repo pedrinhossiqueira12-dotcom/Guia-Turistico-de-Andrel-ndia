@@ -39,7 +39,7 @@ test("factor ownership deve ser conferido ANTES da emissao do challenge GoTrue",
   "checagem_fator_totp_indisponivel",
   "sessao.aal === \"aal1\"",
   "sessionId: sessao.sessionId",
-  "factorId: intencao.factorId",
+  "factorId: snapshot.factorId",
   "HOLD_OBRIGATORIO"
  ]) assert.ok(simulator.includes(s),"Missing guard "+s);
  assert.ok(transport.includes("verificarFatorTotpAal1NoServidor"),
