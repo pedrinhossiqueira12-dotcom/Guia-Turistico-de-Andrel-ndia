@@ -68,7 +68,7 @@ function read(file){
  return {file,json,...validate(json)};
 }
 function compare(now,old){
- const a=now.json,b=old.json;
+ const a=now.json||now,b=old.json||old;
  for(const k of ["separacao_id","tipo","solicitacao_id","motoboy_id",
   "valor_centavos","creditos","fingerprint_creditos_sha256"]){
   if(a[k]!==b[k])fail("Cadastro original da reserva divergiu: "+k);
