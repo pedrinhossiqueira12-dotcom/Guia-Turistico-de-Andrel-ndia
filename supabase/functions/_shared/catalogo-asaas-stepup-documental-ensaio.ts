@@ -32,6 +32,14 @@ export interface PortaDeAutenticacaoFalsa {
   // "inicio" pode ser sessao AAL1 (factorId ainda nulo em auth.sessions).
   // "apos_verificacao" exige AAL2 + factorId correto. CI somente.
   autenticarToken(token: string, fase?: "inicio" | "apos_verificacao"): Promise<SessaoAferidaEmEnsaio | null>;
+  // Leitor de titularidade de fator TOTP em auth.mfa_factors,
+  // obrigatório ANTES do challenge quando a sessão é AAL1.
+  // Nao verifica OTP nem prova a operacao.
+  verificarFatorTotpAal1(args: {
+    userId: string;
+    sessionId: string;
+    factorId: string;
+  }): Promise<boolean>;
   criarDesafio(args: {
     bearerToken: string;
     factorId: string;
@@ -133,6 +141,23 @@ export class SimuladorStepUpDocumental {
       || !(sessao.aal === "aal1" && sessao.factorId === null
         || sessao.aal === "aal2" && sessao.factorId === intencao.factorId)) {
       return resposta(false, "sessao_ou_fator_divergente");
+    }
+    // O JWT AAL1 não inclui fator associado à sessão: antes de permitir
+    // o challenge, exigir que o fator TOTP VERIFICADO pertença ao usuário
+    // de auth.sessions. O banco backend é independente do JWT do cliente.
+    if (sessao.aal === "aal1") {
+      try {
+        const fatorElegivel = await this.provider.verificarFatorTotpAal1({
+          userId: sessao.userId,
+          sessionId: sessao.sessionId,
+          factorId: intencao.factorId,
+        });
+        if (fatorElegivel !== true) {
+          return resposta(false, "fator_totp_nao_elegivel");
+        }
+      } catch {
+        return resposta(false, "checagem_fator_totp_indisponivel");
+      }
     }
     // Nao aceitar duplicar desafio ativo para o mesmo nonce.
     if ([...this.tentativas.values()].some(r => r.intencao.nonce === intencao.nonce)) {
