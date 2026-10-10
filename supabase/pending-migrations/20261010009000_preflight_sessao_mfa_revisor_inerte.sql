@@ -54,7 +54,7 @@ BEGIN
     v_restricoes:=pg_catalog.array_append(v_restricoes,'jwt_expirado_ou_nao_recente');
    END IF;
    IF v_jwt->>'aal' IS DISTINCT FROM 'aal2'
-     OR coalesce((v_jwt->>'is_anonymous')::boolean,false)
+     OR (v_jwt->>'is_anonymous') IS DISTINCT FROM 'false'
    THEN
     v_restricoes:=pg_catalog.array_append(v_restricoes,'aal2_ausente');
    ELSIF v_fresh THEN
