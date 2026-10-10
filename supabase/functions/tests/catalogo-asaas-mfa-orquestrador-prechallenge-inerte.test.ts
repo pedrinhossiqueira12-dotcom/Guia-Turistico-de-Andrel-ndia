@@ -4,6 +4,7 @@ import {
   type ContextoPrivadoPrechallengeInerte,
   type LivroPrivadoPrechallengeInerte,
   type RespostaBancoPrechallengeInerte,
+  type ResultadoOrquestradorInerte,
 } from "../_shared/catalogo-asaas-mfa-orquestrador-prechallenge-inerte.ts";
 import type {
   PortaDeAutenticacaoFalsa, SessaoAferidaEmEnsaio,
@@ -34,10 +35,10 @@ const sql=(v:Flags):RespostaBancoPrechallengeInerte=>({
  pode_registrar_parecer:false,dupla_aprovacao_financeira:false,
  liberacao_autorizada:false,baixa_realizada:false,movimenta_dinheiro:false,
 });
-function hold(v:Record<string,unknown>){
+function hold(v:ResultadoOrquestradorInerte){
  for(const name of ["desafio_mfa_real_comprovado","pagamento_autorizado",
   "liberacao_autorizada","parecer_financeiro_autorizado","baixa_realizada",
-  "movimenta_dinheiro"])assert(v[name]===false,"Financas indevidamente abertas: "+name);
+  "movimenta_dinheiro"] as const)assert(v[name]===false,"Financas indevidamente abertas: "+name);
  assert(v.status_operacional==="HOLD_OBRIGATORIO","HOLD retirado");
 }
 function lab(opts:{
