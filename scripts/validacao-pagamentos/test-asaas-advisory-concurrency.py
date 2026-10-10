@@ -183,8 +183,8 @@ def prepare() -> None:
     INSERT INTO auth.users(id) VALUES ('{OWNER_A}'),('{OWNER_B}'),('{OWNER_C}');
     INSERT INTO public.catalogo_asaas_saldos_residuais
       (id,motoboy_id,saldo_snapshot_centavos,motivo)
-    VALUES ('{REQUEST_B}','{OWNER_B}',12000,'inatividade'),
-           ('{REQUEST_C}','{OWNER_C}',12000,'inatividade');
+    VALUES ('{REQUEST_B}','{OWNER_B}',2500,'inatividade'),
+           ('{REQUEST_C}','{OWNER_C}',2500,'inatividade');
     UPDATE public.catalogo_asaas_saldos_residuais
       SET status='recusada',analisado_por=motoboy_id,
           finalizado_em=now(),detalhe_revisao='CI: simulacao sem pagamento'
@@ -209,7 +209,7 @@ def scenario_evidence_first_cross_owner() -> None:
         a.send(f"""BEGIN;
         INSERT INTO public.catalogo_asaas_transferencias_excepcionais_auditoria
           (tipo,solicitacao_id,motoboy_id,valor_centavos,transferencia_id,referencia_externa)
-        VALUES ('residual','{REQUEST_B}','{OWNER_B}',12000,
+        VALUES ('residual','{REQUEST_B}','{OWNER_B}',2500,
           '{TRANSFER_A}','guia-exc:residual:{REQUEST_B}');
         \\echo EVIDENCE_READY""")
         a.until("EVIDENCE_READY")
@@ -258,7 +258,7 @@ def scenario_claim_first_late_evidence() -> None:
         b.send(f"""SET lock_timeout='10s';
         INSERT INTO public.catalogo_asaas_transferencias_excepcionais_auditoria
           (tipo,solicitacao_id,motoboy_id,valor_centavos,transferencia_id,referencia_externa)
-        VALUES ('residual','{REQUEST_C}','{OWNER_C}',12000,
+        VALUES ('residual','{REQUEST_C}','{OWNER_C}',2500,
           '{TRANSFER_C}','guia-exc:residual:{REQUEST_C}');
         \\echo LATE_EVIDENCE_RECORDED""")
         assert_waiting_advisory(b.name)
