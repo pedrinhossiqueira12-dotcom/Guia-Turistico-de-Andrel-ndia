@@ -587,6 +587,119 @@ async function matrizConciliacaoEscrowAdmin(uid:string,body:Record<string,unknow
  return respond({success:true,matriz:{...matriz,consultas_get:consultas},
   mensagem:"Matriz e trilha local de GETs somente leitura. Nenhuma observação comprova destinatário; a reserva continua congelada."});
 }
+// Etapa #41 — varredura explicita e LIMITADA do historico Asaas Sandbox.
+// GET /transfers e paginado. Este relatorio encontra referencias repetidas
+// e vinculos locais divergentes, mas NUNCA prova ausencia de Pix anterior,
+// identidade do beneficiario original, nem autoriza liberar/baixar saldo.
+// Nao retorna os objetos brutos do Asaas: eles podem conter dados bancarios e PII.
+async function auditarHistoricoTransferenciasExcepcionaisSandboxAdmin(
+ uid:string,body:Record<string,unknown>
+){
+ if(uid!==ADMIN_USER_ID)throw new Failure("Acesso restrito à administração.",403);
+ if(ENVIRONMENT!=="sandbox")
+  throw new Failure("Varredura de historico excepcional permitida somente no Sandbox.",403);
+ if(!ASAAS_TOKEN)throw new Failure("Asaas Sandbox indisponível sem credencial.",503);
+ const id=value(body.separacao_id,70);
+ check(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id),
+  "Identificador da separação inválido.",400);
+ const {data:reserva,error:reservaError}=await db.from("catalogo_asaas_separacoes_excepcionais")
+  .select("id,tipo,solicitacao_id,motoboy_id,valor_centavos,situacao")
+  .eq("id",id).maybeSingle();
+ if(reservaError||!reserva||reserva.situacao!=="congelada")
+  throw new Failure("Separação congelada não encontrada; não consultar banco.",404);
+ const {data:vinculo,error:vinculoError}=await db.from(
+  "catalogo_asaas_transferencias_excepcionais_auditoria")
+  .select("transferencia_id,referencia_externa,valor_centavos,motoboy_id")
+  .eq("tipo",reserva.tipo).eq("solicitacao_id",reserva.solicitacao_id).maybeSingle();
+ if(vinculoError)throw new Failure("Vínculo bancário local indisponível; manter HOLD.",503);
+ const referencia="guia-exc:"+reserva.tipo+":"+reserva.solicitacao_id;
+ const idVinculado=typeof vinculo?.transferencia_id==="string"?vinculo.transferencia_id:"";
+ const vinculoLocalDivergente=Boolean(vinculo)&&(
+  vinculo?.referencia_externa!==referencia||
+  Number(vinculo?.valor_centavos)!==Number(reserva.valor_centavos)||
+  vinculo?.motoboy_id!==reserva.motoboy_id);
+ let mesmoIdSaqueComum=false;
+ if(idVinculado){
+  const {data:saque,error:saqueError}=await db.from("catalogo_asaas_saques")
+   .select("id").eq("transferencia_id",idVinculado).maybeSingle();
+  if(saqueError)throw new Failure("Conflito com saque comum não pôde ser verificado.",503);
+  mesmoIdSaqueComum=Boolean(saque);
+ }
+ const LIMIT=100,MAX_PAGINAS=12;
+ let paginas=0,examinadas=0,referencias=0,refsDeOutroId=0;
+ let valoresDivergentes=0,idsSemReferencia=0,identificadoresInvalidos=0;
+ let listaRepetida=0,estadosDone=0,formatosAmbiguos=0;
+ const vistos=new Set<string>();
+ let completa=false;
+ for(let page=0;page<MAX_PAGINAS;page++){
+  const offset=page*LIMIT;
+  const result=await asaas("/transfers?limit="+LIMIT+"&offset="+offset);
+  if(!Array.isArray(result.data)||typeof result.hasMore!=="boolean"||
+   result.data.length>LIMIT||(result.offset!==undefined&&Number(result.offset)!==offset))
+   throw new Failure("Paginação bancária inválida: histórico inconclusivo. HOLD.",503);
+  paginas++;
+  examinadas+=result.data.length;
+  for(const raw of result.data){
+   const t=input(raw);
+   const tId=typeof t.id==="string"?t.id:"";
+   const tRef=typeof t.externalReference==="string"?t.externalReference:"";
+   const refCorresponde=tRef===referencia;
+   const idCorresponde=Boolean(idVinculado)&&tId===idVinculado;
+   if(!refCorresponde&&!idCorresponde)continue;
+   if(refCorresponde){
+    referencias++;
+    if(!tId)identificadoresInvalidos++;
+    else if(vistos.has(tId))listaRepetida++;
+    else vistos.add(tId);
+    if(idVinculado&&tId!==idVinculado)refsDeOutroId++;
+    if(t.status==="DONE")estadosDone++;
+   }
+   if(idCorresponde&&tRef!==referencia)idsSemReferencia++;
+   // Um erro de conversao deve aparecer como conflito, sem expor valor bruto.
+   try{
+    if(cents(t.value)!==Number(reserva.valor_centavos))valoresDivergentes++;
+   }catch{valoresDivergentes++;}
+   if(typeof t.status!=="string"||
+    !["PENDING","IN_BANK_PROCESSING","BLOCKED","DONE","FAILED","CANCELLED"].includes(t.status))
+    formatosAmbiguos++;
+  }
+  if(result.hasMore===false){completa=true;break;}
+  if(result.data.length===0)
+   throw new Failure("Listagem bancária vazia com hasMore=true: inconclusiva.",503);
+ }
+ const referenciasDistintas=vistos.size;
+ const conflito=refsDeOutroId>0||referenciasDistintas>1||
+  valoresDivergentes>0||idsSemReferencia>0||identificadoresInvalidos>0||
+  listaRepetida>0||formatosAmbiguos>0||mesmoIdSaqueComum||vinculoLocalDivergente;
+ return respond({success:true,relatorio:{
+  paginas_examinadas:paginas,transferencias_examinadas:examinadas,
+  pagina_limite:MAX_PAGINAS,listagem_consultada_ate_o_fim:completa,
+  referencias_iguais_encontradas:referencias,
+  transferencias_distintas_com_mesma_referencia:referenciasDistintas,
+  referencias_com_id_diferente_do_vinculado:refsDeOutroId,
+  transferencias_do_vinculo_sem_referencia:idsSemReferencia,
+  divergencias_de_valor:valoresDivergentes,
+  ids_ausentes:identificadoresInvalidos,
+  ids_repetidos_na_listagem:listaRepetida,
+  estados_done_encontrados:estadosDone,
+  estados_ambiguos:formatosAmbiguos,
+  id_tambem_usado_em_saque_comum:mesmoIdSaqueComum,
+  vinculo_local_divergente:vinculoLocalDivergente,
+  conflito_identificado:conflito,
+  // Nem listagem completa garante ausencia de transferencia feita por
+  // referencia diferente, outra conta, periodos nao cobertos ou dados externos.
+  historico_bancario_independente_comprovado:false,
+  ausencia_de_pix_anterior_comprovada:false,
+  destinatario_original_confirmado:false,
+  liberacao_autorizada:false,pagamento_autorizado:false,baixa_realizada:false,
+  movimenta_dinheiro:false,
+  alerta:conflito?
+   "Divergência ou duplicidade encontrada; manter HOLD e investigar com o Asaas.":
+   completa?
+   "Sem divergência nesta listagem pontual. Não comprova ausência de Pix nem destinatário. HOLD.":
+   "Limite de páginas atingido: amostra incompleta. HOLD obrigatório."
+ },mensagem:"Auditoria da listagem bancária somente leitura, sem Pix, baixa ou desbloqueio."});
+}
 // Dossie administrativo append-only. Evidencias sao declaracoes de apuracao,
 // NAO sao prova suficiente para liberar Pix, pagar ou marcar quitacao.
 async function listarDossieEscrowAdmin(uid:string,body:Record<string,unknown>){
@@ -1212,6 +1325,7 @@ Deno.serve(async (request:Request)=>{
    case "listar_separacoes_congeladas_admin":return await listarSeparacoesCongeladasAdmin(user.id);
    case "diagnosticar_separacao_congelada_admin":return await diagnosticarSeparacaoCongeladaAdmin(user.id,body);
    case "matriz_conciliacao_escrow_admin":return await matrizConciliacaoEscrowAdmin(user.id,body);
+   case "auditar_historico_transferencias_excepcionais_sandbox_admin":return await auditarHistoricoTransferenciasExcepcionaisSandboxAdmin(user.id,body);
    case "exportar_ancora_dossie_admin":return await exportarAncoraEscrowAdmin(user.id,body);
    case "listar_dossie_escrow_admin":return await listarDossieEscrowAdmin(user.id,body);
    case "registrar_dossie_escrow_admin":return await registrarDossieEscrowAdmin(user.id,body);
