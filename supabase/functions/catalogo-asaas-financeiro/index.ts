@@ -572,10 +572,19 @@ async function listarDossieEscrowAdmin(uid:string,body:Record<string,unknown>){
    {count:"exact"})
   .eq("separacao_id",id).order("seq",{ascending:false}).limit(100);
  if(error)throw new Failure("Histórico de conciliação indisponível.",503);
+ const integridade=await rpc("catalogo_asaas_verificar_integridade_dossie_escrow",
+  {p_separacao:id});
+ check(integridade?.ok===true&&
+  integridade?.pagamento_autorizado===false&&
+  integridade?.liberacao_autorizada===false,
+  "A leitura da integridade financeira falhou; manter reserva bloqueada.",503);
  return respond({success:true,evento_count:count,
   ha_mais:count!==null&&count>100,eventos:(data||[]).reverse(),
+  integridade,
   autorizacao_pagamento:false,liberacao_creditos:false,
-  mensagem:"Registros de auditoria sem valor de comprovante bancário ou autorização de pagamento."});
+  mensagem:integridade.integridade_valida===true?
+   "Dossiê íntegro localmente; não é prova bancária nem autoriza baixa.":
+   "ALERTA: dossiê inconsistente. Manter reserva congelada, investigar histórico."});
 }
 async function registrarDossieEscrowAdmin(uid:string,body:Record<string,unknown>){
  if(uid!==ADMIN_USER_ID)throw new Failure("Acesso restrito à administração.",403);
