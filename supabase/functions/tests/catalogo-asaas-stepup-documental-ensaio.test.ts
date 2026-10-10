@@ -188,3 +188,31 @@ Deno.test("duas verificacoes concorrentes nao verificam OTP em duplicidade",asyn
  assert(calls.filter(c=>c.action==="verify").length===1,"Auth recebeu duas verificacoes");
  assertHold(a);assertHold(b);
 });
+
+
+Deno.test("preflight do fator bloqueia challenge AAL1 sem TOTP verificado do usuario",async()=>{
+ for(const options of [{factorEligible:false},{factorError:true}]) {
+  const {auth,calls}=fake(options);
+  const res=await sim(auth).iniciar(intent(),"before");
+  assert(!res.ok &&
+    (res.motivo==="fator_totp_nao_elegivel" ||
+     res.motivo==="checagem_fator_totp_indisponivel"),
+    "challenge emitido sem confirmar titular do TOTP "+JSON.stringify(options));
+  assert(!calls.some(c=>c.action==="challenge"),"provider challenge invoked despite factor denial");
+  assert(calls.filter(c=>c.action==="preflight_factor").length===1,
+    "private factor ownership lookup not consulted");
+  assertHold(res);
+ }
+});
+Deno.test("preflight do fator usa somente identidade assinada e factor da intencao",async()=>{
+ const {auth,calls}=fake();
+ const res=await sim(auth).iniciar(intent(),"before");
+ assert(res.ok,"legitimate factor ownership guard blocked fixture");
+ const record=calls.find(c=>c.action==="preflight_factor");
+ assert(record?.userId===reviewer && record.sessionId===session
+  && record.factorId===factor,
+  "wrong identity used to check factor ownership");
+ assert(calls.some(c=>c.action==="challenge"),
+  "challenge never called after private factor ownership accepted");
+ assertHold(res);
+});
