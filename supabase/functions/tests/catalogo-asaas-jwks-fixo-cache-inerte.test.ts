@@ -182,3 +182,25 @@ Deno.test("cache devolve copia imutavel semanticamente para impedir alteracao do
  const b=await p.buscarJwksConfiavel();
  ok(b.keys[0].alg==="ES256","client mutated cached signing algorithm");
 });
+
+Deno.test("relogio retrocedendo nao pode estender vida de JWKS em cache",async()=>{
+ const kp=await keypair();
+ let now=NOW;const {http}=fake({keys:[kp.publicKey]});
+ const {p}=instance(http,()=>now,30);
+ ok((await p.buscarJwksConfiavel()).keys.length===1,"cache first issue failed");
+ now-=1000;
+ let failed=false;
+ try{await p.buscarJwksConfiavel()}catch{failed=true}
+ ok(failed,"JWKS cache accepted clock rollback");
+});
+
+Deno.test("key_ops e arrays da copia do cliente nao adulteram cache privado",async()=>{
+ const kp=await keypair();
+ const key={...kp.publicKey,key_ops:["verify"]} as PublicKey;
+ const {p}=instance(fake({keys:[key]}).http);
+ const original=await p.buscarJwksConfiavel();
+ original.keys[0].key_ops?.push("sign");
+ const another=await p.buscarJwksConfiavel();
+ ok(JSON.stringify(another.keys[0].key_ops)==='["verify"]',
+  "client changed nested JWKS cache arrays");
+});
