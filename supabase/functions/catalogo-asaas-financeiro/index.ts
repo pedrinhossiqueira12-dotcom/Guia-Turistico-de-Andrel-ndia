@@ -577,8 +577,15 @@ async function matrizConciliacaoEscrowAdmin(uid:string,body:Record<string,unknow
   matriz.movimenta_dinheiro===false&&
   matriz.destino_pix_original_vinculado_com_prova===false,
   "Matriz retornou autorização financeira insegura; operação bloqueada.",503);
- return respond({success:true,matriz,
-  mensagem:"Matriz somente leitura. Nenhuma observação comprova destinatário; a reserva continua congelada."});
+ const consultas=await rpc("catalogo_asaas_diagnosticar_consultas_get_escrow",
+  {p_separacao:id});
+ check(consultas?.ok===true&&consultas.pagamento_autorizado===false&&
+  consultas.baixa_realizada===false&&consultas.liberacao_autorizada===false&&
+  consultas.titularidade_pix_confirmada===false&&
+  consultas.ausencia_de_pix_anterior_comprovada===false,
+  "Trilha de GETs incompleta ou insegura; manter HOLD.",503);
+ return respond({success:true,matriz:{...matriz,consultas_get:consultas},
+  mensagem:"Matriz e trilha local de GETs somente leitura. Nenhuma observação comprova destinatário; a reserva continua congelada."});
 }
 // Dossie administrativo append-only. Evidencias sao declaracoes de apuracao,
 // NAO sao prova suficiente para liberar Pix, pagar ou marcar quitacao.
@@ -709,9 +716,12 @@ async function consultarERegistrarTransferenciaExcepcionalSandbox(
  const status=value(t.status,40);
  check(["PENDING","IN_BANK_PROCESSING","BLOCKED","DONE","FAILED","CANCELLED"].includes(status),
   "Estado bancário desconhecido. Registro suspenso para revisão.",409);
- return await rpc("catalogo_asaas_registrar_observacao_excepcional",{
+ // UUID novo por GET, criado no servidor apos a resposta do banco.
+ // Mesmo estado observado novamente deve originar nova linha append-only.
+ return await rpc("catalogo_asaas_registrar_consulta_get_excepcional",{
   p_tipo:tipo,p_solicitacao:solicitacaoId,p_transferencia:transferenciaId,
-  p_referencia:externalReference,p_valor_centavos:valor,p_estado:status
+  p_referencia:externalReference,p_valor_centavos:valor,p_estado:status,
+  p_consulta_id:crypto.randomUUID()
  });
 }
 async function observarTransferenciaExcepcionalSandboxAdmin(uid:string,body:Record<string,unknown>){
