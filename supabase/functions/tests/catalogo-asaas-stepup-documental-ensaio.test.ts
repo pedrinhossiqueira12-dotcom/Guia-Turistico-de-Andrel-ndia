@@ -294,3 +294,26 @@ Deno.test("demora no preflight TOTP expira nonce sem requisitar challenge",async
   "challenge tardio foi enviado ao provider");
  assertHold(result);
 });
+
+Deno.test("confirmacao: Auth lento deixa challenge vencer sem enviar OTP",async()=>{
+ let clock=NOW;
+ const {auth,calls}=fake();
+ const original=auth.autenticarToken.bind(auth);
+ auth.autenticarToken=async (token,fase)=>{
+  if(token==="before" && fase==="inicio" && calls.some(c=>c.action==="challenge")) {
+   clock+=121_000;
+  }
+  return original(token,fase);
+ };
+ const flow=sim(auth,()=>clock);
+ const issued=await flow.iniciar(intent(),"before");
+ assert(issued.ok && issued.tentativa,"challenge mock inicial falhou");
+ const result=await flow.confirmar(issued.tentativa!,"before","123456");
+ assert(!result.ok && result.motivo==="desafio_ou_intencao_expirada",
+  "challenge expirado durante reautenticacao nao foi bloqueado");
+ assert(calls.filter(c=>c.action==="verify").length===0,
+  "OTP nao deveria ser enviado apos expirar durante await Auth");
+ const retry=await flow.confirmar(issued.tentativa!,"before","123456");
+ assert(!retry.ok,"tentativa expirada nao pode voltar");
+ assertHold(result);assertHold(retry);
+});
