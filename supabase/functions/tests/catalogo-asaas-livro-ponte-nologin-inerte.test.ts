@@ -99,8 +99,11 @@ Deno.test("sem driver CI, role NOLOGIN, ou banco certo, instancia nem inicia",()
   {currentRole:"postgres"},
  ]){
   let rejected=false;
-  try{new LivroSqlPonteNoLoginInerte({...mk(()=>result()).driver,...change}
-    as ExecutorPonteMfaNoLoginSomenteCi,"isolated-ci");}
+  try{
+   const fakeDriver={...mk(()=>result()).driver,...change}
+     as ExecutorPonteMfaNoLoginSomenteCi;
+   new LivroSqlPonteNoLoginInerte(fakeDriver,"isolated-ci");
+  }
   catch(e){rejected=(e as Error).message==="ponte_nao_e_conexao_ci_descartavel";}
   assert(rejected,"ambiente ou role incorreta passou pelo guard");
  }
