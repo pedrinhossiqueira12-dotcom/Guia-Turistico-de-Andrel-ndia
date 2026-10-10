@@ -265,7 +265,18 @@
             Number(m.transferencias_com_retorno_a_processamento||0)+
             " retorno(s) a processamento após estado final, "+
             Number(m.transferencias_com_ordem_temporal_ambigua||0)+
-            " sequência(s) de horários bancários ambíguos, "+
+            " sequência(s) de horários bancários ambíguos no resumo antigo, "+
+            Number(m.consultas_get?.consultas_get_registradas||0)+
+            " GET(s) individuais preservados, "+
+            Number(m.consultas_get?.consultas_com_mesmo_estado_consecutivo||0)+
+            " consulta(s) consecutiva(s) repetindo o mesmo estado, "+
+            Number(m.consultas_get?.consultas_com_retorno_a_processamento||0)+
+            " retorno(s) ao processamento nos GETs individuais, "+
+            Number(m.consultas_get?.consultas_com_horarios_iguais||0)+
+            " empate(s) de horário nos GETs individuais, "+
+            "último GET individual (sem prova bancária final): "+
+            String(m.consultas_get?.ultimo_get_observado_nao_conclusivo||"sem registro")+", "+
+            "histórico anterior à nova auditoria NÃO comprovado, "+
             "último estado observado (não conclusivo): "+
             String(m.ultimo_estado_observado_sem_valor_de_prova||"não disponível")+", "+
             Number(m.transferencias_tambem_vinculadas_a_saques_comuns||0)+
