@@ -2,7 +2,7 @@
  * #42 | Tradutor SQL para o contrato MFA owner-only (SOMENTE CI offline).
  *
  * Nao inclui driver, credenciais, fetch, RPC PostgREST, service_role ou Edge.
- * O caller injeta um executor *falso*. Sao apenas cinco SELECT parametrizados
+ * O caller injeta um executor *falso*. Sao apenas seis SELECT parametrizados
  * que modelam as funcoes catalogo_private das migrations 18000/19000.
  *
  * NUNCA importar em produto/Edge: esta classe exige banco descartavel de CI
@@ -25,6 +25,7 @@ const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]
 const SHA256=/^[0-9a-f]{64}$/;
 const SQL = Object.freeze({
   reservar:"SELECT catalogo_private.catalogo_asaas_reservar_inicio_compartilhado_inerte($1::uuid) AS result",
+  vinculado:"SELECT catalogo_private.catalogo_asaas_reservar_inicio_principal_vinculado_inerte($1::uuid,$2::uuid,$3::uuid) AS result",
   contexto:"SELECT catalogo_private.catalogo_asaas_ler_contexto_prechallenge_inerte($1::uuid) AS result",
   registrar:"SELECT catalogo_private.catalogo_asaas_registrar_desafio_compartilhado_inerte($1::uuid,$2::uuid,$3::uuid) AS result",
   tentativa:"SELECT catalogo_private.catalogo_asaas_ler_tentativa_prechallenge_inerte($1::uuid) AS result",
@@ -93,6 +94,11 @@ export class LivroSqlOwnerPrechallengeInerte implements LivroPrivadoPrechallenge
 
   async reservarInicio(id:string):Promise<RespostaBancoPrechallengeInerte>{
     return resultado(await this.run(SQL.reservar,[id]));
+  }
+  async reservarInicioVinculado(
+    contextoId:string,userId:string,sessionId:string,
+  ):Promise<RespostaBancoPrechallengeInerte>{
+    return resultado(await this.run(SQL.vinculado,[contextoId,userId,sessionId]));
   }
   async lerContexto(id:string):Promise<ContextoPrivadoPrechallengeInerte|null>{
     const v=await this.run(SQL.contexto,[id]);
