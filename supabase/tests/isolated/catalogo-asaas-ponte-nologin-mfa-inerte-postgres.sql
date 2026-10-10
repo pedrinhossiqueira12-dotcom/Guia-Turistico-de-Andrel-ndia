@@ -18,7 +18,9 @@ BEGIN
  THEN RAISE EXCEPTION 'Ponte MFA nao e NOLOGIN sem privilegios'; END IF;
 
  IF NOT has_schema_privilege('catalogo_mfa_ponte_ci_inerte',
-       'catalogo_private','USAGE')
+       'catalogo_mfa_ponte_ci_inerte','USAGE')
+   OR has_schema_privilege('catalogo_mfa_ponte_ci_inerte','catalogo_private','USAGE')
+   OR has_schema_privilege('catalogo_mfa_ponte_ci_inerte','catalogo_mfa_ponte_ci_inerte','CREATE')
    OR has_table_privilege('catalogo_mfa_ponte_ci_inerte',
        'auth.users','SELECT')
    OR has_table_privilege('catalogo_mfa_ponte_ci_inerte',
@@ -36,7 +38,7 @@ BEGIN
 
  IF (SELECT count(*) FROM pg_catalog.pg_proc p
   JOIN pg_catalog.pg_namespace ns ON ns.oid=p.pronamespace
-  WHERE ns.nspname='catalogo_private'
+  WHERE ns.nspname='catalogo_mfa_ponte_ci_inerte'
    AND p.proname LIKE 'catalogo_asaas_ponte_%_inerte'
    AND p.prosecdef AND p.provolatile='v'
    AND p.proconfig @> ARRAY['search_path=']::text[])<>5
@@ -48,7 +50,7 @@ SET LOCAL ROLE catalogo_mfa_ponte_ci_inerte;
 DO $bridge_role$
 DECLARE v_resp jsonb; v_contexto jsonb;
 BEGIN
- v_resp:=catalogo_private.catalogo_asaas_ponte_reservar_principal_inerte(
+ v_resp:=catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_reservar_principal_inerte(
   NULL,NULL,NULL);
  IF v_resp->>'ok' IS DISTINCT FROM 'false'
   OR v_resp->>'motivo' IS DISTINCT FROM 'principal_ou_contexto_invalido'
@@ -58,7 +60,7 @@ BEGIN
   OR v_resp->>'movimenta_dinheiro' IS DISTINCT FROM 'false'
  THEN RAISE EXCEPTION 'Ponte NOLOGIN liberou estado financeiro: %',v_resp; END IF;
 
- v_resp:=catalogo_private.catalogo_asaas_ponte_reservar_principal_inerte(
+ v_resp:=catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_reservar_principal_inerte(
   '11111111-1111-4111-8111-111111111111'::uuid,
   '22222222-2222-4222-8222-222222222222'::uuid,
   '33333333-3333-4333-8333-333333333333'::uuid);
@@ -66,17 +68,17 @@ BEGIN
   OR v_resp->>'motivo' IS DISTINCT FROM 'principal_ou_contexto_divergente'
  THEN RAISE EXCEPTION 'Ponte aceitou contexto alheio: %',v_resp; END IF;
 
- v_contexto:=catalogo_private.catalogo_asaas_ponte_ler_contexto_inerte(
+ v_contexto:=catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_ler_contexto_inerte(
   '11111111-1111-4111-8111-111111111111'::uuid);
  IF v_contexto IS NOT NULL THEN
   RAISE EXCEPTION 'Ponte leu contexto sem reserva'; END IF;
 
- v_contexto:=catalogo_private.catalogo_asaas_ponte_ler_tentativa_inerte(
+ v_contexto:=catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_ler_tentativa_inerte(
   '44444444-4444-4444-8444-444444444444'::uuid);
  IF v_contexto IS NOT NULL THEN
   RAISE EXCEPTION 'Ponte leu tentativa alheia'; END IF;
 
- v_resp:=catalogo_private.catalogo_asaas_ponte_registrar_desafio_inerte(
+ v_resp:=catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_registrar_desafio_inerte(
   '55555555-5555-4555-8555-555555555555'::uuid,
   '66666666-6666-4666-8666-666666666666'::uuid,
   '77777777-7777-4777-8777-777777777777'::uuid);
@@ -84,7 +86,7 @@ BEGIN
   OR v_resp->>'pagamento_autorizado' IS DISTINCT FROM 'false'
  THEN RAISE EXCEPTION 'Ponte registrou challenge sem reserva: %',v_resp; END IF;
 
- v_resp:=catalogo_private.catalogo_asaas_ponte_consumir_desafio_inerte(
+ v_resp:=catalogo_mfa_ponte_ci_inerte.catalogo_asaas_ponte_consumir_desafio_inerte(
   '55555555-5555-4555-8555-555555555555'::uuid,
   '66666666-6666-4666-8666-666666666666'::uuid,
   '77777777-7777-4777-8777-777777777777'::uuid);
@@ -112,7 +114,7 @@ BEGIN
  FOR vfn IN
   SELECT p.oid::pg_catalog.regprocedure::text FROM pg_catalog.pg_proc p
   JOIN pg_catalog.pg_namespace ns ON ns.oid=p.pronamespace
-  WHERE ns.nspname='catalogo_private'
+  WHERE ns.nspname='catalogo_mfa_ponte_ci_inerte'
    AND p.proname LIKE 'catalogo_asaas_ponte_%_inerte'
  LOOP
   IF NOT has_function_privilege('catalogo_mfa_ponte_ci_inerte',vfn,'EXECUTE')
