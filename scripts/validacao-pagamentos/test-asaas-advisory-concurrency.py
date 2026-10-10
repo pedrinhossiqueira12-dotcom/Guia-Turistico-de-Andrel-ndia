@@ -9,6 +9,8 @@ Cenarios:
      chega depois. Deve esperar no lock do titular e ser preservada, sem baixa.
   C) duas sessoes diferentes usam o mesmo nonce documental: uma confirma,
      a outra espera LOCK no header e recebe rejeicao de replay. Zero Pix.
+  D) primeira observacao de outro nonce sofre ROLLBACK: a segunda,
+     que estava aguardando o lock, conclui sem perder nem duplicar o uso.
 
 SO executar no banco local 'catalogo_asaas_race_ci', criado e removido pelo CI.
 """
@@ -519,12 +521,76 @@ def scenario_same_nonce_concurrent() -> None:
     )
 
 
+
+def scenario_nonce_rollback_then_second_succeeds() -> None:
+    """Se a primeira transacao rollbackar, o segundo observador pode gravar."""
+    output = run_sql(
+        context_for_nonce() + """
+        SELECT catalogo_private.catalogo_asaas_iniciar_intencao_mfa_documental_ensaio(
+          (SELECT id FROM public.catalogo_asaas_separacoes_excepcionais
+           WHERE motoboy_id='fd511111-1111-4111-8111-111111111111')
+        );
+        """,
+        app="ci_nonce_rollback_seed",
+    )
+    match = re.search(r'"nonce": "([0-9a-f-]{36})"', output)
+    if not match:
+        raise AssertionError(f"Segundo nonce nao emitido para testar rollback: {output[-500:]}")
+    nonce = match.group(1)
+    first = Session.start("ci_nonce_rollback_first")
+    second = None
+    try:
+        first.send(context_for_nonce() + f"""
+          BEGIN;
+          SELECT catalogo_private.catalogo_asaas_observar_nonce_documental_ensaio('{nonce}'::uuid);
+          \\echo NONCE_ROLLBACK_FIRST_OBSERVED""")
+        result1 = first.until("NONCE_ROLLBACK_FIRST_OBSERVED")
+        if '"nonce_observado_uma_vez": true' not in result1:
+            raise AssertionError(f"Primeiro intento de rollback nao observou nonce: {result1[-500:]}")
+
+        second = Session.start("ci_nonce_rollback_second")
+        second.send(context_for_nonce() + f"""
+          SET lock_timeout='10s';
+          BEGIN;
+          SELECT catalogo_private.catalogo_asaas_observar_nonce_documental_ensaio('{nonce}'::uuid);
+          \\echo NONCE_ROLLBACK_SECOND_OBSERVED""")
+        assert_waiting_nonce_lock(second.name)
+
+        first.send("ROLLBACK;\n\\echo NONCE_FIRST_ROLLED_BACK")
+        first.until("NONCE_FIRST_ROLLED_BACK")
+        result2 = second.until("NONCE_ROLLBACK_SECOND_OBSERVED")
+        if '"nonce_observado_uma_vez": true' not in result2 or '"ok": true' not in result2:
+            raise AssertionError(f"Segundo observador ficou sem nonce apos rollback: {result2[-700:]}")
+        second.send("COMMIT;\n\\echo NONCE_ROLLBACK_SECOND_COMMITTED")
+        second.until("NONCE_ROLLBACK_SECOND_COMMITTED")
+        second.finish()
+        second = None
+        first.finish()
+    finally:
+        if second is not None:
+            second.abort()
+        first.abort()
+    result = run_sql(
+        "SELECT count(*)||'|'||max(resultado) "
+        "FROM public.catalogo_asaas_usos_nonce_documentais_ensaio "
+        f"WHERE nonce='{nonce}'"
+    )
+    if result != "1|vinculo_documental_observado":
+        raise AssertionError(f"Rollback deixou nonce duplicado/sem uso: {result}")
+    print(
+        "PASS: duas sessoes, ROLLBACK da primeira permite segundo uso atomico; "
+        "uma unica observacao persistida, sem Pix",
+        flush=True,
+    )
+
+
 def main() -> None:
     guard_environment()
     prepare()
     scenario_evidence_first_cross_owner()
     scenario_claim_first_late_evidence()
     scenario_same_nonce_concurrent()
+    scenario_nonce_rollback_then_second_succeeds()
     print("PASS: concorrencia real com 2 sessoes, IDs e usuarios sinteticos, zero Pix", flush=True)
 
 
