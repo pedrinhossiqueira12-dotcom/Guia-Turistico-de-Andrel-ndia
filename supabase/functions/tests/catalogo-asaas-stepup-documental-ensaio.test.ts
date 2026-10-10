@@ -216,3 +216,81 @@ Deno.test("preflight do fator usa somente identidade assinada e factor da intenc
   "challenge never called after private factor ownership accepted");
  assertHold(res);
 });
+
+Deno.test("race: autenticarToken pendente NAO permite dupla reserva do mesmo nonce",async()=>{
+ const {auth,calls}=fake();
+ let liberar!:()=>void;
+ const gate=new Promise<void>(resolve=>{liberar=resolve});
+ const original=auth.autenticarToken.bind(auth);
+ auth.autenticarToken=async(token,fase)=>{
+  await gate;
+  return original(token,fase);
+ };
+ const flow=sim(auth);
+ const primeira=flow.iniciar(intent(),"before");
+ const duplicada=await flow.iniciar(intent(),"before");
+ assert(!duplicada.ok && duplicada.motivo==="intencao_ja_vinculada",
+  "segundo begin entrou enquanto primeiro aguardava Auth");
+ assertHold(duplicada);
+ liberar();
+ const resultado=await primeira;
+ assert(resultado.ok,"primeira reserva legitima nao concluiu");
+ assert(calls.filter(c=>c.action==="challenge").length===1,
+  "duplo desafio escapou da reserva antes de Auth");
+ assertHold(resultado);
+});
+
+Deno.test("race: consulta TOTP suspensa nao deixa emitir dois desafios para nonce",async()=>{
+ const {auth,calls}=fake();
+ let liberar!:()=>void;
+ const gate=new Promise<void>(resolve=>{liberar=resolve});
+ const original=auth.verificarFatorTotpAal1.bind(auth);
+ auth.verificarFatorTotpAal1=async args=>{
+  await gate;
+  return original(args);
+ };
+ const flow=sim(auth);
+ const primeira=flow.iniciar(intent(),"before");
+ const duplicada=await flow.iniciar(intent(),"before");
+ assert(!duplicada.ok && duplicada.motivo==="intencao_ja_vinculada",
+  "segundo begin entrou enquanto o backend checava TOTP");
+ assert(calls.filter(c=>c.action==="challenge").length===0,
+  "challenge emitido antes de concluir consulta privada TOTP");
+ liberar();
+ const resultado=await primeira;
+ assert(resultado.ok,"consulta de fator legitima falhou");
+ assert(calls.filter(c=>c.action==="challenge").length===1,
+  "duplo desafio por nonce apos espera de fator");
+ assertHold(resultado);assertHold(duplicada);
+});
+
+Deno.test("nonce reservado falha fechado depois de Auth recusado, sem reuso silencioso",async()=>{
+ const {auth,calls}=fake({before:null});
+ const flow=sim(auth);
+ const first=await flow.iniciar(intent(),"before");
+ assert(!first.ok && first.motivo==="sessao_ou_fator_divergente",
+  "token invalido aceito");
+ const second=await flow.iniciar(intent(),"before");
+ assert(!second.ok && second.motivo==="intencao_ja_vinculada",
+  "nonce negado voltou a ser reutilizado");
+ assert(calls.filter(c=>c.action==="challenge").length===0,
+  "Auth recusado emitiu challenge");
+ assertHold(first);assertHold(second);
+});
+
+Deno.test("demora no preflight TOTP expira nonce sem requisitar challenge",async()=>{
+ let clock=NOW;
+ const {auth,calls}=fake();
+ const original=auth.verificarFatorTotpAal1.bind(auth);
+ auth.verificarFatorTotpAal1=async args=>{
+  clock+=121_000;
+  return original(args);
+ };
+ const flow=sim(auth,()=>clock);
+ const result=await flow.iniciar(intent(),"before");
+ assert(!result.ok && result.motivo==="desafio_ou_intencao_expirada",
+  "nonce venceu durante preflight mas challenge foi criado");
+ assert(calls.filter(c=>c.action==="challenge").length===0,
+  "challenge tardio foi enviado ao provider");
+ assertHold(result);
+});
