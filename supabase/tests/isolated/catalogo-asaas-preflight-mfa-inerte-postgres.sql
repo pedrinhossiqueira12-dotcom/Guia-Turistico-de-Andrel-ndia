@@ -178,6 +178,42 @@ BEGIN
 END $mfa_recent_factor$;
 RESET ROLE;
 
+-- Duas sessoes do MESMO titular podem compartilhar factor_id. O Auth
+-- registra o challenge pelo FATOR sem provar qual sessao completou a prova.
+-- Portanto a sessao B tambem observa o sinal: NUNCA autoriza a sessao B.
+INSERT INTO auth.sessions(id,user_id,aal,factor_id,not_after)
+VALUES('fa900000-0000-4000-8000-000000000011'::uuid,
+ 'fa900000-0000-4000-8000-000000000001'::uuid,
+ 'aal2','fa900000-0000-4000-8000-000000000020'::uuid,
+ now()+interval '3 hours');
+
+SET LOCAL ROLE authenticated;
+DO $same_factor_other_session$
+DECLARE
+ v_n bigint:=(extract(epoch FROM now()))::bigint;
+ v_r jsonb;
+BEGIN
+ PERFORM set_config('request.jwt.claim.role','authenticated',true);
+ PERFORM set_config('request.jwt.claim.sub',
+  'fa900000-0000-4000-8000-000000000001',true);
+ PERFORM set_config('request.jwt.claims',jsonb_build_object(
+  'sub','fa900000-0000-4000-8000-000000000001',
+  'role','authenticated','aal','aal2',
+  'session_id','fa900000-0000-4000-8000-000000000011',
+  'iat',v_n,'exp',v_n+1800,'is_anonymous',false
+ )::text,true);
+ SELECT public.catalogo_asaas_preflight_sessao_revisor_inerte() INTO v_r;
+ IF v_r->>'desafio_recente_observado_no_fator_sem_vinculo_sessao'
+    IS DISTINCT FROM 'true'
+  OR v_r->>'desafio_recente_comprovado_na_sessao_atual'
+    IS DISTINCT FROM 'false'
+  OR v_r->>'mfa_com_desafio_recente_comprovado' IS DISTINCT FROM 'false'
+  OR v_r->>'pagamento_autorizado' IS DISTINCT FROM 'false'
+ THEN RAISE EXCEPTION 'Desafio de outra sessao com mesmo fator virou autorizacao: %',v_r; END IF;
+ RAISE NOTICE 'PASS: duas sessoes no mesmo factor_id observam challenge; nenhuma recebe autorizacao';
+END $same_factor_other_session$;
+RESET ROLE;
+
 -- Mesmo fator, mas prova fora da janela: um JWT recem-renovado nao altera isso.
 UPDATE auth.mfa_challenges SET verified_at=now()-interval '15 minutes'
 WHERE id='fa900000-0000-4000-8000-000000000032'::uuid;
