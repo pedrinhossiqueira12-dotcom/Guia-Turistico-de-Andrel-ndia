@@ -49,7 +49,9 @@ export interface RespostaBancoPrechallengeInerte {
 }
 export interface LivroPrivadoPrechallengeInerte {
   // EXCLUSIVAMENTE conexão owner SQL; nao usar Data API/service_role.
-  reservarInicio(contextoId: string): Promise<RespostaBancoPrechallengeInerte>;
+  // Vincular SEMPRE a identidade AAL1 ja aferida por JWT assinado.
+  // A verificacao SQL de uid/sessao ocorre ANTES de emitir nonce.
+  reservarInicioVinculado(contextoId: string, userId: string, sessionId: string): Promise<RespostaBancoPrechallengeInerte>;
   lerContexto(contextoId: string): Promise<ContextoPrivadoPrechallengeInerte | null>;
   registrarDesafio(
     nonce: string, challengeId: string, tentativa: string,
@@ -127,10 +129,22 @@ export class OrquestradorPrechallengeInerte {
       return hold(false,"contexto_ou_bearer_invalido");
     const iniciouEm=this.agora();
     if (!Number.isFinite(iniciouEm)) return hold(false,"relogio_invalido");
-    // REGISTRA no banco antes de QUALQUER await de Auth.
-    // Falhas queimam o nonce, impedindo reprocessamentos silenciosos.
+    // PRE-AUTENTICAR antes de sequer tocar o livro: uma pessoa sem
+    // principal AAL1 valido nao consegue consumir o nonce de outra pessoa.
+    // O backend real deve verificar assinatura JWT e auth.sessions.
+    let principal: SessaoAferidaEmEnsaio | null;
+    try { principal=await this.auth.autenticarToken(bearer,"inicio"); }
+    catch { return hold(false,"auth_inicial_indisponivel"); }
+    if (!principal || principal.role!=="authenticated" || principal.anonymous!==false
+      || principal.aal!=="aal1" || principal.factorId!==null
+      || !UUID.test(principal.userId) || !UUID.test(principal.sessionId))
+      return hold(false,"sessao_aal1_divergente");
+    // SQL compara revisor_id/sessao_id do snapshot ANTES da insercao.
+    // O proprio banco revalida AAL1, TOTP e dossie sob lock FOR UPDATE.
     let reservado: RespostaBancoPrechallengeInerte;
-    try { reservado=await this.livro.reservarInicio(contextoId); }
+    try { reservado=await this.livro.reservarInicioVinculado(
+      contextoId,principal.userId,principal.sessionId,
+    ); }
     catch { return hold(false,"reserva_sql_indisponivel"); }
     if (!sqlHOLD(reservado) || reservado.ok!==true
       || typeof reservado.nonce!=="string" || !UUID.test(reservado.nonce))
@@ -143,9 +157,9 @@ export class OrquestradorPrechallengeInerte {
       || this.agora()>=Math.min(contexto.expiresAt,iniciouEm+120000))
       return hold(false,"contexto_privado_invalido_ou_expirado");
     const original=Object.freeze({...contexto});
-    let principal: SessaoAferidaEmEnsaio | null;
-    try { principal=await this.auth.autenticarToken(bearer,"inicio"); }
-    catch { return hold(false,"auth_inicial_indisponivel"); }
+    // O Auth de entrada ja foi aferido antes da reserva. Qualquer
+    // discordancia com o snapshot SQL queimaria um nonce apenas se
+    // o backend/SQL quebrasse seu contrato; o SQL deve recusar ANTES.
     if (!mesmaSessao(original,principal)) return hold(false,"sessao_aal1_divergente");
     try {
       const owns=await this.auth.verificarFatorTotpAal1({
