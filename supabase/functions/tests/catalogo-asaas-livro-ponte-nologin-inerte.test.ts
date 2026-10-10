@@ -100,8 +100,8 @@ Deno.test("sem driver CI, role NOLOGIN, ou banco certo, instancia nem inicia",()
  ]){
   let rejected=false;
   try{
-   const fakeDriver={...mk(()=>result()).driver,...change}
-     as ExecutorPonteMfaNoLoginSomenteCi;
+   const validDriver=mk(()=>result()).driver;
+   const fakeDriver=Object.assign({},validDriver,change) as ExecutorPonteMfaNoLoginSomenteCi;
    new LivroSqlPonteNoLoginInerte(fakeDriver,"isolated-ci");
   }
   catch(e){rejected=(e as Error).message==="ponte_nao_e_conexao_ci_descartavel";}
