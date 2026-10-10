@@ -69,6 +69,20 @@ export interface PortaReservaCompartilhadaMfaEmEnsaio {
     evidenceHash: string;
     expiresAt: number;
   }>): Promise<boolean>;
+  // O challenge retornado pelo Auth deve ser fixado de forma UNICA para
+  // nonce, tentativa e contexto ANTES de disponibilizar a tentativa.
+  // Na aplicacao real, UNIQUE(challenge_id) + transacao compartilham o lock.
+  registrarDesafio(args: Readonly<{
+    nonce: string;
+    tentativa: string;
+    challengeId: string;
+    userId: string;
+    sessionId: string;
+    factorId: string;
+    separationId: string;
+    evidenceHash: string;
+    expiresAt: number;
+  }>): Promise<boolean>;
   reservarVerificacao(args: Readonly<{
     nonce: string;
     tentativa: string;
@@ -249,6 +263,35 @@ export class SimuladorStepUpDocumental {
         return resposta(false, "desafio_nao_criado");
       }
       registro.challengeId = challenge.id;
+      // Uma reserva de nonce nao prova que o challenge_id e exclusivo.
+      // Nao retornar tentativa ate o armazenamento compartilhado fixar
+      // a relacao challenge -> nonce/revisor/sessao/fator/evidencia.
+      if (this.reservaCompartilhada) {
+        try {
+          const fixado = await this.reservaCompartilhada.registrarDesafio({
+            nonce: snapshot.nonce,
+            tentativa,
+            challengeId: challenge.id,
+            userId: sessao.userId,
+            sessionId: sessao.sessionId,
+            factorId: snapshot.factorId,
+            separationId: snapshot.separationId,
+            evidenceHash: snapshot.evidenceHash,
+            expiresAt: registro.expiraEm,
+          });
+          if (fixado !== true) {
+            registro.estado = "recusada";
+            return resposta(false, "desafio_ja_vinculado_ou_invalido");
+          }
+        } catch {
+          registro.estado = "recusada";
+          return resposta(false, "registro_compartilhado_desafio_indisponivel");
+        }
+        if (this.agora() >= registro.expiraEm) {
+          registro.estado = "recusada";
+          return resposta(false, "desafio_ou_intencao_expirada");
+        }
+      }
       registro.estado = "pendente";
       return resposta(true, "desafio_simulado_iniciado", tentativa);
     } catch {
