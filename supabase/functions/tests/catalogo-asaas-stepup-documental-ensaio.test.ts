@@ -447,3 +447,57 @@ Deno.test("gate de consumo indisponivel ou lento nunca envia OTP",async()=>{
     assertHold(denied);assertHold(replay);
   }
 });
+
+
+Deno.test("snapshot imutavel impede trocar operacao durante reserva compartilhada async",async()=>{
+  const {auth,calls}=fake();
+  let soltar!:()=>void;
+  let entrou!:()=>void;
+  const aguardando=new Promise<void>(resolve=>{soltar=resolve});
+  const iniciouGate=new Promise<void>(resolve=>{entrou=resolve});
+  let entrada: Record<string, unknown>|null=null;
+  let confirmacao: Record<string, unknown>|null=null;
+  const gate:PortaReservaCompartilhadaMfaEmEnsaio={
+    async reservarInicio(args) {
+      entrada={...args};
+      entrou();
+      await aguardando;
+      return true;
+    },
+    async reservarVerificacao(args) {
+      confirmacao={...args};
+      return true;
+    },
+  };
+  const original=intent();
+  const flow=new SimuladorStepUpDocumental(auth,()=>NOW,"isolated-ci",gate);
+  const inicio=flow.iniciar(original,"before");
+  await iniciouGate;
+  // Ataque TOCTOU: mutar o mesmo objeto enquanto a porta aguarda o banco.
+  original.nonce="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaab";
+  original.userId=sameOwnerOther;
+  original.sessionId=sessionOther;
+  original.factorId=factorOther;
+  original.separationId=sameOwnerOther;
+  original.evidenceHash="b".repeat(64);
+  original.expiresAt=NOW-1;
+  original.consumed=true;
+  soltar();
+  const issued=await inicio;
+  assert(issued.ok && issued.tentativa,
+    "snapshot original nao foi preservado apos a mutacao do chamador");
+  assert(calls.filter(c=>c.action==="challenge").length===1
+    && calls.some(c=>c.action==="challenge" && c.factorId===factor),
+    "challenge escapou com fator substituido durante o IO");
+  const checked=await flow.confirmar(issued.tentativa!,"before","123456");
+  assert(checked.ok,"verificacao deveria seguir identidade original congelada");
+  assert(entrada?.nonce===nonce && entrada?.userId===reviewer
+    && entrada?.factorId===factor && entrada?.evidenceHash==="a".repeat(64),
+    "a reserva recebeu dados trocados");
+  assert(confirmacao?.nonce===nonce && confirmacao?.userId===reviewer
+    && confirmacao?.sessionId===session && confirmacao?.factorId===factor
+    && confirmacao?.separationId===escrow
+    && confirmacao?.evidenceHash==="a".repeat(64),
+    "consumo recebeu campos adulterados apos a espera");
+  assertHold(issued);assertHold(checked);
+});
