@@ -130,3 +130,36 @@ Nao ativar esta classe de testes diretamente em producao.
 
 **Sem mexer no Asaas, sem implantacao Edge, sem PROD, sem saque ou Pix real,
 sem merge. PR #39 DRAFT e HOLD_OBRIGATORIO.**
+
+
+## Incremento 15 — identidade AAL1 antes da reserva (defesa contra queima por terceiros)
+
+Achado de desenho: a simulacao anterior gravava nonce antes de autenticar o
+bearer da pessoa que pede desafio. Se o identificador do contexto fosse
+descoberto, um usuario nao autorizado poderia causar negacao de servico ao
+revisor legitimo, queimando sua reserva de dois minutos.
+
+Correcao em branch PR #39 (ainda NAO instalada no STAGING):
+
+- Orquestrador agora autentica criptograficamente JWT e consulta sessao
+  AAL1 pelo provedor privado ANTES de chamar SQL. Role authenticated, nao
+  anonimato e ausencia de fator AAL2 ja verificado sao obrigatorios.
+- Nova migration `20261010020000_reserva_mfa_principal_vinculado_inerte.sql`
+  implementa `catalogo_private.catalogo_asaas_reservar_inicio_principal_vinculado_inerte`
+  com tres UUIDs. O backend passa ID de contexto, userId e sessionId
+  extraidos EXCLUSIVAMENTE do verificador Auth confiavel; a chamada faz
+  `SELECT FOR UPDATE` e compara com os valores IMUTAVEIS fixados na
+  tabela de contexto antes de delegar à funcao original. Logo, uma
+  identidade divergente recebe erro documental sem inserir nonce.
+- Os testes PostgreSQL no clone exigem zero reserva apos usuario
+  divergente, sessao divergente e valores nulos; em seguida exercitam
+  a reserva legitima e todas as protecoes anteriores de uso unico.
+- O adaptador SQL TypeScript acrescentou uma chamada somente CI com
+  `$1::uuid,$2::uuid,$3::uuid`, sem interpolacao, e as suites Deno
+  exigem que um bearer alheio NAO bloqueie o usuario legitimo.
+
+**Limite**: a nova funcao NAO valida JWT por conta propria, ela exige
+um backend privado que forneca principal previamente AUTENTICADO.
+Nao usar userId/sessionId recebidos no body HTTP. Nao ha GoTrue real
+conectado, nem acesso Data API ou Edge para essa funcao.
+Continuam HOLD_OBRIGATORIO, sem saques ou PIX real.
