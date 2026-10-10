@@ -10,7 +10,7 @@ CREATE FUNCTION catalogo_private.catalogo_asaas_checar_fator_totp_aal1_inerte(
 ) RETURNS jsonb
 LANGUAGE sql STABLE SECURITY INVOKER SET search_path=''
 AS $check_factor$
- SELECT pg_catalog.coalesce(
+ SELECT coalesce(
    (
      SELECT pg_catalog.jsonb_build_object(
        'elegivel', true,
