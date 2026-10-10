@@ -717,12 +717,21 @@ jobs:
           test -z "${SUPABASE_DB_PASSWORD:-}"
           createdb --template=catalogo_ci catalogo_asaas_guards_ci
           trap 'dropdb --if-exists --force catalogo_asaas_guards_ci' EXIT
+          # auth.jwt() e auth.sessions do Supabase nao existem no bootstrap fake:
+          # mock local separado, com guarda pelo nome do banco e opt-in.
+          # O script NUNCA usa URL/tokens de projetos reais.
+          psql -X -d catalogo_asaas_guards_ci -v ON_ERROR_STOP=1 -1 \
+            -c "SET app.catalogo_ci_mfa_mock='enabled'" \
+            -f supabase/tests/baseline/catalogo-asaas-auth-mfa-ephemeral.sql
           for migration in supabase/pending-migrations/*.sql; do
             echo "Validating staged SQL: $migration"
             psql -X -d catalogo_asaas_guards_ci -v ON_ERROR_STOP=1 -f "$migration" > /dev/null
           done
           psql -X -d catalogo_asaas_guards_ci -v ON_ERROR_STOP=1 \
             -f supabase/tests/isolated/catalogo-asaas-staged-guards-postgres.sql
+          psql -X -d catalogo_asaas_guards_ci -v ON_ERROR_STOP=1 \
+            -c "SET app.catalogo_ci_mfa_test='enabled'" \
+            -f supabase/tests/isolated/catalogo-asaas-preflight-mfa-inerte-postgres.sql
           # Criar clone separado APOS os ensaios com ROLLBACK: as duas sessoes
           # concorrentes fazem COMMIT real (dados inteiramente ficticios).
           # Este banco e sempre destruido. Nao poluir catalogo_asaas_guards_ci.
