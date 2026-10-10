@@ -110,12 +110,12 @@ export class GoTrueMfaTransporteInerte implements PortaDeAutenticacaoFalsa {
       throw new Error("Resposta GoTrue recusada");
     }
     const ct = response.headers.get("content-type") ?? "";
-    if (!/^application\\/json(?:\\s*;|$)/i.test(ct)) {
+    if (!/^application\/json(?:\s*;|$)/i.test(ct)) {
       throw new Error("Resposta GoTrue nao-JSON");
     }
     const declared = response.headers.get("content-length");
     if (declared !== null &&
-        (!/^\\d+$/.test(declared) || Number(declared) > MAX_AUTH_JSON_BYTES)) {
+        (!/^\d+$/.test(declared) || Number(declared) > MAX_AUTH_JSON_BYTES)) {
       throw new Error("Resposta GoTrue excedeu limite permitido");
     }
     const reader = response.body?.getReader();
