@@ -3,6 +3,112 @@
 -- A transacao sera revertida ate quando o teste for aprovado.
 BEGIN;
 
+-- Compromisso Pix prospectivo: WRITE-ONCE, sem transferencia ou baixa.
+DO $pix_compromisso_original$
+DECLARE
+ v_uid uuid:='edededed-eded-4ede-8ede-ededededed71';
+ v_saque uuid;
+ v_sem_destino uuid;
+ v_hora timestamptz;
+ v_hora2 timestamptz;
+ v_diag jsonb;
+ v_bloqueios integer:=0;
+BEGIN
+ INSERT INTO auth.users(id) VALUES(v_uid);
+ INSERT INTO public.catalogo_asaas_saques(motoboy_id,valor_centavos)
+ VALUES(v_uid,10000) RETURNING id INTO v_saque;
+
+ -- Primeira gravacao so e permitida com reserva sem referencia externa.
+ UPDATE public.catalogo_asaas_saques
+ SET pix_destino_sha256=repeat('a',64) WHERE id=v_saque;
+ SELECT pix_destino_registrado_em INTO v_hora
+ FROM public.catalogo_asaas_saques WHERE id=v_saque;
+ IF v_hora IS NULL THEN
+  RAISE EXCEPTION 'HMAC Pix inicial sem timestamp local';
+ END IF;
+ UPDATE public.catalogo_asaas_saques SET pix_destino_sha256=repeat('a',64)
+ WHERE id=v_saque;
+ SELECT pix_destino_registrado_em INTO v_hora2
+ FROM public.catalogo_asaas_saques WHERE id=v_saque;
+ IF v_hora2 IS DISTINCT FROM v_hora THEN
+  RAISE EXCEPTION 'Repetir HMAC igual modificou timestamp original';
+ END IF;
+
+ BEGIN
+  UPDATE public.catalogo_asaas_saques SET pix_destino_sha256=repeat('b',64)
+  WHERE id=v_saque;
+  RAISE EXCEPTION 'HMAC de destino Pix trocado indevidamente';
+ EXCEPTION WHEN SQLSTATE '23514' THEN v_bloqueios:=v_bloqueios+1;
+ END;
+ BEGIN
+  UPDATE public.catalogo_asaas_saques SET pix_destino_sha256=NULL
+  WHERE id=v_saque;
+  RAISE EXCEPTION 'HMAC original apagado indevidamente';
+ EXCEPTION WHEN SQLSTATE '23514' THEN v_bloqueios:=v_bloqueios+1;
+ END;
+ BEGIN
+  UPDATE public.catalogo_asaas_saques SET pix_destino_registrado_em=NULL
+  WHERE id=v_saque;
+  RAISE EXCEPTION 'Timestamp do HMAC alterado indevidamente';
+ EXCEPTION WHEN SQLSTATE '23514' THEN v_bloqueios:=v_bloqueios+1;
+ END;
+ BEGIN
+  INSERT INTO public.catalogo_asaas_saques(
+   motoboy_id,valor_centavos,pix_destino_sha256
+  ) VALUES(v_uid,10000,repeat('c',64));
+  RAISE EXCEPTION 'Novo saque aceitou HMAC retroativo no INSERT';
+ EXCEPTION WHEN SQLSTATE '23514' THEN v_bloqueios:=v_bloqueios+1;
+ END;
+
+ -- Depois de associar uma transferencia de teste, HMAC nao pode mudar.
+ UPDATE public.catalogo_asaas_saques
+ SET status='enviado',transferencia_id='ci_hmac_immut_01'
+ WHERE id=v_saque;
+ SELECT public.catalogo_asaas_diagnosticar_compromisso_pix_saque(v_saque)
+ INTO v_diag;
+ IF v_diag->>'ok' IS DISTINCT FROM 'true'
+  OR v_diag->>'compromisso_hmac_presente' IS DISTINCT FROM 'true'
+  OR v_diag->>'compromisso_com_carimbo_prospectivo' IS DISTINCT FROM 'true'
+  OR v_diag->>'prova_bancaria_independente' IS DISTINCT FROM 'false'
+  OR v_diag->>'titularidade_original_comprovada' IS DISTINCT FROM 'false'
+  OR v_diag->>'confirmacao_de_liquidacao' IS DISTINCT FROM 'false'
+  OR v_diag->>'pagamento_autorizado' IS DISTINCT FROM 'false'
+  OR v_diag->>'baixa_autorizada' IS DISTINCT FROM 'false'
+  OR v_diag::text LIKE '%aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa%'
+ THEN RAISE EXCEPTION 'Diagnostico de prova Pix criou liberacao ou revelou HMAC: %',v_diag;
+ END IF;
+ BEGIN
+  UPDATE public.catalogo_asaas_saques SET pix_destino_sha256=repeat('d',64)
+  WHERE id=v_saque;
+  RAISE EXCEPTION 'Destino Pix alterado depois de associar transferencia';
+ EXCEPTION WHEN SQLSTATE '23514' THEN v_bloqueios:=v_bloqueios+1;
+ END;
+
+ -- Nao criar compromisso tardio para saque ja enviado sem snapshot.
+ INSERT INTO public.catalogo_asaas_saques(motoboy_id,valor_centavos)
+ VALUES(v_uid,10000) RETURNING id INTO v_sem_destino;
+ UPDATE public.catalogo_asaas_saques
+ SET status='enviado',transferencia_id='ci_hmac_immut_02'
+ WHERE id=v_sem_destino;
+ BEGIN
+  UPDATE public.catalogo_asaas_saques
+  SET pix_destino_sha256=repeat('e',64) WHERE id=v_sem_destino;
+  RAISE EXCEPTION 'Saque enviado aceitou compromisso tardio';
+ EXCEPTION WHEN SQLSTATE '23514' THEN v_bloqueios:=v_bloqueios+1;
+ END;
+ IF v_bloqueios<>6 THEN
+  RAISE EXCEPTION 'Bloqueios de HMAC esperados 6, obtidos %',v_bloqueios;
+ END IF;
+ IF has_function_privilege('anon',
+  'public.catalogo_asaas_diagnosticar_compromisso_pix_saque(uuid)','EXECUTE')
+  OR has_function_privilege('authenticated',
+  'public.catalogo_asaas_diagnosticar_compromisso_pix_saque(uuid)','EXECUTE')
+  OR NOT has_function_privilege('service_role',
+  'public.catalogo_asaas_diagnosticar_compromisso_pix_saque(uuid)','EXECUTE')
+ THEN RAISE EXCEPTION 'Diagnostico Pix exposto a usuario nao autorizado'; END IF;
+ RAISE NOTICE 'PASS: HMAC Pix write-once, carimbo local, bloqueio de alteracao, sem Pix real';
+END $pix_compromisso_original$;
+
 DO $checks$
 DECLARE
   v_id text := 'ci-asaas-encerramento-guard';
