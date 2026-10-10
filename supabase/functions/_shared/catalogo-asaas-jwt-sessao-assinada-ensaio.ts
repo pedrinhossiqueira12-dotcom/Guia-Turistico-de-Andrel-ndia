@@ -65,6 +65,11 @@ function isObj(v: unknown): v is Record<string, unknown> {
 function decodeB64(s: string, max: number): Uint8Array {
   if (!s || s.length > max || !BASE64URL.test(s)) throw new Error("jwt_base64_invalido");
   const raw = atob(s.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(s.length/4)*4,"="));
+  // JWT Base64URL nao deve aceitar grafias nao canonicas da MESMA assinatura
+  // (bits de preenchimento no ultimo caractere). Isso evita ambiguidade
+  // de representacao, replay por string equivalente e testes intermitentes.
+  const canonical = btoa(raw).replace(/\+/g,"-").replace(/\//g,"_").replace(/=/g,"");
+  if (canonical !== s) throw new Error("jwt_base64url_nao_canonico");
   return Uint8Array.from(raw, c => c.charCodeAt(0));
 }
 function decodeJson(s: string, max: number): Record<string, unknown> {
