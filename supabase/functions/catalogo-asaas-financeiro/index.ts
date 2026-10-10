@@ -628,7 +628,7 @@ async function auditarHistoricoTransferenciasExcepcionaisSandboxAdmin(
  const LIMIT=100,MAX_PAGINAS=12;
  let paginas=0,examinadas=0,referencias=0,refsDeOutroId=0;
  let valoresDivergentes=0,idsSemReferencia=0,identificadoresInvalidos=0;
- let listaRepetida=0,estadosDone=0,formatosAmbiguos=0;
+ let listaRepetida=0,estadosDone=0,formatosAmbiguos=0,achouIdVinculado=false;
  const vistos=new Set<string>();
  let completa=false;
  for(let page=0;page<MAX_PAGINAS;page++){
@@ -646,6 +646,7 @@ async function auditarHistoricoTransferenciasExcepcionaisSandboxAdmin(
    const refCorresponde=tRef===referencia;
    const idCorresponde=Boolean(idVinculado)&&tId===idVinculado;
    if(!refCorresponde&&!idCorresponde)continue;
+   if(idCorresponde)achouIdVinculado=true;
    if(refCorresponde){
     referencias++;
     if(!tId)identificadoresInvalidos++;
@@ -668,9 +669,11 @@ async function auditarHistoricoTransferenciasExcepcionaisSandboxAdmin(
    throw new Failure("Listagem bancária vazia com hasMore=true: inconclusiva.",503);
  }
  const referenciasDistintas=vistos.size;
+ const vinculoNaoLocalizado=completa&&Boolean(idVinculado)&&!achouIdVinculado;
  const conflito=refsDeOutroId>0||referenciasDistintas>1||
   valoresDivergentes>0||idsSemReferencia>0||identificadoresInvalidos>0||
-  listaRepetida>0||formatosAmbiguos>0||mesmoIdSaqueComum||vinculoLocalDivergente;
+  listaRepetida>0||formatosAmbiguos>0||mesmoIdSaqueComum||
+  vinculoLocalDivergente||vinculoNaoLocalizado;
  return respond({success:true,relatorio:{
   paginas_examinadas:paginas,transferencias_examinadas:examinadas,
   pagina_limite:MAX_PAGINAS,listagem_consultada_ate_o_fim:completa,
@@ -684,6 +687,8 @@ async function auditarHistoricoTransferenciasExcepcionaisSandboxAdmin(
   estados_done_encontrados:estadosDone,
   estados_ambiguos:formatosAmbiguos,
   id_tambem_usado_em_saque_comum:mesmoIdSaqueComum,
+  vinculo_local_nao_encontrado_na_listagem:vinculoNaoLocalizado,
+  referencia_ja_encontrada_no_banco:referencias>0,
   vinculo_local_divergente:vinculoLocalDivergente,
   conflito_identificado:conflito,
   // Nem listagem completa garante ausencia de transferencia feita por
@@ -696,7 +701,9 @@ async function auditarHistoricoTransferenciasExcepcionaisSandboxAdmin(
   alerta:conflito?
    "Divergência ou duplicidade encontrada; manter HOLD e investigar com o Asaas.":
    completa?
-   "Sem divergência nesta listagem pontual. Não comprova ausência de Pix nem destinatário. HOLD.":
+   referencias>0?
+   "Há transferência com a referência consultada. Verifique possível Pix anterior; HOLD.":
+   "Referência não localizada nesta consulta. Não comprova ausência de Pix nem destinatário. HOLD.":
    "Limite de páginas atingido: amostra incompleta. HOLD obrigatório."
  },mensagem:"Auditoria da listagem bancária somente leitura, sem Pix, baixa ou desbloqueio."});
 }
