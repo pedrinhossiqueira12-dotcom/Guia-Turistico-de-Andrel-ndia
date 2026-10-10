@@ -27,5 +27,19 @@ CREATE FUNCTION auth.jwt() RETURNS jsonb
 LANGUAGE sql STABLE AS $local_jwt$
  SELECT NULLIF(pg_catalog.current_setting('request.jwt.claims',true),'')::jsonb
 $local_jwt$;
+CREATE TABLE auth.mfa_factors (
+ id uuid PRIMARY KEY,
+ user_id uuid NOT NULL REFERENCES auth.users(id),
+ factor_type text NOT NULL,
+ status text NOT NULL
+);
+CREATE TABLE auth.mfa_challenges (
+ id uuid PRIMARY KEY,
+ factor_id uuid NOT NULL REFERENCES auth.mfa_factors(id),
+ created_at timestamptz NOT NULL,
+ verified_at timestamptz
+);
+-- Mock intencionalmente nao tem session_id em auth.mfa_challenges,
+-- espelhando a limitacao observada no STAGING; nao equivale a GoTrue.
 -- MOCK nunca faz verificacao de JWT assinada. PostgREST/Auth REAL validam
 -- token antes de emitir os claims; estes ensaios so exercitam o predicado SQL.
