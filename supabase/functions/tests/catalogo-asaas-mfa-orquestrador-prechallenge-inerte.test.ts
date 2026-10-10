@@ -218,7 +218,9 @@ Deno.test("falhas de SQL, resposta que libera dinheiro e Auth indisponivel falha
   }
  }
  const unsafe=lab({sqlUnsafe:true});const failed=await unsafe.ctor().iniciar(CID,"before");
- assert(!failed.ok&&!unsafe.calls.includes("auth-inicio"),"SQL released payment before Auth");
+ assert(!failed.ok&&unsafe.calls.includes("auth-inicio")
+  && !unsafe.calls.includes("auth-factor") && !unsafe.calls.includes("auth-challenge"),
+  "SQL com flags financeiras permissivas prosseguiu para fator/challenge");
  hold(failed);
  const challenge=lab({challengeDuplicate:true});
  const failedChallenge=await challenge.ctor().iniciar(CID,"before");
