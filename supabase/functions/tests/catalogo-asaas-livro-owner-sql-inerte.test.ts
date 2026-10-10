@@ -32,6 +32,7 @@ const dict=[
  "catalogo_asaas_registrar_desafio_compartilhado_inerte",
  "catalogo_asaas_ler_tentativa_prechallenge_inerte",
  "catalogo_asaas_consumir_desafio_compartilhado_inerte",
+ "catalogo_asaas_reservar_inicio_principal_vinculado_inerte",
 ];
 function make(responder:(id:number,params:readonly string[])=>unknown){
  const calls:Array<{sql:string,params:readonly string[]}>= [];
@@ -139,4 +140,19 @@ Deno.test("driver de banco nao descartavel ou SQL resultados multiplos falham fe
  const bad=make(()=>pgRes());
  await denied(bad.adapter.reservarInicio("bad_uuid; DROP TABLE users;"),"SQL injection input");
  check(bad.calls.length===0,"query sequer deveria receber input nao UUID");
+});
+
+Deno.test("reserva com principal usa tres UUID bind e recusa campos arbitrarios",async()=>{
+ const {adapter,calls}=make((id,params)=>{
+  check(id===5,"funcao de reserva autenticada trocada");
+  check(params.length===3 && params.join(",") === [C,U,S].join(","),
+   "principal nao foi passado inteiramente em parametros SQL");
+  return pgRes();
+ });
+ const issued=await adapter.reservarInicioVinculado(C,U,S);
+ check(issued.ok && issued.nonce===N,"nonce nao retornou");
+ check(calls.length===1 && calls[0].sql.includes("$1::uuid,$2::uuid,$3::uuid"),
+   "uid ou sessao concatenados na consulta");
+ await denied(adapter.reservarInicioVinculado(C,U,"outro"),"sessao forjada sem UUID");
+ check(calls.length===1,"sessao forjada chegou ao driver");
 });
