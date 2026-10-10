@@ -1009,6 +1009,12 @@ DECLARE
  v_matriz_depois jsonb;
  v_matriz_regressao jsonb;
  v_matriz_ambigua jsonb;
+ v_get1 jsonb;
+ v_get2 jsonb;
+ v_get3 jsonb;
+ v_get_replay jsonb;
+ v_get_reuse jsonb;
+ v_get_diag jsonb;
  v_ancora_zerada jsonb;
  v_ancora_dois jsonb;
  v_ancora_adulterada jsonb;
@@ -1372,6 +1378,64 @@ BEGIN
   OR v_matriz_ambigua->>'pagamento_autorizado' IS DISTINCT FROM 'false'
   OR v_matriz_ambigua->>'movimenta_dinheiro' IS DISTINCT FROM 'false'
  THEN RAISE EXCEPTION 'Horario bancario ambiguo nao manteve HOLD: %',v_matriz_ambigua; END IF;
+
+ -- Cada GET deve ser preservado, inclusive DONE repetido; mesmo UUID e idempotente.
+ -- Consultas anteriores a esta migration continuam sem cronologia completa.
+ SELECT public.catalogo_asaas_registrar_consulta_get_excepcional(
+  'saida',v_saida,'ci_audit_frozen_120','guia-exc:saida:'||v_saida,
+  12000,'DONE','ab100001-1111-4111-8111-111111111111'::uuid) INTO v_get1;
+ SELECT public.catalogo_asaas_registrar_consulta_get_excepcional(
+  'saida',v_saida,'ci_audit_frozen_120','guia-exc:saida:'||v_saida,
+  12000,'DONE','ab100002-1111-4111-8111-111111111111'::uuid) INTO v_get2;
+ SELECT public.catalogo_asaas_registrar_consulta_get_excepcional(
+  'saida',v_saida,'ci_audit_frozen_120','guia-exc:saida:'||v_saida,
+  12000,'PENDING','ab100003-1111-4111-8111-111111111111'::uuid) INTO v_get3;
+ IF v_get1->>'consulta_nova' IS DISTINCT FROM 'true'
+  OR v_get2->>'consulta_nova' IS DISTINCT FROM 'true'
+  OR v_get3->>'consulta_nova' IS DISTINCT FROM 'true'
+  OR v_get3->>'pagamento_baixado' IS DISTINCT FROM 'false'
+ THEN RAISE EXCEPTION 'GET repetido nao foi persistido como evento novo'; END IF;
+ SELECT public.catalogo_asaas_registrar_consulta_get_excepcional(
+  'saida',v_saida,'ci_audit_frozen_120','guia-exc:saida:'||v_saida,
+  12000,'DONE','ab100002-1111-4111-8111-111111111111'::uuid) INTO v_get_replay;
+ IF v_get_replay->>'ok' IS DISTINCT FROM 'true'
+  OR v_get_replay->>'consulta_nova' IS DISTINCT FROM 'false'
+ THEN RAISE EXCEPTION 'Replay de chave GET nao foi idempotente: %',v_get_replay; END IF;
+ SELECT public.catalogo_asaas_registrar_consulta_get_excepcional(
+  'saida',v_saida,'ci_audit_frozen_120','guia-exc:saida:'||v_saida,
+  12000,'FAILED','ab100002-1111-4111-8111-111111111111'::uuid) INTO v_get_reuse;
+ IF v_get_reuse->>'ok' IS DISTINCT FROM 'false'
+ THEN RAISE EXCEPTION 'Chave GET foi reutilizada com estado divergente'; END IF;
+ SELECT public.catalogo_asaas_diagnosticar_consultas_get_escrow(
+  (v_reserva->>'separacao_id')::uuid) INTO v_get_diag;
+ IF v_get_diag->>'ok' IS DISTINCT FROM 'true'
+  OR v_get_diag->>'consultas_get_registradas' IS DISTINCT FROM '3'
+  OR v_get_diag->>'consultas_com_mesmo_estado_consecutivo' IS DISTINCT FROM '1'
+  OR v_get_diag->>'consultas_com_retorno_a_processamento' IS DISTINCT FROM '1'
+  OR v_get_diag->>'historico_anterior_a_migracao_comprovado' IS DISTINCT FROM 'false'
+  OR v_get_diag->>'pagamento_autorizado' IS DISTINCT FROM 'false'
+  OR v_get_diag->>'baixa_realizada' IS DISTINCT FROM 'false'
+  OR v_get_diag->>'liberacao_autorizada' IS DISTINCT FROM 'false'
+ THEN RAISE EXCEPTION 'Diagnostico GET perdeu auditoria ou liberou credito: %',v_get_diag; END IF;
+ BEGIN
+  UPDATE public.catalogo_asaas_consultas_get_excepcionais
+  SET estado_banco='FAILED' WHERE id='ab100001-1111-4111-8111-111111111111'::uuid;
+  RAISE EXCEPTION 'Registro GET foi adulterado';
+ EXCEPTION WHEN check_violation THEN NULL;
+ END;
+ BEGIN
+  DELETE FROM public.catalogo_asaas_consultas_get_excepcionais
+  WHERE id='ab100001-1111-4111-8111-111111111111'::uuid;
+  RAISE EXCEPTION 'Registro GET foi apagado';
+ EXCEPTION WHEN check_violation THEN NULL;
+ END;
+ IF has_table_privilege('service_role',
+  'public.catalogo_asaas_consultas_get_excepcionais','INSERT')
+  OR has_function_privilege('anon',
+  'public.catalogo_asaas_registrar_consulta_get_excepcional(text,uuid,text,text,bigint,text,uuid)','EXECUTE')
+  OR has_function_privilege('authenticated',
+  'public.catalogo_asaas_diagnosticar_consultas_get_escrow(uuid)','EXECUTE')
+ THEN RAISE EXCEPTION 'Acesso direto a registros GET foi aberto'; END IF;
 
  -- Perda de financiamento de um dos 2 creditos: HOLD e alerta, nunca baixa.
  UPDATE public.catalogo_remuneracoes_v2
