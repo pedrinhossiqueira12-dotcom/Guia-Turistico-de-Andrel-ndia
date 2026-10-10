@@ -239,6 +239,42 @@
         }catch(erro){aviso(erro.message||"Diagnóstico indisponível; manter HOLD.",true);}
         finally{btn.disabled=false;}
       });
+      const confronto=document.createElement("button");confronto.type="button";
+      confronto.className="secondary";
+      confronto.textContent="Conferir evidências bancárias (somente leitura)";
+      const situacaoConfronto=document.createElement("p");
+      situacaoConfronto.className="muted";
+      situacaoConfronto.textContent="Sem consulta ainda. A ausência de Pix não está comprovada.";
+      confronto.addEventListener("click",async()=>{
+        confronto.disabled=true;
+        try{
+          const res=await api({acao:"matriz_conciliacao_escrow_admin",
+            separacao_id:String(item.id||"")});
+          const m=res.matriz;
+          if(m?.evidencia_suficiente_para_liquidar!==false||
+            m?.evidencia_suficiente_para_liberar!==false||
+            m?.pagamento_autorizado!==false||
+            m?.baixa_realizada!==false||
+            m?.movimenta_dinheiro!==false)
+            throw new Error("Matriz financeira insegura. Manter HOLD.");
+          situacaoConfronto.textContent="HOLD OBRIGATÓRIO — "+
+            Number(m.transferencias_observadas||0)+" transferência(s) associada(s), "+
+            Number(m.observacoes_de_estado||0)+" estado(s) registrado(s), "+
+            Number(m.transferencias_com_done||0)+" DONE, "+
+            Number(m.transferencias_com_done_e_falha||0)+" estado(s) contraditório(s), "+
+            Number(m.transferencias_tambem_vinculadas_a_saques_comuns||0)+
+            " transferência(s) também usada(s) em saque comum, "+
+            Number(m.fotografias_creditos_incompletas_ou_divergentes||0)+
+            " fotografia(s) incompleta(s), "+
+            Number(m.contagem_sinais_de_conflito||0)+" indício(s) de divergência. "+
+            String(m.alerta||"Destinatário original não comprovado.")+
+            " Nenhum crédito liberado, nenhuma baixa e nenhum Pix criado.";
+          aviso(situacaoConfronto.textContent,Number(m.contagem_sinais_de_conflito||0)>0);
+        }catch(e){
+          situacaoConfronto.textContent="Matriz indisponível; manter reserva congelada.";
+          aviso(e.message||"Conciliação não disponível. Manter HOLD.",true);
+        }finally{confronto.disabled=false;}
+      });
       const area=document.createElement("details");
       const cab=document.createElement("summary");cab.textContent="Dossiê de conciliação (sem Pix)";
       const orientacao=document.createElement("p");orientacao.className="muted";
@@ -354,7 +390,7 @@
         finally{exportar.disabled=false;}
       });
       area.append(cab,orientacao,seloIntegridade,tipo,nota,hash,gravar,consultar,exportar,registros);
-      li.append(title,detail,btn,area);lista.appendChild(li);
+      li.append(title,detail,btn,confronto,situacaoConfronto,area);lista.appendChild(li);
     }
     if(response.ha_mais===true){
       const avisoLimite=document.createElement("li");
