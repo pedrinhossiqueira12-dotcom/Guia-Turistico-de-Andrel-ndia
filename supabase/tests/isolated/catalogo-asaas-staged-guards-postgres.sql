@@ -1008,6 +1008,7 @@ DECLARE
  v_matriz_antes jsonb;
  v_matriz_depois jsonb;
  v_matriz_regressao jsonb;
+ v_matriz_ambigua jsonb;
  v_ancora_zerada jsonb;
  v_ancora_dois jsonb;
  v_ancora_adulterada jsonb;
@@ -1354,6 +1355,23 @@ BEGIN
   OR v_matriz_regressao->>'baixa_realizada' IS DISTINCT FROM 'false'
   OR (v_matriz_regressao->>'contagem_sinais_de_conflito')::bigint<1
  THEN RAISE EXCEPTION 'Regresso bancario deveria manter HOLD: %',v_matriz_regressao; END IF;
+
+ -- Injecao privilegiada somente neste teste descartavel: duas observacoes
+ -- do mesmo vinculo com timestamp IGUAL nao possuem ordem verificavel.
+ -- A API publica e service_role nao tem INSERT direto nesta tabela.
+ INSERT INTO public.catalogo_asaas_observacoes_excepcionais_auditoria(
+  vinculo_id,estado_banco,observado_em)
+ SELECT e.id,'BLOCKED',o.observado_em
+ FROM public.catalogo_asaas_transferencias_excepcionais_auditoria e
+ JOIN public.catalogo_asaas_observacoes_excepcionais_auditoria o
+  ON o.vinculo_id=e.id AND o.estado_banco='DONE'
+ WHERE e.tipo='saida' AND e.solicitacao_id=v_saida;
+ SELECT public.catalogo_asaas_matriz_conciliacao_escrow(
+  (v_reserva->>'separacao_id')::uuid) INTO v_matriz_ambigua;
+ IF v_matriz_ambigua->>'transferencias_com_ordem_temporal_ambigua' IS DISTINCT FROM '1'
+  OR v_matriz_ambigua->>'pagamento_autorizado' IS DISTINCT FROM 'false'
+  OR v_matriz_ambigua->>'movimenta_dinheiro' IS DISTINCT FROM 'false'
+ THEN RAISE EXCEPTION 'Horario bancario ambiguo nao manteve HOLD: %',v_matriz_ambigua; END IF;
 
  -- Perda de financiamento de um dos 2 creditos: HOLD e alerta, nunca baixa.
  UPDATE public.catalogo_remuneracoes_v2
