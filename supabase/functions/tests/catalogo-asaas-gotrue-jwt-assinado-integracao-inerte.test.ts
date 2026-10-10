@@ -109,11 +109,12 @@ async function prepareCrypto(revokeAfterVerify=false,corruptJwks=false){
  };
  return {before,after,simulator,intent,audit,signedSession,transport};
 }
-function hold(result:Record<string,unknown>){
+function hold(result:object){
+ const r=result as Record<string,unknown>;
  for(const k of ["desafio_mfa_real_comprovado","pagamento_autorizado",
   "parecer_financeiro_autorizado","liberacao_autorizada","baixa_realizada",
-  "movimenta_dinheiro"])assert(result[k]===false,"money unexpectedly allowed: "+k);
- assert(result.status_operacional==="HOLD_OBRIGATORIO","HOLD removed");
+  "movimenta_dinheiro"])assert(r[k]===false,"money unexpectedly allowed: "+k);
+ assert(r.status_operacional==="HOLD_OBRIGATORIO","HOLD removed");
 }
 Deno.test("WebCrypto ES256 real + Auth HTTP fake + sessao PG fake mantem HOLD",async()=>{
  const {before,simulator,intent,audit}=await prepareCrypto();
