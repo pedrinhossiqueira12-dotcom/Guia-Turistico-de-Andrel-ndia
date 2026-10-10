@@ -74,3 +74,37 @@ não aceitam JWT de cliente nem autorizam etapa financeira.
 **Não aplicar à produção, não publicar Edge financeira nem enviar Pix.**
 As pendências #41 (titularidade bancária) e #43 (segregação/autorização)
 continuam impedindo go-live.
+
+
+## Aplicacao e auditoria exclusiva do STAGING — 10/10/2026
+
+- Projeto de homologacao Supabase: jbttwihctuibchhcyqtl.
+- A migracao pendente no GitHub foi instalada exclusivamente neste projeto
+  com nome asaas_prechallenge_reservas_duraveis_owner_only_hold_staging_20261010.
+- Execucao anterior do GitHub Actions 38079327895 aprovada: 12/12 jobs,
+  com teste financeiro PostgreSQL real, Node, Deno, pgTAP e smoke frontend.
+- Auditoria de metadados do PostgreSQL depois da instalacao: as tres
+  tabelas existem com relrowsecurity=true, uma trigger append-only ativa
+  cada, sem privilege SELECT/INSERT/UPDATE/DELETE para anon, authenticated
+  ou service_role. UNIQUE/PK de nonce, challenge e tentativa presentes.
+- Cinco funcoes privadas revisadas: todas SECURITY INVOKER; EXECUTE negado
+  para anon, authenticated e service_role.
+- Auth real em homologacao: zero fatores TOTP verified. Nenhum reviewer MFA
+  foi simulado no STAGING. Tres novos registros: 0 reservas, 0 desafios,
+  0 consumos. Nao foi armazenado OTP ou token.
+- Testes negativos read-only de nonce/contexto/challenge/tentativa ficticios
+  receberam respectivamente contexto_aal1_invalido,
+  reserva_expirada_ou_invalida, challenge_sessao_ou_tentativa_divergente.
+  Todos retornaram HOLD_OBRIGATORIO e pagamento_autorizado=false.
+- Security Advisor posterior: 3 novos avisos INFO
+  rls_enabled_no_policy (proposital para tabelas privadas sem acesso),
+  alem de avisos preexistentes de catalogo_status_publicacao e
+  leaked-password-protection. Nenhuma concessao publica financeira nova.
+
+STAGING nao tem fator real e nao existe backend GoTrue/MFA conectando
+essas funcoes; portanto nao foi possivel comprovar MFA real ou permissao
+financeira. CI testa a escrita com usuarios ficticios em banco descartavel,
+nao cria fatores fake no projeto de homologacao.
+
+**Supabase PROD nao foi acessado ou alterado; nao houve fatura, Pix, saque,
+baixa, publicacao de Edge nem merge. PR #39 permanece DRAFT / HOLD.**
