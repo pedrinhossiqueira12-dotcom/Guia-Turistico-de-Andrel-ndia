@@ -262,6 +262,12 @@
             Number(m.observacoes_de_estado||0)+" estado(s) registrado(s), "+
             Number(m.transferencias_com_done||0)+" DONE, "+
             Number(m.transferencias_com_done_e_falha||0)+" estado(s) contraditório(s), "+
+            Number(m.transferencias_com_retorno_a_processamento||0)+
+            " retorno(s) a processamento após estado final, "+
+            Number(m.transferencias_com_ordem_temporal_ambigua||0)+
+            " sequência(s) de horários bancários ambíguos, "+
+            "último estado observado (não conclusivo): "+
+            String(m.ultimo_estado_observado_sem_valor_de_prova||"não disponível")+", "+
             Number(m.transferencias_tambem_vinculadas_a_saques_comuns||0)+
             " transferência(s) também usada(s) em saque comum, "+
             Number(m.fotografias_creditos_incompletas_ou_divergentes||0)+
