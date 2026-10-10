@@ -1005,6 +1005,8 @@ DECLARE
  v_auditoria_integridade jsonb;
  v_falsificacao jsonb;
  v_nota_bloqueada jsonb;
+ v_matriz_antes jsonb;
+ v_matriz_depois jsonb;
  v_ancora_zerada jsonb;
  v_ancora_dois jsonb;
  v_ancora_adulterada jsonb;
@@ -1131,6 +1133,16 @@ BEGIN
  OR has_table_privilege('service_role',
    'public.catalogo_asaas_separacoes_excepcionais_itens','INSERT')
  THEN RAISE EXCEPTION 'Permissões do escrow estão abertas demais'; END IF;
+ SELECT public.catalogo_asaas_matriz_conciliacao_escrow(
+  (v_reserva->>'separacao_id')::uuid) INTO v_matriz_antes;
+ IF v_matriz_antes->>'ok' IS DISTINCT FROM 'true'
+  OR v_matriz_antes->>'transferencias_observadas' IS DISTINCT FROM '0'
+  OR v_matriz_antes->>'ausencia_de_pix_anterior_comprovada' IS DISTINCT FROM 'false'
+  OR v_matriz_antes->>'evidencia_suficiente_para_liquidar' IS DISTINCT FROM 'false'
+  OR v_matriz_antes->>'evidencia_suficiente_para_liberar' IS DISTINCT FROM 'false'
+  OR v_matriz_antes->>'pagamento_autorizado' IS DISTINCT FROM 'false'
+ THEN RAISE EXCEPTION 'Matriz vazia nao reteve credito: %',v_matriz_antes; END IF;
+
  -- Historico vazio precisa exportar manifesto com hash genesis de 64 zeros.
  SELECT public.catalogo_asaas_exportar_ancora_dossie(
   (v_reserva->>'separacao_id')::uuid) INTO v_ancora_zerada;
@@ -1303,6 +1315,24 @@ BEGIN
   OR v_diagnostico_banco->>'liberacao_automatica_autorizada' IS DISTINCT FROM 'false'
   OR v_diagnostico_banco->>'composicao_inalterada_e_financiada' IS DISTINCT FROM 'true'
  THEN RAISE EXCEPTION 'Evidencia DONE nao reteve HOLD: %',v_diagnostico_banco; END IF;
+
+ SELECT public.catalogo_asaas_matriz_conciliacao_escrow(
+  (v_reserva->>'separacao_id')::uuid) INTO v_matriz_depois;
+ IF v_matriz_depois->>'ok' IS DISTINCT FROM 'true'
+  OR v_matriz_depois->>'transferencias_observadas' IS DISTINCT FROM '1'
+  OR v_matriz_depois->>'observacoes_de_estado' IS DISTINCT FROM '1'
+  OR v_matriz_depois->>'transferencias_com_done' IS DISTINCT FROM '1'
+  OR v_matriz_depois->>'destino_pix_original_vinculado_com_prova' IS DISTINCT FROM 'false'
+  OR v_matriz_depois->>'destino_pix_confirmado_no_provedor' IS DISTINCT FROM 'false'
+  OR v_matriz_depois->>'evidencia_suficiente_para_liquidar' IS DISTINCT FROM 'false'
+  OR v_matriz_depois->>'evidencia_suficiente_para_liberar' IS DISTINCT FROM 'false'
+  OR v_matriz_depois->>'pagamento_autorizado' IS DISTINCT FROM 'false'
+  OR v_matriz_depois->>'baixa_realizada' IS DISTINCT FROM 'false'
+ THEN RAISE EXCEPTION 'Matriz DONE liberou pagamento indevido: %',v_matriz_depois; END IF;
+ IF has_function_privilege('anon','public.catalogo_asaas_matriz_conciliacao_escrow(uuid)','EXECUTE')
+ OR has_function_privilege('authenticated','public.catalogo_asaas_matriz_conciliacao_escrow(uuid)','EXECUTE')
+ OR NOT has_function_privilege('service_role','public.catalogo_asaas_matriz_conciliacao_escrow(uuid)','EXECUTE')
+ THEN RAISE EXCEPTION 'Matriz bancaria exposta a usuario comum'; END IF;
 
  -- Perda de financiamento de um dos 2 creditos: HOLD e alerta, nunca baixa.
  UPDATE public.catalogo_remuneracoes_v2
