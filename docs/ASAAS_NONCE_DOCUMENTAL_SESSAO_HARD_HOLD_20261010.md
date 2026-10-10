@@ -66,6 +66,22 @@ deve ser usado em ambiente real. Mesmo com JWT autêntico, `aal2`
 só identifica a garantia MFA da sessão e não a hora da prova
 step-up da operação específica.
 
+## Homologação verificada
+
+- **STAGING** `jbttwihctuibchhcyqtl`, migration
+  `asaas_nonce_documental_sessao_nao_libera_pix_staging_20261010`
+  aplicada somente às tabelas e rotinas inertes. Nenhum endpoint
+  HTTP, pagamento ou Edge Function foi instalado.
+- Duas tabelas com RLS ativo; `anon`, `authenticated` e
+  `service_role` sem SELECT/INSERT direto. Funções privadas
+  sem `EXECUTE` pelos três papéis.
+- Ambos os gatilhos append-only foram confirmados habilitados.
+  Contagens após instalação: **0 intenções, 0 usos, 0 pareceres,
+  0 revisores**.
+- CI funcional **12/12**: commit `61c5b7afcf2284121cbda96dea3da2694aae0711`,
+  [run 38063491397](https://github.com/pedrinhossiqueira12-dotcom/Guia-Turistico-de-Andrel-ndia/actions/runs/38063491397).
+  Código executado no banco descartável sem chamadas a API real.
+
 ## Testes e critérios de segurança
 
 - Teste SQL em transação descartável:
