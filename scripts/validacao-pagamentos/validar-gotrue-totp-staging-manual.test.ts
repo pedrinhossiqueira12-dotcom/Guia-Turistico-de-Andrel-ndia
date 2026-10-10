@@ -68,8 +68,7 @@ Deno.test("GoTrue STAGING falso end-to-end: AAL1 => enroll => challenge => AAL2,
      "login payload mismatch");
    return Response.json({access_token:jwt("aal1")});
   }
-  if(path==="/user")return Response.json({id:UID});
-  if(path==="/factors"&&method==="GET")return Response.json({totp:[]});
+  if(path==="/user")return Response.json({id:UID,factors:[]});
   if(path==="/factors"&&method==="POST"){
    ok(body.factor_type==="totp","factor type changed");
    return Response.json({id:FACTOR,totp:{secret:"GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"}});
@@ -86,6 +85,8 @@ Deno.test("GoTrue STAGING falso end-to-end: AAL1 => enroll => challenge => AAL2,
  ok(inspectSmokeJwt(before).aal==="aal1","AAL1 fake missing");
  const factors=await go.factors(before);
  ok(factors.length===0,"unexpected factors");
+ ok(!routes.some(x=>x==="GET /factors"),"unsupported GoTrue listFactors path requested");
+ await denied(()=>go.call("GET","/factors",before));
  const enroll=await go.enroll(before);
  ok(enroll.id===FACTOR,"wrong factor id");
  const upgraded=await go.verify(before,enroll.id,"123456");
@@ -107,4 +108,41 @@ Deno.test("GoTrue resposta exagerada e erros HTTP nunca chegam ao contrato",asyn
   {status:401});
  const auth2=new StagingMfaManual(key,reject);
  await denied(()=>auth2.login("mfa-teste+qa@example.com","test-only-password"));
+});
+
+Deno.test("factors usa /user e trata TOTP verificado, pendente e tipo alheio separadamente",async()=>{
+ const payload={id:UID,factors:[
+  {id:FACTOR,factor_type:"totp",status:"verified"},
+  {id:crypto.randomUUID(),factor_type:"phone",status:"verified"},
+  {id:crypto.randomUUID(),factor_type:"totp",status:"unverified"},
+ ]};
+ let requests=0;
+ const transport:typeof fetch=async(input,init)=>{
+  requests++;
+  ok(String(input)===STAGING+"/auth/v1/user","factors must only use /user");
+  ok(init?.method==="GET","GET user expected");
+  return Response.json(payload);
+ };
+ const auth=new StagingMfaManual("sb_publishable_ci_fake_limited_key",transport);
+ const factors=await auth.factors(jwt("aal1"));
+ ok(factors.length===2,"must retain both verified and unverified TOTP");
+ ok(factors[0].id===FACTOR && factors[0].status==="verified",
+   "verified factor not returned");
+ ok(factors[1].status==="unverified","pending factor ignored");
+ ok(requests===1,"unnecessary network calls");
+});
+Deno.test("factors ausente em user usa [] e formato injetado ou id ausente falha fechado",async()=>{
+ const key="sb_publishable_ci_fake_limited_key";
+ const noFactors=new StagingMfaManual(key,async()=>Response.json({id:UID}));
+ ok((await noFactors.factors(jwt("aal1"))).length===0,
+   "optional user.factors should default empty");
+ for(const reply of [
+  {id:UID,factors:"forged"},
+  {id:UID,factors:[{id:FACTOR,factor_type:"totp",status:"unknown"}]},
+  {id:UID,factors:[{id:"not-uuid",factor_type:"totp",status:"verified"}]},
+  {id:"bad-user",factors:[]},
+ ]){
+  const auth=new StagingMfaManual(key,async()=>Response.json(reply));
+  await denied(()=>auth.factors(jwt("aal1")));
+ }
 });
