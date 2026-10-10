@@ -11,17 +11,18 @@ RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=''
 AS $guard$
 BEGIN
- IF TG_OP='UPDATE' AND OLD.transferencia_id IS NOT NULL
-  AND NEW.transferencia_id IS DISTINCT FROM OLD.transferencia_id THEN
-  RAISE EXCEPTION 'ID bancario associado a saque regular e imutavel'
-   USING ERRCODE='23514';
+ IF TG_OP='UPDATE' THEN
+  IF OLD.transferencia_id IS NOT NULL
+   AND NEW.transferencia_id IS DISTINCT FROM OLD.transferencia_id THEN
+   RAISE EXCEPTION 'ID bancario associado a saque regular e imutavel'
+    USING ERRCODE='23514';
+  END IF;
+  IF NEW.transferencia_id IS NOT DISTINCT FROM OLD.transferencia_id THEN
+   RETURN NEW;
+  END IF;
  END IF;
 
- IF NEW.transferencia_id IS NULL
-  OR (TG_OP='UPDATE' AND NEW.transferencia_id IS NOT DISTINCT FROM OLD.transferencia_id)
- THEN
-  RETURN NEW;
- END IF;
+ IF NEW.transferencia_id IS NULL THEN RETURN NEW; END IF;
 
  IF NEW.motoboy_id IS NULL
   OR NEW.transferencia_id !~ '^[A-Za-z0-9_-]{4,130}$' THEN
