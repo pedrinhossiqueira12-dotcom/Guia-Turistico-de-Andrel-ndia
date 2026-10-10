@@ -168,6 +168,7 @@ DECLARE
  v_preflight jsonb;
  v_dossie jsonb;
  v_matriz jsonb;
+ v_financeiro jsonb;
  v_e public.catalogo_asaas_separacoes_excepcionais%ROWTYPE;
  v_hash text;
 BEGIN
@@ -202,9 +203,9 @@ BEGIN
   RETURN pg_catalog.jsonb_build_object('ok',false,'motivo','nonce_expirado',
    'pagamento_autorizado',false,'status_operacional','HOLD_OBRIGATORIO');
  END IF;
- -- Lock da separacao e serializacao por titular. A ordem de locks aqui
- -- e inversa ao registro do nonce; nao usar esta rotina para transferir
- -- fundos e testar concorrencia adicional antes de qualquer uso real.
+ -- O nonce e travado para recusar replay; este ensaio NAO
+ -- marca pagamento nem possui operacao bancaria. Financeiro e reavaliado
+ -- a cada tentativa, independentemente do snapshot da intencao.
  SELECT * INTO v_e FROM public.catalogo_asaas_separacoes_excepcionais
  WHERE id=v_i.separacao_id;
  IF NOT FOUND THEN
@@ -213,9 +214,11 @@ BEGIN
  END IF;
  v_dossie:=public.catalogo_asaas_verificar_integridade_dossie_escrow(v_i.separacao_id);
  v_matriz:=public.catalogo_asaas_matriz_conciliacao_escrow(v_i.separacao_id);
+ v_financeiro:=public.catalogo_asaas_diagnosticar_separacao_excepcional(v_i.separacao_id);
  v_hash:=pg_catalog.encode(pg_catalog.sha256(
   pg_catalog.convert_to(v_matriz::text,'UTF8')),'hex');
  IF v_e.situacao IS DISTINCT FROM 'congelada'
+  OR v_financeiro->>'composicao_inalterada_e_financiada' IS DISTINCT FROM 'true'
   OR v_e.fingerprint_sha256 IS DISTINCT FROM v_i.fingerprint_creditos_sha256
   OR v_dossie->>'integridade_valida' IS DISTINCT FROM 'true'
   OR coalesce((v_dossie->>'numero_eventos')::bigint,0) IS DISTINCT FROM v_i.dossie_seq
