@@ -1240,6 +1240,9 @@ DECLARE
  v_rate_idx integer;
  v_stepup_challenge uuid:='fa766666-6666-4666-8666-666666666661'::uuid;
  v_nonce_exp uuid;
+ v_contexto_aal1 uuid;
+ v_contexto_status jsonb;
+ v_nonce_vinculado jsonb;
  v_nonce_result jsonb;
  v_nonce_obs jsonb;
  v_epoch bigint;
@@ -1608,6 +1611,63 @@ BEGIN
  VALUES('fa744444-4444-4444-8444-444444444441'::uuid,
  'fa722222-2222-4222-8222-222222222221'::uuid,'totp','verified');
 
+ -- Preparar SOMENTE vinculo documental em sessao AAL1 antes do challenge.
+ -- Dados de Auth/financeiro e o hash sao carimbados pelo banco, nao pelo cliente.
+ UPDATE auth.sessions SET aal='aal1',factor_id=NULL
+ WHERE id='fa733333-3333-4333-8333-333333333331'::uuid;
+ INSERT INTO public.catalogo_asaas_contextos_pre_mfa_inertes(
+  separacao_id,revisor_id,sessao_id,fator_id,
+  fingerprint_creditos_sha256,dossie_seq,dossie_hash_sha256,
+  matriz_hash_sha256,preparado_em,expira_em,estado
+ ) VALUES(
+  (v_reserva->>'separacao_id')::uuid,
+  'fa722222-2222-4222-8222-222222222224'::uuid,
+  'fa733333-3333-4333-8333-333333333331'::uuid,
+  'fa744444-4444-4444-8444-444444444441'::uuid,
+  repeat('f',64),999,repeat('f',64),repeat('f',64),
+  now()-interval '2 years',now()+interval '2 years',
+  'preparado_sem_challenge'
+ ) RETURNING id INTO v_contexto_aal1;
+ IF NOT EXISTS (
+  SELECT 1 FROM public.catalogo_asaas_contextos_pre_mfa_inertes c
+  WHERE c.id=v_contexto_aal1
+    AND c.revisor_id='fa722222-2222-4222-8222-222222222221'::uuid
+    AND c.dossie_hash_sha256=v_note2->>'hash_sha256'
+    AND c.fingerprint_creditos_sha256=v_reserva->>'fingerprint_sha256'
+    AND c.dossie_seq=2
+    AND c.matriz_hash_sha256<>repeat('f',64)
+    AND c.preparado_em>=now()-interval '5 minutes'
+    AND c.expira_em=c.preparado_em+interval '2 minutes'
+    AND c.estado='preparado_sem_challenge'
+ ) THEN RAISE EXCEPTION 'Contexto AAL1 aceitou fotografia cliente adulterada'; END IF;
+ BEGIN
+  INSERT INTO public.catalogo_asaas_contextos_pre_mfa_inertes(
+    separacao_id,sessao_id,fator_id,
+    revisor_id,fingerprint_creditos_sha256,dossie_seq,dossie_hash_sha256,
+    matriz_hash_sha256,preparado_em,expira_em
+  ) VALUES(
+    (v_reserva->>'separacao_id')::uuid,
+    'fa733333-3333-4333-8333-333333333331'::uuid,
+    'fa744444-4444-4444-8444-444444444441'::uuid,
+    'fa722222-2222-4222-8222-222222222221'::uuid,
+    repeat('f',64),1,repeat('f',64),repeat('f',64),
+    now(),now()+interval '1 hour');
+  RAISE EXCEPTION 'Pre-contexto AAL1 duplicado escapou do UNIQUE';
+ EXCEPTION WHEN unique_violation THEN NULL;
+ END;
+
+ UPDATE auth.sessions SET aal='aal2',
+  factor_id='fa744444-4444-4444-8444-444444444441'::uuid
+ WHERE id='fa733333-3333-4333-8333-333333333331'::uuid;
+
+ -- Mesmo AAL2 na sessao NAO significa verificacao do challenge.
+ SELECT catalogo_private.catalogo_asaas_diagnosticar_vinculo_pre_mfa_nonce_inerte(
+  v_contexto_aal1,'99999999-9999-4999-8999-999999999999'::uuid)
+ INTO v_contexto_status;
+ IF v_contexto_status->>'vinculo_documental_compativel' IS DISTINCT FROM 'false'
+  OR v_contexto_status->>'challenge_go_true_verificado' IS DISTINCT FROM 'false'
+  OR v_contexto_status->>'pagamento_autorizado' IS DISTINCT FROM 'false'
+ THEN RAISE EXCEPTION 'AAL2 sem nonce foi confundida com MFA: %',v_contexto_status; END IF;
 
  SELECT catalogo_private.catalogo_asaas_iniciar_intencao_mfa_documental_ensaio(
   (v_reserva->>'separacao_id')::uuid) INTO v_nonce_result;
@@ -1632,6 +1692,45 @@ BEGIN
   OR v_nonce_result->>'pagamento_autorizado' IS DISTINCT FROM 'false'
  THEN RAISE EXCEPTION 'Nonce documental nao criado ou autorizou dinheiro: %',v_nonce_result; END IF;
  v_nonce_doc:=(v_nonce_result->>'nonce')::uuid;
+ SELECT catalogo_private.catalogo_asaas_diagnosticar_vinculo_pre_mfa_nonce_inerte(
+  v_contexto_aal1,v_nonce_doc) INTO v_contexto_status;
+ IF v_contexto_status->>'vinculo_documental_compativel' IS DISTINCT FROM 'true'
+  OR v_contexto_status->>'challenge_go_true_verificado' IS DISTINCT FROM 'false'
+  OR v_contexto_status->>'desafio_mfa_da_sessao_comprovado' IS DISTINCT FROM 'false'
+  OR v_contexto_status->>'pagamento_autorizado' IS DISTINCT FROM 'false'
+  OR v_contexto_status->>'movimenta_dinheiro' IS DISTINCT FROM 'false'
+ THEN RAISE EXCEPTION 'AAL1/AAL2 documental nao vinculou ou moveu dinheiro: %',v_contexto_status; END IF;
+
+ INSERT INTO public.catalogo_asaas_vinculos_pre_mfa_nonce_inertes(
+   contexto_id,nonce,vinculado_em,resultado)
+ VALUES(v_contexto_aal1,v_nonce_doc,now()-interval '5 years',
+  'comparacao_documental_sem_prova_mfa');
+ IF NOT EXISTS (
+  SELECT 1 FROM public.catalogo_asaas_vinculos_pre_mfa_nonce_inertes v
+  WHERE v.contexto_id=v_contexto_aal1 AND v.nonce=v_nonce_doc
+   AND v.vinculado_em>=now()-interval '5 minutes'
+   AND v.resultado='comparacao_documental_sem_prova_mfa'
+ ) THEN RAISE EXCEPTION 'Vinculo AAL1/AAL2 aceitou carimbo externo'; END IF;
+ BEGIN
+  INSERT INTO public.catalogo_asaas_vinculos_pre_mfa_nonce_inertes(
+   contexto_id,nonce,vinculado_em)
+  VALUES(v_contexto_aal1,v_nonce_doc,now());
+  RAISE EXCEPTION 'Contexto/nonce aceita segundo pareamento';
+ EXCEPTION WHEN unique_violation THEN NULL;
+ END;
+ BEGIN
+  UPDATE public.catalogo_asaas_vinculos_pre_mfa_nonce_inertes
+  SET resultado='comparacao_documental_sem_prova_mfa'
+  WHERE contexto_id=v_contexto_aal1;
+  RAISE EXCEPTION 'Vinculo documental permitiu UPDATE';
+ EXCEPTION WHEN check_violation THEN NULL;
+ END;
+ BEGIN
+  DELETE FROM public.catalogo_asaas_contextos_pre_mfa_inertes
+  WHERE id=v_contexto_aal1;
+  RAISE EXCEPTION 'Contexto AAL1 permitiu DELETE';
+ EXCEPTION WHEN check_violation THEN NULL;
+ END;
  IF NOT EXISTS(
   SELECT 1 FROM public.catalogo_asaas_intencoes_mfa_documentais_ensaio i
   WHERE i.nonce=v_nonce_doc
