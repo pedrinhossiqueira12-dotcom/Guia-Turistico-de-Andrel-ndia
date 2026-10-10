@@ -1232,6 +1232,7 @@ DECLARE
  v_parecer_novo jsonb;
  v_nonce_doc uuid;
  v_nonce_doc2 uuid;
+ v_nonce_doc3 uuid;
  v_stepup_id uuid;
  v_stepup_challenge uuid:='fa766666-6666-4666-8666-666666666661'::uuid;
  v_nonce_exp uuid;
@@ -1738,6 +1739,13 @@ BEGIN
  IF v_nonce_obs->>'ok' IS DISTINCT FROM 'false'
   OR v_nonce_obs->>'motivo' IS DISTINCT FROM 'nonce_expirado'
  THEN RAISE EXCEPTION 'Nonce expirado foi aceito: %',v_nonce_obs; END IF;
+ BEGIN
+  INSERT INTO public.catalogo_asaas_stepup_desafios_documentais_ensaio(nonce,challenge_id)
+  VALUES(v_nonce_exp,'fa766666-6666-4666-8666-666666666669'::uuid);
+  RAISE EXCEPTION 'Nonce expirado aceitou desafio MFA';
+ EXCEPTION WHEN check_violation THEN NULL;
+ END;
+
 
  SELECT catalogo_private.catalogo_asaas_iniciar_intencao_mfa_documental_ensaio(
   (v_reserva->>'separacao_id')::uuid) INTO v_nonce_result;
@@ -1781,6 +1789,21 @@ BEGIN
  IF (SELECT count(*) FROM public.catalogo_asaas_stepup_desafios_documentais_ensaio
      WHERE nonce IN (v_nonce_doc,v_nonce_doc2)) <> 2
  THEN RAISE EXCEPTION 'Dois nonces validos nao receberam desafios distintos'; END IF;
+ 
+ -- Nonce documental ja observado: nao pode servir a novo desafio.
+ BEGIN
+  INSERT INTO public.catalogo_asaas_stepup_desafios_documentais_ensaio(nonce,challenge_id)
+  VALUES(v_nonce_doc,'fa766666-6666-4666-8666-666666666667'::uuid);
+  RAISE EXCEPTION 'Nonce observado foi aceito como novo desafio';
+ EXCEPTION WHEN check_violation THEN NULL;
+ END;
+ -- Terceiro nonce valido ainda sem desafio: sera invalidado por nova evidencia.
+ SELECT catalogo_private.catalogo_asaas_iniciar_intencao_mfa_documental_ensaio(
+  (v_reserva->>'separacao_id')::uuid) INTO v_nonce_result;
+ v_nonce_doc3:=(v_nonce_result->>'nonce')::uuid;
+ IF v_nonce_result->>'ok' IS DISTINCT FROM 'true' OR v_nonce_doc3 IS NULL
+ THEN RAISE EXCEPTION 'Terceiro nonce invalido em CI: %',v_nonce_result; END IF;
+
 
 
  -- Modificacao do dossie invalida o snapshot do novo nonce. ROLLBACK
@@ -1793,6 +1816,13 @@ BEGIN
   ) INTO v_nonce_result;
   IF v_nonce_result->>'ok' IS DISTINCT FROM 'true'
   THEN RAISE EXCEPTION 'Fixture nao criou evento para invalidar nonce'; END IF;
+  BEGIN
+   INSERT INTO public.catalogo_asaas_stepup_desafios_documentais_ensaio(nonce,challenge_id)
+   VALUES(v_nonce_doc3,'fa766666-6666-4666-8666-666666666668'::uuid);
+   RAISE EXCEPTION 'Challenge aceitou dossie diferente do snapshot';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
+
   SELECT catalogo_private.catalogo_asaas_observar_nonce_documental_ensaio(
    v_nonce_doc2) INTO v_nonce_obs;
   IF v_nonce_obs->>'ok' IS DISTINCT FROM 'false'
