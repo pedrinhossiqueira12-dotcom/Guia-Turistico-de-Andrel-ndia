@@ -32,6 +32,29 @@ o banco Asaas executou uma transferência.** Um HMAC único é compromisso
 criptográfico local, mas NÃO comprova titularidade do beneficiário, que
 a conta bancária pertence ao motoboy, nem que Pix realmente chegou.
 
+## Segunda camada — proibir autorização e baixa sem carimbo
+
+A Edge também exige `pix_destino_registrado_em` válido **antes de enviar
+o POST** ao Asaas. O SELECT após gravar HMAC deve devolver a hora que o
+PostgreSQL fixou; se a migração não estiver instalada ou a hora for inválida,
+o POST fica bloqueado.
+
+O processo de conciliação automático, o comando administrativo e o Webhook de
+autorização de saída também exigem esse carimbo. Portanto um HMAC legado sem
+timestamp não é aceito por esse código como prova prospectiva.
+
+A migration complementar
+`20261010005000_impedir_baixa_saque_sem_compromisso_pix.sql` cria gatilho
+`catalogo_asaas_baixa_exigir_compromisso_pix` antes da transição para
+`concluido`: exige HMAC original e timestamp registrados **antes dessa
+transição**, inclusive quando a baixa é solicitada diretamente pelo backend
+com permissão `service_role`. Se faltar prova, o PostgreSQL rejeita a
+transação e não persiste o repasse nem o crédito pago daquela operação.
+
+Essa barreira é **local**: não confirma que o Asaas realmente liquidou o
+Pix. Continua necessária uma consulta/declaração bancária independente
+compatível com o destinatário original.
+
 ## Registros antigos e reservas excepcionais
 
 - Os HMACs que existiam **antes** da migration mantêm o campo novo de carimbo
