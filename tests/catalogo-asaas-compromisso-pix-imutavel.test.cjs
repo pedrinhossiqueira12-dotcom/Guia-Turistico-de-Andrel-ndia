@@ -52,6 +52,25 @@ test("Edge grava HMAC antes de qualquer POST e o banco bloqueia troca",()=>{
   body.indexOf('await asaas("/transfers","POST"'));
 });
 
+test("Edge impede POST e baixa quando carimbo prospectivo esta ausente",()=>{
+ const start=edge.indexOf("async function withdraw(");
+ const end=edge.indexOf("const ADMIN_USER_ID =",start);
+ const withdraw=edge.slice(start,end);
+ assert.match(withdraw,/select\("id,pix_destino_registrado_em"\)/);
+ assert.match(withdraw,/typeof snapshot\.pix_destino_registrado_em!=="string"/);
+ assert.match(withdraw,/Date\.parse\(snapshot\.pix_destino_registrado_em\)/);
+ assert.ok(withdraw.indexOf("Date.parse(snapshot.pix_destino_registrado_em)")<
+  withdraw.indexOf('await asaas("/transfers","POST"'));
+ const proof=edge.slice(edge.indexOf("async function destinoPixConfirmadoParaBaixa("),
+  edge.indexOf("async function equalSecret("));
+ assert.match(proof,/saque\.pix_destino_registrado_em/);
+ assert.match(proof,/Date\.parse\(carimbo\)/);
+ const webhook=edge.slice(edge.indexOf("async function authorizeWithdrawal("),
+  edge.indexOf("async function ",edge.indexOf("async function authorizeWithdrawal(")+20));
+ assert.match(webhook,/pix_destino_registrado_em/);
+ assert.match(webhook,/Date\.parse\(saque\.pix_destino_registrado_em\)/);
+ assert.match(webhook,/return approveResponse\("REFUSED"/);
+});
 test("PostgreSQL rollback cobre primeiro HMAC, repeticao, tentativa de adulteracao e legado",()=>{
  for(const marker of [
   "HMAC Pix inicial sem timestamp local",
