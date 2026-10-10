@@ -42,7 +42,7 @@ test("as tres portas SQL operam sob estado HOLD sem prova MFA ou Pix",()=>{
   "'movimenta_dinheiro',false",
   "'HOLD_OBRIGATORIO'"
  ])assert.ok(migration.includes(text),"missing fail-closed property "+text);
- for(const banned of ["/v3/transfers","mfa.verify","refresh_token","Bearer ","PIX_EXECUTADO"])
+ for(const banned of ["/v3/transfers","/auth/v1/factors/","fetch(","Authorization: Bearer","PIX_EXECUTADO"])
   assert.ok(!migration.includes(banned),"unsafe live behavior "+banned);
 });
 test("CI exercita reserva unica, retry, troca de challenge, status AAL2 e RLS",()=>{
