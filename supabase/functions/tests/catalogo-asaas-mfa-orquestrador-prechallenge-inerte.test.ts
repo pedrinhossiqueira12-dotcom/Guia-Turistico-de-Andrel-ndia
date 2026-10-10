@@ -24,7 +24,7 @@ const aal1:SessaoAferidaEmEnsaio={
  role:"authenticated",anonymous:false
 };
 const aal2:SessaoAferidaEmEnsaio={...aal1,aal:"aal2",factorId:FID};
-const assert=(v:unknown,m:string):asserts v=>{if(!v)throw new Error(m)};
+function assert(v:unknown,m:string):asserts v { if(!v)throw new Error(m); }
 type Flags={ok:boolean;nonce?:string|null;motivo:string;unsafe?:boolean};
 const sql=(v:Flags):RespostaBancoPrechallengeInerte=>({
  ok:v.ok,motivo:v.motivo,nonce:v.nonce??null,
