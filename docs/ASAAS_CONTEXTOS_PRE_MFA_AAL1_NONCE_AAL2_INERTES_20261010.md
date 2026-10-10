@@ -171,3 +171,40 @@ não ativar Money Out, não marcar saques pagos, não publicar Edge
 financeira, não alterar Supabase de produção.
 
 **HOLD_OBRIGATORIO sempre.**
+
+
+## Ensaio de contrato de reserva compartilhada entre instancias (10/10/2026)
+
+Foi adicionado um contrato opcional de laboratorio,
+PortaReservaCompartilhadaMfaEmEnsaio, ao SimuladorStepUpDocumental.
+A porta realiza duas decisoes independentes:
+- reservarInicio: consumo do nonce antes do primeiro request ao Auth;
+- reservarVerificacao: consumo do challenge_id + tentativa + identidade
+  e versao da evidencia ANTES da verificacao do OTP.
+
+O payload da porta contem somente identificadores e hash de evidencia;
+NUNCA leva bearer, OTP, refresh_token ou chave de API. Qualquer negativa,
+exception ou vencimento durante a reserva interrompe o passo em modo
+HOLD_OBRIGATORIO. O nonce e queimado mesmo se a reserva falhar, evitando
+retry acidental dentro da instancia de CI.
+
+Novo ensaio Deno com DUAS instancias de SimuladorStepUpDocumental
+e UMA porta compartilhada falsa confirma:
+- mesmo nonce -> somente um desafio e enviado ao Auth simulado;
+- mesmo challengeId com dois nonces -> apenas uma verificacao;
+- erro/indisponibilidade da porta -> nenhuma chamada de challenge/verify;
+- expirar durante reserva -> sem envio de OTP;
+- nenhuma resposta autoriza parecer, Pix, baixa ou liberacao.
+
+**NAO E PERSISTENCIA REAL.** A porta falsa usa Set em memoria e nao
+protege multiplos processos/instancias de Edge em producao. Ela define
+um contrato para futura transacao real PostgreSQL, com
+UNIQUE/locks/idempotencia, estado compartilhado duravel, prova de
+challenge/verify GoTrue real e revalidacao de sessao e operacao.
+As tabelas SQL atuais protegem outros registros, mas NAO implementam
+esse novo contrato pre-challenge. Nenhuma migration ou Edge foi
+publicada nesta entrega.
+
+Permanece inalterado: zero MFA real comprovado, sem usuarios revisores
+nomeados, duas aprovacoes independentes ainda ausentes e toda execucao
+financeira bloqueada. Nao mesclar PR #39 nem liberar Pix.
