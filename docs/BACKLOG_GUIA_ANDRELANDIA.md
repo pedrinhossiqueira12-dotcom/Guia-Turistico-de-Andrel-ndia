@@ -92,4 +92,6 @@ As issues #48–#54 usam **PENDENTE** quando ainda não foi feita auditoria comp
 
 **Defesa adicional #41 (10/10/2026):** `20261010006000_reserva_regular_nao_reutiliza_id_excepcional.sql` instalada somente em STAGING: impede que saque regular anexe ID bancário já observado em evidência excepcional e torna esse vínculo imutável; evidência **tardia** continua permitida e append-only para não ocultar conflitos históricos. Testes Node e PostgreSQL descartável cobrem os dois sentidos e não executam Pix. Não comprova identidade do beneficiário ou quitação.
 
+**Concorrência multissessão #41 (10/10/2026):** duas conexões PostgreSQL independentes confirmaram a espera real por advisory lock para impedir reutilização de ID já observado em evidência excepcional (SQLSTATE 23514), e a preservação de evidência bancária tardia quando o saque chega primeiro. CI executa teste em banco descartável próprio `catalogo_asaas_race_ci`, excluído após o ensaio, sem alterar STAGING nem produção. Ver `docs/ASAAS_CONCORRENCIA_MULTISSESSAO_20261010.md`. Mesmo com o teste, a prova independente do destinatário excepcional ainda falta.
+
 **Atualizado em:** 10 de outubro de 2026. **Backlog dinâmico:** issues do GitHub prevalecem sobre este documento quando houver edição posterior.
