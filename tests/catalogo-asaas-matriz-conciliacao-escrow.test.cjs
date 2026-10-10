@@ -47,7 +47,7 @@ test("RLS e privilégios RPC não são expostos ao cliente",()=>{
  assert.match(sql,/TO service_role/);
  assert.doesNotMatch(sql,/TO authenticated\s*;/);
  const start=edge.indexOf("async function matrizConciliacaoEscrowAdmin(");
- const end=edge.indexOf("// Dossie administrativo append-only.",start);
+ const end=edge.indexOf("async function auditarHistoricoTransferenciasExcepcionaisSandboxAdmin(",start);
  assert.ok(start>=0&&end>start);
  const handler=edge.slice(start,end);
  assert.match(handler,/uid!==ADMIN_USER_ID/);
