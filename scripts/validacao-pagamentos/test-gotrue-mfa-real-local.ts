@@ -89,9 +89,33 @@ class LocalGoTrue {
       ...(method==="POST" ? {body:JSON.stringify(body??{})}:{}),
       signal:AbortSignal.timeout(10000),
     });
-    // Nunca exibir response body: pode conter JWT, TOTP secret, QR ou refresh.
-    const raw = await response.text();
-    ensure(raw.length <= 65536, "Payload Auth maior que limite");
+    // A resposta de enroll inclui QR SVG e pode ser grande; outras
+    // respostas continuam limitadas. Nunca imprimir JWT, segredo ou SVG.
+    const maxBytes = method === "POST" && path === "/factors"
+      ? 1024 * 1024 : 65536;
+    const length = response.headers.get("content-length");
+    ensure(length === null || (/^\d+$/.test(length) && Number(length) <= maxBytes),
+      "Payload Auth maior que limite");
+    const reader = response.body?.getReader();
+    ensure(reader, "GoTrue respondeu sem corpo");
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+    try {
+      while (true) {
+        const {done,value} = await reader.read();
+        if(done)break;
+        total += value.byteLength;
+        ensure(total <= maxBytes,"Payload Auth maior que limite");
+        chunks.push(value);
+      }
+    } catch (error) {
+      await reader.cancel().catch(()=>{});
+      throw error;
+    }
+    const bytes = new Uint8Array(total);
+    let offset = 0;
+    for(const chunk of chunks) {bytes.set(chunk,offset);offset+=chunk.byteLength;}
+    const raw = new TextDecoder("utf-8",{fatal:true}).decode(bytes);
     let data:Json;
     try { data = rec(JSON.parse(raw)); }
     catch { throw new Error("GoTrue respondeu JSON inesperado (HTTP "+response.status+")"); }
