@@ -531,6 +531,35 @@ async function listarRegularizacoesSaidaAdmin(uid:string){
  if(error)throw new Failure("Não foi possível listar regularizações financeiras.",503);
  return respond({success:true,solicitacoes:data||[]});
 }
+// Monitoramento administrativo de separacoes CONTABEIS imutaveis.
+// Nenhum endpoint permite desbloquear, quitar ou enviar Pix.
+async function listarSeparacoesCongeladasAdmin(uid:string){
+ if(uid!==ADMIN_USER_ID)throw new Failure("Acesso restrito à administração.",403);
+ const {data,error,count}=await db.from("catalogo_asaas_separacoes_excepcionais")
+  .select("id,tipo,solicitacao_id,motoboy_id,valor_centavos,creditos,situacao,criado_em",
+    {count:"exact"})
+  .order("criado_em",{ascending:false}).limit(100);
+ if(error)throw new Failure("Não foi possível consultar separações contábeis.",503);
+ return respond({success:true,separacoes:data||[],total:count,
+  ha_mais:count!==null&&count>100,
+  mensagem:"Lista de reservas contábeis sem liquidação; nenhuma ação de desbloqueio disponível."});
+}
+async function diagnosticarSeparacaoCongeladaAdmin(uid:string,body:Record<string,unknown>){
+ if(uid!==ADMIN_USER_ID)throw new Failure("Acesso restrito à administração.",403);
+ const id=value(body.separacao_id,70);
+ check(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id),
+  "Identificador da separação inválido.",400);
+ const diagnostico=await rpc("catalogo_asaas_diagnosticar_separacao_excepcional",
+  {p_separacao:id});
+ check(diagnostico?.ok===true,"Diagnóstico contábil não disponível.",409);
+ // Impossivel transformar um diagnostico em autorizacao de pagamento.
+ check(diagnostico.liberacao_automatica_autorizada===false&&
+   diagnostico.quitacao_automatica_autorizada===false&&
+   diagnostico.pode_reutilizar_creditos===false,
+   "Resposta contábil insegura. Operação bloqueada.",503);
+ return respond({success:true,diagnostico,
+  mensagem:"Diagnóstico somente leitura; não autoriza nenhum Pix, baixa ou desbloqueio."});
+}
 // Somente conferencia de valores. NUNCA autoriza ou inicia uma transferencia.
 async function preconferirExcepcionalAdmin(uid:string,body:Record<string,unknown>){
  if(uid!==ADMIN_USER_ID)throw new Failure("Acesso restrito à administração.",403);
@@ -1072,6 +1101,8 @@ Deno.serve(async (request:Request)=>{
    case "listar_regularizacoes_saida_admin":return await listarRegularizacoesSaidaAdmin(user.id);
    case "revisar_regularizacao_saida_admin":return await revisarRegularizacaoSaidaAdmin(user.id,body);
    case "preconferir_pagamento_excepcional_admin":return await preconferirExcepcionalAdmin(user.id,body);
+   case "listar_separacoes_congeladas_admin":return await listarSeparacoesCongeladasAdmin(user.id);
+   case "diagnosticar_separacao_congelada_admin":return await diagnosticarSeparacaoCongeladaAdmin(user.id,body);
    case "consultar_titularidade_pix_sandbox_admin":return await consultarTitularidadePixSandboxAdmin(user.id,body);
    case "observar_transferencia_excepcional_sandbox_admin":return await observarTransferenciaExcepcionalSandboxAdmin(user.id,body);
    case "revisar_analise_residual_admin":return await revisarAnaliseResidual(user.id,body);
