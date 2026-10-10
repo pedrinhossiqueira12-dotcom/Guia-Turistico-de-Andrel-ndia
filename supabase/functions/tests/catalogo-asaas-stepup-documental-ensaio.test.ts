@@ -19,10 +19,10 @@ const nonce = "88888888-8888-4888-8888-888888888888";
 const challengeId = "99999999-9999-4999-8999-999999999999";
 const NOW = 1_800_000_000_000;
 const identity: SessaoAferidaEmEnsaio = {
-  userId: reviewer, sessionId: session, factorId: factor,
+  userId: reviewer, sessionId: session, factorId: null,
   role: "authenticated", aal: "aal1", anonymous: false,
 };
-const after: SessaoAferidaEmEnsaio = { ...identity, aal: "aal2" };
+const after: SessaoAferidaEmEnsaio = { ...identity, aal: "aal2", factorId: factor };
 function intent(): IntencaoDocumentalEmEnsaio {
   return {
     nonce, userId: reviewer, sessionId: session, factorId: factor,
