@@ -743,6 +743,9 @@ jobs:
             -f supabase/tests/isolated/catalogo-asaas-staged-guards-postgres.sql
           psql -X -d catalogo_asaas_guards_ci -v ON_ERROR_STOP=1 \
             -c "SET app.catalogo_ci_mfa_test='enabled'" \
+            -f supabase/tests/isolated/catalogo-asaas-ponte-nologin-mfa-inerte-postgres.sql
+          psql -X -d catalogo_asaas_guards_ci -v ON_ERROR_STOP=1 \
+            -c "SET app.catalogo_ci_mfa_test='enabled'" \
             -f supabase/tests/isolated/catalogo-asaas-preflight-mfa-inerte-postgres.sql
           psql -X -d catalogo_asaas_guards_ci -v ON_ERROR_STOP=1 \
             -c "SET app.catalogo_ci_mfa_test='enabled'" \
