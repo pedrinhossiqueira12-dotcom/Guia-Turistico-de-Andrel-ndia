@@ -49,3 +49,21 @@ test("regressoes executam role sem login em banco CI, negam funcao interna e tab
  assert.match(pg,/movimenta_dinheiro' IS DISTINCT FROM 'false'/);
  assert.match(pg,/ROLLBACK;/);
 });
+
+test("migration privileged bridge refuses staging, prod, wrong database and opt-in missing",()=>{
+ assert.match(sql,/current_database\(\) IS DISTINCT FROM 'catalogo_asaas_guards_ci'/);
+ assert.match(sql,/current_setting\('app\.catalogo_ci_mfa_bridge',true\) IS DISTINCT FROM 'enabled'/);
+ assert.match(sql,/session_user IS DISTINCT FROM 'postgres'/);
+ assert.match(sql,/CI_ONLY_MFA_BRIDGE: recusa instalacao fora de clone efemero e opt-in/);
+ const guard=sql.indexOf("DO $ci_only_bridge$");
+ const createRole=sql.indexOf("CREATE ROLE "+ROLE);
+ assert.ok(guard>0 && createRole>guard,"role created before environmental guard");
+ assert.match(wf,/asaas-bridge-without-opt-in\.log/);
+ assert.match(wf,/asaas-bridge-wrong-db\.log/);
+ assert.match(wf,/psql -X -d catalogo_ci -v ON_ERROR_STOP=1/);
+ assert.match(wf,/grep -F 'CI_ONLY_MFA_BRIDGE' \/tmp\/asaas-bridge-without-opt-in\.log/);
+ assert.match(wf,/grep -F 'CI_ONLY_MFA_BRIDGE' \/tmp\/asaas-bridge-wrong-db\.log/);
+ assert.match(wf,/SET app\.catalogo_ci_mfa_bridge='enabled'/);
+ assert.match(wf,/case "\$migration" in/);
+ assert.match(wf,/\$bridge_sql"\)/);
+});
