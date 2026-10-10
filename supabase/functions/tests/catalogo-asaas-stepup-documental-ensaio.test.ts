@@ -325,11 +325,14 @@ Deno.test("confirmacao: Auth lento deixa challenge vencer sem enviar OTP",async(
 function gateCompartilhado(): {
   gate: PortaReservaCompartilhadaMfaEmEnsaio;
   chamadasInicio: Array<Record<string, unknown>>;
+  chamadasRegistro: Array<Record<string, unknown>>;
   chamadasVerificacao: Array<Record<string, unknown>>;
 } {
   const inicios = new Set<string>();
+  const desafios = new Map<string, Record<string, unknown>>();
   const verificacoes = new Set<string>();
   const chamadasInicio: Array<Record<string, unknown>> = [];
+  const chamadasRegistro: Array<Record<string, unknown>> = [];
   const chamadasVerificacao: Array<Record<string, unknown>> = [];
   const gate: PortaReservaCompartilhadaMfaEmEnsaio = {
     async reservarInicio(args) {
@@ -340,20 +343,32 @@ function gateCompartilhado(): {
       await Promise.resolve();
       return true;
     },
+    async registrarDesafio(args) {
+      chamadasRegistro.push({...args});
+      // So aceita nonce previamente reservado e ID nunca utilizado,
+      // inclusive em uma intencao diferente do mesmo revisor.
+      if (!inicios.has(args.nonce) || desafios.has(args.challengeId)) return false;
+      desafios.set(args.challengeId,{...args});
+      await Promise.resolve();
+      return true;
+    },
     async reservarVerificacao(args) {
       chamadasVerificacao.push({...args});
-      if (verificacoes.has(args.challengeId)) return false;
+      const registro=desafios.get(args.challengeId);
+      if (!registro || verificacoes.has(args.challengeId)) return false;
+      for(const chave of ["nonce","tentativa","challengeId","userId","sessionId", "factorId", "separationId", "evidenceHash", "expiresAt"])
+        if (registro[chave]!==args[chave as keyof typeof args]) return false;
       verificacoes.add(args.challengeId);
       await Promise.resolve();
       return true;
     },
   };
-  return {gate, chamadasInicio, chamadasVerificacao};
+  return {gate, chamadasInicio, chamadasRegistro, chamadasVerificacao};
 }
 
 Deno.test("duas instancias com gate comum nao criam dois challenges do mesmo nonce", async()=>{
   const {auth,calls}=fake();
-  const {gate,chamadasInicio,chamadasVerificacao}=gateCompartilhado();
+  const {gate,chamadasInicio,chamadasRegistro,chamadasVerificacao}=gateCompartilhado();
   const a=new SimuladorStepUpDocumental(auth,()=>NOW,"isolated-ci",gate);
   const b=new SimuladorStepUpDocumental(auth,()=>NOW,"isolated-ci",gate);
   const [r1,r2]=await Promise.all([a.iniciar(intent(),"before"),b.iniciar(intent(),"before")]);
@@ -370,6 +385,13 @@ Deno.test("duas instancias com gate comum nao criam dois challenges do mesmo non
   const winner=r1.ok ? {flow:a,result:r1} : {flow:b,result:r2};
   const accepted=await winner.flow.confirmar(winner.result.tentativa!,"before","123456");
   assert(accepted.ok,"gate impediu fluxo valido de laboratorio");
+  assert(chamadasRegistro.length===1,"challenge nao foi fixado no gate compartilhado");
+  assert(chamadasRegistro[0].nonce===nonce && chamadasRegistro[0].challengeId===challengeId
+    && chamadasRegistro[0].userId===reviewer && chamadasRegistro[0].sessionId===session
+    && chamadasRegistro[0].factorId===factor && chamadasRegistro[0].evidenceHash==="a".repeat(64),
+    "challenge nao corresponde ao snapshot original");
+  assert(!("otp" in chamadasRegistro[0])&&! ("bearerToken" in chamadasRegistro[0]),
+    "segredos no armazenamento do challenge");
   assert(chamadasVerificacao.length===1,"gate de verificacao nao foi usado");
   assert(chamadasVerificacao[0].challengeId===challengeId
     && chamadasVerificacao[0].nonce===nonce,"challenge/nonce errados no consumo global");
@@ -386,6 +408,7 @@ Deno.test("reservas compartilhadas negadas ou indisponiveis falham fechado",asyn
         if(kind==="erro")throw Error("db offline");
         return false;
       },
+      async registrarDesafio(){throw Error("nao deve chegar aqui");},
       async reservarVerificacao(){throw Error("nao deve chegar aqui");},
     };
     const flow=new SimuladorStepUpDocumental(auth,()=>NOW,"isolated-ci",gate);
@@ -411,16 +434,19 @@ Deno.test("mesmo challenge usado em outro nonce nao verifica duas operacoes",asy
     a.iniciar(intent(),"before"),
     b.iniciar({...intent(),nonce:alternateNonce},"before"),
   ]);
-  assert(r1.ok && r2.ok,"intencoes distintas deveriam chegar ao mock");
-  const [v1,v2]=await Promise.all([
-    a.confirmar(r1.tentativa!,"before","123456"),
-    b.confirmar(r2.tentativa!,"before","123456"),
-  ]);
-  assert(Number(v1.ok)+Number(v2.ok)===1,
-    "challenge reutilizado em dois nonces escapou do gate global");
+  assert(Number(r1.ok)+Number(r2.ok)===1,
+    "desafio retornado pelo Auth foi vinculado a dois nonces distintos");
+  assert(calls.filter(c=>c.action==="challenge").length===2,
+    "a fixture nao chegou a criar dois challenges identicos");
+  const winner=r1.ok ? {flow:a,result:r1} : {flow:b,result:r2};
+  const loser=r1.ok ? r2 : r1;
+  assert(!loser.ok && loser.motivo==="desafio_ja_vinculado_ou_invalido",
+    "duplicate challenge ID exposed before storage confirmation");
+  const verified=await winner.flow.confirmar(winner.result.tentativa!,"before","123456");
+  assert(verified.ok,"vencedor legitimo recusado");
   assert(calls.filter(c=>c.action==="verify").length===1,
     "mesmo challenge enviou dois OTP ao fake Auth");
-  assertHold(v1);assertHold(v2);
+  assertHold(r1);assertHold(r2);assertHold(verified);
 });
 
 Deno.test("gate de consumo indisponivel ou lento nunca envia OTP",async()=>{
@@ -429,6 +455,7 @@ Deno.test("gate de consumo indisponivel ou lento nunca envia OTP",async()=>{
     const {auth,calls}=fake();
     const gate:PortaReservaCompartilhadaMfaEmEnsaio={
       async reservarInicio(){return true;},
+      async registrarDesafio(){return true;},
       async reservarVerificacao(){
         if(kind==="throw")throw Error("shared DB offline");
         if(kind==="expira"){clock+=121_000;return true;}
@@ -463,6 +490,9 @@ Deno.test("snapshot imutavel impede trocar operacao durante reserva compartilhad
       entrou();
       await aguardando;
       return true;
+    },
+    async registrarDesafio(args) {
+      return args.nonce===nonce && args.evidenceHash==="a".repeat(64);
     },
     async reservarVerificacao(args) {
       confirmacao={...args};
@@ -500,4 +530,40 @@ Deno.test("snapshot imutavel impede trocar operacao durante reserva compartilhad
     && confirmacao?.evidenceHash==="a".repeat(64),
     "consumo recebeu campos adulterados apos a espera");
   assertHold(issued);assertHold(checked);
+});
+
+
+Deno.test("desafio emitido sem persistencia compartilhada nao gera tentativa utilizavel",async()=>{
+  for(const mode of ["rejeitado","erro","expirou"] as const) {
+    let clock=NOW;
+    const {auth,calls}=fake();
+    let attempts=0;
+    const gate:PortaReservaCompartilhadaMfaEmEnsaio={
+      async reservarInicio(){return true;},
+      async registrarDesafio(args) {
+        attempts++;
+        assert(args.nonce===nonce && args.challengeId===challengeId
+          && args.evidenceHash==="a".repeat(64)
+          && args.separationId===escrow,"snapshot divergente ao registrar");
+        assert(!("otp" in args)&&!("bearerToken" in args)
+          &&!("refreshToken" in args),"segredo armazenado no challenge");
+        if(mode==="erro")throw Error("db offline");
+        if(mode==="expirou"){clock+=121_000;return true;}
+        return false;
+      },
+      async reservarVerificacao(){throw Error("nao deve consumir tentativa recusada");},
+    };
+    const flow=new SimuladorStepUpDocumental(auth,()=>clock,"isolated-ci",gate);
+    const opened=await flow.iniciar(intent(),"before");
+    assert(!opened.ok && !opened.tentativa,"tentativa divulgada sem registro confirmado");
+    assert(opened.motivo===(mode==="rejeitado"?"desafio_ja_vinculado_ou_invalido":
+      mode==="erro"?"registro_compartilhado_desafio_indisponivel":
+      "desafio_ou_intencao_expirada"),"reserva externa nao falhou fechado");
+    assert(attempts===1,"registro nao chamado uma vez");
+    assert(calls.filter(c=>c.action==="challenge").length===1,
+      "fixture deveria simular challenge Auth ja emitido");
+    assert(calls.filter(c=>c.action==="verify").length===0,
+      "OTP chegou ao Auth sem registro do challenge");
+    assertHold(opened);
+  }
 });
