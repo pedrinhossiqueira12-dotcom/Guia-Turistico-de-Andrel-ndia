@@ -560,6 +560,26 @@ async function diagnosticarSeparacaoCongeladaAdmin(uid:string,body:Record<string
  return respond({success:true,diagnostico,
   mensagem:"Diagnóstico somente leitura; não autoriza nenhum Pix, baixa ou desbloqueio."});
 }
+// Etapa #41: matriz somente leitura; GET observado nao comprova destino Pix.
+// O diagnostico nunca autoriza Pix, baixa ou liberacao de escrow.
+async function matrizConciliacaoEscrowAdmin(uid:string,body:Record<string,unknown>){
+ if(uid!==ADMIN_USER_ID)throw new Failure("Acesso restrito à administração.",403);
+ const id=value(body.separacao_id,70);
+ check(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id),
+  "Identificador da separação inválido.",400);
+ const matriz=await rpc("catalogo_asaas_matriz_conciliacao_escrow",
+  {p_separacao:id});
+ check(matriz?.ok===true,"Matriz de conciliação indisponível; manter HOLD.",409);
+ check(matriz.evidencia_suficiente_para_liquidar===false&&
+  matriz.evidencia_suficiente_para_liberar===false&&
+  matriz.pagamento_autorizado===false&&
+  matriz.baixa_realizada===false&&
+  matriz.movimenta_dinheiro===false&&
+  matriz.destino_pix_original_vinculado_com_prova===false,
+  "Matriz retornou autorização financeira insegura; operação bloqueada.",503);
+ return respond({success:true,matriz,
+  mensagem:"Matriz somente leitura. Nenhuma observação comprova destinatário; a reserva continua congelada."});
+}
 // Dossie administrativo append-only. Evidencias sao declaracoes de apuracao,
 // NAO sao prova suficiente para liberar Pix, pagar ou marcar quitacao.
 async function listarDossieEscrowAdmin(uid:string,body:Record<string,unknown>){
@@ -1178,6 +1198,7 @@ Deno.serve(async (request:Request)=>{
    case "preconferir_pagamento_excepcional_admin":return await preconferirExcepcionalAdmin(user.id,body);
    case "listar_separacoes_congeladas_admin":return await listarSeparacoesCongeladasAdmin(user.id);
    case "diagnosticar_separacao_congelada_admin":return await diagnosticarSeparacaoCongeladaAdmin(user.id,body);
+   case "matriz_conciliacao_escrow_admin":return await matrizConciliacaoEscrowAdmin(user.id,body);
    case "exportar_ancora_dossie_admin":return await exportarAncoraEscrowAdmin(user.id,body);
    case "listar_dossie_escrow_admin":return await listarDossieEscrowAdmin(user.id,body);
    case "registrar_dossie_escrow_admin":return await registrarDossieEscrowAdmin(user.id,body);
