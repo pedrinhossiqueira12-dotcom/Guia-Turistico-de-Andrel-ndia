@@ -97,6 +97,8 @@ async function prepareCrypto(revokeAfterVerify=false,corruptJwks=false){
    http,
    verificarAssinaturaJwtESessaoNoServidor:(t,fase)=>
      fase==="inicio"? signedSession.verificarInicio(t):signedSession.verificar(t),
+   verificarFatorTotpAal1NoServidor: async ({userId,sessionId,factorId})=>
+     !revoked && userId===UID && sessionId===SID && factorId===FACTOR,
  });
  const simulator=new SimuladorStepUpDocumental(transport,()=>NOW,"isolated-ci");
  const intent={
