@@ -31,6 +31,7 @@
    - `ASAAS_ENVIRONMENT` = `sandbox` ou `production`; sem valor usa **sandbox**
    - `ASAAS_WEBHOOK_TOKEN` = token seguro diferente da chave API, 32–255 caracteres
    - `ASAAS_BILLING_ENABLED` = `false` inicialmente
+   - `ASAAS_PRODUCTION_BILLING_APPROVED` = `false` (opt-in independente obrigatório para a API produtiva de cobranças, habilitar somente após aprovação explícita). Mesmo com `ASAAS_ENVIRONMENT=production` e `ASAAS_BILLING_ENABLED=true`, sem esse opt-in a função responde HTTP 503 e não chama o Asaas.
    - `ASAAS_PAYOUTS_ENABLED` = `false` inicialmente
    - `CATALOGO_DATA_ENCRYPTION_KEY` = **mesma chave já usada** nos perfis dos motoboys; não trocar sem plano de recifragem.
 6. Configurar webhook do Asaas no painel:
