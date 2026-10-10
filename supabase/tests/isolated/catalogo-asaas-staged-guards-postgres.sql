@@ -1650,10 +1650,36 @@ BEGIN
     AND c.estado='preparado_sem_challenge'
  ) THEN RAISE EXCEPTION 'Contexto AAL1 aceitou fotografia cliente adulterada'; END IF;
 
- -- Owner-only PostgreSQL real: uma reserva GLOBAL antes do challenge,
- -- desafio com challenge_id UNIQUE, consumo previo ao OTP, tudo sem Pix.
- SELECT catalogo_private.catalogo_asaas_reservar_inicio_compartilhado_inerte(
-  v_contexto_aal1) INTO v_preinicio;
+ -- Identidade previamente comprovada pelo backend. Um bearer alheio
+ -- NAO pode queimar o nonce do revisor, mesmo conhecendo o contexto.
+ SELECT catalogo_private.catalogo_asaas_reservar_inicio_principal_vinculado_inerte(
+  v_contexto_aal1,'fa722222-2222-4222-8222-222222222224'::uuid,
+  'fa733333-3333-4333-8333-333333333331'::uuid) INTO v_prereplay;
+ IF v_prereplay->>'ok' IS DISTINCT FROM 'false'
+  OR v_prereplay->>'nonce' IS NOT NULL
+  OR v_prereplay->>'motivo' IS DISTINCT FROM 'principal_ou_contexto_divergente'
+ THEN RAISE EXCEPTION 'Usuario alheio reservou nonce: %',v_prereplay; END IF;
+ SELECT catalogo_private.catalogo_asaas_reservar_inicio_principal_vinculado_inerte(
+  v_contexto_aal1,'fa722222-2222-4222-8222-222222222221'::uuid,
+  'fa733333-3333-4333-8333-333333333334'::uuid) INTO v_prereplay;
+ IF v_prereplay->>'ok' IS DISTINCT FROM 'false'
+  OR v_prereplay->>'nonce' IS NOT NULL
+ THEN RAISE EXCEPTION 'Sessao alheia queimou nonce: %',v_prereplay; END IF;
+ SELECT catalogo_private.catalogo_asaas_reservar_inicio_principal_vinculado_inerte(
+  v_contexto_aal1,NULL,'fa733333-3333-4333-8333-333333333331'::uuid
+ ) INTO v_prereplay;
+ IF v_prereplay->>'ok' IS DISTINCT FROM 'false'
+  OR v_prereplay->>'nonce' IS NOT NULL
+ THEN RAISE EXCEPTION 'Principal NULL reservou nonce'; END IF;
+ IF EXISTS (SELECT 1 FROM public.catalogo_asaas_reservas_prechallenge_compartilhadas_inertes
+  WHERE contexto_id=v_contexto_aal1) THEN
+  RAISE EXCEPTION 'Bancos de testes gravaram nonce apesar de principal invalido'; END IF;
+
+ -- Owner-only PostgreSQL real: reserva vinculada ao revisor + sessao
+ -- AAL1, challenge_id UNIQUE, consumo previo ao OTP, tudo sem Pix.
+ SELECT catalogo_private.catalogo_asaas_reservar_inicio_principal_vinculado_inerte(
+  v_contexto_aal1,'fa722222-2222-4222-8222-222222222221'::uuid,
+  'fa733333-3333-4333-8333-333333333331'::uuid) INTO v_preinicio;
  v_prenonce:=(v_preinicio->>'nonce')::uuid;
  IF v_preinicio->>'ok' IS DISTINCT FROM 'true' OR v_prenonce IS NULL
   OR v_preinicio->>'pagamento_autorizado' IS DISTINCT FROM 'false'
@@ -1841,6 +1867,12 @@ BEGIN
     'catalogo_private.catalogo_asaas_ler_tentativa_prechallenge_inerte(uuid)','EXECUTE')
   OR has_function_privilege('service_role',
     'catalogo_private.catalogo_asaas_ler_tentativa_prechallenge_inerte(uuid)','EXECUTE')
+  OR has_function_privilege('anon',
+    'catalogo_private.catalogo_asaas_reservar_inicio_principal_vinculado_inerte(uuid,uuid,uuid)','EXECUTE')
+  OR has_function_privilege('authenticated',
+    'catalogo_private.catalogo_asaas_reservar_inicio_principal_vinculado_inerte(uuid,uuid,uuid)','EXECUTE')
+  OR has_function_privilege('service_role',
+    'catalogo_private.catalogo_asaas_reservar_inicio_principal_vinculado_inerte(uuid,uuid,uuid)','EXECUTE')
  THEN RAISE EXCEPTION 'RPC ou tabela prechallenge compartilhada exposta ao cliente'; END IF;
  RAISE NOTICE 'PASS: prechallenge real Postgres owner-only, nonce e challenge unicos, replay, sessoes, RLS e HOLD';
 
