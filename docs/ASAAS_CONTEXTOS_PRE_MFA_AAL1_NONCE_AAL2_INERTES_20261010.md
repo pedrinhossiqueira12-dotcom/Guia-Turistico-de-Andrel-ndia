@@ -140,9 +140,9 @@ O commit funcional `65784db56d26ea3462127f86461bb9466650f712`
 passou nos jobs financeiros Deno/Node/PostgreSQL, e a última
 execução documental verificada do commit
 `c920a43322b651f609bbeabcd11e81855f3ed06c`
-estava em 11/12 checks aprovados, sem erros, aguardando
-somente o reset/pgTAP nativo. O resultado completo da CI pode
-ser consultado no workflow correspondente.
+concluiu **12/12 jobs com sucesso**, incluindo
+reset nativo Supabase e 23 pgTAP. O relatório está em
+[CI 38076218294](https://github.com/pedrinhossiqueira12-dotcom/Guia-Turistico-de-Andrel-ndia/actions/runs/38076218294).
 
 **Nenhum challenge GoTrue real foi criado, nenhuma sessão
 AAL2 real foi iniciada, nenhuma comissão ou saldo foi movimentado.**
