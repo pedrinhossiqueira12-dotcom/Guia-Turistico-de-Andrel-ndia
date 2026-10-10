@@ -165,7 +165,7 @@ BEGIN
    v_doc:=public.catalogo_asaas_verificar_integridade_dossie_escrow(v_c.separacao_id);
    v_mat:=public.catalogo_asaas_matriz_conciliacao_escrow(v_c.separacao_id);
    v_fin:=public.catalogo_asaas_diagnosticar_separacao_excepcional(v_c.separacao_id);
-   v_ok:=
+   v_ok:=coalesce(
     v_c.expira_em>pg_catalog.clock_timestamp()
     AND v_n.gerado_em>=v_c.preparado_em
     AND v_n.gerado_em<=v_c.expira_em
@@ -198,7 +198,7 @@ BEGIN
       AND r.valido_ate>pg_catalog.clock_timestamp()
       AND NOT EXISTS(
         SELECT 1 FROM public.catalogo_asaas_revisores_escrow_revogacoes_ensaio x
-        WHERE x.revisor_id=r.revisor_id));
+        WHERE x.revisor_id=r.revisor_id)),false);
   END IF;
  END IF;
  RETURN pg_catalog.jsonb_build_object(
