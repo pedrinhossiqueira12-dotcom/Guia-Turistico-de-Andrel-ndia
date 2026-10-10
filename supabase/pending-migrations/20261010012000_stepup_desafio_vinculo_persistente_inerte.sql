@@ -38,6 +38,9 @@ DECLARE
  v_i public.catalogo_asaas_intencoes_mfa_documentais_ensaio%ROWTYPE;
  v_preflight jsonb;
  v_dossie jsonb;
+ v_matriz jsonb;
+ v_e public.catalogo_asaas_separacoes_excepcionais%ROWTYPE;
+ v_matriz_hash text;
  v_financeiro jsonb;
  v_fator uuid;
  v_hora timestamptz;
@@ -88,10 +91,19 @@ BEGIN
    USING ERRCODE='23514';
  END IF;
 
+ SELECT * INTO v_e FROM public.catalogo_asaas_separacoes_excepcionais
+ WHERE id=v_i.separacao_id;
  v_dossie:=public.catalogo_asaas_verificar_integridade_dossie_escrow(v_i.separacao_id);
+ v_matriz:=public.catalogo_asaas_matriz_conciliacao_escrow(v_i.separacao_id);
  v_financeiro:=public.catalogo_asaas_diagnosticar_separacao_excepcional(v_i.separacao_id);
- IF v_dossie->>'integridade_valida' IS DISTINCT FROM 'true'
+ v_matriz_hash:=pg_catalog.encode(pg_catalog.sha256(
+  pg_catalog.convert_to(v_matriz::text,'UTF8')),'hex');
+ IF v_e.situacao IS DISTINCT FROM 'congelada'
+  OR v_e.fingerprint_sha256 IS DISTINCT FROM v_i.fingerprint_creditos_sha256
+  OR v_dossie->>'integridade_valida' IS DISTINCT FROM 'true'
   OR v_dossie->>'hash_final_registrado_sha256' IS DISTINCT FROM v_i.dossie_hash_sha256
+  OR v_matriz->>'ok' IS DISTINCT FROM 'true'
+  OR v_matriz_hash IS DISTINCT FROM v_i.matriz_hash_sha256
   OR v_financeiro->>'composicao_inalterada_e_financiada' IS DISTINCT FROM 'true'
  THEN
   RAISE EXCEPTION 'Evidencia documental/financeira mudou desde o nonce'
