@@ -560,6 +560,54 @@ async function diagnosticarSeparacaoCongeladaAdmin(uid:string,body:Record<string
  return respond({success:true,diagnostico,
   mensagem:"Diagnóstico somente leitura; não autoriza nenhum Pix, baixa ou desbloqueio."});
 }
+// Dossie administrativo append-only. Evidencias sao declaracoes de apuracao,
+// NAO sao prova suficiente para liberar Pix, pagar ou marcar quitacao.
+async function listarDossieEscrowAdmin(uid:string,body:Record<string,unknown>){
+ if(uid!==ADMIN_USER_ID)throw new Failure("Acesso restrito à administração.",403);
+ const id=value(body.separacao_id,70);
+ check(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id),
+   "Identificador da separação inválido.",400);
+ const {data,error,count}=await db.from("catalogo_asaas_escrow_dossie_eventos")
+  .select("id,seq,autor_id,categoria,descricao,documento_sha256,hash_anterior_sha256,evento_sha256,criado_em",
+   {count:"exact"})
+  .eq("separacao_id",id).order("seq",{ascending:false}).limit(100);
+ if(error)throw new Failure("Histórico de conciliação indisponível.",503);
+ return respond({success:true,evento_count:count,
+  ha_mais:count!==null&&count>100,eventos:(data||[]).reverse(),
+  autorizacao_pagamento:false,liberacao_creditos:false,
+  mensagem:"Registros de auditoria sem valor de comprovante bancário ou autorização de pagamento."});
+}
+async function registrarDossieEscrowAdmin(uid:string,body:Record<string,unknown>){
+ if(uid!==ADMIN_USER_ID)throw new Failure("Acesso restrito à administração.",403);
+ const separacao=value(body.separacao_id,70);
+ const chave=value(body.chave_idempotencia,70);
+ const categoria=value(body.categoria,40);
+ const descricao=typeof body.descricao==="string"?body.descricao.trim():"";
+ const documento=body.documento_sha256==null||body.documento_sha256===""
+  ?null:value(body.documento_sha256,70);
+ const uuidRx=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+ check(uuidRx.test(separacao)&&uuidRx.test(chave),"Identificadores de auditoria inválidos.",400);
+ check(["verificacao_banco","verificacao_destinatario","comprovante_externo",
+   "contestacao","divergencia","parecer_pendente"].includes(categoria),
+   "Categoria de auditoria desconhecida.",400);
+ check(descricao.length>=30&&descricao.length<=1000&&!/[\\x00-\\x1F\\x7F]/.test(descricao),
+   "Registre uma descrição de 30 a 1000 caracteres, sem caracteres de controle.",400);
+ check(documento===null||/^[a-f0-9]{64}$/.test(documento),
+   "Documento deve ser identificado pelo SHA-256 hexadecimal, sem conteúdo pessoal.",400);
+ check(categoria!=="comprovante_externo"||Boolean(documento),
+   "Informe a impressão digital SHA-256 do comprovante externo.",400);
+ const gravacao=await rpc("catalogo_asaas_registrar_evento_dossie_escrow",{
+  p_separacao:separacao,p_autor:uid,p_chave:chave,p_categoria:categoria,
+  p_descricao:descricao,p_documento_sha256:documento
+ });
+ check(gravacao?.ok===true,gravacao?.mensagem||"Falha ao registrar evento financeiro.",409);
+ check(gravacao.pagamento_autorizado===false&&gravacao.baixa_realizada===false&&
+  gravacao.liberacao_autorizada===false,
+  "Resposta de auditoria inesperada; bloqueado.",503);
+ return respond({success:true,evento:gravacao,
+  mensagem:gravacao.repetido?"Registro idempotente preservado. Nenhum crédito foi liberado.":
+   "Evidência administrativa registrada, sem desbloquear, liquidar ou enviar Pix."});
+}
 // Somente conferencia de valores. NUNCA autoriza ou inicia uma transferencia.
 async function preconferirExcepcionalAdmin(uid:string,body:Record<string,unknown>){
  if(uid!==ADMIN_USER_ID)throw new Failure("Acesso restrito à administração.",403);
@@ -1103,6 +1151,8 @@ Deno.serve(async (request:Request)=>{
    case "preconferir_pagamento_excepcional_admin":return await preconferirExcepcionalAdmin(user.id,body);
    case "listar_separacoes_congeladas_admin":return await listarSeparacoesCongeladasAdmin(user.id);
    case "diagnosticar_separacao_congelada_admin":return await diagnosticarSeparacaoCongeladaAdmin(user.id,body);
+   case "listar_dossie_escrow_admin":return await listarDossieEscrowAdmin(user.id,body);
+   case "registrar_dossie_escrow_admin":return await registrarDossieEscrowAdmin(user.id,body);
    case "consultar_titularidade_pix_sandbox_admin":return await consultarTitularidadePixSandboxAdmin(user.id,body);
    case "observar_transferencia_excepcional_sandbox_admin":return await observarTransferenciaExcepcionalSandboxAdmin(user.id,body);
    case "revisar_analise_residual_admin":return await revisarAnaliseResidual(user.id,body);
