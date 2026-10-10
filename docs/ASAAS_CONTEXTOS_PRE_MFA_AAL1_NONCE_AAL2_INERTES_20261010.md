@@ -111,6 +111,42 @@ fluxo de pagamento e não concede EXECUTE a qualquer Edge publicada.
 - A execução CI usa Auth falso e isolamento sem rede externa.
   Não modifica dados de usuários STAGING ou produção.
 
+## Resultado de homologação e validação observados
+
+Após os testes Deno, Node e PostgreSQL financeiro passarem no banco
+descartável, a migration
+`asaas_contexto_aal1_nonce_aal2_persistente_inerte_staging_20261010`
+foi aplicada **exclusivamente** ao projeto de homologação Supabase
+`jbttwihctuibchhcyqtl`.
+
+Consultas SQL independentes posteriores confirmaram:
+
+- `catalogo_asaas_contextos_pre_mfa_inertes` e
+  `catalogo_asaas_vinculos_pre_mfa_nonce_inertes`:
+  ambas com RLS ativo e sem SELECT para `anon`, sem INSERT
+  para `authenticated` ou `service_role`.
+- Nenhuma das 3 novas funções privadas pode ser chamada
+  por `anon`, `authenticated` ou `service_role`.
+  A função de diagnóstico é `SECURITY INVOKER`.
+- **Zero** contextos preparatórios, vínculos, fatores MFA,
+  revisores e intenções documentais em homologação.
+- Diagnóstico com contexto/nonce inexistentes devolve
+  `ok=false`, `vinculo_documental_compativel=false`,
+  `challenge_go_true_verificado=false`,
+  `pagamento_autorizado=false`, `movimenta_dinheiro=false`,
+  `HOLD_OBRIGATORIO`.
+
+O commit funcional `65784db56d26ea3462127f86461bb9466650f712`
+passou nos jobs financeiros Deno/Node/PostgreSQL, e a última
+execução documental verificada do commit
+`c920a43322b651f609bbeabcd11e81855f3ed06c`
+estava em 11/12 checks aprovados, sem erros, aguardando
+somente o reset/pgTAP nativo. O resultado completo da CI pode
+ser consultado no workflow correspondente.
+
+**Nenhum challenge GoTrue real foi criado, nenhuma sessão
+AAL2 real foi iniciada, nenhuma comissão ou saldo foi movimentado.**
+
 ## Dependências ainda não implementadas
 
 1. A autenticação MFA real com um revisor TOTP cadastrado no
