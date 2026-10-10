@@ -23,6 +23,16 @@ export interface AuthSessaoConsultada {
   factorStatus: string | null;
 }
 
+// Consulta de sessao PRE-TOTP. Nunca declara MFA concluido: em AAL1
+// auth.sessions.factor_id pode ser NULL e nao deve ser inventado.
+export interface AuthSessaoBasicaConsultada {
+  id: string;
+  userId: string;
+  aal: "aal1" | "aal2";
+  notAfterMs: number | null;
+  usuarioBloqueado: boolean;
+}
+
 export interface ProvedorIdentidadeAssinadaInerte {
   // Apenas JWKS da origem fixa/pinada do projeto Supabase. Se indisponivel,
   // negar por completo. Nao aceitar URLs ou chaves do token do cliente.
@@ -30,6 +40,9 @@ export interface ProvedorIdentidadeAssinadaInerte {
   // Apenas consulta administrativa backend, direta ou privada, em
   // auth.sessions+auth.mfa_factors. Nao é um RPC publico.
   consultarSessaoEFator(sessionId: string): Promise<AuthSessaoConsultada | null>;
+  // Porta opcional de AAL1 para iniciar MFA: se nao houver leitor privado,
+  // falha fechada. Nunca pode ser usada para comprovar fator/operacao.
+  consultarSessaoBasica?(sessionId: string): Promise<AuthSessaoBasicaConsultada | null>;
 }
 
 export interface ConfigJWTInerte {
@@ -120,6 +133,19 @@ export class ValidadorJwtSessaoInerte {
   }
 
   async verificar(token: string): Promise<SessaoAferidaEmEnsaio | null> {
+    // Verificacao final: apenas AAL2 com fator TOTP efetivamente associado.
+    return this.verificarInterno(token, false);
+  }
+
+  async verificarInicio(token: string): Promise<SessaoAferidaEmEnsaio | null> {
+    // Somente fase anterior ao challenge. AAL1 e identidade, NUNCA prova MFA.
+    return this.verificarInterno(token, true);
+  }
+
+  private async verificarInterno(
+    token: string,
+    aceitaAal1: boolean,
+  ): Promise<SessaoAferidaEmEnsaio | null> {
     // Fail closed: nunca vazar JWT, JWK, OTP ou erro remoto nos logs.
     try {
       if (typeof token !== "string" || token.length > MAX_JWT_LENGTH) return null;
@@ -145,7 +171,7 @@ export class ValidadorJwtSessaoInerte {
         claims.aud !== "authenticated" ||
         claims.role !== "authenticated" ||
         claims.is_anonymous !== false ||
-        claims.aal !== "aal2" ||
+        (claims.aal !== "aal2" && !(aceitaAal1 && claims.aal === "aal1")) ||
         typeof claims.sub !== "string" || !UUID.test(claims.sub) ||
         typeof claims.session_id !== "string" || !UUID.test(claims.session_id) ||
         iat === null || exp === null || exp <= nowSec ||
@@ -175,7 +201,23 @@ export class ValidadorJwtSessaoInerte {
       );
       if (!verified) return null;
 
-      // Somente DEPOIS da validacao criptografica consultar Auth.
+      // Somente DEPOIS da assinatura consultar Auth, sempre na fase correta.
+      // AAL1 nao possui fator associado a esta sessao; a API de challenge
+      // GoTrue sera responsavel por verificar posse do fator pelo usuario.
+      if (claims.aal === "aal1") {
+        const buscar = this.cfg.provedor.consultarSessaoBasica;
+        if (!aceitaAal1 || typeof buscar !== "function") return null;
+        const basica = await buscar(claims.session_id as string);
+        if (!basica || basica.id !== claims.session_id ||
+          basica.userId !== claims.sub || basica.aal !== "aal1" ||
+          basica.usuarioBloqueado !== false ||
+          (basica.notAfterMs !== null && (!Number.isFinite(basica.notAfterMs)
+            || basica.notAfterMs <= now))) return null;
+        return {
+          userId: basica.userId, sessionId: basica.id, factorId: null,
+          role: "authenticated", aal: "aal1", anonymous: false,
+        };
+      }
       const session = await this.cfg.provedor.consultarSessaoEFator(claims.session_id as string);
       if (!session || !equalClaimsSession(claims,session,now)) return null;
       return {
