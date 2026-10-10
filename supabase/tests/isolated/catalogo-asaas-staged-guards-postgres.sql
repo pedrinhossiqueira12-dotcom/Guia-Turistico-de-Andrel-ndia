@@ -1007,6 +1007,7 @@ DECLARE
  v_nota_bloqueada jsonb;
  v_matriz_antes jsonb;
  v_matriz_depois jsonb;
+ v_matriz_regressao jsonb;
  v_ancora_zerada jsonb;
  v_ancora_dois jsonb;
  v_ancora_adulterada jsonb;
@@ -1333,6 +1334,26 @@ BEGIN
  OR has_function_privilege('authenticated','public.catalogo_asaas_matriz_conciliacao_escrow(uuid)','EXECUTE')
  OR NOT has_function_privilege('service_role','public.catalogo_asaas_matriz_conciliacao_escrow(uuid)','EXECUTE')
  THEN RAISE EXCEPTION 'Matriz bancaria exposta a usuario comum'; END IF;
+
+ -- GET tardio observou PENDING depois de DONE. STATUS bancario observado
+ -- nunca prova destinatario nem autoriza reutilizar saldo.
+ SELECT public.catalogo_asaas_registrar_observacao_excepcional(
+  'saida',v_saida,'ci_audit_frozen_120',
+  'guia-exc:saida:'||v_saida,12000,'PENDING') INTO v_evidencia;
+ IF v_evidencia->>'ok' IS DISTINCT FROM 'true'
+  OR v_evidencia->>'pagamento_baixado' IS DISTINCT FROM 'false'
+ THEN RAISE EXCEPTION 'Retorno a PENDING nao foi auditado: %',v_evidencia; END IF;
+ SELECT public.catalogo_asaas_matriz_conciliacao_escrow(
+  (v_reserva->>'separacao_id')::uuid) INTO v_matriz_regressao;
+ IF v_matriz_regressao->>'transferencias_com_retorno_a_processamento' IS DISTINCT FROM '1'
+  OR v_matriz_regressao->>'transferencias_com_done' IS DISTINCT FROM '1'
+  OR v_matriz_regressao->>'ultimo_estado_observado_sem_valor_de_prova' IS DISTINCT FROM 'PENDING'
+  OR v_matriz_regressao->>'evidencia_suficiente_para_liquidar' IS DISTINCT FROM 'false'
+  OR v_matriz_regressao->>'evidencia_suficiente_para_liberar' IS DISTINCT FROM 'false'
+  OR v_matriz_regressao->>'pagamento_autorizado' IS DISTINCT FROM 'false'
+  OR v_matriz_regressao->>'baixa_realizada' IS DISTINCT FROM 'false'
+  OR (v_matriz_regressao->>'contagem_sinais_de_conflito')::bigint<1
+ THEN RAISE EXCEPTION 'Regresso bancario deveria manter HOLD: %',v_matriz_regressao; END IF;
 
  -- Perda de financiamento de um dos 2 creditos: HOLD e alerta, nunca baixa.
  UPDATE public.catalogo_remuneracoes_v2
