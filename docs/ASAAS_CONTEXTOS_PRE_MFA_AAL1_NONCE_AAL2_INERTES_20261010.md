@@ -208,3 +208,26 @@ publicada nesta entrega.
 Permanece inalterado: zero MFA real comprovado, sem usuarios revisores
 nomeados, duas aprovacoes independentes ainda ausentes e toda execucao
 financeira bloqueada. Nao mesclar PR #39 nem liberar Pix.
+
+
+### Snapshot contra mutacao TOCTOU durante o preflight
+
+Como o chamador do simulador consegue alterar um objeto JavaScript enquanto
+a porta aguarda um resultado assincrono, a intencao e copiada e congelada
+imediatamente apos as validacoes iniciais, ANTES do primeiro await.
+Todos os usos posteriores na inicializacao — reserva local/global,
+conferencia de usuario/sessao/fator, emissao do challenge e registro da
+tentativa — utilizam apenas a copia da operacao original.
+
+Teste Deno adversarial muda nonce, usuario, sessao, fator, separacao,
+hash da evidencia, expiracao e campo consumed durante a espera da
+reserva, e confirma que tanto o challenge quanto o consumo posterior
+permanecem ligados ao mesmo snapshot. Nao passa TOTP ou JWT ao gate.
+Commits: c0af97129d8e0659436f2fcd72ef761e5677152a e
+c3c4bf43758865c7eeaa8ebbc73a2590029c221b.
+
+Trata-se de defesa no LABORATORIO JS. Em integracao real, hashes e
+identidades devem ser recalculados de fontes server-side dentro de
+transacao PostgreSQL, e a etapa de verify deve ter prova do GoTrue
+associada ao challenge correto. Nunca converter snapshot em
+permissao de parecer, pagamento ou baixa.
