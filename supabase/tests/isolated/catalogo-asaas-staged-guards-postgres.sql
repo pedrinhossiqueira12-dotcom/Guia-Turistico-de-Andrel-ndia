@@ -1002,6 +1002,9 @@ DECLARE
  v_seq2 bigint;
  v_prev_hash text;
  v_hash1 text;
+ v_auditoria_integridade jsonb;
+ v_falsificacao jsonb;
+ v_nota_bloqueada jsonb;
 BEGIN
  INSERT INTO auth.users(id) VALUES(v_uid);
  INSERT INTO public.comercios_publicados(local_id,status) VALUES(v_store,'ativo');
@@ -1190,6 +1193,59 @@ BEGIN
    'public.catalogo_asaas_registrar_evento_dossie_escrow(uuid,uuid,uuid,text,text,text)','EXECUTE')
  OR has_table_privilege('service_role','public.catalogo_asaas_escrow_dossie_eventos','INSERT')
  THEN RAISE EXCEPTION 'Dossie admin possui permissao indevida'; END IF;
+
+ -- Valida cada evento reconstituindo JSONB canonico, hash e sequencia.
+ SELECT public.catalogo_asaas_verificar_integridade_dossie_escrow(
+  (v_reserva->>'separacao_id')::uuid) INTO v_auditoria_integridade;
+ IF v_auditoria_integridade->>'integridade_valida' IS DISTINCT FROM 'true'
+ OR v_auditoria_integridade->>'numero_eventos' IS DISTINCT FROM '2'
+ OR v_auditoria_integridade->>'liberacao_autorizada' IS DISTINCT FROM 'false'
+ THEN RAISE EXCEPTION 'Verificador acusou trilha integra como invalida: %',v_auditoria_integridade; END IF;
+
+ BEGIN
+  UPDATE public.catalogo_asaas_escrow_dossie_eventos SET descricao=
+   'Texto administrativo de adulteracao manual que deve ser rejeitada pelo trigger.'
+  WHERE id=(v_note1->>'evento_id')::uuid;
+  RAISE EXCEPTION 'Dossie aceitou UPDATE indevido';
+ EXCEPTION WHEN check_violation THEN v_blocks:=v_blocks+1;
+ END;
+ BEGIN
+  DELETE FROM public.catalogo_asaas_escrow_dossie_eventos
+  WHERE id=(v_note1->>'evento_id')::uuid;
+  RAISE EXCEPTION 'Dossie aceitou DELETE indevido';
+ EXCEPTION WHEN check_violation THEN v_blocks:=v_blocks+1;
+ END;
+ IF v_blocks<>5 THEN RAISE EXCEPTION 'Esperados 5 bloqueios contabeis, obtidos %',v_blocks; END IF;
+
+ -- Injeta linha artificial errada com permissao privilegiada do SQL isolado.
+ -- Em ambiente real service_role NAO tem INSERT; a RPC jamais faz isto.
+ INSERT INTO public.catalogo_asaas_escrow_dossie_eventos(
+  separacao_id,seq,chave_idempotencia,autor_id,categoria,descricao,
+  hash_anterior_sha256,evento_sha256)
+ VALUES((v_reserva->>'separacao_id')::uuid,3,
+  'fafa1111-2222-4333-8444-555555555553'::uuid,v_uid,'divergencia',
+  'Linha falsificada diretamente pelo administrador do banco no ensaio de integridade.',
+  repeat('0',64),repeat('b',64));
+ SELECT public.catalogo_asaas_verificar_integridade_dossie_escrow(
+  (v_reserva->>'separacao_id')::uuid) INTO v_falsificacao;
+ IF v_falsificacao->>'integridade_valida' IS DISTINCT FROM 'false'
+ OR v_falsificacao->>'numero_eventos' IS DISTINCT FROM '3'
+ OR v_falsificacao->>'liberacao_autorizada' IS DISTINCT FROM 'false'
+ THEN RAISE EXCEPTION 'Dossie adulterado nao identificado: %',v_falsificacao; END IF;
+
+ SELECT public.catalogo_asaas_registrar_evento_dossie_escrow(
+  (v_reserva->>'separacao_id')::uuid,v_uid,
+  'fafa1111-2222-4333-8444-555555555554'::uuid,'parecer_pendente',
+  'Ocorrencia futura deve ser rejeitada pois a cadeia anterior perdeu integridade.'
+ ) INTO v_nota_bloqueada;
+ IF v_nota_bloqueada->>'ok' IS DISTINCT FROM 'false' THEN
+  RAISE EXCEPTION 'Trilha adulterada permitiu novo append: %',v_nota_bloqueada; END IF;
+
+ IF has_function_privilege('anon',
+ 'public.catalogo_asaas_verificar_integridade_dossie_escrow(uuid)','EXECUTE')
+ OR has_function_privilege('authenticated',
+ 'public.catalogo_asaas_verificar_integridade_dossie_escrow(uuid)','EXECUTE')
+ THEN RAISE EXCEPTION 'Verificacao de dossie exposta a usuarios comuns'; END IF;
 
  -- Diagnostico da separacao e SOMENTE LEITURA: nunca liberar/pagar.
  SELECT public.catalogo_asaas_diagnosticar_separacao_excepcional(
