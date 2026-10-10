@@ -239,7 +239,73 @@
         }catch(erro){aviso(erro.message||"Diagnóstico indisponível; manter HOLD.",true);}
         finally{btn.disabled=false;}
       });
-      li.append(title,detail,btn);lista.appendChild(li);
+      const area=document.createElement("details");
+      const cab=document.createElement("summary");cab.textContent="Dossiê de conciliação (sem Pix)";
+      const orientacao=document.createElement("p");orientacao.className="muted";
+      orientacao.textContent="Não inclua dados pessoais, chave Pix, CPF ou conta bancária.";
+      const tipo=document.createElement("select");
+      for(const [val,label] of [
+       ["verificacao_banco","Verificação bancária"],
+       ["verificacao_destinatario","Verificação do destinatário"],
+       ["comprovante_externo","Comprovante externo"],
+       ["contestacao","Contestação"],
+       ["divergencia","Divergência"],
+       ["parecer_pendente","Parecer pendente"]]){
+        const opt=document.createElement("option");opt.value=val;opt.textContent=label;tipo.appendChild(opt);
+      }
+      const nota=document.createElement("textarea");nota.maxLength=1000;
+      nota.placeholder="Descrição da ocorrência (mínimo de 30 caracteres)";
+      const hash=document.createElement("input");hash.maxLength=64;
+      hash.placeholder="SHA-256 do documento, obrigatório para comprovante externo";
+      const gravar=document.createElement("button");gravar.type="button";
+      gravar.textContent="Registrar ocorrência (não paga)";
+      const consultar=document.createElement("button");consultar.type="button";
+      consultar.className="secondary";consultar.textContent="Ver histórico";
+      const registros=document.createElement("ul");
+      let chaveAtual=null,assinaturaAtual=null;
+      async function consultarDossie(){
+        const res=await api({acao:"listar_dossie_escrow_admin",separacao_id:String(item.id||"")});
+        registros.replaceChildren();
+        for(const e of res.eventos||[]){
+          const linha=document.createElement("li");
+          linha.textContent="#"+e.seq+" · "+e.categoria+" · "+e.descricao+
+            (e.documento_sha256?" · SHA-256: "+e.documento_sha256:"");
+          registros.appendChild(linha);
+        }
+        if(res.ha_mais){
+          const linha=document.createElement("li");
+          linha.textContent="Histórico parcial; registros anteriores permanecem armazenados.";
+          registros.appendChild(linha);
+        }
+      }
+      gravar.addEventListener("click",async()=>{
+        const descricao=nota.value.trim(),documento=hash.value.trim().toLowerCase();
+        if(descricao.length<30||descricao.length>1000||
+          (documento&&!/^[a-f0-9]{64}$/.test(documento))||
+          (tipo.value==="comprovante_externo"&&!documento)){
+          aviso("Verifique o texto (30 a 1000 caracteres) e o SHA-256 do comprovante.",true);return;
+        }
+        const assinatura=JSON.stringify([item.id,tipo.value,descricao,documento]);
+        if(assinatura!==assinaturaAtual){chaveAtual=crypto.randomUUID();assinaturaAtual=assinatura;}
+        gravar.disabled=true;
+        try{
+          const resultado=await api({acao:"registrar_dossie_escrow_admin",
+           separacao_id:String(item.id||""),chave_idempotencia:chaveAtual,
+           categoria:tipo.value,descricao,documento_sha256:documento||null});
+          aviso(resultado.mensagem||"Ocorrência registrada sem quitação.");
+          chaveAtual=null;assinaturaAtual=null;nota.value="";hash.value="";
+          await consultarDossie();
+        }catch(e){aviso(e.message||"Registro não confirmado; repetição segura preservada.",true);}
+        finally{gravar.disabled=false;}
+      });
+      consultar.addEventListener("click",async()=>{
+        consultar.disabled=true;
+        try{await consultarDossie();}
+        catch(e){aviso(e.message||"Histórico indisponível.",true);}
+        finally{consultar.disabled=false;}
+      });
+      area.append(cab,orientacao,tipo,nota,hash,gravar,consultar,registros);
+      li.append(title,detail,btn,area);lista.appendChild(li);
     }
     if(response.ha_mais===true){
       const avisoLimite=document.createElement("li");
