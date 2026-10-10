@@ -8,7 +8,7 @@ Cenarios:
   B) saque regular (titular C) registra ID primeiro; evidencia do MESMO titular
      chega depois. Deve esperar no lock do titular e ser preservada, sem baixa.
 
-SO executar no banco local 'catalogo_asaas_guards_ci', criado e removido pelo CI.
+SO executar no banco local 'catalogo_asaas_race_ci', criado e removido pelo CI.
 """
 import os
 import re
@@ -19,7 +19,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-EXPECTED_DB = "catalogo_asaas_guards_ci"
+EXPECTED_DB = "catalogo_asaas_race_ci"
 LOCK_TIMEOUT_SECONDS = 12
 POLL_TIMEOUT_SECONDS = 9
 OWNER_A = "fa411111-1111-4111-8111-111111111111"
@@ -35,7 +35,7 @@ TRANSFER_C = "ci_claim_then_late_C"
 
 def guard_environment() -> None:
     if len(sys.argv) != 3 or sys.argv[1] != "--database" or sys.argv[2] != EXPECTED_DB:
-        raise RuntimeError("Use --database catalogo_asaas_guards_ci, nunca outra base")
+        raise RuntimeError("Use --database catalogo_asaas_race_ci, nunca outra base")
     expected = {
         "PGHOST": "localhost",
         "PGPORT": "5432",
