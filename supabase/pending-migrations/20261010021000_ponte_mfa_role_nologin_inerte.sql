@@ -102,6 +102,17 @@ BEGIN
   WHERE target.rolname='catalogo_mfa_ponte_ci_inerte'
     AND member.rolname IN ('anon','authenticated','service_role','authenticator'))
  THEN RAISE EXCEPTION 'CI: role MFA foi associado a Data API'; END IF;
+ -- pg_auth_members direto NAO basta: um papel pode chegar aqui
+ -- por heranca ou SET ROLE atraves de membros INTERMEDIARIOS. Em PG17,
+ -- NOLOGIN nao impede esse caminho; pg_has_role MEMBER segue toda a cadeia.
+ IF EXISTS(
+  SELECT 1 FROM pg_catalog.pg_roles parent
+  JOIN pg_catalog.pg_roles bridge
+    ON bridge.rolname='catalogo_mfa_ponte_ci_inerte'
+  WHERE parent.rolname IN ('anon','authenticated','service_role','authenticator')
+    AND pg_catalog.pg_has_role(parent.oid,bridge.oid,'MEMBER')
+ ) THEN RAISE EXCEPTION
+  'CI: papel MFA alcançavel por membership indireta de Data API'; END IF;
  IF has_schema_privilege('catalogo_mfa_ponte_ci_inerte','catalogo_private','USAGE')
   OR has_schema_privilege('catalogo_mfa_ponte_ci_inerte','catalogo_mfa_ponte_ci_inerte','CREATE')
  THEN RAISE EXCEPTION 'CI: role MFA ganhou acesso a schema bruto ou CREATE'; END IF;
