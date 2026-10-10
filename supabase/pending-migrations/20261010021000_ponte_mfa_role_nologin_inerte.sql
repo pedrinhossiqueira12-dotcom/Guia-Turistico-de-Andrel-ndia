@@ -5,7 +5,19 @@
 -- retornam HOLD, NAO acessam nem autorizam saques, faturas ou pagamentos.
 -- O backend futuro DEVE verificar JWT assinada/sessao AAL1 real antes de
 -- passar user_id/session_id; o proprio PostgreSQL NAO verifica JWT.
+-- BLOQUEIO MATERIAL: este arquivo NAO pode ser aplicado em STAGING/PROD,
+-- nem por engano via push de TODAS as pending-migrations.
 BEGIN;
+DO $ci_only_bridge$
+BEGIN
+ IF current_database() IS DISTINCT FROM 'catalogo_asaas_guards_ci'
+  OR current_setting('app.catalogo_ci_mfa_bridge',true) IS DISTINCT FROM 'enabled'
+  OR session_user IS DISTINCT FROM 'postgres'
+ THEN
+  RAISE EXCEPTION
+   'CI_ONLY_MFA_BRIDGE: recusa instalacao fora de clone efemero e opt-in';
+ END IF;
+END $ci_only_bridge$;
 
 -- Criar papel sem LOGIN e sem qualquer capacidade privilegiada de banco.
 -- NUNCA conceder membership a anon, authenticated, service_role,
