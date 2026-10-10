@@ -20,6 +20,7 @@ import type {
 
 export type VerificadorServidorAssinaturaESessao = (
   accessToken: string,
+  fase?: "inicio" | "apos_verificacao",
 ) => Promise<SessaoAferidaEmEnsaio | null>;
 
 export interface GoTrueMfaConfigInerte {
@@ -40,7 +41,8 @@ function validPrincipal(
   p: SessaoAferidaEmEnsaio | null,
 ): p is SessaoAferidaEmEnsaio {
   return !!p && UUID.test(p.userId) && UUID.test(p.sessionId)
-    && typeof p.factorId === "string" && UUID.test(p.factorId)
+    && (p.aal === "aal1" && p.factorId === null
+      || p.aal === "aal2" && typeof p.factorId === "string" && UUID.test(p.factorId))
     && p.role === "authenticated"
     && (p.aal === "aal1" || p.aal === "aal2")
     && p.anonymous === false;
@@ -106,12 +108,16 @@ export class GoTrueMfaTransporteInerte implements PortaDeAutenticacaoFalsa {
     return obj;
   }
 
-  async autenticarToken(token: string): Promise<SessaoAferidaEmEnsaio | null> {
+  async autenticarToken(
+    token: string,
+    fase: "inicio" | "apos_verificacao" = "apos_verificacao",
+  ): Promise<SessaoAferidaEmEnsaio | null> {
     // Um GET /user valida usuario, mas sozinho NAO prova session_id,
     // revogacao da sessao, nem garantia criptografica das claims.
     if (!JWT_BEARER.test(token)) return null;
-    const principal = await this.cfg.verificarAssinaturaJwtESessaoNoServidor(token);
-    if (!validPrincipal(principal)) return null;
+    const principal = await this.cfg.verificarAssinaturaJwtESessaoNoServidor(token, fase);
+    if (!validPrincipal(principal)
+      || (fase === "apos_verificacao" && principal.aal !== "aal2")) return null;
     const gotrue = await this.request("GET", "/user", token);
     return gotrue.id === principal.userId ? principal : null;
   }
