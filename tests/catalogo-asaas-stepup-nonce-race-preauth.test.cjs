@@ -10,11 +10,17 @@ test("nonce reservado sincronicamente antes de qualquer await do fluxo iniciar",
  const end=source.indexOf("async confirmar(",begin);
  assert.ok(begin>=0 && end>begin,"missing lifecycle methods");
  const flow=source.slice(begin,end);
- const reserve=flow.indexOf("this.noncesReservados.add(intencao.nonce)");
+ const snapshot=flow.indexOf("const snapshot = Object.freeze({ ...intencao })");
+ const reserve=flow.indexOf("this.noncesReservados.add(snapshot.nonce)");
  const firstAwait=flow.indexOf("await ");
- const guard=flow.indexOf("this.noncesReservados.has(intencao.nonce)");
+ const guard=flow.indexOf("this.noncesReservados.has(snapshot.nonce)");
+ assert.ok(snapshot>0 && snapshot<guard,"operation must be frozen before nonce check");
  assert.ok(reserve>0 && reserve<firstAwait,"nonce reservation after async await");
  assert.ok(guard>0 && guard<reserve,"duplicate detection after nonce reservation");
+ assert.match(flow,/reservaCompartilhada\.reservarInicio\(/);
+ assert.ok(flow.indexOf("reservaCompartilhada.reservarInicio(")<flow.indexOf("this.provider.autenticarToken("),
+   "shared gate must run before external Auth");
+ assert.match(suite,/snapshot imutavel impede trocar operacao/);
  assert.match(flow,/this\.provider\.verificarFatorTotpAal1\(/);
  assert.ok(flow.indexOf("this.provider.verificarFatorTotpAal1(")<flow.indexOf("this.provider.criarDesafio("));
  assert.ok(flow.indexOf("this.agora() >= Math.min")<flow.indexOf("this.provider.criarDesafio("));
