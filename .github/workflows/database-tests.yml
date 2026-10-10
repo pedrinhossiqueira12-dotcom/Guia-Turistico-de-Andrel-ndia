@@ -735,9 +735,37 @@ jobs:
           psql -X -d catalogo_asaas_guards_ci -v ON_ERROR_STOP=1 -1 \
             -c "SET app.catalogo_ci_mfa_mock='enabled'" \
             -f supabase/tests/baseline/catalogo-asaas-auth-mfa-ephemeral.sql
+          # A ponte SEC DEFINER e restrita a este clone e um opt-in
+          # EXPLICITO, jamais permitida no projeto Supabase ou no DB base.
+          bridge_sql=supabase/pending-migrations/20261010021000_ponte_mfa_role_nologin_inerte.sql
+          if psql -X -d catalogo_asaas_guards_ci -v ON_ERROR_STOP=1 \
+            -f "$bridge_sql" > /tmp/asaas-bridge-without-opt-in.log 2>&1; then
+            echo 'ERROR: ponte MFA instalada sem opt-in' >&2
+            exit 1
+          fi
+          grep -F 'CI_ONLY_MFA_BRIDGE' /tmp/asaas-bridge-without-opt-in.log
+          if psql -X -d catalogo_ci -v ON_ERROR_STOP=1 \
+            -c "SET app.catalogo_ci_mfa_bridge='enabled'" \
+            -f "$bridge_sql" > /tmp/asaas-bridge-wrong-db.log 2>&1; then
+            echo 'ERROR: ponte MFA instalada no banco incorreto' >&2
+            exit 1
+          fi
+          grep -F 'CI_ONLY_MFA_BRIDGE' /tmp/asaas-bridge-wrong-db.log
+          test "$(psql -X -d catalogo_asaas_guards_ci -Atqc \
+            "SELECT count(*) FROM pg_roles WHERE rolname='catalogo_mfa_ponte_ci_inerte'")" = 0
           for migration in supabase/pending-migrations/*.sql; do
             echo "Validating staged SQL: $migration"
-            psql -X -d catalogo_asaas_guards_ci -v ON_ERROR_STOP=1 -f "$migration" > /dev/null
+            case "$migration" in
+              "$bridge_sql")
+                psql -X -d catalogo_asaas_guards_ci -v ON_ERROR_STOP=1 \
+                  -c "SET app.catalogo_ci_mfa_bridge='enabled'" \
+                  -f "$migration" > /dev/null
+                ;;
+              *)
+                psql -X -d catalogo_asaas_guards_ci -v ON_ERROR_STOP=1 \
+                  -f "$migration" > /dev/null
+                ;;
+            esac
           done
           psql -X -d catalogo_asaas_guards_ci -v ON_ERROR_STOP=1 \
             -f supabase/tests/isolated/catalogo-asaas-staged-guards-postgres.sql
