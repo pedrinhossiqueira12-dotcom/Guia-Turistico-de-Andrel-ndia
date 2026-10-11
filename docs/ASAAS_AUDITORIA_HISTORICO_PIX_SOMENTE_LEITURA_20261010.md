@@ -22,6 +22,36 @@
 - Painel `admin-encerramentos`: botão **Verificar transferências repetidas (Sandbox)**, com alertas. Não existe botão de pagamento, quitação ou liberação.
 - Testes de contrato: `tests/catalogo-asaas-varredura-historico.test.cjs`; execução Deno/Node/Chromium/SQL pela CI existente.
 
+## Endurecimento de paginação em 11/10/2026
+
+A API oficial do Asaas documenta o retorno de `limit`, `offset`,
+`totalCount`, `hasMore` e `data` em `GET /v3/transfers`.
+O auditor verificava `hasMore` e offset, mas não exigia `limit`
+nem `totalCount` válidos. Uma página com 40 itens e `hasMore=true`
+poderia ser seguida de `offset=100`, pulando até 60 itens.
+
+**Agora, se os campos de paginação estiverem faltando, forem inválidos
+ou indicarem página parcial com `hasMore=true`, a Edge responde 503
+e preserva HOLD.** Confere adicionalmente que `totalCount` não é
+inferior a `offset + data.length`.
+
+- `limit` deve ser exatamente 100 e `offset` o esperado pela varredura;
+- `totalCount` deve ser inteiro não negativo;
+- `hasMore=true` exige exatamente 100 itens; `hasMore=false` encerra;
+- falha ou contradição nunca produz auditoria marcada como concluída;
+- Deno testa a Edge HTTP real com Asaas/Supabase *fictícios* e rede externa bloqueada;
+- Node vigia o contrato estático para evitar regressões.
+
+Esses controles **não convertem uma listagem mutável em extrato
+bancário definitivo**: uma transferência inserida ou removida entre
+páginas pode causar instabilidade mesmo com metadados consistentes.
+Nenhuma ausência de pagamento ou titularidade é atestada. Não houve
+deploy da Edge nem migração de banco nesta alteração.
+
+Referências:
+- https://docs.asaas.com/reference/listagem-e-paginacao
+- https://docs.asaas.com/reference/listar-transferencias
+
 ## O que esta auditoria NÃO garante
 
 1. `listagem_consultada_ate_o_fim=true` só significa que o endpoint devolveu `hasMore=false` nessa consulta **àquela conta Asaas**. Não há atestado de outras contas, histórico deletado/fora de banda, ou transferência de referência diferente.
