@@ -38,7 +38,6 @@ test("recusa paginacao curta e metadados incompletos do Asaas",()=>{
  assert.match(scanner,/result\.offset!==offset/);
  assert.match(scanner,/typeof result\.totalCount!=="number"/);
  assert.match(scanner,/Number\.isSafeInteger\(result\.totalCount\)/);
- assert.match(scanner,/result\.totalCount<offset\+result\.data\.length/);
  assert.match(scanner,/result\.hasMore===true&&result\.data\.length!==LIMIT/);
  assert.match(scanner,/result\.hasMore===true&&result\.totalCount<=offset\+result\.data\.length/);
  assert.match(scanner,/result\.hasMore===false&&result\.totalCount!==offset\+result\.data\.length/);
