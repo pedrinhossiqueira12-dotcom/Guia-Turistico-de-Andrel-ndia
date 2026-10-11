@@ -13,6 +13,7 @@ assert.ok(a>=0&&b>a,"Webhook source not found");
 const source=edge.slice(a,b)
  .replace("async function webhook(request:Request){","async function webhook(request){")
  .replace("let body:Record<string,unknown>;","let body;")
+ .replace("const chunks:Uint8Array[]=[];","const chunks=[];")
  .replace(/\(globalThis as typeof globalThis & \{\s*EdgeRuntime\?:\{waitUntil:\(p:Promise<unknown>\)=>void\}\s*\}\)\.EdgeRuntime/g,"globalThis.EdgeRuntime")
  .replace(/\(e as Error\)\.name/g,"e.name");
 
