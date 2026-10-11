@@ -1333,10 +1333,32 @@ async function sha256Hex(source:string){
  return Array.from(bytes,b=>b.toString(16).padStart(2,"0")).join("");
 }
 function canonicalPix(type:string,key:string){
- const t=type.trim().toUpperCase(),raw=key.trim();
- if(t==="EMAIL")return raw.toLowerCase();
- if(t==="CPF"||t==="CNPJ"||t==="PHONE")return raw.replace(/\D/g,"");
- if(t==="EVP")return raw.toLowerCase();
+ // Nunca normalizar texto alheio removendo caracteres arbitrarios.
+ // A chave vem do Asaas ou do cadastro previamente validado; um sufixo
+ // estranho, espaco ou simbolo invalido deve causar divergencia e HOLD.
+ if(typeof type!=="string"||typeof key!=="string"||
+    key.length===0||key.length>254||key!==key.trim())return "";
+ const t=type.toUpperCase(),raw=key;
+ if(t==="EMAIL"){
+  return /^[^\s@]{1,64}@[^\s@]{1,185}\.[^\s@]{2,}$/.test(raw)
+   ?raw.toLowerCase():"";
+ }
+ if(t==="CPF"){
+  if(!/^(?:\d{11}|\d{3}\.\d{3}\.\d{3}-\d{2})$/.test(raw))return "";
+  return raw.replace(/\D/g,"");
+ }
+ if(t==="CNPJ"){
+  if(!/^(?:\d{14}|\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})$/.test(raw))return "";
+  return raw.replace(/\D/g,"");
+ }
+ if(t==="PHONE"){
+  if(!/^(?:\+55)?\d{10,11}$/.test(raw))return "";
+  return raw.startsWith("+55")?raw.slice(3):raw;
+ }
+ if(t==="EVP"){
+  return /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(raw)
+   ?raw.toLowerCase():"";
+ }
  return "";
 }
 async function pixFingerprint(type:string,key:string){
@@ -1357,8 +1379,14 @@ async function pixDestinationsMatch(fingerprint:string,transfers:Record<string,u
  let checked=0;
  for(const transfer of transfers){
   const bank=input(transfer.bankAccount);
-  const vals=[value(transfer.pixAddressKey,254),value(bank.pixAddressKey,254)].filter(Boolean);
-  const unique=[...new Set(vals)];
+  // value() trunca strings: jamais usar truncamento para conferir a
+  // identidade financeira do destinatario. Ausencia e permitida em uma
+  // das representacoes, mas qualquer chave presente precisa ser integra.
+  const vals=[transfer.pixAddressKey,bank.pixAddressKey]
+   .filter(v=>v!==null&&v!==undefined);
+  if(vals.some(v=>typeof v!=="string"||v.length===0||
+     v.length>254||v!==v.trim()))return false;
+  const unique=[...new Set(vals as string[])];
   // GET e webhook precisam, ambos, identificar o mesmo destino.
   // Sem prova independente do destinatário, recusamos a autorização.
   if(unique.length===0)return false;
