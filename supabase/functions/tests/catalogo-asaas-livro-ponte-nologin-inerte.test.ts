@@ -189,3 +189,29 @@ Deno.test("ponte rejeita UUID malformado nas cinco rotas sem chamar o executor S
    "challenge sem uuid");
  assert(x.calls.length===0,"parametro adulterado chegou ao executor");
 });
+
+Deno.test("lookup privado bloqueia troca de contexto entre revisores mesmo com UUIDs validos",async()=>{
+ const {adapter}=mk(i=>i===1?{...ctx,id:SESSION}:result());
+ await denied(()=>adapter.lerContexto(ID),
+   "SQL retornou contexto de outro ID sem negar");
+});
+Deno.test("lookup de tentativa bloqueia replay por ID diferente valido",async()=>{
+ const {adapter}=mk(i=>i===3?{
+  nonce:NONCE,tentativa:SESSION,challengeId:CHALLENGE,contexto:ctx,
+ }:result());
+ await denied(()=>adapter.lerTentativa(ATTEMPT),
+   "SQL retornou tentativa UUID valida mas de outro revisor");
+});
+Deno.test("respostas de desafio/consumo aceitas recusam nonce valido de outra operacao",async()=>{
+ const {adapter}=mk(()=>({...result(),nonce:SESSION}));
+ await denied(()=>adapter.registrarDesafio(NONCE,CHALLENGE,ATTEMPT),
+   "desafio aceitou nonce alheio");
+ await denied(()=>adapter.consumirDesafio(NONCE,CHALLENGE,ATTEMPT),
+   "consumo aceitou nonce alheio");
+ // Resultado SQL ok=false sem nonce continua sendo recusa documental.
+ const {adapter:rejected}=mk(()=>result(false));
+ const response=await rejected.registrarDesafio(NONCE,CHALLENGE,ATTEMPT);
+ assert(!response.ok && !response.pagamento_autorizado &&
+   response.status_operacional==="HOLD_OBRIGATORIO",
+   "erro SQL foi confundido com autorizacao");
+});
