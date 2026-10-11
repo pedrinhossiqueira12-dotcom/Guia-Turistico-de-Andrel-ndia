@@ -1384,6 +1384,71 @@ async function diagnosticarFaturasSandboxAdmin(uid:string){
   lista_limitada:docs.length===50,aptas:lista.filter(x=>x.apta).length,faturas:lista,
   mensagem:"Pré-condições locais somente leitura. Apto não comprova API Asaas habilitada; teste de pagamento depende de emissão e confirmação no Sandbox."});
 }
+// Simula o recebimento EXCLUSIVAMENTE de uma cobranca Pix existente no
+// Asaas Sandbox. Nunca gera fatura/cliente/saldo por SQL, nem envia saque.
+// Requer flag de homologacao separada, admin de QA e prova bancaria por GET.
+async function confirmarFaturaSandboxAdmin(uid:string,body:Record<string,unknown>){
+ const qaAdmin=Deno.env.get("ASAAS_SANDBOX_ADMIN_USER_ID")||"";
+ if(ENVIRONMENT!=="sandbox"||
+    !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(qaAdmin)||
+    uid!==qaAdmin)
+  throw new Failure("Somente o administrador de homologação pode confirmar pagamentos de teste.",403);
+ if(Deno.env.get("ASAAS_SANDBOX_QA_CONFIRM_ENABLED")!=="true")
+  throw new Failure("Confirmação simulada de pagamentos está desativada no Sandbox.",503);
+ enabled("billing");
+ const fechamentoId=value(body.fechamento_id,36);
+ check(/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(fechamentoId),
+  "Identificador da fatura de teste inválido.",400);
+ const [local,invoiceRow]=await Promise.all([
+  db.from("catalogo_fatura_cobrancas")
+   .select("fechamento_id,comercio_id,competencia,gateway,order_id,status,valor_centavos")
+   .eq("fechamento_id",fechamentoId).maybeSingle(),
+  db.from("catalogo_fechamentos_offline")
+   .select("id,comercio_id,competencia,status,total_comissao_centavos")
+   .eq("id",fechamentoId).maybeSingle()
+ ]);
+ if(local.error||invoiceRow.error)
+  throw new Failure("Falha ao verificar fatura local de homologação.",503);
+ const charge=local.data,f=invoiceRow.data;
+ check(Boolean(charge&&f)&&charge.gateway==="asaas"&&
+  charge.comercio_id===f.comercio_id&&charge.competencia===f.competencia&&
+  ["faturado","vencido","bloqueado"].includes(String(f.status))&&
+  ["pendente","vencido"].includes(String(charge.status))&&
+  Number.isSafeInteger(Number(f.total_comissao_centavos))&&
+  Number(f.total_comissao_centavos)>0&&
+  Number(charge.valor_centavos)===Number(f.total_comissao_centavos),
+  "Fatura ausente, quitada ou divergente. Nenhuma simulação executada.",409);
+ const paymentId=value(charge.order_id,130);
+ check(/^pay_[a-z0-9_-]{5,120}$/i.test(paymentId)&&paymentId===charge.order_id,
+  "Pagamento Sandbox sem identificador reconhecido.",409);
+ const remote=await asaas("/payments/"+encodeURIComponent(paymentId));
+ const {data:client,error:clientError}=await db.from("catalogo_asaas_clientes")
+  .select("cliente_id").eq("comercio_id",f.comercio_id).maybeSingle();
+ if(clientError)throw new Failure("Falha na validação do cliente financeiro.",503);
+ check(Boolean(client?.cliente_id)&&remote.id===paymentId&&
+  remote.customer===client?.cliente_id&&remote.billingType==="PIX"&&
+  remote.externalReference===reference(String(f.comercio_id),String(f.competencia).slice(0,7))&&
+  cents(remote.value)===Number(f.total_comissao_centavos),
+  "Dados bancários diferentes da fatura. Nenhuma confirmação simulada executada.",409);
+ const status=value(remote.status,60);
+ // Repetir clique jamais deve repetir o POST de simulacao.
+ if(status==="RECEIVED"||status==="CONFIRMED")
+  return respond({success:true,simulacao_enviada:false,status_bancario:status,
+   mensagem:"Cobrança já confirmada no provedor de teste. Verifique webhook e conciliação; nenhum segundo POST foi enviado."});
+ check(["PENDING","OVERDUE"].includes(status),
+  "Cobrança não está pendente no Sandbox. Não é seguro simular a confirmação.",409);
+ // Endpoint documentado exclusivamente no Sandbox. Nao chamar /payments POST,
+ // nem efetuar credito por SQL: a notificacao deve chegar pelo webhook real.
+ const confirmed=await asaas("/sandbox/payment/"+encodeURIComponent(paymentId)+"/confirm",
+  "POST",{});
+ check(confirmed.id===paymentId&&confirmed.customer===client?.cliente_id&&
+  confirmed.externalReference===remote.externalReference&&
+  cents(confirmed.value)===Number(f.total_comissao_centavos),
+  "Provedor retornou confirmação divergente. Verificar manualmente.",503);
+ return respond({success:true,simulacao_enviada:true,
+  status_bancario:value(confirmed.status,60),
+  mensagem:"Confirmação de teste enviada ao Asaas Sandbox. Conferir entrega do webhook e quitação; nenhum dinheiro real foi movimentado."});
+}
 // Recuperação segura de resposta inconclusiva após POST /transfers.
 // O operador SOMENTE informa um ID para CONSULTA. Não gera novo Pix.
 async function reconcileAdminTransfer(uid:string,body:Record<string,unknown>){
@@ -1818,6 +1883,7 @@ Deno.serve(async (request:Request)=>{
    case "listar_encerramentos_admin":return await listarEncerramentosAdmin(user.id);
    case "finalizar_encerramento_admin":return await finalizarEncerramentoAdmin(user.id,body);
    case "diagnosticar_faturas_sandbox_admin":return await diagnosticarFaturasSandboxAdmin(user.id);
+   case "confirmar_fatura_sandbox_admin":return await confirmarFaturaSandboxAdmin(user.id,body);
    case "diagnosticar_webhooks_asaas_admin":return await diagnosticarWebhooksAsaasAdmin(user.id);
    case "reprocessar_webhooks_asaas_admin":return await reprocessarWebhooksAsaasAdmin(user.id);
    case "obter_fatura":return await showInvoice(user.id,body);
