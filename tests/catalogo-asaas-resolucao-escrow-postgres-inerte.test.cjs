@@ -114,3 +114,45 @@ test("#43: falha depois de primeiro item reverte TODA a sombra sem mexer em remu
  assert.match(sql,/ON COMMIT DROP/);
  assert.match(sql,/\nROLLBACK;\s*$/);
 });
+
+test("#43: valida cada remuneracao e detecta adulteracao com soma e contagem iguais",()=>{
+ const start=sql.indexOf("CREATE FUNCTION pg_temp.catalogo_asaas_validar_itens_sombra_inerte(");
+ const end=sql.indexOf("$shadow_compare$;",start);
+ assert.ok(start>=0&&end>start);
+ const compared=sql.slice(start,end);
+ for(const marker of [
+  "FULL OUTER JOIN sombra s",
+  "ON s.remuneracao_id=e.remuneracao_id",
+  "esperado_centavos IS DISTINCT FROM sombra_centavos",
+  "esperado_id IS NULL OR sombra_id IS NULL",
+  "v_diferentes=0",
+  "v_planejados=v_escrow.creditos",
+  "v_valor=v_escrow.valor_centavos",
+  "v_fingerprint IS NOT DISTINCT FROM v_escrow.fingerprint_sha256",
+  "'integridade_sombra_por_credito',coalesce(v_ok,false)",
+  "'status_operacional','HOLD_OBRIGATORIO'",
+  "'pagamento_autorizado',false",
+  "'baixa_realizada',false"
+ ])assert.ok(compared.includes(marker),"Ausente: "+marker);
+ assert.doesNotMatch(compared,/\bUPDATE\b|\bDELETE\b|\bINSERT\b|http_post|fetch\(/i);
+});
+test("#43: soma balanceada (+1/-1), item apagado e replay errado sao bloqueados",()=>{
+ const start=sql.indexOf("-- Comparacao de cada remuneracao contra o snapshot reservado");
+ const end=sql.indexOf("-- Replay de IDENTICA tentativa/versao:",start);
+ assert.ok(start>=0&&end>start);
+ const f=sql.slice(start,end);
+ for(const expected of [
+  "CASE\n   WHEN si.remuneracao_id",
+  "THEN 1 ELSE -1 END",
+  "IF v_shadow_itens<>2 OR v_shadow_soma<>12000",
+  "v_shadow_diag->>'itens_divergentes_ou_ausentes' IS DISTINCT FROM '2'",
+  "EXCEPTION WHEN SQLSTATE 'P4304' THEN NULL",
+  "DELETE FROM pg_temp.catalogo_ci_escrow_planos_itens_shadow_inertes",
+  "v_shadow_diag->>'itens_divergentes_ou_ausentes' IS DISTINCT FROM '1'",
+  "EXCEPTION WHEN SQLSTATE 'P4305' THEN NULL",
+  "Rollback dos ataques deixou plano corrompido",
+  "gen_random_uuid()) INTO v_shadow_diag",
+  "Tentativa sem identificador valido parecia integra"
+ ])assert.ok(f.includes(expected),"Ausente: "+expected);
+ assert.match(sql,/\nROLLBACK;\s*$/);
+});
