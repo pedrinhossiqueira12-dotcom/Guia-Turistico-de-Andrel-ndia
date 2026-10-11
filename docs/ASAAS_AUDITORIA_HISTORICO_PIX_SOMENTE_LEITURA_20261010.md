@@ -108,6 +108,15 @@ Para atestar o destinatário original sem improvisar:
 - Confirmar **com a documentação e com a conta Asaas autorizada** quais campos efetivos do GET/webhook/extrato comprovam destino, titular e liquidação — e a abrangência dos históricos de transferência.
 - Projetar um mecanismo bancário independente ou conciliação manual com dupla conferência que possa rejeitar fatos ausentes ou contraditórios sem liberar saldo; só depois propor migração de baixa/liquidação sujeita a autorização específica.
 
+
+## Deteccao de ID bancario com referencias externas divergentes — 11/10/2026
+
+- Durante as paginas de **GET somente leitura** no Sandbox, o scanner acompanha a primeira `externalReference` observada para cada ID e identifica IDs que aparecem depois com referencia diferente (inclusive quando a referencia alheia aparece **antes** da referencia da separacao).
+- Para cada ID encontrado com a referencia da separacao examinada, a nova contagem `ids_da_referencia_com_outra_referencia` sinaliza a colisao. Funciona **sem vinculo excepcional local** e **sem saque comum** no banco do Guia; o painel exibe apenas a quantidade, nunca o ID ou dados bancarios.
+- Mesmo que duas paginas informem o mesmo `totalCount`, a listagem pode nao ser snapshot imutavel. A colisao e um alerta de anomalia, nao prova conclusiva de fraude ou de duas transferencias reais.
+- Teste HTTP isolado: ID igual sob duas referencias, vinculo local ausente, nenhuma linha de saque comum, `conflito_identificado=true`, todas as flags de pagamento/liberacao/baixa `false`, sem expor CPF ou ID.
+- **Inalterado:** `HOLD_OBRIGATORIO`; PR #39 Draft, sem Edge financeira publicada, sem Pix, sem alteracao em STAGING/PROD nem autorizacao financeira.
+
 ## Checklist de liberação
 
 - [ ] CI integralmente verde no commit final.
