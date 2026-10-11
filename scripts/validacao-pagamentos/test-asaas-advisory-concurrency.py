@@ -2053,11 +2053,37 @@ def scenario_vinculo_pareceres_duravel_versao_concorrente() -> None:
         if second is not None:
             second.abort()
         first.abort()
-    # Uma observacao para B com outro challenge, ambos continuam sem dinheiro.
-    verificar_retorno_vinculo(run_sql(observar_vinculo_ci(
-        nonce_b,CI_REVIEW_B,CI_REVIEW_SESSION_B,
-        "cd980000-0000-4000-8000-000000000002"
-    )),True,"challenge_local_documentado_sem_prova_mfa")
+    # B: a primeira tentativa local de observar sofre ROLLBACK depois de
+    # escrever; a segunda disputa o mutex e gera UMA unica observacao COMMIT.
+    first=Session.start("ci_vinculo_observe_rollback_first")
+    second=None
+    challenge_b="cd980000-0000-4000-8000-000000000002"
+    try:
+        first.send("BEGIN;\n"+observar_vinculo_ci(
+            nonce_b,CI_REVIEW_B,CI_REVIEW_SESSION_B,challenge_b
+        )+"\n\\echo CI_OBSERVE_B_PREPARED")
+        verificar_retorno_vinculo(
+            first.until("CI_OBSERVE_B_PREPARED"),True,
+            "challenge_local_documentado_sem_prova_mfa")
+        second=Session.start("ci_vinculo_observe_rollback_second")
+        second.send("SET lock_timeout='10s';\nBEGIN;\n"+observar_vinculo_ci(
+            nonce_b,CI_REVIEW_B,CI_REVIEW_SESSION_B,challenge_b
+        )+"\n\\echo CI_OBSERVE_B_AFTER_ROLLBACK")
+        assert_waiting_advisory(second.name)
+        first.send("ROLLBACK;\n\\echo CI_OBSERVE_B_ROLLED_BACK")
+        first.until("CI_OBSERVE_B_ROLLED_BACK")
+        verificar_retorno_vinculo(
+            second.until("CI_OBSERVE_B_AFTER_ROLLBACK"),True,
+            "challenge_local_documentado_sem_prova_mfa")
+        second.send("COMMIT;\n\\echo CI_OBSERVE_B_COMMITTED")
+        second.until("CI_OBSERVE_B_COMMITTED")
+        second.finish()
+        second=None
+        first.finish()
+    finally:
+        if second is not None:
+            second.abort()
+        first.abort()
     valid=diagnosticar_vinculo_ci(CI_REVIEW_ESCROW)
     if (valid.get("revisores_documentais_mock_distintos_vigentes")!=2
         or valid.get("duas_observacoes_mock_de_mesma_versao") is not True):
