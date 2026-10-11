@@ -7,6 +7,8 @@
  * Cria usuario/fator temporarios; as containers sao removidos ao sair da CI.
  * Nao registra senhas, chaves, otpauth, OTP, bearer, refresh_token ou secret.
  */
+import {VinculoMfaDossieLocalCI} from "./vinculo-mfa-dossie-local-ci.ts";
+const SNAP_CI={decisaoId:"eb420000-0000-4000-8000-000000000042",separacaoId:"ec420000-0000-4000-8000-000000000042",fingerprint:"a".repeat(64),dossieHash:"b".repeat(64),beneficiarioId:"ed420000-0000-4000-8000-000000000042",autoresEvidencia:[]};
 const BASE = "http://127.0.0.1:54321/auth/v1";
 const EXPECTED_ORIGIN = "http://127.0.0.1:54321";
 type Json = Record<string, unknown>;
@@ -131,7 +133,7 @@ interface RevisorGoTrueLocal {
   afterToken: string;
 }
 async function criarRevisorGoTrueLocal(
-  gotrue: LocalGoTrue, numero: 1 | 2,
+  gotrue: LocalGoTrue, numero: 1 | 2, binder: VinculoMfaDossieLocalCI,
 ): Promise<RevisorGoTrueLocal> {
   const uuid = crypto.randomUUID();
   const email = "ci-real-totp-reviewer-" + numero + "-" + uuid + "@example.com";
@@ -207,8 +209,9 @@ async function criarRevisorGoTrueLocal(
  */
 export async function exerciseLocalAuthMfa(apiKey: string) {
   const gotrue = new LocalGoTrue(apiKey);
-  const a = await criarRevisorGoTrueLocal(gotrue, 1);
-  const b = await criarRevisorGoTrueLocal(gotrue, 2);
+  const binder=new VinculoMfaDossieLocalCI(SNAP_CI,()=>Date.now(),"ci-local-descartavel");
+  const a = await criarRevisorGoTrueLocal(gotrue, 1,binder);
+  const b = await criarRevisorGoTrueLocal(gotrue, 2,binder);
   ensure(a.userId !== b.userId && a.sessionId !== b.sessionId
     && a.factorId !== b.factorId,
     "GoTrue reutilizou identidade, sessao ou fator entre revisores");
