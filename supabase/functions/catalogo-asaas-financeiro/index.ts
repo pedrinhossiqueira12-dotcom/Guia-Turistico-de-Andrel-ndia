@@ -650,7 +650,9 @@ async function auditarHistoricoTransferenciasExcepcionaisSandboxAdmin(
    !Number.isSafeInteger(result.totalCount)||result.totalCount<0||
    result.data.length>LIMIT||
    (result.hasMore===true&&result.data.length!==LIMIT)||
-   result.totalCount<offset+result.data.length)
+   // Sinalizacao hasMore e totalCount precisam concordar NAQUELA pagina.
+   (result.hasMore===true&&result.totalCount<=offset+result.data.length)||
+   (result.hasMore===false&&result.totalCount!==offset+result.data.length))
    throw new Failure("Paginação bancária inválida: histórico inconclusivo. HOLD.",503);
   paginas++;
   examinadas+=result.data.length;
