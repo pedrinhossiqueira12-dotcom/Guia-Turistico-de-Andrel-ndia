@@ -64,6 +64,8 @@
     feedback("saquesAsaasFeedback", "");
     feedback("conciliarSaqueAsaasFeedback", "");
     feedback("asaasWebhookInboxResumo", "");
+    feedback("asaasSandboxFaturasFeedback", "");
+    if ($("asaasSandboxFaturasLista")) $("asaasSandboxFaturasLista").innerHTML = "";
     $("conciliarSaqueAsaasForm")?.reset();
     $("repassePreview").innerHTML = '<p class="empty-state">Selecione um crédito disponível para revisar as provas antes de registrar o repasse.</p>';
   }
@@ -146,6 +148,47 @@
       if (!state.authorized) return;
       $("listaSaquesAsaas").innerHTML = '<p class="empty-state">Auditoria Asaas indisponível neste ambiente.</p>';
       feedback("saquesAsaasFeedback", "Este módulo só estará disponível após instalar a nova função financeira.", true);
+    }
+  }
+
+  // Relatorio apenas consultivo. Nunca criar fechamento ou cobranca nesta tela.
+  async function verificarFaturasSandboxAsaas() {
+    if (!state.authorized) return;
+    const generation = state.generation, userId = state.userId;
+    const button = $("asaasSandboxFaturasConsultar");
+    if (button) button.disabled = true;
+    feedback("asaasSandboxFaturasFeedback", "Conferindo faturas existentes no Sandbox, sem criar cobrança...");
+    try {
+      const res = await chamarApi("diagnosticar_faturas_sandbox_admin", {},
+        generation, userId, ASAAS_ADMIN_URL);
+      validarSessao(generation, userId);
+      if (!state.authorized) return;
+      const lista = $("asaasSandboxFaturasLista");
+      const faturas = Array.isArray(res.faturas) ? res.faturas : [];
+      lista.innerHTML = faturas.length ? faturas.map(f => {
+        const estado = {
+          pronta_para_emissao:"Apta para emitir Pix de teste",
+          cobranca_existente:"Já possui cobrança: consultar e conciliar",
+          emissao_reservada_para_conciliacao:"Emissão reservada: não duplicar Pix",
+          sem_proprietario_autorizado:"Proprietário não verificado"
+        }[f.motivo] || "Revisão necessária";
+        return `<article class="manager-row"><div class="manager-copy">
+          <strong>${escapar(f.comercio_id)} · ${escapar(f.competencia)} · ${escapar(reais(f.valor_centavos))}</strong>
+          <small>${escapar(estado)}${f.gateway_existente ? " · gateway: " + escapar(f.gateway_existente) : ""}</small>
+          <small>Fechamento: ${escapar(f.fechamento_id)}</small>
+          </div><span class="status-pill ${f.apta ? "" : "is-warning"}">${f.apta ? "Pronta" : "Revisar"}</span></article>`;
+      }).join("") : '<p class="empty-state">Nenhuma fatura aberta e elegível encontrada. Faça um pedido de teste legítimo e conclua o fechamento mensal no Sandbox; não ajuste saldos pelo SQL.</p>';
+      const limit = res.lista_limitada ? " (amostra de 50)" : "";
+      feedback("asaasSandboxFaturasFeedback", "Faturas consultadas: " +
+        Number(res.consultadas || 0) + limit + " · aptas: " + Number(res.aptas || 0) +
+        ". Este relatório não cria nem confirma cobranças.");
+    } catch (error) {
+      if (error.message !== STALE_SESSION_REQUEST && state.authorized) {
+        $("asaasSandboxFaturasLista").innerHTML = "";
+        feedback("asaasSandboxFaturasFeedback", error.message || "Diagnóstico indisponível.", true);
+      }
+    } finally {
+      if (generation === state.generation && button) button.disabled = false;
     }
   }
 
@@ -298,6 +341,7 @@
     $("ocorrenciaForm").addEventListener("submit", resolverOcorrencia);
     $("repasseForm").addEventListener("submit", registrarRepasse);
     $("conciliarSaqueAsaasForm")?.addEventListener("submit", conciliarSaqueAsaas);
+    $("asaasSandboxFaturasConsultar")?.addEventListener("click", verificarFaturasSandboxAsaas);
     $("asaasWebhookInboxConsultar")?.addEventListener("click", () => verificarFilaWebhookAsaas(false));
     $("asaasWebhookInboxReprocessar")?.addEventListener("click", () => verificarFilaWebhookAsaas(true));
     $("repasseCredito").addEventListener("change", (event) => selecionarCredito(event.target.value));
