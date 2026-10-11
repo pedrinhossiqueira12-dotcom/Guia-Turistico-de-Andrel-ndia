@@ -40,7 +40,10 @@ function uuid(v:unknown):v is string{return typeof v==="string"&&UUID.test(v);}
 function hold(raw:unknown):RespostaBancoPrechallengeInerte {
   if(!obj(raw)||typeof raw.ok!=="boolean" ||typeof raw.motivo!=="string"
     || raw.motivo.length<1 ||raw.motivo.length>160
-    || ![undefined,null].includes(raw.nonce as undefined|null) && !uuid(raw.nonce)
+    || (![undefined,null].includes(raw.nonce as undefined|null) && !uuid(raw.nonce))
+    // Recusas nao podem entregar nonce validavel ao chamador: o banco
+    // deve falhar FECHADO antes de queimar ou emitir um nonce do revisor.
+    || (raw.ok===false && raw.nonce!==null && raw.nonce!==undefined)
     || raw.status_operacional!=="HOLD_OBRIGATORIO"
     || raw.pagamento_autorizado!==false
     || raw.challenge_go_true_verificado!==false
