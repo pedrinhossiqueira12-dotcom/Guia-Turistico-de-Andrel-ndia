@@ -32,7 +32,7 @@ function fixture(){
   total_comissao_centavos:7000,status:"faturado",vencimento_em:"2026-10-30"};
  const state={f,charge:null,claim:false,provider:[],events:[],posts:0,qrs:0,
    reconciles:[],rpcCalls:[],providerCalls:[],getErrors:0,customer,
-   registrarAckOverride:undefined};
+   customerLoads:0,customerExpected:[],registrarAckOverride:undefined};
  let counter=0;
  const clientQuery=(table)=>{
   const conditions={};
@@ -92,7 +92,11 @@ function fixture(){
   db:{from:clientQuery},asaas,
   enabled:kind=>assert.equal(kind,"billing"),
   invoice:async()=>({f:state.f,charge:state.charge,store,month}),
-  loadOrCreateCustomer:async()=>state.customer,
+  loadOrCreateCustomer:async(_store,_body,_email,expected)=>{
+   state.customerLoads++;state.customerExpected.push(expected);
+   if(expected&&expected!==state.customer)throw new Failure("Pagador externo divergente",409);
+   return state.customer;
+  },
   reference:(s,m)=>"fatura-"+s+"-"+m,
   commerce:x=>x,competence:x=>x,money:c=>Math.round(c)/100,
   cents:x=>typeof x==="number"?Math.round(x*100):NaN,
@@ -172,6 +176,8 @@ test("emissao reservada apos timeout recupera pagamento remoto sem novo POST",as
   status:"PENDING",invoiceUrl:"https://sandbox.invalid/pay-ci"});
  const r=await x.request();
  assert.equal(r.order_id,"pay_ci_existing");
+ assert.deepEqual(x.state.customerExpected,["cus-ci-001"],
+  "recuperacao deve vincular exatamente o pagador da cobranca antiga");
  assert.equal(x.state.posts,0);
  assert.equal(x.state.charge.order_id,"pay_ci_existing");
 });
@@ -179,6 +185,7 @@ test("emissao reservada sem pagamento visivel bloqueia para evitar duplicacao",a
  const x=fixture();x.state.claim=true;
  await assert.rejects(x.request(),e=>e.status===409&&/Não é seguro emitir outro Pix/.test(e.message));
  assert.equal(x.state.posts,0);
+ assert.equal(x.state.customerLoads,0,"claim concorrente nao pode criar cliente remoto");
  assert.equal(x.state.rpcCalls.length,0);
 });
 test("duas cobrancas remotas com mesma referencia exigem revisao humana",async()=>{
