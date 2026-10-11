@@ -86,3 +86,16 @@ O teste usa a separação previamente criada com **2 remunerações financiadas,
 4. Confirma que as remunerações verdadeiras continuam `disponivel`, com `repasse_id IS NULL`. A fixture termina com `ROLLBACK`.
 
 **Limitação essencial:** esta é uma simulação da *atomicidade de preparação documental em tabelas temporárias*. Não há executor de Pix, baixa, liberação ou migração de resolução. Ela não comprova concorrência de uma baixa real nem recuperação após resposta bancária ambígua. O livro de duas sessões mencionado acima cobre concorrência de tentativas documentais, não execução financeira. As dependências #41 e #42 permanecem obrigatórias.
+
+## Conferência por remuneração: dois erros que a soma não detecta (11/10/2026)
+
+A fixture SQL transacional agora define `pg_temp.catalogo_asaas_validar_itens_sombra_inerte(uuid,uuid)`. A comparação usa `FULL OUTER JOIN` entre os **IDs e valores de cada remuneração separada** e os IDs/valores do plano temporário. Ela também compara quantidade, total e fingerprint SHA-256 ordenada por ID. O diagnóstico jamais autoriza dinheiro: `HOLD_OBRIGATORIO`, `pagamento_autorizado=false`, `baixa_realizada=false` e `movimenta_dinheiro=false`.
+
+Foram adicionados cenários reais do PostgreSQL efêmero em que:
+
+- **Adulteração balanceada:** uma das duas comissões recebe +1 centavo na cópia temporária e a outra recebe -1 centavo. A soma ainda é **R$120,00** e o número de itens ainda é **2**, mas o comparador deve encontrar **2 créditos divergentes** e rejeitar a integridade.
+- **Item excluído na sombra:** mesmo sem alterar nenhum crédito original, o comparador deve encontrar **1 crédito ausente** e rejeitar.
+- **Identificador de tentativa desconhecido:** não pode reaproveitar plano ou fingerprint de outra tentativa.
+- **Rollback de cada ataque:** subtransações de teste revertem as alterações temporárias; a comparação posterior deve voltar a indicar integridade sem modificar `catalogo_remuneracoes_v2`.
+
+**Fronteira:** é uma prova negativa de integridade de *plano documental temporário*, não o mecanismo final de transferência ou baixa. A resolução real continua bloqueada por evidência bancária independente (#41), revisores MFA (#42) e projeto transacional idempotente auditado (#43).
