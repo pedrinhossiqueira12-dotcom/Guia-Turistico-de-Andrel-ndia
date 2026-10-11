@@ -2751,11 +2751,9 @@ DECLARE
  v_uid uuid:='edededed-eded-4ede-8ede-ededededed43';
  v_store text:='ci-escrow-1201-sem-pix';
  v_month integer;
- v_i integer;
  v_target integer;
  v_competencia date;
  v_fechamento uuid;
- v_pedido uuid;
  v_saida uuid;
  v_reserva jsonb;
  v_previa jsonb;
@@ -2782,35 +2780,57 @@ BEGIN
   ) VALUES(v_fechamento,v_store,v_competencia,'asaas',
    'ci-pagamento-escrow-bulk-'||v_month,'pago',v_target*21000,now());
 
-  FOR v_i IN 1..v_target LOOP
-   INSERT INTO public.catalogo_pedidos(
-    comercio_id,referencia_externa,provedor,idempotency_key,status,
-    status_pagamento,modalidade,forma_pagamento,subtotal_produtos_centavos,
-    entrega_centavos,total_centavos,taxa_plataforma_centavos,
-    repasse_bruto_comercio_centavos,cliente_nome,cliente_telefone,
-    versao_financeira,taxa_motoboy_centavos,taxa_total_centavos,
-    entrega_status,metadata
-   ) VALUES(v_store,'ci-1201-'||v_month||'-'||v_i,
-    'offline',gen_random_uuid(),'entregue','aprovado','entrega','dinheiro',
-    300000,0,300000,15000,279000,'Cliente CI 1201','00000000000',
-    2,6000,21000,'entregue',jsonb_build_object(
-     'ensaio','1201-remuneracoes-pg','mes',v_month,'i',v_i))
-   RETURNING id INTO v_pedido;
-   INSERT INTO public.catalogo_fatura_componentes_v2(
-    fechamento_id,pedido_id,tipo,valor_centavos
-   ) VALUES(v_fechamento,v_pedido,'plataforma',15000),
-           (v_fechamento,v_pedido,'logistica',6000);
-   INSERT INTO public.catalogo_comissoes_offline(
-    pedido_id,comercio_id,competencia,subtotal_produtos_centavos,
-    taxa_percentual,valor_comissao_centavos,status,pago_em,
-    taxa_plataforma_centavos,taxa_motoboy_centavos,valor_total_centavos,
-    versao_financeira,motoboy_id,financiamento_logistica_comprovado
-   ) VALUES(v_pedido,v_store,v_competencia,300000,5,21000,'paga',now(),
-    15000,6000,21000,2,v_uid,true);
-   INSERT INTO public.catalogo_remuneracoes_v2(
-    pedido_id,comercio_id,motoboy_id,valor_centavos,status,financiamento_comprovado
-   ) VALUES(v_pedido,v_store,v_uid,6000,'disponivel',true);
-  END LOOP;
+  -- Insercoes set-based para impedir milhares de roundtrips SQL no CI.
+  -- Os 1.201 IDs continuam independentes, vinculados ao financiamento real.
+  INSERT INTO public.catalogo_pedidos(
+   comercio_id,referencia_externa,provedor,idempotency_key,status,
+   status_pagamento,modalidade,forma_pagamento,subtotal_produtos_centavos,
+   entrega_centavos,total_centavos,taxa_plataforma_centavos,
+   repasse_bruto_comercio_centavos,cliente_nome,cliente_telefone,
+   versao_financeira,taxa_motoboy_centavos,taxa_total_centavos,
+   entrega_status,metadata
+  )
+  SELECT v_store,'ci-1201-'||v_month||'-'||g.i,
+   'offline',gen_random_uuid(),'entregue','aprovado','entrega','dinheiro',
+   300000,0,300000,15000,279000,'Cliente CI 1201','00000000000',
+   2,6000,21000,'entregue',jsonb_build_object(
+    'ensaio','1201-remuneracoes-pg','mes',v_month,'i',g.i)
+  FROM pg_catalog.generate_series(1,v_target) AS g(i);
+
+  INSERT INTO public.catalogo_fatura_componentes_v2(
+   fechamento_id,pedido_id,tipo,valor_centavos
+  )
+  SELECT v_fechamento,p.id,'plataforma',15000
+  FROM public.catalogo_pedidos p
+  WHERE p.comercio_id=v_store
+   AND p.referencia_externa LIKE 'ci-1201-'||v_month||'-%';
+  INSERT INTO public.catalogo_fatura_componentes_v2(
+   fechamento_id,pedido_id,tipo,valor_centavos
+  )
+  SELECT v_fechamento,p.id,'logistica',6000
+  FROM public.catalogo_pedidos p
+  WHERE p.comercio_id=v_store
+   AND p.referencia_externa LIKE 'ci-1201-'||v_month||'-%';
+
+  INSERT INTO public.catalogo_comissoes_offline(
+   pedido_id,comercio_id,competencia,subtotal_produtos_centavos,
+   taxa_percentual,valor_comissao_centavos,status,pago_em,
+   taxa_plataforma_centavos,taxa_motoboy_centavos,valor_total_centavos,
+   versao_financeira,motoboy_id,financiamento_logistica_comprovado
+  )
+  SELECT p.id,v_store,v_competencia,300000,5,21000,'paga',now(),
+   15000,6000,21000,2,v_uid,true
+  FROM public.catalogo_pedidos p
+  WHERE p.comercio_id=v_store
+   AND p.referencia_externa LIKE 'ci-1201-'||v_month||'-%';
+
+  INSERT INTO public.catalogo_remuneracoes_v2(
+   pedido_id,comercio_id,motoboy_id,valor_centavos,status,financiamento_comprovado
+  )
+  SELECT p.id,v_store,v_uid,6000,'disponivel',true
+  FROM public.catalogo_pedidos p
+  WHERE p.comercio_id=v_store
+   AND p.referencia_externa LIKE 'ci-1201-'||v_month||'-%';
  END LOOP;
 
  SELECT public.catalogo_asaas_saldo_historico(v_uid) INTO v_saldo;
