@@ -126,6 +126,14 @@ Para atestar o destinatário original sem improvisar:
 - A duplicidade e um **indicio de listagem instavel**, nao prova de fraude ou de transferencia duplicada; sua ausencia tambem NAO atesta integridade temporal, destino ou ausencia de pagamento. `listagem_consultada_ate_o_fim=true` permanece descritivo do endpoint, nao atestado bancario independente.
 - Sem POST, migracoes, implantacao Edge, Pix ou alteracao produtiva. PR #39 Draft e `HOLD_OBRIGATORIO`.
 
+## IDs bancarios ausentes ou malformados no lote inteiro — 11/10/2026
+
+- Antes deste incremento, uma transferencia **fora** da referencia investigada podia ser ignorada mesmo quando o GET do Asaas trazia `id` ausente, numero em vez de string, string vazia ou espacos externos. Assim, o painel nao sinalizava a inconsistencia geral da amostra.
+- A contagem `ids_sem_identificador_globais` agora cobre todas as paginas examinadas. Se maior que zero, `conflito_identificado=true` e a interface comunica apenas a contagem. O scanner nao aceita um ID com espacos externos como um ID bancario confiavel.
+- Teste HTTP Deno da Edge real em rede bloqueada (Asaas e Supabase falsos) com 3 registros nao relacionados, sendo dois com IDs invalidos. Verifica alerta mesmo com nenhuma referencia encontrada, e que todas as flags de autorizacao, pagamento, baixa e evidencia independente permanecem falsas.
+- **Importante:** o alerta indica resposta incompleta/inesperada e exige investigacao; nao afirma fraude, pagamento, nao pagamento ou titularidade. `listagem_consultada_ate_o_fim` apenas relata a paginacao; nao atesta integridade ou snapshot bancario.
+- Nenhuma implantacao, migracao, POST de Pix ou mudanca no ambiente de producao. PR #39 continua Draft e `HOLD_OBRIGATORIO`.
+
 ## Checklist de liberação
 
 - [ ] CI integralmente verde no commit final.
