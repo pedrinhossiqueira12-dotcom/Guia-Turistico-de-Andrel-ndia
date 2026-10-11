@@ -1443,41 +1443,117 @@ async function authorizeWithdrawal(request:Request){
  return approveResponse(decision,reason);
 }
 
-async function webhook(request:Request){
- if(!WEBHOOK_TOKEN)throw new Failure("Webhook não configurado.",503);
- const actual=request.headers.get("asaas-access-token")||"";
- check(actual.length===WEBHOOK_TOKEN.length&&actual===WEBHOOK_TOKEN,"Webhook não autorizado.",401);
- const body=input(await request.json().catch(()=>({})));
- const event=value(body.event,80),id=value(body.id,180),resource=input(body.payment||body.transfer);
- if(!id||!event||!resource.id)throw new Failure("Evento inválido.",400);
- const {data:prior}=await db.from("catalogo_asaas_webhook_eventos").select("id").eq("id",id).maybeSingle();
- if(prior)return respond({success:true,duplicado:true});
- if(event.startsWith("PAYMENT_")){
-  const paymentId=value(resource.id,150);
-  const {data:charge}=await db.from("catalogo_fatura_cobrancas").select("*")
-    .eq("gateway","asaas").eq("order_id",paymentId).maybeSingle();
-  if(!charge)return respond({success:true,ignorado:true}); // pedido fora do escopo da plataforma
-  await verifyInvoice(paymentId,charge,String(charge.comercio_id),String(charge.competencia).slice(0,7));
- } else if(event.startsWith("TRANSFER_")){
-  const transferId=value(resource.id,150);
-  const {data:saque}=await db.from("catalogo_asaas_saques")
-   .select("id").eq("transferencia_id",transferId).maybeSingle();
+type AsaasWebhookPendente={
+ id:string;evento:string;recurso_id:string;
+ referencia_externa:string|null;tentativa_token:string;
+};
+async function processarEventoAsaasPendente(row:AsaasWebhookPendente){
+ // Dados recebidos no Webhook apenas IDENTIFICAM o recurso; a confirmacao
+ // financeira continua exigindo GET autenticado ao Asaas e RPC no banco.
+ if(row.evento.startsWith("PAYMENT_")){
+  const {data:charge,error}=await db.from("catalogo_fatura_cobrancas")
+   .select("*").eq("gateway","asaas").eq("order_id",row.recurso_id).maybeSingle();
+  if(error)throw new Failure("Falha ao localizar fatura do Webhook.",503);
+  if(!charge)return; // cobranca da conta Asaas que nao pertence ao Guia
+  await verifyInvoice(row.recurso_id,charge,String(charge.comercio_id),
+   String(charge.competencia).slice(0,7));
+  return;
+ }
+ if(row.evento.startsWith("TRANSFER_")){
+  const {data:saque,error}=await db.from("catalogo_asaas_saques")
+   .select("id").eq("transferencia_id",row.recurso_id).maybeSingle();
+  if(error)throw new Failure("Falha ao localizar saque do Webhook.",503);
   if(saque){
-   await reconcileTransfer(String(saque.id),transferId);
-  } else {
-   // Sem saque normal: observar apenas referencias excepcionais no Sandbox.
-   // Nunca usar diretamente o estado relatado no webhook.
-   const ref=value(resource.externalReference,180);
-   const match=/^guia-exc:(residual|saida):([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i.exec(ref);
-   if(ENVIRONMENT!=="sandbox"||!match)
-    return respond({success:true,ignorado:true});
-   await consultarERegistrarTransferenciaExcepcionalSandbox(match[1],match[2],transferId);
+   await reconcileTransfer(String(saque.id),row.recurso_id);
+   return;
   }
- } else return respond({success:true,ignorado:true});
- const {error}=await db.from("catalogo_asaas_webhook_eventos")
-  .insert({id,evento:event,recurso_id:value(resource.id,180)});
- if(error&&error.code!=="23505")throw new Failure("Não foi possível registrar evento financeiro.",503);
- return respond({success:true});
+  // Excecoes preservadas SOMENTE para observacao no Sandbox, sem baixar saldo.
+  const ref=row.referencia_externa||"";
+  const match=/^guia-exc:(residual|saida):([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i.exec(ref);
+  if(ENVIRONMENT==="sandbox"&&match)
+   await consultarERegistrarTransferenciaExcepcionalSandbox(match[1],match[2],row.recurso_id);
+ }
+}
+async function processarWebhooksAsaasPendentes(limit=5){
+ const picked=await rpc("catalogo_asaas_webhook_claim",{p_limite:limit});
+ if(!Array.isArray(picked))throw new Failure("Fila de Webhooks inválida.",503);
+ let concluido=0,falhou=0;
+ for(const candidate of picked){
+  const row=input(candidate) as unknown as AsaasWebhookPendente;
+  if(!row.id||!row.tentativa_token){falhou++;continue;}
+  try{
+   await processarEventoAsaasPendente(row);
+   const result=await rpc("catalogo_asaas_webhook_finalizar",{
+    p_id:row.id,p_token:row.tentativa_token,p_sucesso:true
+   });
+   if(result?.ok!==true)throw new Failure("Tentativa de Webhook perdeu o lock.",503);
+   concluido++;
+  }catch(e){
+   falhou++;
+   // Registrar ERRO sem detalhes pessoais; nova tentativa usa backoff no SQL.
+   try{await rpc("catalogo_asaas_webhook_finalizar",{
+     p_id:row.id,p_token:row.tentativa_token,p_sucesso:false
+   });}catch{/* Timeout: lease de 5 min permite nova tentativa posterior. */}
+   console.error("Asaas webhook pendente para nova tentativa",{
+     tipo:(e as Error).name,evento:row.evento
+   });
+  }
+ }
+ return {concluido,falhou};
+}
+async function webhook(request:Request){
+ if(!WEBHOOK_TOKEN || WEBHOOK_TOKEN.length<32)
+  throw new Failure("Webhook não configurado.",503);
+ const token=request.headers.get("asaas-access-token")||"";
+ if(!(await equalSecret(token,WEBHOOK_TOKEN)))
+  throw new Failure("Webhook não autorizado.",401);
+ const raw=await request.text();
+ if(raw.length>65536)throw new Failure("Evento fora do limite.",413);
+ const body=input(JSON.parse(raw||"{}"));
+ const event=value(body.event,80),id=value(body.id,180);
+ const resource=input(body.payment||body.transfer);
+ const resourceId=value(resource.id,150);
+ if(!id||!event||!resourceId)throw new Failure("Evento inválido.",400);
+ if(!event.startsWith("PAYMENT_")&&!event.startsWith("TRANSFER_"))
+  return respond({success:true,ignorado:true});
+ // Persistir ANTES de responder 200 (modelo at-least-once da Asaas).
+ const stored=await rpc("catalogo_asaas_webhook_receber",{
+  p_id:id,p_evento:event,p_recurso:resourceId,
+  p_referencia:value(resource.externalReference,180)||null
+ });
+ if(stored?.ok!==true)throw new Failure("Evento duplicado divergente.",409);
+ // ACK rapido: Supabase EdgeRuntime conserva a instancia para completar a
+ // reconciliacao. Se cair, o registro pendente sera reprocessado depois.
+ const task=processarWebhooksAsaasPendentes(5).catch(e=>{
+  console.error("Asaas fila financeira", {tipo:(e as Error).name});
+ });
+ const runtime=(globalThis as typeof globalThis & {
+  EdgeRuntime?:{waitUntil:(p:Promise<unknown>)=>void}
+ }).EdgeRuntime;
+ if(runtime?.waitUntil)runtime.waitUntil(task);
+ else await task; // fallback somente para testes offline sem EdgeRuntime
+ return respond({success:true,recebido:true,duplicado:stored.duplicado===true});
+}
+async function reprocessarWebhooksAsaasAdmin(uid:string){
+ if(uid!==ADMIN_USER_ID)throw new Failure("Acesso restrito à administração.",403);
+ const resultado=await processarWebhooksAsaasPendentes(10);
+ return respond({success:true,...resultado,
+  mensagem:"Conferência realizada. Eventos falhos permanecem na fila para retentativa."});
+}
+async function diagnosticarWebhooksAsaasAdmin(uid:string){
+ if(uid!==ADMIN_USER_ID)throw new Failure("Acesso restrito à administração.",403);
+ const {data,error}=await db.from("catalogo_asaas_webhook_eventos")
+  .select("estado,criado_em,proxima_tentativa_em")
+  .neq("estado","concluido")
+  .order("criado_em",{ascending:true}).limit(100);
+ if(error)throw new Failure("Falha ao consultar eventos financeiros.",503);
+ const eventos=data||[];
+ return respond({success:true,pendentes:Math.min(eventos.length,100),
+  amostra_limitada:eventos.length===100,
+  em_erro:eventos.filter(x=>x.estado==="erro").length,
+  em_processamento:eventos.filter(x=>x.estado==="processando").length,
+  aguardando:eventos.filter(x=>x.estado==="pendente").length,
+  mensagem:"Diagnóstico de eventos ainda não conciliados; nenhuma movimentação solicitada."});
 }
 Deno.serve(async (request:Request)=>{
  if(request.method==="OPTIONS")return new Response("ok",{headers:JSON_HEADERS});
@@ -1497,6 +1573,8 @@ Deno.serve(async (request:Request)=>{
    case "consultar_encerramento":return await consultarEncerramento(user.id,body);
    case "listar_encerramentos_admin":return await listarEncerramentosAdmin(user.id);
    case "finalizar_encerramento_admin":return await finalizarEncerramentoAdmin(user.id,body);
+   case "diagnosticar_webhooks_asaas_admin":return await diagnosticarWebhooksAsaasAdmin(user.id);
+   case "reprocessar_webhooks_asaas_admin":return await reprocessarWebhooksAsaasAdmin(user.id);
    case "obter_fatura":return await showInvoice(user.id,body);
    case "criar_cobranca":return await createInvoice(user.id,body,user.email||"");
    case "consultar_cobranca":return await reconcileInvoice(user.id,body);
