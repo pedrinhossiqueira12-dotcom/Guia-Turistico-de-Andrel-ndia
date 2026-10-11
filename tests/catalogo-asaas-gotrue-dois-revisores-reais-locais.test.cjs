@@ -12,8 +12,8 @@ test("#42: dois usuarios e TOTP reais SOMENTE no GoTrue local da CI",()=>{
   'const BASE = "http://127.0.0.1:54321/auth/v1"',
   'const EXPECTED_ORIGIN = "http://127.0.0.1:54321"',
   "async function criarRevisorGoTrueLocal(",
-  'gotrue, 1)',
-  'gotrue, 2)',
+  'gotrue, 1,binder)',
+  'gotrue, 2,binder)',
   "a.userId !== b.userId",
   "a.sessionId !== b.sessionId",
   "a.factorId !== b.factorId",
@@ -52,6 +52,11 @@ test("#42: nao devolver tokens, OTP, segredos ou fator na prova local",()=>{
 
 test("#42: falta de permissao externa impede prometer autorizacao real",()=>{
  assert.doesNotMatch(script,/(?:payment_authorized|approve_payment|criar_pix|liberar_saldo)\s*\(/i);
+ assert.ok(script.includes("binder.preparar(identidade)"));
+ assert.ok(script.includes("binder.vincularChallenge(reserved.nonce,cid)"));
+ assert.ok(script.includes("binder.registrarResultado(reserved.nonce"));
+ assert.ok(script.includes("duas_observacoes_locais_vinculadas===true"));
+ assert.ok(script.includes("stale.duas_observacoes_locais_vinculadas===false"));
  assert.ok(script.includes("Nao retornar bearer, TOTP ou fator"));
  assert.ok(script.includes("NAO chamar nenhuma RPC de parecer, transferencia, Pix ou Asaas"));
 });
