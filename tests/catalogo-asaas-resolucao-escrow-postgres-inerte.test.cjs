@@ -67,3 +67,22 @@ test("#43: PostgreSQL descartavel valida 1201 remuneracoes em 2 meses antes de H
  assert.match(sql,/v_previa->>'movimenta_dinheiro' IS DISTINCT FROM 'false'/);
  assert.match(sql,/PASS #43 PostgreSQL: 1201 remuneracoes reais em 2 competencias, HOLD, zero Pix/);
 });
+
+test("#43: CI executa preview sob lock com duas sessoes postgres e commit/rollback",()=>{
+ const script=fs.readFileSync(
+  "scripts/validacao-pagamentos/test-asaas-advisory-concurrency.py","utf8");
+ for(const marker of [
+  "def scenario_escrow_preview_concurrent_hold()",
+  "ESCROW_PREVIEW_OWNER",
+  "CREATE FUNCTION pg_temp.catalogo_asaas_previsualizar_resolucao_inerte(",
+  'for resolution in ("COMMIT", "ROLLBACK"):',
+  "assert_waiting_advisory(second.name)",
+  "HOLD_OBRIGATORIO",
+  '"pagamento_autorizado": false',
+  '"liberacao_autorizada": false',
+  '"baixa_realizada": false',
+  "scenario_escrow_preview_concurrent_hold()"
+ ])assert.ok(script.includes(marker),marker);
+ assert.ok(script.includes("EXPECTED_DB = \"catalogo_asaas_race_ci\""));
+ assert.ok(script.includes("if run_sql("));
+});
