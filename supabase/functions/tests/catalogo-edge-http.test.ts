@@ -262,6 +262,8 @@ Deno.test("varredura recusa paginas Asaas parciais, parametros incoerentes e tot
   {label:"offset omitido",page:{limit:100,totalCount:2,hasMore:false,data:full.slice(0,2)}},
   {label:"totalCount nao inteiro",page:{limit:100,offset:0,totalCount:"2",hasMore:false,data:full.slice(0,2)}},
   {label:"totalCount menor que dados",page:{limit:100,offset:0,totalCount:1,hasMore:false,data:full.slice(0,2)}},
+  {label:"hasMore falso mas totalCount aponta mais registros",page:{limit:100,offset:0,totalCount:6,hasMore:false,data:full.slice(0,2)}},
+  {label:"hasMore verdadeiro apesar de totalCount completo",page:{limit:100,offset:0,totalCount:100,hasMore:true,data:full}},
  ];
  for(const scenario of malformed){
   let bankGets=0;
