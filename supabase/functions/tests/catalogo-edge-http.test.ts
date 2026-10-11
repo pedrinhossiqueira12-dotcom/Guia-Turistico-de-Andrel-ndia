@@ -122,6 +122,68 @@ Deno.test("Asaas com validacao desativada recusa por HTTP sem consultar rede", a
 
 // #41: exercita a Edge REAL com autenticação e histórico Asaas inteiramente
 // FICTÍCIOS. Nenhuma rede é permitida fora dos mocks da CI.
+Deno.test("varredura rejeita resposta Asaas enorme ou malformada sem expor dados",async()=>{
+ const edge=handlers.get("asaas")!;
+ const separacaoId="ad500001-1111-4111-8111-111111111111";
+ const requestId="ad500002-1111-4111-8111-111111111111";
+ const motoboyId="edededed-eded-4ede-8ede-ededededed10";
+ const adminUid="4b9a0233-6b72-4573-aebd-d596c5b15e1b";
+ const bankSecret="CHAVE_PIX_BANCO_NAO_EXIBIR";
+ const scenarios:{label:string;make:()=>Response}[]=[
+  {label:"content-length acima do limite",make:()=>new Response(
+   JSON.stringify({detail:bankSecret}),{status:200,headers:{
+    "content-type":"application/json","content-length":String(2*1024*1024+1),
+   }})},
+  {label:"resposta sem MIME JSON",make:()=>new Response(bankSecret,
+   {status:200,headers:{"content-type":"text/plain"}})},
+  {label:"corpo real supera limite",make:()=>new Response(
+   new Uint8Array(2*1024*1024+1),{status:200,headers:{"content-type":"application/json"}})},
+  {label:"UTF-8 invalido",make:()=>new Response(
+   new Uint8Array([0xc3,0x28]),{status:200,headers:{"content-type":"application/json"}})},
+  {label:"JSON truncado",make:()=>new Response(
+   '{"data":"'+bankSecret+'"',
+   {status:200,headers:{"content-type":"application/json"}})},
+ ];
+ for(const scenario of scenarios){
+  let bankGets=0;
+  try{
+   currentMockFetch=async(input:RequestInfo|URL,init?:RequestInit)=>{
+    const raw=typeof input==="string"?input:input instanceof URL?input.toString():input.url;
+    const u=new URL(raw);
+    assert((init?.method??"GET")==="GET","Leitura bancária tentou escrita: "+scenario.label);
+    if(u.host==="ci-supabase.invalid"&&u.pathname==="/auth/v1/user")
+     return result({id:adminUid,aud:"authenticated",role:"authenticated",
+      app_metadata:{},user_metadata:{}});
+    if(u.host==="ci-supabase.invalid"&&
+       u.pathname==="/rest/v1/catalogo_asaas_separacoes_excepcionais")
+     return result({id:separacaoId,tipo:"saida",solicitacao_id:requestId,
+      motoboy_id:motoboyId,valor_centavos:12000,situacao:"congelada"});
+    if(u.host==="ci-supabase.invalid"&&
+       u.pathname==="/rest/v1/catalogo_asaas_transferencias_excepcionais_auditoria")
+     return result(null);
+    if(u.host==="api-sandbox.asaas.com"&&u.pathname==="/v3/transfers"){
+     bankGets++;
+     return scenario.make();
+    }
+    throw Error("Rota não prevista no teste de resposta Asaas: "+u.pathname);
+   };
+   const response=await edge(post("/functions/v1/catalogo-asaas-financeiro",{
+    acao:"auditar_historico_transferencias_excepcionais_sandbox_admin",
+    separacao_id:separacaoId,
+   },{authorization:"Bearer ci-admin-test-token"}));
+   assertions(response,503,scenario.label);
+   const payload=await response.json();
+   assert(bankGets===1, "Auditoria nao fez exatamente um GET: "+scenario.label);
+   assert(payload.success===false&&
+    typeof payload.mensagem==="string"&&payload.mensagem.includes("HOLD"),
+    "Resposta bancária inválida não falhou fechada: "+scenario.label);
+   assert(!JSON.stringify(payload).includes(bankSecret)&&!JSON.stringify(payload).includes("bankAccount")&&
+    !JSON.stringify(payload).includes("pagamento_autorizado"),
+    "Resposta inválida vazou detalhes ou simulou autorização: "+scenario.label);
+  }finally{currentMockFetch=denyNetwork;}
+ }
+});
+
 Deno.test("varredura Asaas detecta referencias duplicadas sem transferir ou baixar saldo",async()=>{
  const edge=handlers.get("asaas")!;
  const separacaoId="ab100001-1111-4111-8111-111111111111";
