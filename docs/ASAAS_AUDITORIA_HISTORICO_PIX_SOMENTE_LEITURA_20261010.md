@@ -152,6 +152,14 @@ O `GET /v3/transfers` da auditoria em Sandbox agora usa um leitor limitado a **2
 - Essa verificação é diagnóstica, **não é prova bancária de titularidade, destino original, recebimento nem ausência de Pix anterior**. A origem deve investigar respostas monetárias inesperadas; nunca arredondar e concluir quitação.
 - Sem migração SQL, sem deploy de Edge, sem alteração em STAGING/PROD, sem POST de transferências e sem merge do PR #39 (Draft/HOLD).
 
+## Pré-validação da separação congelada antes de consultar o banco (11/10/2026)
+
+- A consulta read-only para o administrador agora valida **antes da busca do vínculo local e antes do GET Asaas** se a separação congelada tem o mesmo UUID da solicitação, tipo permitido (`residual` ou `saida`), identificadores UUID da solicitação e do motoboy e valor **positivo, inteiro e seguro em centavos**.
+- Uma linha local incompleta, adulterada ou inesperada retorna **HTTP 503 + HOLD**, sem tentar consultar o histórico financeiro nem construir uma `externalReference` a partir de dados inválidos.
+- Teste Deno usa a Edge HTTP real com Supabase e Asaas inteiramente simulados (sem rede) para 10 entradas adulteradas, incluindo tipo inválido, UUID ausente, valor negativo, zero, fracionário, inseguro e string; cada uma deve falhar **antes** do vínculo bancário e de qualquer GET ao provedor. Teste Node verifica a ordem das barreiras.
+- O teste **não comprova** origem imutável, beneficiário original nem ausência de Pix prévio. Ele protege a auditoria contra inconsistências internas, sem tornar transferências pagáveis.
+- Somente PR #39 Draft, sem migrações, deploy financeiro, pagamentos, saques reais ou alterações em produção.
+
 ## Checklist de liberação
 
 - [ ] CI integralmente verde no commit final.
