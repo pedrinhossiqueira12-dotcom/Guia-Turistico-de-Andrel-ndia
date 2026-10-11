@@ -218,7 +218,12 @@ BEGIN
  IF p_separacao IS NULL THEN
   RETURN jsonb_build_object('ok',false,'motivo','separacao_invalida',
    'status_operacional','HOLD_OBRIGATORIO','pode_enviar_post',false,
-   'pode_reenviar_post',false,'pagamento_autorizado',false,
+   'pode_reenviar_post',false,
+   'evidencia_independente_bancaria_suficiente',false,
+   'revisores_mfa_credenciados_confirmados',false,
+   'dupla_aprovacao_financeira_confirmada',false,
+   'transacao_de_baixa_habilitada',false,
+   'pagamento_autorizado',false,
    'liberacao_autorizada',false,'baixa_realizada',false,'movimenta_dinheiro',false);
  END IF;
  SELECT motoboy_id INTO v_uid
@@ -226,7 +231,12 @@ BEGIN
  IF v_uid IS NULL THEN
   RETURN jsonb_build_object('ok',false,'motivo','separacao_ausente',
    'status_operacional','HOLD_OBRIGATORIO','pode_enviar_post',false,
-   'pode_reenviar_post',false,'pagamento_autorizado',false,
+   'pode_reenviar_post',false,
+   'evidencia_independente_bancaria_suficiente',false,
+   'revisores_mfa_credenciados_confirmados',false,
+   'dupla_aprovacao_financeira_confirmada',false,
+   'transacao_de_baixa_habilitada',false,
+   'pagamento_autorizado',false,
    'liberacao_autorizada',false,'baixa_realizada',false,'movimenta_dinheiro',false);
  END IF;
  PERFORM pg_catalog.pg_advisory_xact_lock(
@@ -237,7 +247,12 @@ BEGIN
  OR v_escrow.situacao IS DISTINCT FROM 'congelada' THEN
   RETURN jsonb_build_object('ok',false,'motivo','separacao_nao_congelada',
    'status_operacional','HOLD_OBRIGATORIO','pode_enviar_post',false,
-   'pode_reenviar_post',false,'pagamento_autorizado',false,
+   'pode_reenviar_post',false,
+   'evidencia_independente_bancaria_suficiente',false,
+   'revisores_mfa_credenciados_confirmados',false,
+   'dupla_aprovacao_financeira_confirmada',false,
+   'transacao_de_baixa_habilitada',false,
+   'pagamento_autorizado',false,
    'liberacao_autorizada',false,'baixa_realizada',false,'movimenta_dinheiro',false);
  END IF;
 
