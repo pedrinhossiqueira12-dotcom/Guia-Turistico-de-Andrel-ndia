@@ -306,7 +306,7 @@ async function reconcileInvoice(uid:string,body:Record<string,unknown>){
    await asaas("/payments/"+encodeURIComponent(String(charge.order_id))+"/pixQrCode");
  // A observacao bancária negativa prevalece mesmo que o SQL ainda retorne
  // um estado local antigo ("pago") enquanto a contestacao e conciliada.
- const statusPublico=bloqueadaParaPagamento?proof.estado:
+ const statusPublico=bloqueadaParaPagamento||somenteConferencia?proof.estado:
    proof.conciliado.status||proof.estado;
  return respond({success:true,fatura:f,cobranca_status:statusPublico,
   valor_centavos:charge.valor_centavos,pix:parsePix(proof.payment,qr),
