@@ -76,7 +76,11 @@ test("painel comercial tambem bloqueia QR antigo, apesar de resposta velha do se
  const stop=merchant.indexOf("async function gerarPixFatura(",start);
  assert.ok(start>=0&&stop>start);
  const block=merchant.slice(start,stop);
- assert.match(block,/\["estornado", "contestado", "cancelado"\]\.includes\(situacao\)/);
+ const match=/const cobrancaNaoPagavel = (\[[^\]]+\])\.includes\(situacao\);/.exec(block);
+ assert.ok(match,"Politica de supressao de QR do comerciante ausente");
+ const bloqueados=JSON.parse(match[1]);
+ for(const estado of ["estornado","contestado","cancelado","pago","emissao_reservada"])
+  assert.ok(bloqueados.includes(estado),"QR nao pode aparecer em "+estado);
  assert.match(block,/if \(pix\.code && !cobrancaNaoPagavel\)/);
  assert.ok(block.indexOf("cobrancaNaoPagavel")<block.indexOf("if (pix.code"));
 });
