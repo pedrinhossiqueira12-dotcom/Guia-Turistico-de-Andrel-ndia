@@ -57,6 +57,8 @@ async function rpc(name:string,args:Record<string,unknown>){
 // Content-Length: validar tambem os bytes efetivamente recebidos. Apenas
 // para auditoria read-only, sem alterar POST ou conciliacao existente.
 const MAX_ASAAS_LISTAGEM_BYTES=2*1024*1024;
+// Timeout nao comprova rejeicao: POST de transferencia incerto permanece em revisao.
+const ASAAS_HTTP_TIMEOUT_MS=15000;
 async function lerListagemAsaasLimitada(response:Response):Promise<unknown>{
  const mime=(response.headers.get("content-type")||"").split(";")[0].trim().toLowerCase();
  if(mime!=="application/json"&&!(mime.startsWith("application/")&&mime.endsWith("+json")))
@@ -112,6 +114,7 @@ async function asaas(path:string,method="GET",body?:unknown){
   method,headers:{"access_token":ASAAS_TOKEN,"accept":"application/json",
     "content-type":"application/json","User-Agent":"GuiaAndrelandia/1.0"},
   body:body===undefined?undefined:JSON.stringify(body),
+  signal:AbortSignal.timeout(ASAAS_HTTP_TIMEOUT_MS),
  });
  const result=method==="GET"&&path.startsWith("/transfers?")
   ?await lerListagemAsaasLimitada(response)
@@ -1121,11 +1124,8 @@ async function auditPendingSandboxTransfer(uid:string){
  let checked=0;
  for(let offset=0;offset<=4900;offset+=100){
   const path="/transfers?limit=100&offset="+offset+"&dateCreated%5Bge%5D="+from;
-  const response=await fetch(API_BASE+path,{headers:{
-   "access_token":ASAAS_TOKEN,"accept":"application/json","User-Agent":"GuiaAndrelandia/1.0",
-  }});
-  if(!response.ok)throw new Failure("Asaas não permitiu consultar o histórico de transferências ("+response.status+").",502);
-  const result=input(await response.json().catch(()=>({})));
+  // Leitura reutiliza validacao de MIME, limite de bytes e timeout.
+  const result=await asaas(path);
   if(!Array.isArray(result.data))throw new Failure("Lista de transferências inválida: manter reserva para revisão.",503);
   checked+=result.data.length;
   for(const entry of result.data){
@@ -1244,7 +1244,8 @@ async function consultarTitularidadePixSandboxAdmin(uid:string,body:Record<strin
  const result=await fetch(API_BASE+
   "/pix/addressKeys/external?type=PHONE&key=47996515839",{
    method:"GET",headers:{"access_token":ASAAS_TOKEN,"accept":"application/json",
-    "User-Agent":"GuiaAndrelandia/1.0"}
+    "User-Agent":"GuiaAndrelandia/1.0"},
+   signal:AbortSignal.timeout(ASAAS_HTTP_TIMEOUT_MS),
   });
  if(!result.ok)throw new Failure("Consulta Pix não concluída no Asaas Sandbox. Respeite os limites de consulta.",502);
  const provider=input(await result.json().catch(()=>({})));
