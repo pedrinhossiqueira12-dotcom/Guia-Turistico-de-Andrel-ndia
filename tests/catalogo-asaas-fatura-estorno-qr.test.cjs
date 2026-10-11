@@ -12,7 +12,7 @@ const fnSource=edge.slice(from,until)
  .replace("async function reconcileInvoice(uid:string,body:Record<string,unknown>)",
           "async function reconcileInvoice(uid,body)");
 
-async function consultar(estado,providerStatus=estado){
+async function consultar(estado,providerStatus=estado,paymentStatus=""){
  const chamadas=[];
  const sandbox={
   invoice:async()=>({f:{id:"invoice-ci",status:"faturado",total_comissao_centavos:700},
@@ -21,7 +21,7 @@ async function consultar(estado,providerStatus=estado){
   enabled:(kind)=>assert.equal(kind,"billing"),
   verifyInvoice:async()=>({
    estado,conciliado:{status:providerStatus},
-   payment:{id:"pay-ci",invoiceUrl:"https://example.invalid/fatura"}
+   payment:{id:"pay-ci",status:paymentStatus,invoiceUrl:"https://example.invalid/fatura"}
   }),
   asaas:async (path)=>{
    chamadas.push(path);
@@ -64,6 +64,13 @@ for(const status of ["estornado","contestado","cancelado"]){
   assert.match(result.mensagem,/regularização/i);
  });
 }
+test("CONFIRMED no Asaas nao mostra Pix nem status local pago indevido",async()=>{
+ const {result,chamadas}=await consultar("pendente","pago","CONFIRMED");
+ assert.deepEqual(chamadas,[]);
+ assert.equal(result.cobranca_status,"pendente");
+ assert.equal(result.pix.code,"");
+ assert.match(result.mensagem,/não faça outro Pix/i);
+});
 test("painel comercial tambem bloqueia QR antigo, apesar de resposta velha do servidor",()=>{
  const start=merchant.indexOf("function renderizarPixFatura(");
  const stop=merchant.indexOf("async function gerarPixFatura(",start);
