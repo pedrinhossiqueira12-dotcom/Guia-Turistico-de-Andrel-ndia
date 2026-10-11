@@ -116,3 +116,30 @@ test("admin pode consultar e reprocessar fila com autenticação, sem botão Pix
  assert.match(edge,/async function reprocessarWebhooksAsaasAdmin\(uid:string\)\{\s*if\(uid!==ADMIN_USER_ID\)/);
  assert.doesNotMatch(html,/id="asaasWebhookInbox(?:Consultar|Reprocessar)"[^>]*\bsubmit\b/);
 });
+
+
+test("webhook do Guia que chega antes do cadastro local NAO e perdido",async()=>{
+ const start=edge.indexOf("async function processarEventoAsaasPendente(");
+ const finish=edge.indexOf("async function processarWebhooksAsaasPendentes(",start);
+ assert.ok(start>=0&&finish>start);
+ const implementation=edge.slice(start,finish).replace(
+   "async function processarEventoAsaasPendente(row:AsaasWebhookPendente)",
+   "async function processarEventoAsaasPendente(row)");
+ let consulted=0,verified=0;
+ const ctx={
+  db:{from:()=>({select:()=>({eq(){return this},maybeSingle:async()=>({data:null,error:null})})})},
+  asaas:async()=>{consulted++;return {externalReference:"fatura-loja-ci-2026-10"}},
+  verifyInvoice:async()=>{verified++},
+  value:(v,m)=>typeof v==="string"?v.slice(0,m):"",
+  Failure:class Failure extends Error{constructor(message,status){super(message);this.status=status;}},
+  ENVIRONMENT:"sandbox"
+ };
+ const process=vm.runInNewContext(implementation+"\nprocessarEventoAsaasPendente",ctx);
+ const row={evento:"PAYMENT_RECEIVED",recurso_id:"pay_ci_001",referencia_externa:null};
+ await assert.rejects(process(row),e=>e.status===503&&/ainda nao registrada/.test(e.message));
+ assert.equal(consulted,1);
+ assert.equal(verified,0);
+ ctx.asaas=async()=>({externalReference:"pagamento-de-outra-plataforma"});
+ await process(row);
+ assert.equal(verified,0);
+});
