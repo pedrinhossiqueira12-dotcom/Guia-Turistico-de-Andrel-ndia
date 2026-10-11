@@ -111,10 +111,10 @@ Deno.test("o snapshot e imutavel apos criacao e o browser nao concede MFA",()=>{
  dynamic.autoresEvidencia.push(A);
  const a=cred(A,SA,FA);
  const nonce=begin(x,a,C1);
- const unauth=x.registrarResultado(nonce,{
-  ...proof(a,C1),autenticacaoLocalGoTrueConfirmada:false,
-  pode_enviar_pix:true,aprovacao_financeira:true,
- });
+ const browserForged={...proof(a,C1),
+  autenticacaoLocalGoTrueConfirmada:false,
+  pode_enviar_pix:true,aprovacao_financeira:true};
+ const unauth=x.registrarResultado(nonce,browserForged);
  hold(unauth);ok(!unauth.ok,"flag forjada habilitou comprovacao local");
  const diagnostic=x.diagnosticar(version);
  hold(diagnostic);ok(!diagnostic.duas_observacoes_locais_vinculadas,"tentativa falsa contou");
