@@ -92,6 +92,10 @@ function fixture(){
   db:{from:clientQuery},asaas,
   enabled:kind=>assert.equal(kind,"billing"),
   invoice:async()=>({f:state.f,charge:state.charge,store,month}),
+  listarAsaasPorReferencia:async(tipo,ref)=>{
+   assert.equal(tipo,"payments");
+   return state.provider.filter(p=>p.externalReference===ref);
+  },
   loadOrCreateCustomer:async(_store,_body,_email,expected)=>{
    state.customerLoads++;state.customerExpected.push(expected);
    if(expected&&expected!==state.customer)throw new Failure("Pagador externo divergente",409);
