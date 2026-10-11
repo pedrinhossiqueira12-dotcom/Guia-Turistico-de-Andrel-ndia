@@ -32,6 +32,7 @@ function fake({storedOk=true,duplicate=false,worker=null}={}){
   processarWebhooksAsaasPendentes:worker|| (async()=>({concluido:1,falhou:0})),
   respond:(body,status=200)=>({status,body}),
   console:{error(){}},
+  TextDecoder,Uint8Array,
  };
  context.EdgeRuntime={waitUntil:(p)=>background.push(p)};
  const webhook=vm.runInNewContext(source+"\nwebhook",context);
@@ -84,6 +85,34 @@ test("evento desconhecido ignora sem escrever e payload fora do limite e recusad
  assert.equal(res.status,200);assert.equal(res.body.ignorado,true);
  assert.equal(f.calls.length,0);
  await assert.rejects(f.webhook(f.request("X".repeat(65537))),e=>e.status===413);
+ assert.equal(f.calls.length,0);
+});
+test("webhook aplica limite de BYTES UTF-8, inclusive texto curto com emoji multibyte",async()=>{
+ const f=fake();
+ // 4 bytes por emoji, mesmo que o numero de caracteres JS seja menor
+ // que 65536: a entrada deve ser recusada ANTES de JSON.parse ou da RPC.
+ const body=JSON.stringify({...event,detalhe:"💳".repeat(17000)});
+ assert.ok(body.length<65536,"teste deveria caber na antiga checagem por caracteres");
+ assert.ok(Buffer.byteLength(body,"utf8")>65536,"teste deve ultrapassar o limite real");
+ await assert.rejects(f.webhook(f.request(body)),e=>e.status===413);
+ assert.equal(f.calls.length,0);
+});
+test("webhook rejeita UTF-8 malformado em vez de substituir bytes silenciosamente",async()=>{
+ const f=fake();
+ const req=new Request("https://example.invalid/webhook",{
+  method:"POST",headers:{"asaas-access-token":"secret-valid-token-of-at-least-32-bytes"},
+  body:new Uint8Array([0xc3,0x28])
+ });
+ await assert.rejects(f.webhook(req),e=>e.status===400);
+ assert.equal(f.calls.length,0);
+});
+test("webhook recusa Content-Length acima de 64 KiB mesmo com corpo pequeno",async()=>{
+ const f=fake();
+ const req=new Request("https://example.invalid/webhook",{
+  method:"POST",headers:{"asaas-access-token":"secret-valid-token-of-at-least-32-bytes",
+   "content-length":"70000"},body:JSON.stringify(event)
+ });
+ await assert.rejects(f.webhook(req),e=>e.status===413);
  assert.equal(f.calls.length,0);
 });
 test("recuperacao apos falha tem fila duravel, SKIP LOCKED e token de tentativa",()=>{
