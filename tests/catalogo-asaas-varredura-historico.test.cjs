@@ -113,6 +113,18 @@ test("confronta referencia, ID, valor, status e conflitos com saques comuns",()=
  assert.match(admin,/ids_da_referencia_tambem_em_saques_comuns/);
 });
 
+test("valor observado nao arredonda diferencas fracionarias de centavo",()=>{
+ assert.ok(scanner.includes('const centsBrutos=valorBanco*100;'));
+ assert.ok(scanner.includes('Math.abs(centsBrutos-centsInteiros)>1e-7'));
+ assert.ok(scanner.includes('!Number.isSafeInteger(centsInteiros)'));
+ assert.ok(scanner.includes('centsInteiros!==Number(reserva.valor_centavos)'));
+ const edgeTests=fs.readFileSync("supabase/functions/tests/catalogo-edge-http.test.ts","utf8");
+ assert.match(edgeTests,/varredura rejeita fracoes de centavo sem arredondar o valor bancario/);
+ assert.match(edgeTests,/120\.004/);
+ assert.match(edgeTests,/120\.006/);
+ assert.match(edgeTests,/divergencias_de_valor===caso\.divergencias/);
+});
+
 test("nunca alega ausencia de Pix, prova original do destinatario ou autoriza baixa",()=>{
  for(const flag of [
   "historico_bancario_independente_comprovado:false",
