@@ -3,6 +3,86 @@
 -- A transacao sera revertida ate quando o teste for aprovado.
 BEGIN;
 
+-- #43: prototipo TRANSIENTE de conferencia do livro financeiro real.
+-- Executado apenas nesta transacao isolada; pg_temp desaparece no ROLLBACK.
+-- Locks, contagem integral e SHA sao observacoes LOCAIS, nunca prova bancaria.
+CREATE FUNCTION pg_temp.catalogo_asaas_previsualizar_resolucao_inerte(p_separacao uuid)
+RETURNS jsonb LANGUAGE plpgsql VOLATILE SECURITY INVOKER SET search_path=''
+AS $resolucao_preview$
+DECLARE
+ v_uid uuid;
+ v_e public.catalogo_asaas_separacoes_excepcionais%ROWTYPE;
+ v_qtd bigint;
+ v_total numeric;
+ v_hash text;
+ v_invalidos bigint;
+ v_consistente boolean;
+BEGIN
+ IF p_separacao IS NULL THEN
+  RETURN jsonb_build_object('ok',false,'status_operacional','HOLD_OBRIGATORIO',
+   'pagamento_autorizado',false,'liberacao_autorizada',false,'baixa_realizada',false);
+ END IF;
+ SELECT e.motoboy_id INTO v_uid
+ FROM public.catalogo_asaas_separacoes_excepcionais e
+ WHERE e.id=p_separacao;
+ IF v_uid IS NULL THEN
+  RETURN jsonb_build_object('ok',false,'status_operacional','HOLD_OBRIGATORIO',
+   'pagamento_autorizado',false,'liberacao_autorizada',false,'baixa_realizada',false);
+ END IF;
+ -- Mesmo mutex de saque usado na reserva excepcional, depois lock da
+ -- separacao e de TODOS os itens/remuneracoes, em ordem deterministica.
+ PERFORM pg_catalog.pg_advisory_xact_lock(
+  pg_catalog.hashtextextended('asaas-saque:'||v_uid::text,0));
+ SELECT * INTO v_e
+ FROM public.catalogo_asaas_separacoes_excepcionais e
+ WHERE e.id=p_separacao FOR UPDATE;
+ IF NOT FOUND OR v_e.motoboy_id IS DISTINCT FROM v_uid
+  OR v_e.situacao IS DISTINCT FROM 'congelada' THEN
+  RETURN jsonb_build_object('ok',false,'status_operacional','HOLD_OBRIGATORIO',
+   'pagamento_autorizado',false,'liberacao_autorizada',false,'baixa_realizada',false);
+ END IF;
+
+ -- Sem LIMIT, OFFSET, cliente JS ou agregacao de paginas parciais.
+ WITH travados AS MATERIALIZED (
+  SELECT i.remuneracao_id,i.valor_centavos AS valor_separado,
+   r.valor_centavos AS valor_atual,r.motoboy_id,r.status,
+   r.financiamento_comprovado,r.repasse_id,r.pedido_id
+  FROM public.catalogo_asaas_separacoes_excepcionais_itens i
+  JOIN public.catalogo_remuneracoes_v2 r ON r.id=i.remuneracao_id
+  WHERE i.separacao_id=p_separacao
+  ORDER BY i.remuneracao_id FOR UPDATE OF i,r
+ )
+ SELECT count(*)::bigint,
+  coalesce(sum(valor_separado::numeric),0),
+  pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(
+   pg_catalog.string_agg(remuneracao_id::text||':'||valor_atual::text,
+    '|' ORDER BY remuneracao_id),'UTF8')),'hex'),
+  count(*) FILTER(WHERE valor_atual IS DISTINCT FROM valor_separado
+   OR motoboy_id IS DISTINCT FROM v_e.motoboy_id
+   OR status IS DISTINCT FROM 'disponivel'
+   OR financiamento_comprovado IS DISTINCT FROM true
+   OR repasse_id IS NOT NULL
+   OR NOT catalogo_private.catalogo_v2_financiado(pedido_id))::bigint
+ INTO v_qtd,v_total,v_hash,v_invalidos
+ FROM travados;
+ v_consistente:=v_qtd=v_e.creditos AND v_qtd>0
+  AND v_total=v_e.valor_centavos
+  AND v_hash IS NOT DISTINCT FROM v_e.fingerprint_sha256
+  AND v_invalidos=0;
+ RETURN jsonb_build_object(
+  'ok',true,'status_operacional','HOLD_OBRIGATORIO',
+  'classificacao_documental',CASE WHEN v_consistente THEN 'revisao' ELSE 'contestacao' END,
+  'creditos_lidos_do_livro',v_qtd,'total_centavos_no_livro',v_total,
+  'creditos_invalidos',v_invalidos,'composicao_local_consistente',v_consistente,
+  'cobertura_bancaria_independente_comprovada',false,
+  'beneficiario_original_confirmado',false,
+  'ausencia_de_pix_anterior_comprovada',false,
+  'dupla_autorizacao_real_comprovada',false,
+  'pagamento_autorizado',false,'liberacao_autorizada',false,
+  'baixa_realizada',false,'movimenta_dinheiro',false);
+END
+$resolucao_preview$;
+
 -- Compromisso Pix prospectivo: WRITE-ONCE, sem transferencia ou baixa.
 DO $pix_compromisso_original$
 DECLARE
@@ -1257,6 +1337,7 @@ DECLARE
  v_epoch bigint;
  v_claims jsonb;
  v_revisores integer:=0;
+ v_preview_resolucao jsonb;
 BEGIN
  INSERT INTO auth.users(id) VALUES(v_uid);
  INSERT INTO public.comercios_publicados(local_id,status) VALUES(v_store,'ativo');
@@ -1331,6 +1412,20 @@ BEGIN
  WHERE separacao_id=(v_reserva->>'separacao_id')::uuid;
  IF v_qty<>2 OR v_sum<>12000 THEN
   RAISE EXCEPTION 'Itens separados incorretos: % %',v_qty,v_sum; END IF;
+
+ SELECT pg_temp.catalogo_asaas_previsualizar_resolucao_inerte(
+  (v_reserva->>'separacao_id')::uuid) INTO v_preview_resolucao;
+ IF v_preview_resolucao->>'ok' IS DISTINCT FROM 'true'
+  OR v_preview_resolucao->>'classificacao_documental' IS DISTINCT FROM 'revisao'
+  OR v_preview_resolucao->>'creditos_lidos_do_livro' IS DISTINCT FROM '2'
+  OR v_preview_resolucao->>'total_centavos_no_livro' IS DISTINCT FROM '12000'
+  OR v_preview_resolucao->>'creditos_invalidos' IS DISTINCT FROM '0'
+  OR v_preview_resolucao->>'composicao_local_consistente' IS DISTINCT FROM 'true'
+  OR v_preview_resolucao->>'pagamento_autorizado' IS DISTINCT FROM 'false'
+  OR v_preview_resolucao->>'liberacao_autorizada' IS DISTINCT FROM 'false'
+  OR v_preview_resolucao->>'baixa_realizada' IS DISTINCT FROM 'false'
+ THEN RAISE EXCEPTION 'Preview escrow puro local nao conferiu, HOLD: %',
+  v_preview_resolucao; END IF;
 
  SELECT public.catalogo_asaas_preconferir_pagamento_excepcional('saida',v_saida)
  INTO v_posreserva;
@@ -2622,6 +2717,16 @@ BEGIN
  -- Perda de financiamento de um dos 2 creditos: HOLD e alerta, nunca baixa.
  UPDATE public.catalogo_remuneracoes_v2
  SET status='retido',financiamento_comprovado=false WHERE id=v_item;
+ SELECT pg_temp.catalogo_asaas_previsualizar_resolucao_inerte(
+  (v_reserva->>'separacao_id')::uuid) INTO v_preview_resolucao;
+ IF v_preview_resolucao->>'composicao_local_consistente' IS DISTINCT FROM 'false'
+  OR v_preview_resolucao->>'creditos_invalidos' IS DISTINCT FROM '1'
+  OR v_preview_resolucao->>'classificacao_documental' IS DISTINCT FROM 'contestacao'
+  OR v_preview_resolucao->>'pagamento_autorizado' IS DISTINCT FROM 'false'
+  OR v_preview_resolucao->>'liberacao_autorizada' IS DISTINCT FROM 'false'
+  OR v_preview_resolucao->>'baixa_realizada' IS DISTINCT FROM 'false'
+ THEN RAISE EXCEPTION 'Reversao nao manteve HOLD no SQL de resolucao: %',
+  v_preview_resolucao; END IF;
  SELECT public.catalogo_asaas_diagnosticar_separacao_excepcional(
   (v_reserva->>'separacao_id')::uuid) INTO v_diagnostico_reversao;
  IF v_diagnostico_reversao->>'creditos_financeiramente_invalidos' IS DISTINCT FROM '1'
