@@ -78,3 +78,54 @@ test("#43: testes PostgreSQL de 2 sessoes simulam journal COMMIT, rollback e rep
  assert.match(race,/EXPECTED_DB = "catalogo_asaas_race_ci"/);
  assert.match(race,/scenario_intencao_prepost_duravel_concorrente\(\)/);
 });
+
+
+test("#41/#42/#43: porta conjunta consulta diagnósticos reais mas nunca autoriza saldo",()=>{
+ const start=ddl.indexOf("CREATE FUNCTION catalogo_ci_intencao_pix_inerte.diagnosticar_portas_hold(");
+ assert.ok(start>=0,"A fixture precisa ter o diagnóstico de três frentes");
+ const gate=ddl.slice(start);
+ const mutex=gate.indexOf("pg_catalog.pg_advisory_xact_lock(");
+ const locked=gate.indexOf("FOR UPDATE");
+ const journal=gate.indexOf("catalogo_ci_intencao_pix_inerte.intencoes i");
+ const matrix=gate.indexOf("public.catalogo_asaas_matriz_conciliacao_escrow(");
+ const reviewers=gate.indexOf("public.catalogo_asaas_diagnosticar_dupla_conferencia_inerte(");
+ assert.ok(mutex>0&&locked>mutex&&journal>locked&&matrix>journal&&reviewers>matrix);
+ for(const marker of [
+  "p_sinais_cliente jsonb DEFAULT '{}'::jsonb",
+  "'journal_intencoes_validas_no_ci',v_contagem",
+  "'journal_marcos_de_inicio_no_ci',v_marcos",
+  "'duas_conferencias_documentais_observadas',v_revisoes_documentais",
+  "'evidencia_independente_bancaria_suficiente',v_banco_ok",
+  "'revisores_mfa_credenciados_confirmados',false",
+  "'dupla_aprovacao_financeira_confirmada',false",
+  "'transacao_de_baixa_habilitada',false",
+  "'status_operacional','HOLD_OBRIGATORIO'",
+  "'pode_enviar_post',false",
+  "'pode_reenviar_post',false",
+  "'pagamento_autorizado',false",
+  "'liberacao_autorizada',false",
+  "'baixa_realizada',false",
+  "'movimenta_dinheiro',false"
+ ])assert.ok(gate.includes(marker),"Missing joint gate contract: "+marker);
+ assert.doesNotMatch(gate,/\b(?:INSERT INTO|UPDATE|DELETE FROM)\b/i);
+ assert.match(gate,/REVOKE ALL ON FUNCTION[\s\S]*?diagnosticar_portas_hold\(uuid,jsonb\)/);
+ assert.doesNotMatch(gate,/p_sinais_cliente\s*(?:->|#>|=)|\bGRANT EXECUTE\b/i);
+});
+
+test("#41/#42/#43: duas sessoes verificam HOLD com intencao, marco e sinais forjados",()=>{
+ for(const required of [
+  "def diagnosticar_portas_hold_ci(",
+  "catalogo_ci_intencao_pix_inerte.diagnosticar_portas_hold(",
+  "porta_antes = diagnosticar_portas_hold_ci(INTENT_ESCROW_A)",
+  "porta_intencao = diagnosticar_portas_hold_ci(INTENT_ESCROW_A)",
+  "porta_marcada = diagnosticar_portas_hold_ci(INTENT_ESCROW_A)",
+  "porta_falsificada = diagnosticar_portas_hold_ci(INTENT_ESCROW_A, forged=True)",
+  "porta_falsificada != porta_marcada",
+  "porta_outro_titular = diagnosticar_portas_hold_ci(INTENT_ESCROW_B, forged=True)",
+  "porta_ausente = diagnosticar_portas_hold_ci(",
+  "'pode_reenviar_post'",
+  '"dupla_aprovacao_financeira":true',
+  "NUNCA_EXIBIR_PIX",
+  "NUNCA_EXIBIR_CPF"
+ ])assert.ok(race.includes(required),"missing 3-way gate test: "+required);
+});
