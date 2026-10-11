@@ -32,7 +32,19 @@ const respond=(payload:unknown,status=200)=>new Response(JSON.stringify(payload)
 const input=(x:unknown)=>x&&typeof x==="object"&&!Array.isArray(x)?x as Record<string,unknown>:{};
 const value=(x:unknown,max=200)=>typeof x==="string"?x.trim().slice(0,max):"";
 const money=(cents:number)=>Math.round(cents)/100;
-const cents=(amount:unknown)=>typeof amount==="number"&&Number.isFinite(amount)?Math.round(amount*100):NaN;
+// Valores retornados pelo banco precisam ter PRECISAO de centavos;
+// Math.round() aqui aceitaria 100.004 como R$ 100,00 na conciliacao.
+// Convertemos a representacao decimal canonica via BigInt para evitar
+// arredondar valores do provedor ou aceitar numeros acima do intervalo seguro.
+function cents(amount:unknown):number{
+ if(typeof amount!=="number"||!Number.isFinite(amount)||amount<0)return NaN;
+ const decimal=amount.toString();
+ if(!/^(?:0|[1-9]\\d*)(?:\\.\\d{1,2})?$/.test(decimal))return NaN;
+ const [inteiro,fracao=""]=decimal.split(".");
+ const total=BigInt(inteiro)*100n+BigInt(fracao.padEnd(2,"0"));
+ const num=Number(total);
+ return Number.isSafeInteger(num)?num:NaN;
+}
 function enabled(kind:"billing"|"payouts"){
  if(!ASAAS_TOKEN || !(kind==="billing"?BILLING_ON:PAYOUTS_ON))
    throw new Failure("Integração Asaas ainda não ativada. Nenhum dinheiro foi movimentado.",503);
