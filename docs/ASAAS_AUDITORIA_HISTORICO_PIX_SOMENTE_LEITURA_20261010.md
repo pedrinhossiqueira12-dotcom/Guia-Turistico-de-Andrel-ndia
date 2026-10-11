@@ -117,6 +117,15 @@ Para atestar o destinatário original sem improvisar:
 - Teste HTTP isolado: ID igual sob duas referencias, vinculo local ausente, nenhuma linha de saque comum, `conflito_identificado=true`, todas as flags de pagamento/liberacao/baixa `false`, sem expor CPF ou ID.
 - **Inalterado:** `HOLD_OBRIGATORIO`; PR #39 Draft, sem Edge financeira publicada, sem Pix, sem alteracao em STAGING/PROD nem autorizacao financeira.
 
+## IDs repetidos globalmente em paginas diferentes — 11/10/2026
+
+- A contagem de IDs repetidos antes observava apenas as transferencias com a referencia da separacao. Se outra transferencia se repetisse em paginas diferentes (com `totalCount` inalterado), o relatorio nao destacava a instabilidade.
+- O scanner agora rastreia **todos os IDs** da listagem de ate 12 paginas e conta em `ids_repetidos_globais` cada ID que apareca mais de uma vez; `conflito_identificado=true` mesmo com **zero referencias da separacao**.
+- O painel informa somente a quantidade, sem mostrar IDs, payload bancario ou chave Pix. A contagem anterior `ids_repetidos_na_listagem` permanece especifica da referencia pesquisada.
+- Teste Deno executa o handler HTTP real com Sandbox e Supabase simulados e rede externa bloqueada: primeira pagina com 100 itens, ultima com um ID repetido nao relacionado; ambas apresentam `totalCount=101`. A varredura sinaliza conflito e preserva todas as flags financeiras falsas.
+- A duplicidade e um **indicio de listagem instavel**, nao prova de fraude ou de transferencia duplicada; sua ausencia tambem NAO atesta integridade temporal, destino ou ausencia de pagamento. `listagem_consultada_ate_o_fim=true` permanece descritivo do endpoint, nao atestado bancario independente.
+- Sem POST, migracoes, implantacao Edge, Pix ou alteracao produtiva. PR #39 Draft e `HOLD_OBRIGATORIO`.
+
 ## Checklist de liberação
 
 - [ ] CI integralmente verde no commit final.
