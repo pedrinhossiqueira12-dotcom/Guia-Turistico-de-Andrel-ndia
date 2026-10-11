@@ -146,7 +146,7 @@ Deno.test("varredura bloqueia vinculo bancario local malformado antes de GET Asa
   {nome:"centavos fracionarios",vinculo:{...valido,valor_centavos:12000.5}},
   {nome:"centavos inseguros",vinculo:{...valido,valor_centavos:1e20}},
   {nome:"motoboy do vinculo invalido",vinculo:{...valido,motoboy_id:"nao-e-uuid"}},
-  {nome:"objeto devolvido como array",vinculo:[valido]},
+  {nome:"vinculos locais duplicados",vinculo:[valido,{...valido,transferencia_id:"ci-outra-transferencia"}]},
  ];
  for(const caso of casos){
   let bancoGets=0,saquesGets=0;
