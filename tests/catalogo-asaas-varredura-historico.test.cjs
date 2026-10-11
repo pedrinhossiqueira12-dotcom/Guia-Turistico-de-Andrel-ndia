@@ -65,6 +65,8 @@ test("confronta referencia, ID, valor, status e conflitos com saques comuns",()=
   "catalogo_asaas_transferencias_excepcionais_auditoria",
   "catalogo_asaas_saques", "referenciasDistintas>1",
   "idsDaReferenciaTambemEmSaqueComum>0",
+  "idsDaReferenciaComOutraReferencia>0",
+  "primeiraReferenciaPorId", "idsComReferenciaDivergente",
   "vinculoLocalDivergente", "vinculoNaoLocalizado",
   "tRef===referencia", "tId===idVinculado",
   "refsDeOutroId", "valoresDivergentes", "formatosAmbiguos",
@@ -78,6 +80,7 @@ test("confronta referencia, ID, valor, status e conflitos com saques comuns",()=
  assert.match(scanner,/\.in\("transferencia_id",lote\)/);
  assert.match(scanner,/if\(saquesError\|\|!Array\.isArray\(saques\)\)/);
  assert.match(scanner,/ids_da_referencia_tambem_em_saques_comuns:idsDaReferenciaTambemEmSaqueComum/);
+ assert.match(scanner,/ids_da_referencia_com_outra_referencia:idsDaReferenciaComOutraReferencia/);
  const edgeTests=fs.readFileSync("supabase/functions/tests/catalogo-edge-http.test.ts","utf8");
  assert.match(edgeTests,/varredura detecta transferência de saque comum sem vínculo excepcional prévio/);
  assert.match(edgeTests,/ids_da_referencia_tambem_em_saques_comuns===1/);
