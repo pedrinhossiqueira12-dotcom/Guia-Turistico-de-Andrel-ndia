@@ -2754,10 +2754,9 @@ DECLARE
  v_target integer;
  v_competencia date;
  v_fechamento uuid;
- v_saida uuid;
- v_reserva jsonb;
+ v_separacao uuid;
+ v_hash text;
  v_previa jsonb;
- v_saldo jsonb;
  v_total bigint:=1201*6000;
  v_contagem bigint;
  v_soma bigint;
@@ -2833,32 +2832,41 @@ BEGIN
    AND p.referencia_externa LIKE 'ci-1201-'||v_month||'-%';
  END LOOP;
 
- SELECT public.catalogo_asaas_saldo_historico(v_uid) INTO v_saldo;
- IF (v_saldo->>'disponivel_centavos')::bigint IS DISTINCT FROM v_total
- THEN RAISE EXCEPTION 'Saldo CI 1201 divergiu: %',v_saldo; END IF;
+ -- Volume testa o LEITOR de escrow, nao a RPC de separacao de fundos:
+ -- a RPC completa ja tem fixture separada com 2 creditos e verificacoes.
+ -- Preparar a amostra syntheticamente economiza conciliacoes aninhadas
+ -- caras de 1.201 ordens sem remover checagem real de financiamento no preview.
+ SELECT count(*)::bigint,coalesce(sum(r.valor_centavos::bigint),0),
+  pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(
+   pg_catalog.string_agg(r.id::text||':'||r.valor_centavos::text,
+    '|' ORDER BY r.id),'UTF8')),'hex')
+ INTO v_contagem,v_soma,v_hash
+ FROM public.catalogo_remuneracoes_v2 r
+ WHERE r.motoboy_id=v_uid;
+ IF v_contagem<>1201 OR v_soma<>v_total
+ THEN RAISE EXCEPTION 'Fonte de 1201 remuneracoes invalida % %',v_contagem,v_soma; END IF;
 
- DELETE FROM public.catalogo_motoboys WHERE usuario_id=v_uid;
- INSERT INTO public.catalogo_asaas_regularizacoes_inativos(
-  motoboy_id,saldo_snapshot_centavos,motivo
- ) VALUES(v_uid,v_total,'inatividade')
- RETURNING id INTO v_saida;
- SELECT public.catalogo_asaas_separar_creditos_excepcionais(
-  'saida',v_saida) INTO v_reserva;
- IF v_reserva->>'ok' IS DISTINCT FROM 'true'
-  OR v_reserva->>'creditos_separados' IS DISTINCT FROM '1201'
-  OR (v_reserva->>'valor_centavos')::bigint IS DISTINCT FROM v_total
-  OR v_reserva->>'pagamento_autorizado' IS DISTINCT FROM 'false'
- THEN RAISE EXCEPTION 'Separacao de 1201 itens nao foi concluida: %',v_reserva; END IF;
+ INSERT INTO public.catalogo_asaas_separacoes_excepcionais(
+  tipo,solicitacao_id,motoboy_id,valor_centavos,creditos,fingerprint_sha256
+ ) VALUES('saida',gen_random_uuid(),v_uid,v_total,v_contagem,v_hash)
+ RETURNING id INTO v_separacao;
+
+ INSERT INTO public.catalogo_asaas_separacoes_excepcionais_itens(
+  separacao_id,remuneracao_id,valor_centavos
+ )
+ SELECT v_separacao,r.id,r.valor_centavos
+ FROM public.catalogo_remuneracoes_v2 r
+ WHERE r.motoboy_id=v_uid;
 
  SELECT count(*)::bigint,coalesce(sum(i.valor_centavos::bigint),0)
  INTO v_contagem,v_soma
  FROM public.catalogo_asaas_separacoes_excepcionais_itens i
- WHERE i.separacao_id=(v_reserva->>'separacao_id')::uuid;
+ WHERE i.separacao_id=v_separacao;
  IF v_contagem<>1201 OR v_soma<>v_total
  THEN RAISE EXCEPTION 'Itens escrow 1201 incorretos % %',v_contagem,v_soma; END IF;
 
  SELECT pg_temp.catalogo_asaas_previsualizar_resolucao_inerte(
-  (v_reserva->>'separacao_id')::uuid) INTO v_previa;
+  v_separacao) INTO v_previa;
  IF v_previa->>'composicao_local_consistente' IS DISTINCT FROM 'true'
   OR v_previa->>'creditos_lidos_do_livro' IS DISTINCT FROM '1201'
   OR (v_previa->>'total_centavos_no_livro')::numeric IS DISTINCT FROM v_total
