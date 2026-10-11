@@ -964,6 +964,100 @@ def scenario_prechallenge_shared_reservation_and_challenge() -> None:
           "HOLD e zero Pix", flush=True)
 
 
+
+# Etapa #43: validar a propria funcao pg_temp do ensaio SQL sob mutex
+# compartilhado com saques, em duas sessoes PostgreSQL REAIS de clone CI.
+# Um escrow propositalmente incompleto sempre retorna HOLD; nao e baixa.
+ESCROW_PREVIEW_OWNER = "fd844444-4444-4444-8444-444444444444"
+ESCROW_PREVIEW_REQUEST = "dd844444-4444-4444-8444-444444444444"
+ESCROW_PREVIEW_ID = "ed844444-4444-4444-8444-444444444444"
+
+
+def scenario_escrow_preview_concurrent_hold() -> None:
+    source = Path("supabase/tests/isolated/catalogo-asaas-staged-guards-postgres.sql").read_text(
+        encoding="utf-8"
+    )
+    begin = source.index("CREATE FUNCTION pg_temp.catalogo_asaas_previsualizar_resolucao_inerte(")
+    delimiter = "$resolucao_preview$;"
+    end = source.index(delimiter, begin) + len(delimiter)
+    definition = source[begin:end]
+    if ("SECURITY INVOKER" not in definition or
+            "pg_advisory_xact_lock" not in definition or
+            "'pagamento_autorizado',false" not in definition):
+        raise AssertionError("Preview SQL nao preserva locks e HOLD")
+    run_sql(f"""
+    BEGIN;
+    INSERT INTO auth.users(id) VALUES ('{ESCROW_PREVIEW_OWNER}');
+    INSERT INTO public.catalogo_asaas_separacoes_excepcionais(
+      id,tipo,solicitacao_id,motoboy_id,valor_centavos,creditos,fingerprint_sha256
+    ) VALUES ('{ESCROW_PREVIEW_ID}','saida','{ESCROW_PREVIEW_REQUEST}',
+      '{ESCROW_PREVIEW_OWNER}',2500,1,repeat('a',64));
+    COMMIT;
+    """)
+
+    for resolution in ("COMMIT", "ROLLBACK"):
+        first = Session.start("ci_escrow_preview_lock_first_" + resolution.lower())
+        second = None
+        try:
+            first.send(
+                "BEGIN;\nSELECT pg_advisory_xact_lock("
+                "hashtextextended('asaas-saque:" + ESCROW_PREVIEW_OWNER + "',0));"
+                "\n\\echo ESCROW_PREVIEW_MUTEX_HELD"
+            )
+            first.until("ESCROW_PREVIEW_MUTEX_HELD")
+
+            second = Session.start("ci_escrow_preview_lock_second_" + resolution.lower())
+            # pg_temp e executada SOMENTE nesta conexao, nunca criada no banco persistente.
+            second.send(definition + "\n\\echo ESCROW_PREVIEW_FUNCTION_READY")
+            second.until("ESCROW_PREVIEW_FUNCTION_READY")
+            second.send(
+                "SET lock_timeout='10s';\nBEGIN;\n"
+                "SELECT pg_temp.catalogo_asaas_previsualizar_resolucao_inerte('"
+                + ESCROW_PREVIEW_ID + "'::uuid);\n"
+                "\\echo ESCROW_PREVIEW_COMPLETED"
+            )
+            assert_waiting_advisory(second.name)
+            first.send(resolution + ";\n\\echo ESCROW_PREVIEW_FIRST_RELEASED")
+            first.until("ESCROW_PREVIEW_FIRST_RELEASED")
+            response = second.until("ESCROW_PREVIEW_COMPLETED")
+            if (
+                "HOLD_OBRIGATORIO" not in response or
+                '"pagamento_autorizado": false' not in response or
+                '"liberacao_autorizada": false' not in response or
+                '"baixa_realizada": false' not in response or
+                '"composicao_local_consistente": false' not in response
+            ):
+                raise AssertionError(
+                    "Preview SQL deixou sair estado financeiro seguro apos "
+                    + resolution + ": " + response[-900:]
+                )
+            second.send("ROLLBACK;\n\\echo ESCROW_PREVIEW_SECOND_ROLLBACK")
+            second.until("ESCROW_PREVIEW_SECOND_ROLLBACK")
+            second.finish()
+            second = None
+            first.finish()
+        finally:
+            if second:
+                second.abort()
+            first.abort()
+
+    if run_sql(
+        "SELECT count(*) FROM public.catalogo_asaas_separacoes_excepcionais "
+        f"WHERE id='{ESCROW_PREVIEW_ID}' AND situacao='congelada'"
+    ) != "1":
+        raise AssertionError("Escrow sintético mudou na conferencia concorrente")
+    if run_sql(
+        "SELECT count(*) FROM public.catalogo_asaas_saques "
+        f"WHERE motoboy_id='{ESCROW_PREVIEW_OWNER}'"
+    ) != "0":
+        raise AssertionError("Preview concorrente criou saque inexistente")
+    print(
+        "PASS #43: preview PostgreSQL real respeita advisory lock comum, "
+        "2 sessoes, COMMIT/ROLLBACK, HOLD e zero Pix",
+        flush=True
+    )
+
+
 def main() -> None:
     guard_environment()
     prepare()
@@ -973,6 +1067,7 @@ def main() -> None:
     scenario_nonce_rollback_then_second_succeeds()
     scenario_stepup_attempts_concurrent_and_quota()
     scenario_prechallenge_shared_reservation_and_challenge()
+    scenario_escrow_preview_concurrent_hold()
     print("PASS: concorrencia real com 2 sessoes, IDs e usuarios sinteticos, zero Pix", flush=True)
 
 
