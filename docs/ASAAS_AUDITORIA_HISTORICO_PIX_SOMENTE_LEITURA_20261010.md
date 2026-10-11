@@ -160,6 +160,14 @@ O `GET /v3/transfers` da auditoria em Sandbox agora usa um leitor limitado a **2
 - O teste **não comprova** origem imutável, beneficiário original nem ausência de Pix prévio. Ele protege a auditoria contra inconsistências internas, sem tornar transferências pagáveis.
 - Somente PR #39 Draft, sem migrações, deploy financeiro, pagamentos, saques reais ou alterações em produção.
 
+## Vínculo local de transferência precisa ser íntegro antes do GET Asaas — 11/10/2026
+
+- **Proteção no relatório somente leitura do administrador:** caso exista uma linha de `catalogo_asaas_transferencias_excepcionais_auditoria`, ela deve trazer ID de transferência não vazio, com até 180 caracteres e sem espaços, referência externa não vazia e sem espaços nas extremidades, valor numérico **inteiro, positivo e seguro** em centavos e UUID do motoboy bem formado.
+- Dados locais malformados interrompem o relatório com HTTP 503 e HOLD **antes de consultar saques comuns ou o Asaas**. Uma linha local ausente permanece um cenário diferente: a auditoria pode investigar o histórico sem afirmar ausência de Pix.
+- Quando ambos os registros têm tipos válidos, mas o valor/referência/motoboy não coincidem, o diagnóstico original de `vinculo_local_divergente` permanece ativo. A comparação de centavos não converte strings numéricas com `Number()`.
+- Testes HTTP isolados da Edge real com Supabase/Asaas simulados e rede bloqueada cobrem 15 vínculos malformados, incluindo ID vazio, quebra de linha, valor string, centavos fracionários, referência inválida e UUID de motoboy inconsistente; exigem **zero GET ao provedor** e nenhuma exposição de IDs pessoais/bancários.
+- Essa validação **não** atesta que a linha local seja prova bancária independente, nem comprova destinatário original, liquidação ou ausência de Pix anterior. PR #39 continua em Draft/HOLD; sem migrações, deploy, saque real ou alteração de produção.
+
 ## Checklist de liberação
 
 - [ ] CI integralmente verde no commit final.
