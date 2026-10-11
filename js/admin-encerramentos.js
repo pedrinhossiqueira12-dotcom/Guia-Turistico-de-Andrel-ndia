@@ -322,6 +322,7 @@
             Number(a.divergencias_de_valor||0)+" valor(es) divergente(s), "+
             Number(a.ids_repetidos_na_listagem||0)+" ID(s) repetido(s) na referência, "+
             Number(a.ids_repetidos_globais||0)+" ID(s) repetido(s) em toda a listagem, "+
+            Number(a.ids_sem_identificador_globais||0)+" registro(s) sem ID bancário válido, "+
             Number(a.estados_done_encontrados||0)+" DONE(s), "+
             Number(a.ids_da_referencia_tambem_em_saques_comuns||0)+
             " ID(s) da referência já usados em saques comuns, "+
