@@ -411,8 +411,8 @@ BEGIN
                         ELSE NULL END,
      proxima_tentativa_em=CASE WHEN p_sucesso THEN NULL ELSE
         pg_catalog.clock_timestamp()+
-        (pg_catalog.least(900,30*pg_catalog.power(
-           2,pg_catalog.least(pg_catalog.greatest(w.tentativas-1,0),5)
+        (LEAST(900,30*pg_catalog.power(
+           2,LEAST(GREATEST(w.tentativas-1,0),5)
          ))*interval '1 second') END,
      tentativa_token=NULL
  WHERE w.id=p_id AND w.estado='processando' AND w.tentativa_token=p_token;
