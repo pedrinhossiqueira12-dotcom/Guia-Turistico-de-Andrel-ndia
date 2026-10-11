@@ -14,11 +14,12 @@ test("todas as chamadas HTTP Asaas diretas possuem timeout finito",()=>{
  assert.ok(match,"limite HTTP Asaas ausente");
  const timeout=Number(match[1]);
  assert.ok(Number.isSafeInteger(timeout) && timeout>=1000 && timeout<=30000);
+ assert.match(src,/async function asaas\(path:string,method="GET",body\?:unknown,timeoutMs=ASAAS_HTTP_TIMEOUT_MS\)/);
  const segments=src.split("await fetch(API_BASE+");
  assert.equal(segments.length-1,2,"nova chamada externa deve ser auditada");
  for(const call of segments.slice(1)){
   const options=call.slice(0,call.indexOf("});")+3);
-  assert.match(options,/signal:AbortSignal\.timeout\(ASAAS_HTTP_TIMEOUT_MS\)/);
+  assert.match(options,/signal:AbortSignal\.timeout\(timeoutMs\)/);
  }
 });
 test("historico legado usa o mesmo leitor com limite de bytes e timeout",()=>{
@@ -26,7 +27,7 @@ test("historico legado usa o mesmo leitor com limite de bytes e timeout",()=>{
  assert.match(history,/const result=await asaas\(path\);/);
  assert.doesNotMatch(history,/await fetch\(|response\.json\(/);
  const asaas=section("async function asaas(","function competence(");
- assert.match(asaas,/signal:AbortSignal\.timeout\(ASAAS_HTTP_TIMEOUT_MS\)/);
+ assert.match(asaas,/signal:AbortSignal\.timeout\(timeoutMs\)/);
  assert.match(asaas,/await lerListagemAsaasLimitada\(response\)/);
  assert.match(asaas,/method==="GET"&&path\.startsWith\("\/transfers\?"\)/);
  assert.match(asaas,/if\(path\.startsWith\("\/transfers"\) && method==="GET"\)/);
