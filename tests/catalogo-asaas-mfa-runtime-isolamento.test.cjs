@@ -23,7 +23,7 @@ function walk(dir) {
     if (entry.name.startsWith(".")) return [];
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) return walk(full);
-    return /\.(?:ts|tsx|js|mjs|cjs)$/.test(entry.name) ? [full] : [];
+    return /\.(?:ts|tsx|mts|cts|js|mjs|cjs)$/.test(entry.name) ? [full] : [];
   });
 }
 function isRuntimeEntry(file) {
@@ -32,7 +32,7 @@ function isRuntimeEntry(file) {
   return !relative.startsWith("_shared/")
     && !relative.startsWith("tests/")
     && !relative.split("/").some((part) => part === "__tests__"
-      || part.endsWith(".test.ts") || part.endsWith(".spec.ts"));
+      || /\.(?:test|spec)\.(?:ts|tsx|mts|cts|js|mjs|cjs)$/.test(part));
 }
 test("nenhuma Edge publicável importa o MFA inerte ou de ensaio", () => {
   assert.ok(fs.existsSync(ROOT), "diretório das funções ausente");
