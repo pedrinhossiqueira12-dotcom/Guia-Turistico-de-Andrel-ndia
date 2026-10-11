@@ -51,14 +51,17 @@ test("RLS e grants impedem usuário comum de fabricar evento",()=>{
 });
 
 test("webhook excepcional não confia no payload e só observa estado via GET no sandbox",()=>{
- const start=edge.indexOf("async function webhook(request:Request)");
- const end=edge.indexOf("Deno.serve(",start);
+ const start=edge.indexOf("async function processarEventoAsaasPendente(");
+ const end=edge.indexOf("async function processarWebhooksAsaasPendentes(",start);
  assert.ok(start>=0&&end>start);
  const wh=edge.slice(start,end);
- assert.match(wh,/event\.startsWith\("TRANSFER_"\)/);
- assert.match(wh,/if\(ENVIRONMENT!=="sandbox"\|\|!match\)/);
+ assert.match(wh,/row\.evento\.startsWith\("TRANSFER_"\)/);
+ assert.match(wh,/ENVIRONMENT==="sandbox"&&match/);
  assert.match(wh,/guia-exc:\(residual\|saida\)/);
- assert.match(wh,/consultarERegistrarTransferenciaExcepcionalSandbox\(match\[1\],match\[2\],transferId\)/);
- assert.match(wh,/await reconcileTransfer\(String\(saque\.id\),transferId\)/);
+ assert.match(wh,/consultarERegistrarTransferenciaExcepcionalSandbox\(match\[1\],match\[2\],row\.recurso_id\)/);
+ assert.match(wh,/await reconcileTransfer\(String\(saque\.id\),row\.recurso_id\)/);
  assert.doesNotMatch(wh,/\/transfers","POST"|p_estado:"concluido"/);
+ const recepcao=edge.slice(edge.indexOf("async function webhook(request:Request)"));
+ assert.match(recepcao,/catalogo_asaas_webhook_receber/);
+ assert.match(recepcao,/runtime\.waitUntil\(task\)/);
 });
