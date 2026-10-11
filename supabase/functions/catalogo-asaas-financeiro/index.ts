@@ -743,10 +743,17 @@ async function auditarHistoricoTransferenciasExcepcionaisSandboxAdmin(
     if(t.status==="DONE")estadosDone++;
    }
    if(idCorresponde&&tRef!==referencia)idsSemReferencia++;
-   // Um erro de conversao deve aparecer como conflito, sem expor valor bruto.
-   try{
-    if(cents(t.value)!==Number(reserva.valor_centavos))valoresDivergentes++;
-   }catch{valoresDivergentes++;}
+   // Nao arredondar fracoes de centavo vindas do banco: 120.004
+   // nao pode ser considerado igual a R$ 120,00. A tolerancia abaixo
+   // apenas absorve residuos de ponto flutuante em centavos validos.
+   const valorBanco=typeof t.value==="number"?t.value:NaN;
+   const centsBrutos=valorBanco*100;
+   const centsInteiros=Math.round(centsBrutos);
+   if(!Number.isFinite(valorBanco)||valorBanco<=0||
+    !Number.isSafeInteger(centsInteiros)||
+    Math.abs(centsBrutos-centsInteiros)>1e-7||
+    centsInteiros!==Number(reserva.valor_centavos))
+    valoresDivergentes++;
    if(typeof t.status!=="string"||
     !["PENDING","IN_BANK_PROCESSING","BLOCKED","DONE","FAILED","CANCELLED"].includes(t.status))
     formatosAmbiguos++;
