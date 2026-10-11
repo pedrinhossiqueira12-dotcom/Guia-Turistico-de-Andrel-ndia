@@ -56,6 +56,30 @@ test("valida a integridade da reserva congelada ANTES de qualquer consulta banca
  assert.ok(edgeTests.includes("requisicoesBanco===0&&requisicoesVinculo===0"));
 });
 
+test("vinculo bancario local precisa ter ID e tipos validos antes do GET Asaas",()=>{
+ const orderGuard=scanner.indexOf("if(vinculo!==null&&vinculo!==undefined)");
+ const orderBank=scanner.indexOf('await asaas("/transfers?limit="');
+ assert.ok(orderGuard>=0&&orderBank>orderGuard);
+ for(const expected of [
+  'typeof vinculo.transferencia_id!=="string"',
+  'vinculo.transferencia_id.length<1',
+  'vinculo.transferencia_id.length>180',
+  '/\\s/.test(vinculo.transferencia_id)',
+  'typeof vinculo.referencia_externa!=="string"',
+  'vinculo.referencia_externa.trim()!==vinculo.referencia_externa',
+  'typeof vinculo.valor_centavos!=="number"',
+  '!Number.isSafeInteger(vinculo.valor_centavos)',
+  'vinculo.valor_centavos<=0',
+  '!uuidValido.test(vinculo.motoboy_id)',
+  'Vínculo bancário local inconsistente; auditoria inconclusiva. HOLD.',
+  'vinculo?.valor_centavos!==reserva.valor_centavos',
+ ])assert.ok(scanner.includes(expected),expected);
+ assert.doesNotMatch(scanner,/Number\(vinculo\?\.valor_centavos\)/);
+ const edgeTests=fs.readFileSync("supabase/functions/tests/catalogo-edge-http.test.ts","utf8");
+ assert.ok(edgeTests.includes("varredura bloqueia vinculo bancario local malformado antes de GET Asaas"));
+ assert.ok(edgeTests.includes("bancoGets===0&&saquesGets===0"));
+});
+
 test("usa apenas listagem GET paginada com limite, nunca um POST de transferencia",()=>{
  assert.match(scanner,/const LIMIT=100,MAX_PAGINAS=12/);
  assert.match(scanner,/for\(let page=0;page<MAX_PAGINAS;page\+\+\)/);
