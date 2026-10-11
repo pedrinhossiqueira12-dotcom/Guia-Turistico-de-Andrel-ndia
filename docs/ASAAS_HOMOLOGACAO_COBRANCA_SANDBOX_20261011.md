@@ -17,6 +17,13 @@
 4. Criar no catálogo de testes um pedido/entrega de teste legítimos, consolidar comissões e **fechar normalmente a competência mensal** para gerar uma fatura em estado `faturado`, `vencido` ou `bloqueado` e valor positivo. Não mudar diretamente `catalogo_fechamentos_offline`, `catalogo_remuneracoes_v2` ou `catalogo_fatura_cobrancas` pelo editor SQL para fabricar saldo.
 5. Executar “Verificar faturas de teste” no painel: **`pronta_para_emissao`** significa apenas que não há cobrança nem claim local. Não é prova de conta Asaas liberada ou de webhook funcional. **`emissao_reservada_para_conciliacao`** significa HOLD: nunca reemitir para tentar contornar.
 
+## Confirmação simulada pelo próprio painel (sem expor chave Asaas)
+- A ação de **simular pagamento** só aparece em faturas já fechadas, com cobrança Asaas local ainda pendente/vencida. Não cria fatura nem cliente.
+- Administrador autorizado no projeto de testes configura os segredos `ASAAS_SANDBOX_ADMIN_USER_ID` e **`ASAAS_SANDBOX_QA_CONFIRM_ENABLED=true`**, além de `ASAAS_ENVIRONMENT=sandbox` e `ASAAS_BILLING_ENABLED=true` com credencial **Asaas Sandbox**. A configuração não é feita automaticamente. A chave Asaas permanece exclusivamente na Edge Function, nunca no HTML ou JavaScript.
+- A rota administrativa `confirmar_fatura_sandbox_admin` recebe **somente o UUID de um fechamento**; a Edge confirma os vínculos no banco e faz GET da cobrança Asaas com ID, tipo Pix, pagador, referência, valor e estado idênticos. Somente então chama o endpoint oficial `POST /sandbox/payment/{id}/confirm`.
+- A confirmação depende de **clique e confirmação humana** no painel. Se a cobrança já estiver `CONFIRMED` ou `RECEIVED`, a ação retorna o estado sem outro POST. Cancelamentos, estornos, contestação, divergência e produção são rejeitados. Não transforma `CONFIRMED` em `pago` nem registra pagamento por SQL: o evento deve passar pelo webhook autêntico.
+- Depois do clique, verificar no painel o recebimento do evento, sua reconciliação e a mudança para `pago` apenas se o provedor retornar `RECEIVED`. **Sem o webhook não considerar E2E homologado**. Tokens não devem aparecer em screenshots ou logs.
+
 ## Roteiro do teste real no provedor Sandbox
 1. Acessar a loja como seu proprietário de teste e aceitar os termos. No catálogo administrativo, consultar a fatura da competência fechada.
 2. Solicitar **uma** emissão Pix pela ação existente `criar_cobranca`. Anotar o ID de cobrança Asaas retornado, a competência e o valor. Conferir QR/copia-e-cola e valor com a cobrança do provedor. Não realizar Pix real.
