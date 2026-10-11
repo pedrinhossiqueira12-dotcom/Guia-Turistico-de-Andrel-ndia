@@ -150,7 +150,8 @@ Deno.test("varredura Asaas detecta referencias duplicadas sem transferir ou baix
      valor_centavos:12000,motoboy_id:motoboyId});
    if(u.host==="ci-supabase.invalid"&&
       u.pathname==="/rest/v1/catalogo_asaas_saques")
-    return result(null);
+    return result(u.searchParams.get("transferencia_id")?.startsWith("in.")
+      ?[{transferencia_id:"ci-transfer-two"}]:null);
    if(u.host==="api-sandbox.asaas.com"&&u.pathname==="/v3/transfers"){
     assert(u.searchParams.get("limit")==="100"&&u.searchParams.get("offset")==="0",
       "Consulta não usou paginação segura");
@@ -176,6 +177,9 @@ Deno.test("varredura Asaas detecta referencias duplicadas sem transferir ou baix
    "Nao identificou 2 transferencias da mesma referencia");
   assert(audit?.referencias_com_id_diferente_do_vinculado===1,
    "Nao identificou ID diferente do esperado");
+  assert(audit?.id_tambem_usado_em_saque_comum===false &&
+   audit?.ids_da_referencia_tambem_em_saques_comuns===1,
+   "Nao detectou outro ID do banco reutilizado em saque comum");
   assert(audit?.divergencias_de_valor===1,
    "Nao identificou valor divergente");
   assert(audit?.conflito_identificado===true&&audit?.estados_done_encontrados===1,
@@ -331,7 +335,7 @@ Deno.test("varredura em duas paginas detecta ID de transferencia repetido e mant
      valor_centavos:12000,motoboy_id:motoboyId});
    if(u.host==="ci-supabase.invalid" &&
       u.pathname==="/rest/v1/catalogo_asaas_saques")
-    return result(null);
+    return result(u.searchParams.get("transferencia_id")?.startsWith("in.")?[]:null);
    if(u.host==="api-sandbox.asaas.com" && u.pathname==="/v3/transfers"){
     assert(u.searchParams.get("limit")==="100","limite foi alterado");
     const offset=Number(u.searchParams.get("offset"));
