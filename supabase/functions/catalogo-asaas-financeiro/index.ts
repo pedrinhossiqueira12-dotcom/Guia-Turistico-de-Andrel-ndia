@@ -1336,6 +1336,50 @@ async function listAdminPayouts(uid:string){
  if(saquesError||emissoesError)throw new Failure("Consulta da auditoria financeira indisponível.",503);
  return respond({success:true,saques:saques||[],emissoes_pendentes:emissoes||[]});
 }
+// Diagnóstico administrativo somente leitura para preparar uma cobranca de teste.
+// Nenhum pedido, fechamento, cliente, fatura ou pagamento e criado aqui.
+async function diagnosticarFaturasSandboxAdmin(uid:string){
+ if(uid!==ADMIN_USER_ID)throw new Failure("Acesso restrito à administração.",403);
+ if(ENVIRONMENT!=="sandbox")
+  throw new Failure("Diagnóstico de homologação disponível somente no Sandbox.",403);
+ const {data:faturas,error:faturasError}=await db.from("catalogo_fechamentos_offline")
+  .select("id,comercio_id,competencia,status,total_comissao_centavos")
+  .in("status",["faturado","vencido","bloqueado"])
+  .gt("total_comissao_centavos",0)
+  .order("competencia",{ascending:false}).limit(50);
+ if(faturasError)throw new Failure("Não foi possível conferir faturas para homologação.",503);
+ const docs=faturas||[];
+ if(!docs.length)return respond({success:true,ambiente:"sandbox",consultadas:0,
+  lista_limitada:false,aptas:0,faturas:[],
+  mensagem:"Nenhuma fatura aberta para teste. Crie um pedido de teste legítimo no catálogo Sandbox e conclua o fechamento mensal; não altere créditos diretamente no SQL."});
+ const ids=docs.map(x=>x.id),stores=[...new Set(docs.map(x=>x.comercio_id))];
+ const [charges,claims,owners]=await Promise.all([
+  db.from("catalogo_fatura_cobrancas").select("fechamento_id,gateway,status")
+   .in("fechamento_id",ids),
+  db.from("catalogo_asaas_emissoes").select("fechamento_id,estado")
+   .in("fechamento_id",ids),
+  db.from("catalogos").select("comercio_id,proprietario_id")
+   .in("comercio_id",stores)
+ ]);
+ if(charges.error||claims.error||owners.error)
+  throw new Failure("Não foi possível confirmar vínculos e reservas das faturas.",503);
+ const byCharge=new Map((charges.data||[]).map(x=>[x.fechamento_id,x]));
+ const byClaim=new Map((claims.data||[]).map(x=>[x.fechamento_id,x]));
+ const owned=new Set((owners.data||[]).filter(x=>Boolean(x.proprietario_id)).map(x=>x.comercio_id));
+ const lista=docs.map(f=>{
+  const charge=byCharge.get(f.id),claim=byClaim.get(f.id);
+  const motivo=!owned.has(f.comercio_id)?"sem_proprietario_autorizado":
+   charge?"cobranca_existente":
+   claim?"emissao_reservada_para_conciliacao":"pronta_para_emissao";
+  return {comercio_id:f.comercio_id,competencia:String(f.competencia).slice(0,7),
+   valor_centavos:f.total_comissao_centavos,fechamento_id:f.id,
+   motivo,apta:motivo==="pronta_para_emissao",
+   gateway_existente:charge?.gateway||null,status_cobranca:charge?.status||null};
+ });
+ return respond({success:true,ambiente:"sandbox",consultadas:docs.length,
+  lista_limitada:docs.length===50,aptas:lista.filter(x=>x.apta).length,faturas:lista,
+  mensagem:"Pré-condições locais somente leitura. Apto não comprova API Asaas habilitada; teste de pagamento depende de emissão e confirmação no Sandbox."});
+}
 // Recuperação segura de resposta inconclusiva após POST /transfers.
 // O operador SOMENTE informa um ID para CONSULTA. Não gera novo Pix.
 async function reconcileAdminTransfer(uid:string,body:Record<string,unknown>){
@@ -1737,6 +1781,7 @@ Deno.serve(async (request:Request)=>{
    case "consultar_encerramento":return await consultarEncerramento(user.id,body);
    case "listar_encerramentos_admin":return await listarEncerramentosAdmin(user.id);
    case "finalizar_encerramento_admin":return await finalizarEncerramentoAdmin(user.id,body);
+   case "diagnosticar_faturas_sandbox_admin":return await diagnosticarFaturasSandboxAdmin(user.id);
    case "diagnosticar_webhooks_asaas_admin":return await diagnosticarWebhooksAsaasAdmin(user.id);
    case "reprocessar_webhooks_asaas_admin":return await reprocessarWebhooksAsaasAdmin(user.id);
    case "obter_fatura":return await showInvoice(user.id,body);
