@@ -1,8 +1,15 @@
 (() => {
   "use strict";
 
-  const SUPABASE_URL = "https://xdmbkflufsfqziixzpxc.supabase.co";
-  const SUPABASE_KEY = "sb_publishable_dvwNkLDf3oZrCqvZ5uAaRA_VsfiuZFy";
+  // Modo QA opt-in por URL: ?asaas-sandbox=1. Nao altera o site publico.
+  // As credenciais abaixo sao SOMENTE publishable, nunca service_role.
+  const QA_SANDBOX = new URLSearchParams(window.location.search).get("asaas-sandbox") === "1";
+  const SUPABASE_URL = QA_SANDBOX
+    ? "https://jbttwihctuibchhcyqtl.supabase.co"
+    : "https://xdmbkflufsfqziixzpxc.supabase.co";
+  const SUPABASE_KEY = QA_SANDBOX
+    ? "sb_publishable_W80rooaGpHP4voYiLwtz7w_-k32qHsF"
+    : "sb_publishable_dvwNkLDf3oZrCqvZ5uAaRA_VsfiuZFy";
   const API_URL = `${SUPABASE_URL}/functions/v1/catalogo-entregas`;
   const ASAAS_ADMIN_URL = `${SUPABASE_URL}/functions/v1/catalogo-asaas-financeiro`;
   const ADMIN_USER_ID = "4b9a0233-6b72-4573-aebd-d596c5b15e1b";
@@ -12,6 +19,10 @@
 
   function obterCliente() {
     if (state.client) return state.client;
+    // QA precisa de sessao propria do projeto de teste; nao reutilizar
+    // login/cookies do Supabase de producao.
+    if (QA_SANDBOX && window.supabase?.createClient)
+      return (state.client = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY));
     if (window.supabaseLoginClient) return (state.client = window.supabaseLoginClient);
     if (window.supabase && typeof window.supabase.createClient === "function") {
       window.supabaseLoginClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -254,6 +265,26 @@
     $("operationPanel").hidden = true;
     aviso("Validando autorização", "Nenhum dado operacional será exibido antes da confirmação do backend.");
     try {
+      if (QA_SANDBOX) {
+        // O endpoint autentica e compara com ASAAS_SANDBOX_ADMIN_USER_ID
+        // (segredo de servidor). Sem administrador configurado: acesso negado.
+        await chamarApi("diagnosticar_faturas_sandbox_admin", {},
+          generation, userId, ASAAS_ADMIN_URL);
+        validarSessao(generation,userId);
+        state.authorized = true;
+        $("operationLoginCard").hidden = true;
+        $("operationLogout").hidden = false;
+        $("operationPanel").hidden = false;
+        for (const section of document.querySelectorAll(".operation-grid > section")) {
+          section.style.display = section.id === "asaasSandboxFaturasCard" ? "" : "none";
+        }
+        const link = document.querySelector("#operationPanel > p");
+        if (link) link.hidden = true;
+        aviso("Acesso de homologação confirmado",
+          "Somente as faturas fechadas no Supabase de TESTES estão disponíveis. Nenhuma cobrança ou transferência será criada.", "sucesso");
+        void verificarFaturasSandboxAsaas();
+        return;
+      }
       const result = await chamarApi("operacao_admin", { operacao: "listar", subacao: "listar" }, generation, userId);
       validarSessao(generation, userId);
       if (!autorizadoExplicitamente(result)) throw new Error("A conta autenticada não tem autorização de administrador da plataforma.");
