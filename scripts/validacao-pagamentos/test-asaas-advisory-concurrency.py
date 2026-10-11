@@ -2169,6 +2169,77 @@ def scenario_vinculo_pareceres_duravel_versao_concorrente() -> None:
     print("PASS #42 journal documental CI persistente, COMMIT/replay, "
           "revogacao, nova versao, append-only, sem MFA real ou Pix",flush=True)
 
+
+def scenario_webhook_asaas_inbox_transacional() -> None:
+    """Testa fila REAL PostgreSQL local, sem HTTP, sem criar ou baixar Pix."""
+    import json
+    def query(sql):
+        return json.loads(run_sql(sql))
+    def receive(e,resource="pay_ci_billing_01"):
+        return query("SELECT public.catalogo_asaas_webhook_receber("
+          f"'{e}','PAYMENT_RECEIVED','{resource}',NULL)")
+    first="evt_ci_billing_webhook_01"
+    second="evt_ci_billing_webhook_02"
+    if receive(first).get("novo") is not True:
+        raise AssertionError("Nao persistiu evento na recepcao")
+    if receive(first).get("duplicado") is not True:
+        raise AssertionError("Evento repetido nao foi reconhecido")
+    if receive(first,"pay_ci_billing_DIVERGENTE").get("ok") is not False:
+        raise AssertionError("Mesmo ID de evento foi usado para outro pagamento")
+    claimed=query("SELECT public.catalogo_asaas_webhook_claim(1)")
+    if len(claimed)!=1 or claimed[0]["id"]!=first:
+        raise AssertionError("Primeiro evento nao foi reservado")
+    token=claimed[0]["tentativa_token"]
+    if query("SELECT public.catalogo_asaas_webhook_claim(1)")!=[]:
+        raise AssertionError("Mesmo evento foi reservado duas vezes")
+    wrong=query("SELECT public.catalogo_asaas_webhook_finalizar("
+      f"'{first}','00000000-0000-4000-8000-000000000042'::uuid,true)")
+    if wrong.get("ok") is not False:
+        raise AssertionError("Token errado encerrou evento")
+    done=query("SELECT public.catalogo_asaas_webhook_finalizar("
+      f"'{first}','{token}'::uuid,true)")
+    if done.get("ok") is not True or receive(first).get("estado")!="concluido":
+        raise AssertionError("Evento nao entrou em estado final")
+    if receive(second).get("novo") is not True:
+        raise AssertionError("Segundo evento nao gravado")
+    todo=query("SELECT public.catalogo_asaas_webhook_claim(1)")
+    if len(todo)!=1 or todo[0]["id"]!=second:
+        raise AssertionError("Segundo evento nao encontrado")
+    old_token=todo[0]["tentativa_token"]
+    failed=query("SELECT public.catalogo_asaas_webhook_finalizar("
+      f"'{second}','{old_token}'::uuid,false)")
+    if failed.get("ok") is not True:
+        raise AssertionError("Falha transitoria nao foi registrada")
+    if query("SELECT public.catalogo_asaas_webhook_claim(1)")!=[]:
+        raise AssertionError("Backoff de erro nao foi respeitado")
+    run_sql("UPDATE public.catalogo_asaas_webhook_eventos "
+      "SET proxima_tentativa_em=now()-interval '1 minute' "
+      f"WHERE id='{second}'")
+    retry=query("SELECT public.catalogo_asaas_webhook_claim(1)")
+    if len(retry)!=1 or retry[0]["id"]!=second or retry[0]["tentativa_token"]==old_token:
+        raise AssertionError("Retry nao criou novo token")
+    if query("SELECT public.catalogo_asaas_webhook_finalizar("
+      f"'{second}','{old_token}'::uuid,true)").get("ok") is not False:
+        raise AssertionError("Worker anterior encerrou tentativa nova")
+    if query("SELECT public.catalogo_asaas_webhook_finalizar("
+      f"'{second}','{retry[0]['tentativa_token']}'::uuid,true)").get("ok") is not True:
+        raise AssertionError("Retry seguro nao foi finalizado")
+    if run_sql("""
+      SELECT (
+       has_function_privilege('anon',
+        'public.catalogo_asaas_webhook_receber(text,text,text,text)','EXECUTE')
+       OR has_function_privilege('authenticated',
+        'public.catalogo_asaas_webhook_claim(integer)','EXECUTE')
+       OR has_function_privilege('authenticated',
+        'public.catalogo_asaas_webhook_finalizar(text,uuid,boolean)','EXECUTE')
+      )::text
+    """)!="false":
+        raise AssertionError("Webhooks foram expostos a anon/authenticated")
+    if run_sql("SELECT count(*) FROM public.catalogo_asaas_webhook_eventos "
+        "WHERE id LIKE 'evt_ci_billing_webhook_%' AND estado='concluido'")!="2":
+        raise AssertionError("Eventos foram duplicados/perdidos")
+    print("PASS billing PostgreSQL real: inbox, replay, retry e HOLD",flush=True)
+
 def main() -> None:
     guard_environment()
     prepare()
@@ -2183,6 +2254,7 @@ def main() -> None:
     scenario_intencao_prepost_duravel_concorrente()
     scenario_revisores_credenciais_mock_hold()
     scenario_vinculo_pareceres_duravel_versao_concorrente()
+    scenario_webhook_asaas_inbox_transacional()
     print("PASS: concorrencia real com 2 sessoes, IDs e usuarios sinteticos, zero Pix", flush=True)
 
 
