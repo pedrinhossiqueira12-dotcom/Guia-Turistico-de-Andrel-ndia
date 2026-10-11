@@ -122,10 +122,19 @@ class LocalGoTrue {
     return {status:response.status,data};
   }
 }
-export async function exerciseLocalAuthMfa(apiKey: string) {
-  const gotrue = new LocalGoTrue(apiKey);
+// Somente a rotina de CI usa estas credenciais em memoria, nunca logs.
+interface RevisorGoTrueLocal {
+  userId: string;
+  sessionId: string;
+  factorId: string;
+  beforeToken: string;
+  afterToken: string;
+}
+async function criarRevisorGoTrueLocal(
+  gotrue: LocalGoTrue, numero: 1 | 2,
+): Promise<RevisorGoTrueLocal> {
   const uuid = crypto.randomUUID();
-  const email = "ci-real-totp-" + uuid + "@example.com";
+  const email = "ci-real-totp-reviewer-" + numero + "-" + uuid + "@example.com";
   const password = "CI-Local-Only-" + crypto.randomUUID() + "-Xy!9";
   let result = await gotrue.call("POST", "/signup", undefined,
     {email,password});
@@ -182,7 +191,57 @@ export async function exerciseLocalAuthMfa(apiKey: string) {
 
   // Reautenticacao nao e autorizacao financeira:
   // NAO chamar nenhuma RPC de parecer, transferencia, Pix ou Asaas.
-  return {verified:true,sessionUnchanged:true,moneyAuthorized:false} as const;
+  return {
+    userId: String(initial.sub),
+    sessionId: String(initial.session_id),
+    factorId: id,
+    beforeToken: before,
+    afterToken: next,
+  };
+}
+
+/**
+ * #42 - Duas IDENTIDADES REAIS do GoTrue, mas so no projeto LOCAL efemero.
+ * Nunca cria papel financeiro; a autenticacao AAL2 nao equivale a aprovacao.
+ * Provas e tokens permanecem apenas em memoria, sem log ou arquivo.
+ */
+export async function exerciseLocalAuthMfa(apiKey: string) {
+  const gotrue = new LocalGoTrue(apiKey);
+  const a = await criarRevisorGoTrueLocal(gotrue, 1);
+  const b = await criarRevisorGoTrueLocal(gotrue, 2);
+  ensure(a.userId !== b.userId && a.sessionId !== b.sessionId
+    && a.factorId !== b.factorId,
+    "GoTrue reutilizou identidade, sessao ou fator entre revisores");
+
+  // GoTrue deve negar challenge para fator que pertence a OUTRO usuario,
+  // mesmo que o token do solicitante seja AAL1 autenticado e valido.
+  const wrongA = await gotrue.call(
+    "POST", "/factors/" + b.factorId + "/challenge", a.beforeToken, {},
+  );
+  ensure(wrongA.status >= 400 && wrongA.status < 500,
+    "GoTrue permitiu desafio no fator de outro revisor");
+  const wrongB = await gotrue.call(
+    "POST", "/factors/" + a.factorId + "/challenge", b.beforeToken, {},
+  );
+  ensure(wrongB.status >= 400 && wrongB.status < 500,
+    "GoTrue permitiu desafio cruzado no fator da outra identidade");
+
+  // Mesmo apos autenticacao forte, sessao de A nao passa a ser identidade B.
+  const afterA = await gotrue.call("GET", "/user", a.afterToken);
+  const afterB = await gotrue.call("GET", "/user", b.afterToken);
+  ensure(afterA.status === 200 && afterB.status === 200
+    && afterA.data.id === a.userId && afterB.data.id === b.userId
+    && afterA.data.id !== afterB.data.id,
+    "GoTrue trocou ou confundiu identidades de sessoes AAL2");
+
+  // Apenas fatos nao sensiveis. Nao retornar bearer, TOTP ou fator.
+  return {
+    verified: true,
+    sessionUnchanged: true,
+    twoIndependentReviewers: true,
+    crossUserFactorDenied: true,
+    moneyAuthorized: false,
+  } as const;
 }
 if (import.meta.main) {
   if(Deno.args.length!==1 || Deno.args[0]!=="--native-ci-local-only")
@@ -193,7 +252,9 @@ if (import.meta.main) {
   }
   const key = Deno.env.get("LOCAL_SUPABASE_ANON_KEY") ?? "";
   const proof = await exerciseLocalAuthMfa(key);
-  ensure(proof.verified && proof.sessionUnchanged && !proof.moneyAuthorized,
-    "Prova local incompleta");
-  console.log("PASS: GoTrue REAL LOCAL confirmou enrollment TOTP, challenge, verify, AAL1=>AAL2 e mesma sessao; zero dinheiro");
+  ensure(proof.verified && proof.sessionUnchanged
+    && proof.twoIndependentReviewers && proof.crossUserFactorDenied
+    && !proof.moneyAuthorized,
+    "Prova local de duas sessoes/fatores independentes incompleta");
+  console.log("PASS: GoTrue REAL LOCAL: dois usuarios e fatores TOTP, AAL1=>AAL2, mesma sessao por usuario, challenges cruzados recusados; HOLD sem dinheiro");
 }
