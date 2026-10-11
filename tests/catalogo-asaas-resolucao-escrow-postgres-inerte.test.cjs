@@ -58,7 +58,7 @@ test("#43: PostgreSQL descartavel valida 1201 remuneracoes em 2 meses antes de H
  assert.match(sql,/v_total bigint:=1201\*6000/);
  assert.match(sql,/v_target:=CASE WHEN v_month=1 THEN 601 ELSE 600 END/);
  assert.match(sql,/v_competencia:=make_date\(2097,v_month,1\)/);
- assert.match(sql,/FOR v_i IN 1\.\.v_target LOOP/);
+ assert.match(sql,/pg_catalog\.generate_series\(1,v_target\)/);
  assert.match(sql,/catalogo_asaas_separar_creditos_excepcionais\(\s*'saida',v_saida\)/);
  assert.match(sql,/v_reserva->>'creditos_separados' IS DISTINCT FROM '1201'/);
  assert.match(sql,/v_previa->>'creditos_lidos_do_livro' IS DISTINCT FROM '1201'/);
