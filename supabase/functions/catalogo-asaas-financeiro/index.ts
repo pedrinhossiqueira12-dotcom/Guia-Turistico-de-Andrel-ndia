@@ -39,7 +39,7 @@ const money=(cents:number)=>Math.round(cents)/100;
 function cents(amount:unknown):number{
  if(typeof amount!=="number"||!Number.isFinite(amount)||amount<0)return NaN;
  const decimal=amount.toString();
- if(!/^(?:0|[1-9]\\d*)(?:\\.\\d{1,2})?$/.test(decimal))return NaN;
+ if(!/^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/.test(decimal))return NaN;
  const [inteiro,fracao=""]=decimal.split(".");
  const total=BigInt(inteiro)*100n+BigInt(fracao.padEnd(2,"0"));
  const num=Number(total);
