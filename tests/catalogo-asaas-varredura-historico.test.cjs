@@ -8,6 +8,25 @@ const start=edge.indexOf("async function auditarHistoricoTransferenciasExcepcion
 const end=edge.indexOf("// Dossie administrativo append-only.",start);
 const scanner=edge.slice(start,end);
 
+test("GET paginado Asaas restringe bytes, media type, UTF-8 e JSON sem abrir pagamentos",()=>{
+ assert.match(edge,/const MAX_ASAAS_LISTAGEM_BYTES=2\*1024\*1024/);
+ assert.match(edge,/response\.headers\.get\("content-length"\)/);
+ assert.match(edge,/response\.headers\.get\("content-type"\)/);
+ assert.match(edge,/reader\.read\(\)/);
+ assert.match(edge,/if\(size>MAX_ASAAS_LISTAGEM_BYTES\)/);
+ assert.match(edge,/new TextDecoder\("utf-8",\{fatal:true\}\)/);
+ assert.match(edge,/method==="GET"&&path\.startsWith\("\/transfers\?"\)/);
+ assert.match(edge,/await lerListagemAsaasLimitada\(response\)/);
+ assert.match(edge,/Auditoria inconclusiva\. HOLD\./);
+ const edgeTests=fs.readFileSync("supabase/functions/tests/catalogo-edge-http.test.ts","utf8");
+ assert.match(edgeTests,/varredura rejeita resposta Asaas enorme ou malformada sem expor dados/);
+ assert.match(edgeTests,/content-length acima do limite/);
+ assert.match(edgeTests,/resposta sem MIME JSON/);
+ assert.match(edgeTests,/corpo real supera limite/);
+ assert.match(edgeTests,/UTF-8 invalido/);
+ assert.match(edgeTests,/JSON truncado/);
+});
+
 test("varredura somente admin e Sandbox, com ID de reserva UUID",()=>{
  assert.ok(start>=0&&end>start);
  assert.match(scanner,/uid!==ADMIN_USER_ID/);
