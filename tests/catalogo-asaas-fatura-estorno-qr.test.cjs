@@ -54,7 +54,8 @@ test("cobranca recebida nao consulta QR nem sugere novo pagamento",async()=>{
 });
 for(const status of ["estornado","contestado","cancelado"]){
  test("cobranca "+status+" nunca busca QR nem exibe codigo de pagamento",async()=>{
-  const {result,chamadas}=await consultar(status);
+  // Estado local antigo "pago" nao pode esconder estorno/contestacao do Asaas.
+  const {result,chamadas}=await consultar(status,"pago");
   assert.deepEqual(chamadas,[]);
   assert.equal(result.cobranca_status,status);
   assert.equal(result.pix.code,"");
