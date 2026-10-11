@@ -88,3 +88,29 @@ test("#43: CI executa preview sob lock com duas sessoes postgres e commit/rollba
  assert.ok(script.includes("EXPECTED_DB = \"catalogo_asaas_race_ci\""));
  assert.ok(script.includes("if run_sql("));
 });
+
+test("#43: falha depois de primeiro item reverte TODA a sombra sem mexer em remuneracao",()=>{
+ const begin=sql.indexOf("-- #43: falha forjada APOS inserir header");
+ const end=sql.indexOf("SELECT public.catalogo_asaas_preconferir_pagamento_excepcional('saida',v_saida)\n INTO v_posreserva;",begin);
+ assert.ok(begin>=0&&end>begin);
+ const fixture=sql.slice(begin,end);
+ for(const contract of [
+  "BEGIN\n  INSERT INTO pg_temp.catalogo_ci_escrow_planos_shadow_inertes(",
+  "INSERT INTO pg_temp.catalogo_ci_escrow_planos_itens_shadow_inertes(",
+  "ORDER BY i.remuneracao_id LIMIT 1",
+  "USING ERRCODE='P4301'",
+  "EXCEPTION WHEN SQLSTATE 'P4301' THEN NULL",
+  "IF v_shadow_header<>0 OR v_shadow_itens<>0",
+  "IF v_shadow_itens<>2 OR v_shadow_soma<>12000",
+  "fingerprint_sha256=v_reserva->>'fingerprint_sha256'",
+  "EXCEPTION WHEN unique_violation THEN v_shadow_blocks:=v_shadow_blocks+1",
+  "IF v_shadow_header<>1 OR v_shadow_itens<>2",
+  "Sombra alterou credito real do teste"
+ ])assert.ok(fixture.includes(contract),"Contrato ausente: "+contract);
+ assert.doesNotMatch(fixture,/UPDATE\s+public\.catalogo_remuneracoes_v2|DELETE\s+FROM\s+public\.catalogo_remuneracoes_v2/i);
+ assert.match(sql,/CREATE TEMP TABLE catalogo_ci_escrow_planos_shadow_inertes\(/);
+ assert.match(sql,/CREATE TEMP TABLE catalogo_ci_escrow_planos_itens_shadow_inertes\(/);
+ assert.match(sql,/PRIMARY KEY\(separacao_id,remuneracao_id\)/);
+ assert.match(sql,/ON COMMIT DROP/);
+ assert.match(sql,/\nROLLBACK;\s*$/);
+});
