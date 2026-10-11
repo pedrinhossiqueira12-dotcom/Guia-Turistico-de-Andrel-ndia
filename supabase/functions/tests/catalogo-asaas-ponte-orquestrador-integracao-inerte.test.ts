@@ -199,8 +199,10 @@ Deno.test("bearer falso e sessao alheia nao queimam nonce no PostgreSQL fake",as
 Deno.test("GRANT acidental inibe a ponte ANTES do challenge ou consumo",async()=>{
   const before=lab({membershipLeak:true});
   const denied=await before.orchestrator().iniciar(CTX,"aal1-valid");
-  assert(!denied.ok&&denied.motivo==="reserva_sql_recusada_ou_sem_hold",
-    "NULL bridge response allowed reserve");
+  // O adaptador rejeita SQL NULL por EXCEPTION antes que o
+  // orquestrador examine flags de HOLD; motivo correto: SQL indisponivel.
+  assert(!denied.ok&&denied.motivo==="reserva_sql_indisponivel",
+    "NULL bridge response did not fail closed");
   assertHold(denied);
   assert(!before.state().reserved&&before.state().challengeCount===0,
     "privilege leak reached reserve/challenge");
