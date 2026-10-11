@@ -633,6 +633,7 @@ async function auditarHistoricoTransferenciasExcepcionaisSandboxAdmin(
  let paginas=0,examinadas=0,referencias=0,refsDeOutroId=0;
  let valoresDivergentes=0,idsSemReferencia=0,identificadoresInvalidos=0;
  let listaRepetida=0,estadosDone=0,formatosAmbiguos=0,achouIdVinculado=false;
+ let idsSemIdentificadorGlobais=0;
  const vistos=new Set<string>();
  // Captura colisao entre referencias de qualquer pagina, inclusive se o ID
  // aparecer primeiro numa referencia alheia e so depois na referencia alvo.
@@ -672,7 +673,10 @@ async function auditarHistoricoTransferenciasExcepcionaisSandboxAdmin(
   examinadas+=result.data.length;
   for(const raw of result.data){
    const t=input(raw);
-   const tId=typeof t.id==="string"?t.id:"";
+   // ID ausente, vazio ou com espaços externos não identifica uma transferência.
+   // Mesmo registros fora da referência-alvo tornam a listagem inconclusiva.
+   const tId=typeof t.id==="string"&&t.id.trim()===t.id?t.id:"";
+   if(!tId)idsSemIdentificadorGlobais++;
    const tRef=typeof t.externalReference==="string"?t.externalReference:"";
    if(tId){
     if(!primeiraReferenciaPorId.has(tId))primeiraReferenciaPorId.set(tId,tRef);
@@ -737,7 +741,7 @@ async function auditarHistoricoTransferenciasExcepcionaisSandboxAdmin(
  const vinculoNaoLocalizado=completa&&Boolean(idVinculado)&&!achouIdVinculado;
  const conflito=refsDeOutroId>0||referenciasDistintas>1||
   valoresDivergentes>0||idsSemReferencia>0||identificadoresInvalidos>0||
-  listaRepetida>0||idsRepetidosGlobais>0||
+  listaRepetida>0||idsRepetidosGlobais>0||idsSemIdentificadorGlobais>0||
   formatosAmbiguos>0||mesmoIdSaqueComum||
   idsDaReferenciaTambemEmSaqueComum>0||
   idsDaReferenciaComOutraReferencia>0||
@@ -753,6 +757,7 @@ async function auditarHistoricoTransferenciasExcepcionaisSandboxAdmin(
   ids_ausentes:identificadoresInvalidos,
   ids_repetidos_na_listagem:listaRepetida,
   ids_repetidos_globais:idsRepetidosGlobais,
+  ids_sem_identificador_globais:idsSemIdentificadorGlobais,
   estados_done_encontrados:estadosDone,
   estados_ambiguos:formatosAmbiguos,
   id_tambem_usado_em_saque_comum:mesmoIdSaqueComum,
