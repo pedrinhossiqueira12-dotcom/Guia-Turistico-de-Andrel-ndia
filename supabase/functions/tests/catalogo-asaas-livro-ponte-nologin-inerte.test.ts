@@ -215,3 +215,20 @@ Deno.test("respostas de desafio/consumo aceitas recusam nonce valido de outra op
    response.status_operacional==="HOLD_OBRIGATORIO",
    "erro SQL foi confundido com autorizacao");
 });
+
+
+Deno.test("campos financeiros novos ou permissivos nao passam despercebidos na ponte SQL",async()=>{
+ for(const extra of [
+  {pode_transferir:true},{saque_liberado:true},{autorizar_pix:true},
+  {autenticacao_mfa_real:true},{status_pagamento:"approved"},
+ ]) {
+  const {adapter}=mk(()=>({...result(),...extra}));
+  await denied(()=>adapter.reservarInicioVinculado(ID,USER,SESSION),
+    "campo inesperado "+Object.keys(extra)[0]);
+ }
+ // Resposta do contrato vigente continua sendo aceita em HOLD.
+ const {adapter}=mk(()=>result());
+ const response=await adapter.reservarInicioVinculado(ID,USER,SESSION);
+ assert(response.ok && response.status_operacional==="HOLD_OBRIGATORIO"
+   && response.movimenta_dinheiro===false,"contrato vigente rejeitado");
+});
