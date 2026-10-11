@@ -144,6 +144,14 @@ O `GET /v3/transfers` da auditoria em Sandbox agora usa um leitor limitado a **2
 - Nem tamanho aceitável, nem JSON válido e nem uma listagem paginada completa comprovam destino original, liquidação, integridade de snapshot bancário ou inexistência de transferência anterior.
 - **PR #39 permanece Draft, sem deploy financeiro, saques reais, Pix ou mudanças no Supabase de produção.**
 
+## Comparação monetária sem arredondar frações de centavo (11/10/2026)
+
+- A auditoria da listagem `GET /v3/transfers` anteriormente usava `Math.round(value * 100)`. Isso ocultava a diferença entre R$ 120,004 e R$ 120,00, embora o primeiro número não seja um valor válido em centavos.
+- Agora o scanner **somente leitura** exige número finito e positivo, equivalente a uma quantidade inteira e segura de centavos; uma tolerância de apenas `1e-7` centavo absorve os resíduos usuais de ponto flutuante. Frações reais de centavo ou valores grandes fora do intervalo seguro contam como `divergencias_de_valor` e obrigam `conflito_identificado=true`.
+- Teste de Edge HTTP com Asaas e Supabase simulados compara `120` (válido), `120.004` (inválido), `120.006` (inválido) e `1e20` (inválido); todos os casos mantêm `pagamento_autorizado=false`, `liberacao_autorizada=false` e `baixa_realizada=false`.
+- Essa verificação é diagnóstica, **não é prova bancária de titularidade, destino original, recebimento nem ausência de Pix anterior**. A origem deve investigar respostas monetárias inesperadas; nunca arredondar e concluir quitação.
+- Sem migração SQL, sem deploy de Edge, sem alteração em STAGING/PROD, sem POST de transferências e sem merge do PR #39 (Draft/HOLD).
+
 ## Checklist de liberação
 
 - [ ] CI integralmente verde no commit final.
