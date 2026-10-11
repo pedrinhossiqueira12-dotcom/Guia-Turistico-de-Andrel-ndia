@@ -125,10 +125,10 @@ test("webhook do Guia que chega antes do cadastro local NAO e perdido",async()=>
  const implementation=edge.slice(start,finish).replace(
    "async function processarEventoAsaasPendente(row:AsaasWebhookPendente)",
    "async function processarEventoAsaasPendente(row)");
- let consulted=0,verified=0;
+ let consulted=0,verified=0,remoteRef="fatura-loja-ci-2026-10";
  const ctx={
   db:{from:()=>({select:()=>({eq(){return this},maybeSingle:async()=>({data:null,error:null})})})},
-  asaas:async()=>{consulted++;return {externalReference:"fatura-loja-ci-2026-10"}},
+  asaas:async()=>{consulted++;return {externalReference:remoteRef}},
   verifyInvoice:async()=>{verified++},
   value:(v,m)=>typeof v==="string"?v.slice(0,m):"",
   Failure:class Failure extends Error{constructor(message,status){super(message);this.status=status;}},
@@ -139,7 +139,7 @@ test("webhook do Guia que chega antes do cadastro local NAO e perdido",async()=>
  await assert.rejects(process(row),e=>e.status===503&&/ainda nao registrada/.test(e.message));
  assert.equal(consulted,1);
  assert.equal(verified,0);
- ctx.asaas=async()=>({externalReference:"pagamento-de-outra-plataforma"});
+ remoteRef="pagamento-de-outra-plataforma";
  await process(row);
  assert.equal(verified,0);
 });
