@@ -1907,6 +1907,242 @@ def scenario_revisores_credenciais_mock_hold() -> None:
     print("PASS #42: dois revisores mock com sessao/fator, revogacao, "
           "AAL1/expiry, autor impedido, ataque de claims e HOLD",flush=True)
 
+
+# #42: registro transacional DURAVEL so no clone CI, usando AAL2 MOCK.
+def diagnosticar_vinculo_ci(escrow: str) -> dict:
+    import json
+    result=json.loads(run_sql(
+        "SELECT catalogo_ci_vinculo_mfa_inerte.diagnosticar_ci("
+        f"'{escrow}'::uuid)"
+    ))
+    if result.get("status_operacional")!="HOLD_OBRIGATORIO":
+        raise AssertionError("Livro documental saiu do HOLD")
+    for key in ("mfa_real_validado","credenciamento_formal_confirmado",
+                "dupla_aprovacao_financeira","pode_pagar","pode_liberar",
+                "baixa_realizada","movimenta_dinheiro"):
+        if result.get(key) is not False:
+            raise AssertionError("Livro documental autorizou "+key)
+    return result
+
+
+def verificar_retorno_vinculo(texto: str, ok: bool, motivo: str) -> dict:
+    import json
+    line=next((r.strip() for r in texto.splitlines() if r.strip().startswith("{")),None)
+    if not line:
+        raise AssertionError("Sem retorno JSON do livro duravel CI")
+    data=json.loads(line)
+    if data.get("ok") is not ok or data.get("motivo")!=motivo:
+        raise AssertionError("Resultado inesperado do vinculo: "+str(data))
+    if data.get("status_operacional")!="HOLD_OBRIGATORIO":
+        raise AssertionError("Resultado do vinculo sem HOLD")
+    for k in ("mfa_real_validado","pode_pagar","pode_liberar","movimenta_dinheiro"):
+        if data.get(k) is not False:
+            raise AssertionError("Habilitacao financeira indevida: "+k)
+    return data
+
+
+def reservar_vinculo_ci(revisor: str, sessao: str) -> str:
+    return (
+        "SELECT catalogo_ci_vinculo_mfa_inerte.reservar_ci("
+        f"'{CI_REVIEW_ESCROW}'::uuid,'{revisor}'::uuid,'{sessao}'::uuid,"
+        "(SELECT fator_id FROM catalogo_ci_revisores_inertes.sessoes_mock_ci "
+        f" WHERE sessao_id='{sessao}'::uuid));"
+    )
+
+
+def observar_vinculo_ci(nonce: str, revisor: str, sessao: str, desafio: str) -> str:
+    return (
+        "SELECT catalogo_ci_vinculo_mfa_inerte.observar_ci("
+        f"'{nonce}'::uuid,'{revisor}'::uuid,'{sessao}'::uuid,"
+        "(SELECT fator_id FROM catalogo_ci_revisores_inertes.sessoes_mock_ci "
+        f" WHERE sessao_id='{sessao}'::uuid),'{desafio}'::uuid);"
+    )
+
+
+def scenario_vinculo_pareceres_duravel_versao_concorrente() -> None:
+    source=Path(
+        "supabase/tests/isolated/catalogo-asaas-vinculo-parecer-mfa-duravel-ci.sql"
+    ).read_text(encoding="utf8")
+    if ("catalogo_asaas_race_ci" not in source or
+        "CREATE TABLE catalogo_ci_vinculo_mfa_inerte.intencoes_ci" not in source or
+        "'mfa_real_validado',false" not in source or
+        "'pode_pagar',false" not in source):
+        raise AssertionError("Novo journal CI perdeu HOLD ou guard")
+    run_sql("SET app.catalogo_ci_vinculo_test='enabled';\n"+source)
+    run_sql(f"""
+      UPDATE catalogo_ci_revisores_inertes.credenciais_ci
+      SET situacao='habilitado',valido_ate=now()+interval '2 hours'
+      WHERE revisor_id IN ('{CI_REVIEW_A}','{CI_REVIEW_B}');
+      UPDATE catalogo_ci_revisores_inertes.sessoes_mock_ci
+      SET aal_mock='aal2',fator_estado_mock='verified',
+          revogada_em=NULL,ultimo_desafio_mock_em=now()-interval '1 minute',
+          expira_em=now()+interval '30 minutes'
+      WHERE revisor_id IN ('{CI_REVIEW_A}','{CI_REVIEW_B}');
+      INSERT INTO catalogo_ci_vinculo_mfa_inerte.dossies_ci(
+       separacao_id,versao,hash_sha256
+      ) VALUES ('{CI_REVIEW_ESCROW}',1,repeat('d',64));
+    """)
+    # Uma sessao prepara sob COMMIT, segunda espera advisory e perde o replay.
+    first=Session.start("ci_vinculo_prepare_first")
+    second=None
+    try:
+        first.send("BEGIN;\n"+reservar_vinculo_ci(
+            CI_REVIEW_A,CI_REVIEW_SESSION_A)+"\n\\echo CI_VINCULO_PREPARED")
+        accepted=verificar_retorno_vinculo(
+            first.until("CI_VINCULO_PREPARED"),True,"vinculo_ci_reservado")
+        nonce_a=accepted.get("nonce_ci")
+        if not nonce_a:
+            raise AssertionError("Falta nonce duravel CI")
+        second=Session.start("ci_vinculo_prepare_second")
+        second.send("SET lock_timeout='10s';\nBEGIN;\n"+reservar_vinculo_ci(
+            CI_REVIEW_A,CI_REVIEW_SESSION_A)+"\n\\echo CI_VINCULO_REPLAY")
+        assert_waiting_advisory(second.name)
+        first.send("COMMIT;\n\\echo CI_VINCULO_COMMIT")
+        first.until("CI_VINCULO_COMMIT")
+        verificar_retorno_vinculo(
+            second.until("CI_VINCULO_REPLAY"),False,"vinculo_ja_reservado")
+        second.send("COMMIT;\n\\echo CI_VINCULO_REPLAY_COMMIT")
+        second.until("CI_VINCULO_REPLAY_COMMIT")
+        second.finish()
+        second=None
+        first.finish()
+    finally:
+        if second is not None:
+            second.abort()
+        first.abort()
+    if run_sql(
+        "SELECT count(*) FROM catalogo_ci_vinculo_mfa_inerte.intencoes_ci"
+    )!="1":
+        raise AssertionError("Revisor A registrou duas intencoes")
+    nonce_b=verificar_retorno_vinculo(run_sql(
+        reservar_vinculo_ci(CI_REVIEW_B,CI_REVIEW_SESSION_B)
+    ),True,"vinculo_ci_reservado").get("nonce_ci")
+    if not nonce_b or nonce_b==nonce_a:
+        raise AssertionError("Nonces nao independentes dos dois revisores")
+    # Dono/sessao trocados nunca criam observacao, mesmo usando nonce valido.
+    forged=run_sql(observar_vinculo_ci(
+        nonce_a,CI_REVIEW_B,CI_REVIEW_SESSION_B,
+        "cd980000-0000-4000-8000-000000000001"))
+    verificar_retorno_vinculo(forged,False,"nonce_ou_identidade_divergente")
+    # Mesmo challenge nao e aceito duas vezes sob duas transacoes concorrentes.
+    first=Session.start("ci_vinculo_observe_first")
+    second=None
+    challenge_a="cd980000-0000-4000-8000-000000000001"
+    try:
+        first.send("BEGIN;\n"+observar_vinculo_ci(
+            nonce_a,CI_REVIEW_A,CI_REVIEW_SESSION_A,challenge_a
+        )+"\n\\echo CI_OBSERVE_FIRST")
+        verificar_retorno_vinculo(
+            first.until("CI_OBSERVE_FIRST"),True,
+            "challenge_local_documentado_sem_prova_mfa")
+        second=Session.start("ci_vinculo_observe_second")
+        second.send("SET lock_timeout='10s';\nBEGIN;\n"+observar_vinculo_ci(
+            nonce_a,CI_REVIEW_A,CI_REVIEW_SESSION_A,challenge_a
+        )+"\n\\echo CI_OBSERVE_REPLAY")
+        assert_waiting_advisory(second.name)
+        first.send("COMMIT;\n\\echo CI_OBSERVE_COMMITTED")
+        first.until("CI_OBSERVE_COMMITTED")
+        verificar_retorno_vinculo(
+            second.until("CI_OBSERVE_REPLAY"),False,"replay_ou_challenge_usado")
+        second.send("COMMIT;\n\\echo CI_OBSERVE_REPLAY_COMMIT")
+        second.until("CI_OBSERVE_REPLAY_COMMIT")
+        second.finish()
+        second=None
+        first.finish()
+    finally:
+        if second is not None:
+            second.abort()
+        first.abort()
+    # Uma observacao para B com outro challenge, ambos continuam sem dinheiro.
+    verificar_retorno_vinculo(run_sql(observar_vinculo_ci(
+        nonce_b,CI_REVIEW_B,CI_REVIEW_SESSION_B,
+        "cd980000-0000-4000-8000-000000000002"
+    )),True,"challenge_local_documentado_sem_prova_mfa")
+    valid=diagnosticar_vinculo_ci(CI_REVIEW_ESCROW)
+    if (valid.get("revisores_documentais_mock_distintos_vigentes")!=2
+        or valid.get("duas_observacoes_mock_de_mesma_versao") is not True):
+        raise AssertionError("Journal CI nao reconheceu os dois registros: "+str(valid))
+
+    # Uma REVOGACAO depois dos dois registros ja gravados deve invalidar
+    # a segunda observacao na proxima conferencia.
+    run_sql(
+      "UPDATE catalogo_ci_revisores_inertes.credenciais_ci "
+      f"SET situacao='revogado' WHERE revisor_id='{CI_REVIEW_B}'"
+    )
+    revoked=diagnosticar_vinculo_ci(CI_REVIEW_ESCROW)
+    if (revoked.get("revisores_documentais_mock_distintos_vigentes")!=1
+        or revoked.get("duas_observacoes_mock_de_mesma_versao") is not False):
+        raise AssertionError("Revogacao nao invalidou parecer armazenado")
+    run_sql(
+      "UPDATE catalogo_ci_revisores_inertes.credenciais_ci "
+      f"SET situacao='habilitado' WHERE revisor_id='{CI_REVIEW_B}'"
+    )
+    # Dossie mudou NO BANCO de CI. As confirmacoes antigas nao valem.
+    run_sql(
+      "UPDATE catalogo_ci_vinculo_mfa_inerte.dossies_ci "
+      f"SET versao=2,hash_sha256=repeat('e',64) WHERE separacao_id='{CI_REVIEW_ESCROW}'"
+    )
+    stale=diagnosticar_vinculo_ci(CI_REVIEW_ESCROW)
+    if (stale.get("revisores_documentais_mock_distintos_vigentes")!=0
+        or stale.get("duas_observacoes_mock_de_mesma_versao") is not False):
+        raise AssertionError("Nova versao reutilizou desafios da versao antiga")
+    verificar_retorno_vinculo(run_sql(observar_vinculo_ci(
+        nonce_a,CI_REVIEW_A,CI_REVIEW_SESSION_A,
+        "cd980000-0000-4000-8000-000000000003"
+    )),False,"nonce_ou_identidade_divergente")
+
+    # Este unico snapshot CI nao admite reabrir o mesmo revisor/escrow:
+    # nova autorizacao futura exigiria um novo protocolo formal auditado.
+    verificar_retorno_vinculo(run_sql(reservar_vinculo_ci(
+        CI_REVIEW_A,CI_REVIEW_SESSION_A
+    )),False,"vinculo_ja_reservado")
+    run_sql("""
+      DO $immut_ci$
+      BEGIN
+       BEGIN
+        UPDATE catalogo_ci_vinculo_mfa_inerte.intencoes_ci
+        SET dossie_hash_sha256=repeat('f',64);
+        RAISE EXCEPTION 'UPDATE alterou journal';
+       EXCEPTION WHEN check_violation THEN NULL;
+       END;
+       BEGIN
+        DELETE FROM catalogo_ci_vinculo_mfa_inerte.observacoes_ci;
+        RAISE EXCEPTION 'DELETE apagou journal';
+       EXCEPTION WHEN check_violation THEN NULL;
+       END;
+      END $immut_ci$;
+    """)
+    privilege=run_sql("""
+      SELECT (
+       has_schema_privilege('service_role','catalogo_ci_vinculo_mfa_inerte','USAGE')
+       OR has_table_privilege('anon',
+          'catalogo_ci_vinculo_mfa_inerte.intencoes_ci','INSERT')
+       OR has_table_privilege('authenticated',
+          'catalogo_ci_vinculo_mfa_inerte.observacoes_ci','SELECT')
+       OR has_function_privilege('service_role',
+         'catalogo_ci_vinculo_mfa_inerte.observar_ci(uuid,uuid,uuid,uuid,uuid)',
+         'EXECUTE')
+      )::text
+    """)
+    if privilege!="false":
+        raise AssertionError("Journal documental acessivel a roles do backend")
+    if run_sql(
+      "SELECT count(*) FROM catalogo_ci_vinculo_mfa_inerte.observacoes_ci"
+    )!="2":
+        raise AssertionError("Observacao duravel duplicou/apagou dados")
+    if run_sql(
+      "SELECT count(*) FROM public.catalogo_asaas_separacoes_excepcionais "
+      f"WHERE id='{CI_REVIEW_ESCROW}' AND situacao='congelada'"
+    )!="1":
+        raise AssertionError("Journal local liberou saldo")
+    if run_sql(
+      "SELECT count(*) FROM public.catalogo_asaas_saques "
+      f"WHERE motoboy_id='{CI_REVIEW_OWNER}'"
+    )!="0":
+        raise AssertionError("Registro MFA sintético criou saque")
+    print("PASS #42 journal documental CI persistente, COMMIT/replay, "
+          "revogacao, nova versao, append-only, sem MFA real ou Pix",flush=True)
+
 def main() -> None:
     guard_environment()
     prepare()
@@ -1920,6 +2156,7 @@ def main() -> None:
     scenario_resolucao_documental_idempotente_concorrente()
     scenario_intencao_prepost_duravel_concorrente()
     scenario_revisores_credenciais_mock_hold()
+    scenario_vinculo_pareceres_duravel_versao_concorrente()
     print("PASS: concorrencia real com 2 sessoes, IDs e usuarios sinteticos, zero Pix", flush=True)
 
 
