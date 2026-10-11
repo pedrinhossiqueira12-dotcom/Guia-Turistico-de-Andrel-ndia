@@ -1435,6 +1435,7 @@ DECLARE
  v_shadow_itens bigint;
  v_shadow_soma bigint;
  v_shadow_blocks integer:=0;
+ v_shadow_diag jsonb;
 BEGIN
  INSERT INTO auth.users(id) VALUES(v_uid);
  INSERT INTO public.comercios_publicados(local_id,status) VALUES(v_store,'ativo');
@@ -1568,6 +1569,76 @@ BEGIN
  IF v_shadow_itens<>2 OR v_shadow_soma<>12000
  THEN RAISE EXCEPTION 'Retentativa de sombra incompleta % %',
   v_shadow_itens,v_shadow_soma; END IF;
+
+ -- Comparacao de cada remuneracao contra o snapshot reservado, nao apenas
+ -- contagem/valor global. Fingerprint e identidade da tentativa sao exigidos.
+ SELECT pg_temp.catalogo_asaas_validar_itens_sombra_inerte(
+  (v_reserva->>'separacao_id')::uuid,v_plano_tentativa) INTO v_shadow_diag;
+ IF v_shadow_diag->>'integridade_sombra_por_credito' IS DISTINCT FROM 'true'
+ OR v_shadow_diag->>'itens_divergentes_ou_ausentes' IS DISTINCT FROM '0'
+ OR v_shadow_diag->>'creditos_planejados' IS DISTINCT FROM '2'
+ OR v_shadow_diag->>'pagamento_autorizado' IS DISTINCT FROM 'false'
+ OR v_shadow_diag->>'movimenta_dinheiro' IS DISTINCT FROM 'false'
+ THEN RAISE EXCEPTION 'Comparacao per-credit recusou plano integro: %',v_shadow_diag; END IF;
+
+ -- Adulteracao balanceada: +1 centavo em A, -1 centavo em B.
+ -- Soma e contagem PERMANECEM iguais, mas a comparacao por ID/fingerprint
+ -- precisa rejeitar o plano. Subtransacao desfaz a propria adulteracao.
+ BEGIN
+  UPDATE pg_temp.catalogo_ci_escrow_planos_itens_shadow_inertes si
+  SET valor_centavos=si.valor_centavos + CASE
+   WHEN si.remuneracao_id=(
+    SELECT remuneracao_id
+    FROM pg_temp.catalogo_ci_escrow_planos_itens_shadow_inertes
+    WHERE tentativa_id=v_plano_tentativa
+    ORDER BY remuneracao_id LIMIT 1
+   ) THEN 1 ELSE -1 END
+  WHERE si.tentativa_id=v_plano_tentativa;
+  SELECT count(*)::bigint,coalesce(sum(valor_centavos::bigint),0)
+  INTO v_shadow_itens,v_shadow_soma
+  FROM pg_temp.catalogo_ci_escrow_planos_itens_shadow_inertes
+  WHERE tentativa_id=v_plano_tentativa;
+  IF v_shadow_itens<>2 OR v_shadow_soma<>12000
+  THEN RAISE EXCEPTION 'Fixture balanceada mudou contagem/soma'; END IF;
+  SELECT pg_temp.catalogo_asaas_validar_itens_sombra_inerte(
+   (v_reserva->>'separacao_id')::uuid,v_plano_tentativa) INTO v_shadow_diag;
+  IF v_shadow_diag->>'integridade_sombra_por_credito' IS DISTINCT FROM 'false'
+   OR v_shadow_diag->>'itens_divergentes_ou_ausentes' IS DISTINCT FROM '2'
+   OR v_shadow_diag->>'pagamento_autorizado' IS DISTINCT FROM 'false'
+  THEN RAISE EXCEPTION 'Troca balanceada nao foi detectada: %',v_shadow_diag; END IF;
+  RAISE EXCEPTION 'Adulteracao documental revertida' USING ERRCODE='P4304';
+ EXCEPTION WHEN SQLSTATE 'P4304' THEN NULL;
+ END;
+
+ -- Remocao do item de sombra: detectar lacuna e reverter imediatamente.
+ BEGIN
+  DELETE FROM pg_temp.catalogo_ci_escrow_planos_itens_shadow_inertes
+  WHERE tentativa_id=v_plano_tentativa
+   AND remuneracao_id=(
+    SELECT remuneracao_id
+    FROM pg_temp.catalogo_ci_escrow_planos_itens_shadow_inertes
+    WHERE tentativa_id=v_plano_tentativa ORDER BY remuneracao_id LIMIT 1
+   );
+  SELECT pg_temp.catalogo_asaas_validar_itens_sombra_inerte(
+   (v_reserva->>'separacao_id')::uuid,v_plano_tentativa) INTO v_shadow_diag;
+  IF v_shadow_diag->>'integridade_sombra_por_credito' IS DISTINCT FROM 'false'
+   OR v_shadow_diag->>'itens_divergentes_ou_ausentes' IS DISTINCT FROM '1'
+  THEN RAISE EXCEPTION 'Item ausente nao foi detectado: %',v_shadow_diag; END IF;
+  RAISE EXCEPTION 'Lacuna documental revertida' USING ERRCODE='P4305';
+ EXCEPTION WHEN SQLSTATE 'P4305' THEN NULL;
+ END;
+ SELECT pg_temp.catalogo_asaas_validar_itens_sombra_inerte(
+  (v_reserva->>'separacao_id')::uuid,v_plano_tentativa) INTO v_shadow_diag;
+ IF v_shadow_diag->>'integridade_sombra_por_credito' IS DISTINCT FROM 'true'
+  OR v_shadow_diag->>'itens_divergentes_ou_ausentes' IS DISTINCT FROM '0'
+ THEN RAISE EXCEPTION 'Rollback dos ataques deixou plano corrompido: %',
+  v_shadow_diag; END IF;
+ SELECT pg_temp.catalogo_asaas_validar_itens_sombra_inerte(
+  (v_reserva->>'separacao_id')::uuid,gen_random_uuid()) INTO v_shadow_diag;
+ IF v_shadow_diag->>'integridade_sombra_por_credito' IS DISTINCT FROM 'false'
+  OR v_shadow_diag->>'creditos_planejados' IS DISTINCT FROM '0'
+  OR v_shadow_diag->>'pagamento_autorizado' IS DISTINCT FROM 'false'
+ THEN RAISE EXCEPTION 'Tentativa sem identificador valido parecia integra'; END IF;
 
  -- Replay de IDENTICA tentativa/versao: comparacao nao cria outras linhas.
  IF NOT EXISTS(SELECT 1 FROM pg_temp.catalogo_ci_escrow_planos_shadow_inertes
