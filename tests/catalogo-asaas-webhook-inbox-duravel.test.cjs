@@ -143,3 +143,57 @@ test("webhook do Guia que chega antes do cadastro local NAO e perdido",async()=>
  await process(row);
  assert.equal(verified,0);
 });
+
+
+test("endpoint cron-webhooks exige token dedicado e habilitacoes independentes",async()=>{
+ const start=edge.indexOf("async function executarWorkerWebhooksAsaas(request:Request){");
+ const end=edge.indexOf("async function reprocessarWebhooksAsaasAdmin(",start);
+ assert.ok(start>=0&&end>start,"Worker financeiro deve existir");
+ const source=edge.slice(start,end).replace(
+  "async function executarWorkerWebhooksAsaas(request:Request)",
+  "async function executarWorkerWebhooksAsaas(request)");
+ assert.ok(edge.includes('const WEBHOOK_WORKER_TOKEN = Deno.env.get("ASAAS_WEBHOOK_WORKER_TOKEN") || "";'));
+ assert.ok(edge.includes('const WEBHOOK_WORKER_ON = Deno.env.get("ASAAS_WEBHOOK_WORKER_ENABLED") === "true";'));
+ assert.ok(edge.includes('if(pathname.endsWith("/cron-webhooks"))return await executarWorkerWebhooksAsaas(request);'));
+ assert.ok(edge.indexOf('if(pathname.endsWith("/cron-webhooks"))')<edge.indexOf('const user=await auth(request);'));
+ const secret="segredo-exclusivo-do-teste-1234567890-1234567890-1234567890";
+ async function run({correct=true,workerOn=true,enabledOn=true,token=secret}={}){
+  const calls=[];
+  const env={
+   WEBHOOK_WORKER_TOKEN:token, WEBHOOK_WORKER_ON:workerOn,
+   equalSecret:async(x,y)=>x===y,
+   enabled:kind=>{
+    calls.push(["enabled",kind]);
+    if(!enabledOn)throw new Error("Faturamento nao ativado");
+   },
+   processarWebhooksAsaasPendentes:async n=>{
+    calls.push(["reconcile",n]);
+    return {concluido:2,falhou:1};
+   },
+   Failure:class Failure extends Error{constructor(message,status){super(message);this.status=status;}},
+   respond:obj=>obj
+  };
+  const fn=vm.runInNewContext(source+"\nexecutarWorkerWebhooksAsaas",env);
+  const req={headers:{get:()=>correct?secret:"invasor-nao-autorizado"}};
+  try{return {result:await fn(req),calls};}
+  catch(error){return {error,calls};}
+ }
+ const invalid=await run({correct:false});
+ assert.equal(invalid.error.status,401);
+ assert.equal(invalid.calls.length,0,"token errado nao pode consultar Asaas");
+ const off=await run({workerOn:false});
+ assert.equal(off.error.status,503);
+ assert.equal(off.calls.length,0,"rotina desligada nao invoca Asaas");
+ const billingOff=await run({enabledOn:false});
+ assert.match(billingOff.error.message,/Faturamento nao ativado/);
+ assert.deepEqual(JSON.parse(JSON.stringify(billingOff.calls)),[["enabled","billing"]]);
+ const short=await run({token:"123"});
+ assert.equal(short.error.status,503);
+ assert.equal(short.calls.length,0);
+ const good=await run();
+ assert.equal(good.result.success,true);
+ assert.equal(good.result.processados,2);
+ assert.equal(good.result.em_erro,1);
+ assert.deepEqual(JSON.parse(JSON.stringify(good.calls)),[["enabled","billing"],["reconcile",10]]);
+ assert.doesNotMatch(source,/\/transfers|\/payments|POST.*Pix|autorizar_saque/i);
+});
