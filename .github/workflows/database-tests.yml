@@ -150,7 +150,8 @@ jobs:
       - name: Exercise Edge functions without listening sockets or network permission
         run: |
           deno test --no-check --node-modules-dir=auto --allow-env --allow-read=supabase/functions \
-            supabase/functions/tests/catalogo-edge-http.test.ts
+            supabase/functions/tests/catalogo-edge-http.test.ts \
+            supabase/functions/tests/catalogo-asaas-replay-webhook-http.test.ts
 
   supabase-native-local-pgtap:
     name: Supabase native local reset and 23 pgTAP (temporary project, no external schedule)
