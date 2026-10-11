@@ -199,6 +199,69 @@ Deno.test("varredura Asaas detecta referencias duplicadas sem transferir ou baix
  }finally{currentMockFetch=denyNetwork;}
 });
 
+Deno.test("varredura detecta transferência de saque comum sem vínculo excepcional prévio",async()=>{
+ const edge=handlers.get("asaas")!;
+ const separacaoId="af100001-1111-4111-8111-111111111111";
+ const requestId="af100002-1111-4111-8111-111111111111";
+ const motoboyId="edededed-eded-4ede-8ede-ededededed10";
+ const adminUid="4b9a0233-6b72-4573-aebd-d596c5b15e1b";
+ const referencia="guia-exc:saida:"+requestId;
+ let payoutReads=0,transferGets=0;
+ try{
+  currentMockFetch=async(input:RequestInfo|URL,init?:RequestInit)=>{
+   const raw=typeof input==="string"?input:input instanceof URL?input.toString():input.url;
+   const u=new URL(raw);
+   assert((init?.method??"GET")==="GET","Auditoria tentou escrita");
+   if(u.host==="ci-supabase.invalid"&&u.pathname==="/auth/v1/user")
+    return result({id:adminUid,aud:"authenticated",role:"authenticated",
+     app_metadata:{},user_metadata:{}});
+   if(u.host==="ci-supabase.invalid"&&
+      u.pathname==="/rest/v1/catalogo_asaas_separacoes_excepcionais")
+    return result({id:separacaoId,tipo:"saida",solicitacao_id:requestId,
+     motoboy_id:motoboyId,valor_centavos:12000,situacao:"congelada"});
+   if(u.host==="ci-supabase.invalid"&&
+      u.pathname==="/rest/v1/catalogo_asaas_transferencias_excepcionais_auditoria")
+    return result(null); // Sem vínculo excepcional, exige auditoria dos IDs do banco.
+   if(u.host==="ci-supabase.invalid"&&u.pathname==="/rest/v1/catalogo_asaas_saques"){
+    payoutReads++;
+    assert(u.searchParams.get("transferencia_id")?.startsWith("in."),
+     "Somente leitura batelada por IDs bancários observados");
+    return result([{transferencia_id:"ci-saida-ordinaria"}]);
+   }
+   if(u.host==="api-sandbox.asaas.com"&&u.pathname==="/v3/transfers"){
+    transferGets++;
+    return result({limit:100,offset:0,totalCount:1,hasMore:false,data:[{
+     id:"ci-saida-ordinaria",externalReference:referencia,value:120,status:"DONE",
+     bankAccount:{cpfCnpj:"DOCUMENTO_FICTICIO_PROIBIDO_NA_RESPOSTA"},
+    }]});
+   }
+   throw Error("Rota inesperada na auditoria cruzada: "+u.pathname);
+  };
+  const response=await edge(post("/functions/v1/catalogo-asaas-financeiro",{
+   acao:"auditar_historico_transferencias_excepcionais_sandbox_admin",
+   separacao_id:separacaoId,
+  },{authorization:"Bearer ci-admin-test-token"}));
+  assertions(response,200,"Conflito entre referencia excepcional e saque comum");
+  const payload=await response.json();
+  const audit=payload.relatorio;
+  assert(payoutReads===1&&transferGets===1,"Faltou consulta independente ao saque comum");
+  assert(audit?.id_tambem_usado_em_saque_comum===false,
+   "ID vinculado inexistente foi inventado");
+  assert(audit?.ids_da_referencia_tambem_em_saques_comuns===1 &&
+   audit?.conflito_identificado===true,
+   "Transferência ordinária da mesma referência não foi sinalizada");
+  assert(audit?.historico_bancario_independente_comprovado===false &&
+   audit?.destinatario_original_confirmado===false &&
+   audit?.ausencia_de_pix_anterior_comprovada===false &&
+   audit?.pagamento_autorizado===false && audit?.liberacao_autorizada===false &&
+   audit?.baixa_realizada===false && audit?.movimenta_dinheiro===false,
+   "Auditoria cruzada desbloqueou dinheiro");
+  assert(!JSON.stringify(payload).includes("DOCUMENTO_FICTICIO_PROIBIDO_NA_RESPOSTA") &&
+   !JSON.stringify(payload).includes("ci-saida-ordinaria"),
+   "Auditoria vazou dados do provedor ou ID bancário");
+ }finally{currentMockFetch=denyNetwork;}
+});
+
 Deno.test("varredura de listagem incompleta preserva HOLD em 12 paginas",async()=>{
  const edge=handlers.get("asaas")!;
  const separacaoId="ab100001-1111-4111-8111-111111111111";
