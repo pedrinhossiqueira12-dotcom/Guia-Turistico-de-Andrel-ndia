@@ -37,7 +37,8 @@ inferior a `offset + data.length`.
 
 - `limit` deve ser exatamente 100 e `offset` o esperado pela varredura;
 - `totalCount` deve ser inteiro não negativo;
-- `hasMore=true` exige exatamente 100 itens; `hasMore=false` encerra;
+- `hasMore=true` exige exatamente 100 itens e `totalCount > offset + data.length`;
+- `hasMore=false` só encerra quando `totalCount === offset + data.length`;
 - falha ou contradição nunca produz auditoria marcada como concluída;
 - Deno testa a Edge HTTP real com Asaas/Supabase *fictícios* e rede externa bloqueada;
 - Node vigia o contrato estático para evitar regressões.
