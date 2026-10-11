@@ -24,7 +24,7 @@ test("#43: mutex de saque e row locks ANTES de contar o livro integral",()=>{
  assert.match(preview,/JOIN public\.catalogo_remuneracoes_v2 r ON r\.id=i\.remuneracao_id/);
  assert.match(preview,/WHERE i\.separacao_id=p_separacao/);
  assert.match(preview,/ORDER BY i\.remuneracao_id FOR UPDATE OF i,r/);
- assert.doesNotMatch(preview,/\bLIMIT\b|\bOFFSET\b/i);
+ assert.doesNotMatch(preview.replace(/--[^\n]*/g,""),/\bLIMIT\b|\bOFFSET\b/i);
 });
 test("#43: confere quantidade total, soma, fingerprint e financiamento sem liberar",()=>{
  for(const anchor of [
