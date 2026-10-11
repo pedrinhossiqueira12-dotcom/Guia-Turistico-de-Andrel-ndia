@@ -137,3 +137,44 @@ Deno.test("resposta permissiva, autenticacao forjada, SQL invalido e rows extras
  await denied(()=>new LivroSqlPonteNoLoginInerte(multi,"isolated-ci")
   .registrarDesafio(NONCE,CHALLENGE,ATTEMPT),"multiples SQL rows");
 });
+
+Deno.test("negativa SQL com nonce reutilizavel deve falhar fechada",async()=>{
+ const {adapter}=mk(()=>({...result(false),nonce:NONCE}));
+ await denied(()=>adapter.reservarInicioVinculado(ID,USER,SESSION),
+   "reserva negada revelou nonce");
+ await denied(()=>adapter.registrarDesafio(NONCE,CHALLENGE,ATTEMPT),
+   "challenge negado revelou nonce");
+ await denied(()=>adapter.consumirDesafio(NONCE,CHALLENGE,ATTEMPT),
+   "consumo negado revelou nonce");
+});
+Deno.test("dados de contexto ou tentativa adulterados nao sao expostos pelo adaptador",async()=>{
+ for(const invalid of [
+  {...ctx,id:"evil"},{...ctx,userId:"evil"},
+  {...ctx,sessionId:null},{...ctx,evidenceHash:"0"},
+  {...ctx,expiresAt:NaN},{...ctx,factorId:"evil"},
+ ]){
+  const {adapter}=mk(i=>i===1?invalid:result());
+  await denied(()=>adapter.lerContexto(ID),"snapshot invalido");
+ }
+ for(const invalid of [
+  {nonce:"evil",tentativa:ATTEMPT,challengeId:CHALLENGE,contexto:ctx},
+  {nonce:NONCE,tentativa:"evil",challengeId:CHALLENGE,contexto:ctx},
+  {nonce:NONCE,tentativa:ATTEMPT,challengeId:CHALLENGE,
+   contexto:{...ctx,sessionId:"evil"}},
+ ]){
+  const {adapter}=mk(i=>i===3?invalid:result());
+  await denied(()=>adapter.lerTentativa(ATTEMPT),"tentativa adulterada");
+ }
+});
+Deno.test("ponte rejeita UUID malformado nas cinco rotas sem chamar o executor SQL",async()=>{
+ const x=mk(()=>result());
+ await denied(()=>x.adapter.reservarInicioVinculado(ID,USER,"' OR 1=1 --"),
+   "sessao com SQL injection");
+ await denied(()=>x.adapter.lerContexto("bad-uuid"),"contexto adulterado");
+ await denied(()=>x.adapter.registrarDesafio(NONCE,CHALLENGE,"bad-uuid"),
+   "tentativa adulterada");
+ await denied(()=>x.adapter.lerTentativa("bad-uuid"),"consulta sem uuid");
+ await denied(()=>x.adapter.consumirDesafio(NONCE,"bad-uuid",ATTEMPT),
+   "challenge sem uuid");
+ assert(x.calls.length===0,"parametro adulterado chegou ao executor");
+});
