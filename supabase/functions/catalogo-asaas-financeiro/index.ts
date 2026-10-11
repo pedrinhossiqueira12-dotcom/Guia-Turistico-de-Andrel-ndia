@@ -1428,10 +1428,6 @@ async function authorizeWithdrawal(request:Request){
  if(revalidacao.elegivel!==true)
   return approveResponse("REFUSED","Reserva suspensa ou créditos não elegíveis para autorização.");
 
- const {data:existing,error:existingError}=await db.from("catalogo_asaas_validacoes_saque")
-   .select("decisao,motivo").eq("saque_id",ref).eq("transferencia_id",id).maybeSingle();
- if(existingError)throw new Failure("Erro ao recuperar autorização.",503);
- if(existing)return approveResponse(existing.decisao==="APPROVED"?"APPROVED":"REFUSED",existing.motivo||undefined);
  let decision:"APPROVED"|"REFUSED"="REFUSED",reason="Transferência não elegível.";
  const localAmount=Number(saque.valor_centavos);
  if(saque.status==="enviado" && Number.isSafeInteger(localAmount)&&localAmount>0 &&
@@ -1451,7 +1447,8 @@ async function authorizeWithdrawal(request:Request){
   }
   if(remote.id===id && remote.externalReference===ref &&
     cents(remote.value)===localAmount && value(remote.operationType,12)==="PIX" &&
-    !["DONE","FAILED","CANCELLED"].includes(value(remote.status,60)) &&
+    // Somente PENDING pode receber autorizacao; status ausente ou futuro e HOLD.
+    remote.status==="PENDING" &&
     await pixDestinationsMatch(String(saque.pix_destino_sha256),[incoming,remote])){
    // RPC faz COUNT/SUM/BOOL_AND no PostgreSQL e retorna UM objeto JSON.
    // Não aplica limite de 1000 linhas do PostgREST, mesmo com vários meses acumulados.
@@ -1472,6 +1469,13 @@ async function authorizeWithdrawal(request:Request){
    }else reason="Conta do motoboy ou créditos não elegíveis.";
   }else reason="Identidade, valor, estado ou destino Pix divergente.";
  }else reason="Reserva não habilitada, valor divergente ou operação não Pix.";
+ // Decisao persistida NAO substitui nova prova de valor, destino, status,
+ // titular, elegibilidade e GET bancario. Mesmo replays precisam ser aferidos.
+ const {data:existing,error:existingError}=await db.from("catalogo_asaas_validacoes_saque")
+   .select("decisao,motivo").eq("saque_id",ref).eq("transferencia_id",id).maybeSingle();
+ if(existingError)throw new Failure("Erro ao recuperar autorização.",503);
+ if(existing)return approveResponse(existing.decisao==="APPROVED"&&decision==="APPROVED"?"APPROVED":"REFUSED",
+   decision==="APPROVED"?existing.motivo||undefined:reason);
  const {error:insertError}=await db.from("catalogo_asaas_validacoes_saque")
    .insert({saque_id:ref,transferencia_id:id,decisao:decision,motivo:reason});
  if(insertError && insertError.code!=="23505")throw new Failure("Falha ao registrar auditoria.",503);
@@ -1479,7 +1483,8 @@ async function authorizeWithdrawal(request:Request){
   const {data:stored,error:e}=await db.from("catalogo_asaas_validacoes_saque")
     .select("decisao,motivo").eq("saque_id",ref).eq("transferencia_id",id).maybeSingle();
   if(e||!stored)throw new Failure("Falha ao conferir decisão duplicada.",503);
-  return approveResponse(stored.decisao==="APPROVED"?"APPROVED":"REFUSED",stored.motivo||undefined);
+  return approveResponse(stored.decisao==="APPROVED"&&decision==="APPROVED"?"APPROVED":"REFUSED",
+    decision==="APPROVED"?stored.motivo||undefined:reason);
  }
  console.info("Asaas saque validado",{saque_id:ref,decision});
  return approveResponse(decision,reason);
