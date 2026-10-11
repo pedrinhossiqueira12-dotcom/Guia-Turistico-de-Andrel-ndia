@@ -287,10 +287,19 @@ async function reconcileInvoice(uid:string,body:Record<string,unknown>){
  if(charge.gateway!=="asaas")throw new Failure("Esta fatura pertence ao Mercado Pago. Continue pelo fluxo original.",409);
  enabled("billing");
  const proof=await verifyInvoice(String(charge.order_id),charge,store,month);
- const qr=proof.estado==="pago"?{}:await asaas("/payments/"+encodeURIComponent(String(charge.order_id))+"/pixQrCode");
+ // Nunca exibir QR/copia-e-cola de cobranca cancelada, estornada ou contestada.
+ // Ela nao deve ser reaproveitada como um Pix ainda valido, mesmo se o
+ // endpoint pixQrCode devolver um payload legado.
+ const bloqueadaParaPagamento=["estornado","contestado","cancelado"].includes(proof.estado);
+ const qr=proof.estado==="pago"||bloqueadaParaPagamento?{}:
+   await asaas("/payments/"+encodeURIComponent(String(charge.order_id))+"/pixQrCode");
  return respond({success:true,fatura:f,cobranca_status:proof.conciliado.status||proof.estado,
   valor_centavos:charge.valor_centavos,pix:parsePix(proof.payment,qr),
-  mensagem:proof.estado==="pago"?"Pagamento reconhecido e fatura quitada. Créditos são disponibilizados somente quando houver remunerações elegíveis.":"Aguardando liquidação da cobrança."});
+  mensagem:proof.estado==="pago"
+   ?"Pagamento reconhecido e fatura quitada. Créditos são disponibilizados somente quando houver remunerações elegíveis."
+   :bloqueadaParaPagamento
+   ?"Esta cobrança está cancelada, estornada ou contestada. Não utilize o Pix anterior. Solicite regularização à administração."
+   :"Aguardando liquidação da cobrança."});
 }
 async function createInvoice(uid:string,body:Record<string,unknown>,email:string){
  // Regularização de obrigação já constituída não depende da aceitação
