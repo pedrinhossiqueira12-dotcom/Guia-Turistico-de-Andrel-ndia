@@ -692,10 +692,34 @@ async function auditarHistoricoTransferenciasExcepcionaisSandboxAdmin(
    throw new Failure("Listagem bancária vazia com hasMore=true: inconclusiva.",503);
  }
  const referenciasDistintas=vistos.size;
+ // #41: o Asaas pode devolver transferencia com a referencia alvo, MAS
+ // diferente do unico ID ja vinculado no nosso livro (ou sem vinculo).
+ // Conferir TODOS os IDs dessa referencia contra saques comuns, nao apenas
+ // idVinculado. Nenhum ID do banco e retornado ao navegador/log.
+ const MAX_IDS_CONFERENCIA=400,LOTE_IDS_CONFERENCIA=40;
+ if(vistos.size>MAX_IDS_CONFERENCIA)
+  throw new Failure("Muitas transferências com a mesma referência: verificação bancária incompleta. HOLD.",503);
+ const usadosEmSaqueComum=new Set<string>();
+ const idsDaReferencia=[...vistos];
+ for(let i=0;i<idsDaReferencia.length;i+=LOTE_IDS_CONFERENCIA){
+  const lote=idsDaReferencia.slice(i,i+LOTE_IDS_CONFERENCIA);
+  const {data:saques,error:saquesError}=await db.from("catalogo_asaas_saques")
+   .select("transferencia_id").in("transferencia_id",lote);
+  if(saquesError||!Array.isArray(saques))
+   throw new Failure("Verificação de reutilização de transferência indisponível; manter HOLD.",503);
+  const loteConferido=new Set(lote);
+  for(const row of saques){
+   if(typeof row?.transferencia_id!=="string"||!loteConferido.has(row.transferencia_id))
+    throw new Failure("Conflito bancário devolveu dados inconsistentes; manter HOLD.",503);
+   usadosEmSaqueComum.add(row.transferencia_id);
+  }
+ }
+ const idsDaReferenciaTambemEmSaqueComum=usadosEmSaqueComum.size;
  const vinculoNaoLocalizado=completa&&Boolean(idVinculado)&&!achouIdVinculado;
  const conflito=refsDeOutroId>0||referenciasDistintas>1||
   valoresDivergentes>0||idsSemReferencia>0||identificadoresInvalidos>0||
   listaRepetida>0||formatosAmbiguos>0||mesmoIdSaqueComum||
+  idsDaReferenciaTambemEmSaqueComum>0||
   vinculoLocalDivergente||vinculoNaoLocalizado;
  return respond({success:true,relatorio:{
   paginas_examinadas:paginas,transferencias_examinadas:examinadas,
@@ -710,6 +734,7 @@ async function auditarHistoricoTransferenciasExcepcionaisSandboxAdmin(
   estados_done_encontrados:estadosDone,
   estados_ambiguos:formatosAmbiguos,
   id_tambem_usado_em_saque_comum:mesmoIdSaqueComum,
+  ids_da_referencia_tambem_em_saques_comuns:idsDaReferenciaTambemEmSaqueComum,
   vinculo_local_nao_encontrado_na_listagem:vinculoNaoLocalizado,
   referencia_ja_encontrada_no_banco:referencias>0,
   vinculo_local_divergente:vinculoLocalDivergente,
