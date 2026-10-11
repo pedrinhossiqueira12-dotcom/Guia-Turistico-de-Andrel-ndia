@@ -187,6 +187,8 @@
           <strong>${escapar(f.comercio_id)} · ${escapar(f.competencia)} · ${escapar(reais(f.valor_centavos))}</strong>
           <small>${escapar(estado)}${f.gateway_existente ? " · gateway: " + escapar(f.gateway_existente) : ""}</small>
           <small>Fechamento: ${escapar(f.fechamento_id)}</small>
+          ${f.gateway_existente === "asaas" && ["pendente","vencido"].includes(f.status_cobranca) ?
+            `<button class="small-button" type="button" data-asaas-qa-confirmar="${escapar(f.fechamento_id)}">Simular pagamento no Sandbox</button>` : ""}
           </div><span class="status-pill ${f.apta ? "" : "is-warning"}">${f.apta ? "Pronta" : "Revisar"}</span></article>`;
       }).join("") : '<p class="empty-state">Nenhuma fatura aberta e elegível encontrada. Faça um pedido de teste legítimo e conclua o fechamento mensal no Sandbox; não ajuste saldos pelo SQL.</p>';
       const limit = res.lista_limitada ? " (amostra de 50)" : "";
@@ -200,6 +202,38 @@
       }
     } finally {
       if (generation === state.generation && button) button.disabled = false;
+    }
+  }
+
+  async function confirmarPagamentoSandboxAsaas(event) {
+    if (!QA_SANDBOX || !state.authorized) return;
+    const button=event.target.closest("[data-asaas-qa-confirmar]");
+    if (!button || !event.currentTarget.contains(button)) return;
+    const fechamentoId=button.dataset.asaasQaConfirmar || "";
+    if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(fechamentoId)) {
+      feedback("asaasSandboxFaturasFeedback","Identificador da fatura inválido.",true);
+      return;
+    }
+    if (!window.confirm("Confirmar a SIMULAÇÃO de pagamento no Asaas Sandbox? Esta ação altera o status da cobrança de TESTE e pode disparar o webhook. Não movimenta dinheiro real.")) return;
+    const generation=state.generation,userId=state.userId;
+    button.disabled=true;
+    feedback("asaasSandboxFaturasFeedback","Enviando confirmação somente ao Asaas Sandbox...");
+    try {
+      const result=await chamarApi("confirmar_fatura_sandbox_admin",
+        {fechamento_id:fechamentoId},generation,userId,ASAAS_ADMIN_URL);
+      validarSessao(generation,userId);
+      if (!state.authorized) return;
+      feedback("asaasSandboxFaturasFeedback",result.mensagem ||
+        "Simulação registrada. Confira webhook e baixa bancária.");
+      // Recarregar apenas o diagnóstico. Nao reenviar POST automaticamente.
+      const refresh=$("asaasSandboxFaturasConsultar");
+      if (refresh) refresh.focus();
+    } catch (error) {
+      if (error.message !== STALE_SESSION_REQUEST && state.authorized)
+        feedback("asaasSandboxFaturasFeedback",error.message ||
+          "Confirmação inconclusiva. Consulte o Asaas antes de tentar novamente.",true);
+    } finally {
+      if (generation===state.generation) button.disabled=false;
     }
   }
 
@@ -373,6 +407,7 @@
     $("repasseForm").addEventListener("submit", registrarRepasse);
     $("conciliarSaqueAsaasForm")?.addEventListener("submit", conciliarSaqueAsaas);
     $("asaasSandboxFaturasConsultar")?.addEventListener("click", verificarFaturasSandboxAsaas);
+    $("asaasSandboxFaturasLista")?.addEventListener("click", confirmarPagamentoSandboxAsaas);
     $("asaasWebhookInboxConsultar")?.addEventListener("click", () => verificarFilaWebhookAsaas(false));
     $("asaasWebhookInboxReprocessar")?.addEventListener("click", () => verificarFilaWebhookAsaas(true));
     $("repasseCredito").addEventListener("change", (event) => selecionarCredito(event.target.value));
