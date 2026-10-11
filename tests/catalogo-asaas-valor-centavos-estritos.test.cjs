@@ -31,8 +31,8 @@ test("Asaas: verifica montante ANTES de cadastrar cliente e de criar cobranca",(
  const customer=fn.indexOf("await loadOrCreateCustomer(");
  const claim=fn.indexOf('db.from("catalogo_asaas_emissoes")');
  const post=fn.indexOf('await asaas("/payments","POST"');
- assert.ok(guard>=0&&customer>guard&&claim>guard&&post>claim,
-  "fatura invalida poderia produzir efeitos externos");
+ assert.ok(guard>=0&&claim>guard&&customer>claim&&post>customer,
+  "fatura deve validar centavos e reservar emissao ANTES de criar pagador e Pix");
  assert.match(fn,/value:money\(invoiceCents\)/);
  assert.doesNotMatch(fn.replace(/^\s*\/\/.*$/gm,""),/Math\.round\(/);
 });
