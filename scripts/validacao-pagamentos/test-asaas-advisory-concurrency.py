@@ -1287,6 +1287,231 @@ def scenario_resolucao_documental_idempotente_concorrente() -> None:
         "idempotencia/versao, COMMIT/ROLLBACK, HOLD e zero Pix", flush=True
     )
 
+
+# #43: Journal ANTES de um futuro POST, com marca unica de inicio.
+# Sem POST real, credencial, prova bancaria ou autorizacao de pagamento.
+INTENT_OWNER_A = "fa860000-0000-4000-8000-000000000001"
+INTENT_OWNER_B = "fa860000-0000-4000-8000-000000000002"
+INTENT_ESCROW_A = "ea860000-0000-4000-8000-000000000001"
+INTENT_ESCROW_B = "ea860000-0000-4000-8000-000000000002"
+INTENT_REQ_A = "da860000-0000-4000-8000-000000000001"
+INTENT_REQ_B = "da860000-0000-4000-8000-000000000002"
+INTENT_ATTEMPT_A = "aa860000-0000-4000-8000-000000000001"
+INTENT_ATTEMPT_B = "aa860000-0000-4000-8000-000000000002"
+INTENT_MARK_A = "ca860000-0000-4000-8000-000000000001"
+INTENT_MARK_B = "ca860000-0000-4000-8000-000000000002"
+
+
+def intent_prepare(escrow: str, attempt: str, req: str, amount: int = 12000) -> str:
+    return (
+        "SELECT catalogo_ci_intencao_pix_inerte.preparar("
+        f"'{escrow}'::uuid,'{attempt}'::uuid,"
+        f"'guia-exc:saida:{req}',{amount},repeat('a',64));"
+    )
+
+
+def intent_mark(attempt: str, mark: str) -> str:
+    return (
+        "SELECT catalogo_ci_intencao_pix_inerte.marcar_inicio("
+        f"'{attempt}'::uuid,'{mark}'::uuid);"
+    )
+
+
+def assert_intent_hold(result: str, *, ok: bool, motivo: str) -> None:
+    import json
+    line = next((row for row in result.splitlines() if row.strip().startswith("{")), None)
+    if line is None:
+        raise AssertionError("Journal CI sem resposta JSON: " + result[-750:])
+    value = json.loads(line)
+    if value.get("ok") is not ok or value.get("motivo") != motivo:
+        raise AssertionError("Resposta de journal incorreta: " + str(value))
+    if value.get("status_operacional") != "HOLD_OBRIGATORIO":
+        raise AssertionError("Journal sem HOLD: " + str(value))
+    for field in (
+        "pode_enviar_post","pode_reenviar_post","pagamento_autorizado",
+        "liberacao_autorizada","baixa_realizada","movimenta_dinheiro"
+    ):
+        if value.get(field) is not False:
+            raise AssertionError("Journal habilitou recurso proibido: " + field)
+
+
+def scenario_intencao_prepost_duravel_concorrente() -> None:
+    source = Path(
+        "supabase/tests/isolated/catalogo-asaas-journal-intencao-prepost-race-inerte.sql"
+    ).read_text(encoding="utf-8")
+    if (
+        "catalogo_asaas_race_ci" not in source or
+        "CREATE TABLE catalogo_ci_intencao_pix_inerte.intencoes" not in source or
+        "CREATE TABLE catalogo_ci_intencao_pix_inerte.marcos_inicio" not in source or
+        "'pode_reenviar_post',false" not in source
+    ):
+        raise AssertionError("Journal #43 perdeu precondicoes de isolamento ou HOLD")
+    run_sql("SET app.catalogo_ci_intencao_test='enabled';\n" + source)
+    run_sql(f"""
+    BEGIN;
+    INSERT INTO auth.users(id) VALUES('{INTENT_OWNER_A}'),('{INTENT_OWNER_B}');
+    INSERT INTO public.catalogo_asaas_separacoes_excepcionais(
+     id,tipo,solicitacao_id,motoboy_id,valor_centavos,creditos,fingerprint_sha256
+    ) VALUES
+     ('{INTENT_ESCROW_A}','saida','{INTENT_REQ_A}','{INTENT_OWNER_A}',12000,2,repeat('a',64)),
+     ('{INTENT_ESCROW_B}','saida','{INTENT_REQ_B}','{INTENT_OWNER_B}',15000,3,repeat('a',64));
+    COMMIT;
+    """)
+    no_intent = run_sql(intent_mark(INTENT_ATTEMPT_A, INTENT_MARK_A))
+    assert_intent_hold(no_intent, ok=False, motivo="intencao_ausente")
+
+    # A escreve intencao em transacao aberta. B disputa lock e aguarda
+    # confirmacao. Depois do COMMIT, B recebe replay, nunca novo POST.
+    first = Session.start("ci_intencao_prepost_first")
+    second = None
+    try:
+        first.send("BEGIN;\n" + intent_prepare(
+            INTENT_ESCROW_A, INTENT_ATTEMPT_A, INTENT_REQ_A
+        ) + "\n\\echo INTENT_FIRST_PREPARED")
+        r1 = first.until("INTENT_FIRST_PREPARED")
+        assert_intent_hold(r1, ok=True, motivo="intencao_documental_registrada")
+        second = Session.start("ci_intencao_prepost_second")
+        second.send("SET lock_timeout='10s';\nBEGIN;\n" + intent_prepare(
+            INTENT_ESCROW_A, INTENT_ATTEMPT_A, INTENT_REQ_A
+        ) + "\n\\echo INTENT_SECOND_REPLAY")
+        assert_waiting_advisory(second.name)
+        first.send("COMMIT;\n\\echo INTENT_FIRST_COMMITTED")
+        first.until("INTENT_FIRST_COMMITTED")
+        r2 = second.until("INTENT_SECOND_REPLAY")
+        assert_intent_hold(r2, ok=True, motivo="replay_de_intencao_sem_envio")
+        second.send("COMMIT;\n\\echo INTENT_SECOND_COMMITTED")
+        second.until("INTENT_SECOND_COMMITTED")
+        second.finish()
+        second = None
+        first.finish()
+    finally:
+        if second:
+            second.abort()
+        first.abort()
+    if run_sql(
+        "SELECT count(*) FROM catalogo_ci_intencao_pix_inerte.intencoes"
+    ) != "1":
+        raise AssertionError("Duas intencoes foram criadas no replay concorrente")
+
+    altered = run_sql(intent_prepare(
+        INTENT_ESCROW_A, INTENT_ATTEMPT_A, INTENT_REQ_A, amount=12001
+    ))
+    assert_intent_hold(altered, ok=False, motivo="reserva_ou_versao_divergente")
+    another = run_sql(intent_prepare(
+        INTENT_ESCROW_A, INTENT_ATTEMPT_B, INTENT_REQ_A
+    ))
+    assert_intent_hold(another, ok=False, motivo="id_ou_separacao_ja_utilizado")
+
+    # Marco de inicio e SEMPRE somente uma anotacao: nenhum retorno habilita POST.
+    first = Session.start("ci_intencao_marco_first")
+    second = None
+    try:
+        first.send("BEGIN;\n" + intent_mark(
+            INTENT_ATTEMPT_A, INTENT_MARK_A
+        ) + "\n\\echo INTENT_MARK_FIRST")
+        r1 = first.until("INTENT_MARK_FIRST")
+        assert_intent_hold(r1, ok=True, motivo="inicio_documental_gravado")
+        second = Session.start("ci_intencao_marco_second")
+        second.send("SET lock_timeout='10s';\nBEGIN;\n" + intent_mark(
+            INTENT_ATTEMPT_A, INTENT_MARK_A
+        ) + "\n\\echo INTENT_MARK_REPLAY")
+        assert_waiting_advisory(second.name)
+        first.send("COMMIT;\n\\echo INTENT_MARK_COMMIT")
+        first.until("INTENT_MARK_COMMIT")
+        r2 = second.until("INTENT_MARK_REPLAY")
+        assert_intent_hold(r2, ok=False, motivo="marco_ja_existente_sem_novo_envio")
+        second.send("COMMIT;\n\\echo INTENT_MARK_REPLAY_COMMIT")
+        second.until("INTENT_MARK_REPLAY_COMMIT")
+        second.finish()
+        second = None
+        first.finish()
+    finally:
+        if second:
+            second.abort()
+        first.abort()
+
+    changed_mark = run_sql(intent_mark(INTENT_ATTEMPT_A, INTENT_MARK_B))
+    assert_intent_hold(changed_mark,ok=False,motivo="tentativa_ja_tem_marco_diferente")
+    if run_sql("SELECT count(*) FROM catalogo_ci_intencao_pix_inerte.marcos_inicio") != "1":
+        raise AssertionError("Marcos de envio podem ser duplicados")
+
+    # ROLLBACK de intencao B; tentativa seguinte deve ser a unica persistida.
+    first = Session.start("ci_intencao_rollback_first")
+    second = None
+    try:
+        first.send("BEGIN;\n" + intent_prepare(
+            INTENT_ESCROW_B, INTENT_ATTEMPT_B, INTENT_REQ_B,amount=15000
+        ) + "\n\\echo INTENT_B_FIRST_PREPARED")
+        r1 = first.until("INTENT_B_FIRST_PREPARED")
+        assert_intent_hold(r1,ok=True,motivo="intencao_documental_registrada")
+        second = Session.start("ci_intencao_rollback_second")
+        second.send("SET lock_timeout='10s';\nBEGIN;\n" + intent_prepare(
+            INTENT_ESCROW_B, INTENT_ATTEMPT_B, INTENT_REQ_B,amount=15000
+        ) + "\n\\echo INTENT_B_SECOND_PREPARED")
+        assert_waiting_advisory(second.name)
+        first.send("ROLLBACK;\n\\echo INTENT_B_FIRST_ROLLED_BACK")
+        first.until("INTENT_B_FIRST_ROLLED_BACK")
+        r2 = second.until("INTENT_B_SECOND_PREPARED")
+        assert_intent_hold(r2,ok=True,motivo="intencao_documental_registrada")
+        second.send("COMMIT;\n\\echo INTENT_B_SECOND_COMMITTED")
+        second.until("INTENT_B_SECOND_COMMITTED")
+        second.finish()
+        second = None
+        first.finish()
+    finally:
+        if second:
+            second.abort()
+        first.abort()
+
+    if run_sql("SELECT count(*) FROM catalogo_ci_intencao_pix_inerte.intencoes") != "2":
+        raise AssertionError("ROLLBACK perdeu intencao ou registrou duplicada")
+    if run_sql("SELECT count(*) FROM catalogo_ci_intencao_pix_inerte.marcos_inicio") != "1":
+        raise AssertionError("Criou marco de envio apos rollback sem envio")
+
+    run_sql("""
+    DO $immutability$
+    BEGIN
+     BEGIN
+      UPDATE catalogo_ci_intencao_pix_inerte.intencoes
+      SET valor_centavos=valor_centavos+1;
+      RAISE EXCEPTION 'Intencao aceitou UPDATE';
+     EXCEPTION WHEN check_violation THEN NULL;
+     END;
+     BEGIN
+      DELETE FROM catalogo_ci_intencao_pix_inerte.marcos_inicio;
+      RAISE EXCEPTION 'Marco de inicio aceitou DELETE';
+     EXCEPTION WHEN check_violation THEN NULL;
+     END;
+    END $immutability$;
+    """)
+    privileges = run_sql("""
+    SELECT (
+      has_table_privilege('service_role',
+       'catalogo_ci_intencao_pix_inerte.intencoes','INSERT')
+      OR has_table_privilege('authenticated',
+       'catalogo_ci_intencao_pix_inerte.marcos_inicio','SELECT')
+      OR has_function_privilege('service_role',
+       'catalogo_ci_intencao_pix_inerte.preparar(uuid,uuid,text,bigint,text)',
+       'EXECUTE')
+      OR has_function_privilege('anon',
+       'catalogo_ci_intencao_pix_inerte.marcar_inicio(uuid,uuid)','EXECUTE')
+    )::text
+    """)
+    if privileges != "false":
+        raise AssertionError("Journal foi exposto ao app ou service_role")
+    if run_sql(
+      "SELECT count(*) FROM public.catalogo_asaas_saques "
+      f"WHERE motoboy_id IN ('{INTENT_OWNER_A}','{INTENT_OWNER_B}')"
+    ) != "0":
+        raise AssertionError("Journal CI provocou saque")
+    if run_sql(
+      "SELECT count(*) FROM public.catalogo_asaas_separacoes_excepcionais "
+      f"WHERE id IN ('{INTENT_ESCROW_A}','{INTENT_ESCROW_B}') AND situacao='congelada'"
+    ) != "2":
+        raise AssertionError("Journal CI alterou status das reservas")
+    print("PASS #43 journal PRE-POST imutavel, locks 2 sessoes, "
+          "COMMIT/ROLLBACK, zero Pix, HOLD",flush=True)
+
 def main() -> None:
     guard_environment()
     prepare()
@@ -1298,6 +1523,7 @@ def main() -> None:
     scenario_prechallenge_shared_reservation_and_challenge()
     scenario_escrow_preview_concurrent_hold()
     scenario_resolucao_documental_idempotente_concorrente()
+    scenario_intencao_prepost_duravel_concorrente()
     print("PASS: concorrencia real com 2 sessoes, IDs e usuarios sinteticos, zero Pix", flush=True)
 
 
