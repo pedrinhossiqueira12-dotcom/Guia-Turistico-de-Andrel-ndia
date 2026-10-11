@@ -1339,9 +1339,13 @@ async function listAdminPayouts(uid:string){
 // Diagnóstico administrativo somente leitura para preparar uma cobranca de teste.
 // Nenhum pedido, fechamento, cliente, fatura ou pagamento e criado aqui.
 async function diagnosticarFaturasSandboxAdmin(uid:string){
- if(uid!==ADMIN_USER_ID)throw new Failure("Acesso restrito à administração.",403);
- if(ENVIRONMENT!=="sandbox")
-  throw new Failure("Diagnóstico de homologação disponível somente no Sandbox.",403);
+ // Usuario de QA definido exclusivamente como segredo de STAGING; NUNCA
+ // permitir acesso generico a usuarios autenticados do ambiente Sandbox.
+ const qaAdmin=Deno.env.get("ASAAS_SANDBOX_ADMIN_USER_ID")||"";
+ if(ENVIRONMENT!=="sandbox"||
+    !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(qaAdmin)||
+    uid!==qaAdmin)
+  throw new Failure("Diagnóstico de homologação restrito ao administrador do Sandbox configurado no servidor.",403);
  const {data:faturas,error:faturasError}=await db.from("catalogo_fechamentos_offline")
   .select("id,comercio_id,competencia,status,total_comissao_centavos")
   .in("status",["faturado","vencido","bloqueado"])
