@@ -232,3 +232,23 @@ Deno.test("campos financeiros novos ou permissivos nao passam despercebidos na p
  assert(response.ok && response.status_operacional==="HOLD_OBRIGATORIO"
    && response.movimenta_dinheiro===false,"contrato vigente rejeitado");
 });
+
+
+Deno.test("snapshot e tentativa recusam campos privados desconhecidos",async()=>{
+ for(const unknown of [{pode_liberar:true},{pix_destinatario:"forjado"},{autorizacao:"aprovada"}]){
+  const {adapter:contextAdapter}=mk(i=>i===1?{...ctx,...unknown}:result());
+  await denied(()=>contextAdapter.lerContexto(ID),
+    "contexto aceitou campo nao previsto "+Object.keys(unknown)[0]);
+  const {adapter:attemptAdapter}=mk(i=>i===3?{
+   nonce:NONCE,tentativa:ATTEMPT,challengeId:CHALLENGE,contexto:ctx,...unknown,
+  }:result());
+  await denied(()=>attemptAdapter.lerTentativa(ATTEMPT),
+    "tentativa aceitou campo nao previsto "+Object.keys(unknown)[0]);
+  const {adapter:nestedAdapter}=mk(i=>i===3?{
+   nonce:NONCE,tentativa:ATTEMPT,challengeId:CHALLENGE,
+   contexto:{...ctx,...unknown},
+  }:result());
+  await denied(()=>nestedAdapter.lerTentativa(ATTEMPT),
+    "tentativa aceitou contexto adulterado "+Object.keys(unknown)[0]);
+ }
+});
