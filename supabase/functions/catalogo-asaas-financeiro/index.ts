@@ -50,6 +50,48 @@ async function rpc(name:string,args:Record<string,unknown>){
  check(data?.ok!==false,data?.mensagem||"Operação recusada.");
  return data;
 }
+// GET paginado traz ate 100 transferencias por requisicao. Nao confiar no
+// Content-Length: validar tambem os bytes efetivamente recebidos. Apenas
+// para auditoria read-only, sem alterar POST ou conciliacao existente.
+const MAX_ASAAS_LISTAGEM_BYTES=2*1024*1024;
+async function lerListagemAsaasLimitada(response:Response):Promise<unknown>{
+ const mime=(response.headers.get("content-type")||"").split(";")[0].trim().toLowerCase();
+ if(mime!=="application/json"&&!/^application\\/[a-z0-9.+-]+\\+json$/.test(mime))
+  throw new Failure("Resposta bancária não é JSON confiável. Auditoria inconclusiva. HOLD.",503);
+ const declared=response.headers.get("content-length");
+ if(declared!==null&&(!/^[0-9]+$/.test(declared)||
+   !Number.isSafeInteger(Number(declared))||Number(declared)>MAX_ASAAS_LISTAGEM_BYTES))
+  throw new Failure("Resposta bancária excede limite seguro. Auditoria inconclusiva. HOLD.",503);
+ if(!response.body)
+  throw new Failure("Resposta bancária sem corpo. Auditoria inconclusiva. HOLD.",503);
+ const reader=response.body.getReader();
+ const chunks:Uint8Array[]=[];
+ let size=0,finished=false;
+ try{
+  while(true){
+   const chunk=await reader.read();
+   if(chunk.done){finished=true;break;}
+   size+=chunk.value.byteLength;
+   if(size>MAX_ASAAS_LISTAGEM_BYTES)
+    throw new Failure("Resposta bancária excede limite seguro. Auditoria inconclusiva. HOLD.",503);
+   chunks.push(chunk.value);
+  }
+ }catch(e){
+  if(e instanceof Failure)throw e;
+  throw new Failure("Erro ao ler resposta bancária. Auditoria inconclusiva. HOLD.",503);
+ }finally{
+  if(!finished)await reader.cancel().catch(()=>{});
+  reader.releaseLock();
+ }
+ const bytes=new Uint8Array(size);
+ let offset=0;
+ for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.byteLength;}
+ try{
+  return JSON.parse(new TextDecoder("utf-8",{fatal:true}).decode(bytes));
+ }catch{
+  throw new Failure("JSON bancário inválido. Auditoria inconclusiva. HOLD.",503);
+ }
+}
 async function asaas(path:string,method="GET",body?:unknown){
  // Defesa independente, na saída HTTP: esta implementação não envia saques na produção.
  if(method==="POST" && path==="/transfers"){
@@ -68,7 +110,9 @@ async function asaas(path:string,method="GET",body?:unknown){
     "content-type":"application/json","User-Agent":"GuiaAndrelandia/1.0"},
   body:body===undefined?undefined:JSON.stringify(body),
  });
- const result=await response.json().catch(()=>({}));
+ const result=method==="GET"&&path.startsWith("/transfers?")
+  ?await lerListagemAsaasLimitada(response)
+  :await response.json().catch(()=>({}));
  if(!response.ok){
   const details=input(result);
   const errors=Array.isArray(details.errors)?details.errors:[];
