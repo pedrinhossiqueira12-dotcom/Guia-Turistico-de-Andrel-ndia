@@ -147,8 +147,9 @@ test("fatura inteira: emitir 1 Pix -> webhook RECEIVED -> baixa uma vez -> repla
   evento:"PAYMENT_RECEIVED",recurso_id:payment.id,referencia_externa:payment.externalReference
  });
  assert.equal(x.state.charge.status,"pago");
- assert.equal(x.state.reconciles.length,1);
- assert.equal(x.state.reconciles[0].p_estado,"pago");
+ assert.equal(x.state.reconciles.length,2,"Consulta pendente e webhook devem conciliar");
+ assert.equal(x.state.reconciles[0].p_estado,"pendente");
+ assert.equal(x.state.reconciles[1].p_estado,"pago");
  const settled=await x.funcs.reconcileInvoice("owner-ci",x.body);
  assert.equal(settled.cobranca_status,"pago");
  assert.equal(settled.pix.code,"");
@@ -158,7 +159,7 @@ test("fatura inteira: emitir 1 Pix -> webhook RECEIVED -> baixa uma vez -> repla
   evento:"PAYMENT_RECEIVED",recurso_id:payment.id,referencia_externa:payment.externalReference
  });
  assert.equal(x.state.posts,1,"Webhook repetido nao emite cobrança");
- assert.equal(x.state.reconciles.length,3,"RPC de conciliacao recebe evento reentregue sem POST Pix");
+ assert.equal(x.state.reconciles.length,4,"RPC de conciliacao recebe evento reentregue sem POST Pix");
 });
 test("emissao reservada apos timeout recupera pagamento remoto sem novo POST",async()=>{
  const x=fixture();
