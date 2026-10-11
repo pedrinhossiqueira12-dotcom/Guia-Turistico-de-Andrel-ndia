@@ -260,6 +260,32 @@ function parsePix(payment:Record<string,unknown>,qr:Record<string,unknown>){
  return {code:value(qr.payload,4096),imageBase64:value(qr.encodedImage,160000),
   ticketUrl:value(payment.invoiceUrl,2048)};
 }
+// API Asaas usa limit/offset e hasMore. Buscar SOMENTE a primeira pagina
+// poderia esconder cliente/cobranca ja existente e causar outro POST Pix.
+// Em paginacao inconclusiva, nunca interpretar resposta parcial como ausencia.
+async function listarAsaasPorReferencia(tipo:"payments"|"customers",ref:string){
+ const encontrados:Record<string,unknown>[]=[];
+ const paginaMaxima=5,limite=100;
+ for(let pagina=0;pagina<paginaMaxima;pagina++){
+  const offset=pagina*limite;
+  const list=await asaas("/"+tipo+"?externalReference="+
+    encodeURIComponent(ref)+"&limit="+limite+"&offset="+offset);
+  check(Array.isArray(list.data)&&typeof list.hasMore==="boolean"&&
+    list.data.length<=limite,
+    "Listagem do Asaas incompleta ou inválida. Emissão bloqueada para conciliação.",503);
+  for(const raw of list.data){
+   const obj=input(raw);
+   check(typeof obj.id==="string"&&obj.id.length>0&&
+     obj.externalReference===ref,
+     "Asaas retornou registro incompatível com a referência financeira. Revisão necessária.",409);
+   encontrados.push(obj);
+  }
+  if(list.hasMore===false)return encontrados;
+  check(list.data.length===limite,
+   "Paginação inconsistente no Asaas. Não emitir cobrança sem conciliação.",503);
+ }
+ throw new Failure("A listagem do Asaas ultrapassou o limite seguro. Revisão administrativa obrigatória.",503);
+}
 async function verifyInvoice(paymentId:string,charge:Record<string,unknown>,store:string,month:string){
  const payment=await asaas("/payments/"+encodeURIComponent(paymentId));
  const expected=Number(charge.valor_centavos);
@@ -299,9 +325,7 @@ async function loadOrCreateCustomer(
   return String(found.cliente_id);
  }
  const ref="guia-comercio-"+store;
- const list=await asaas("/customers?externalReference="+encodeURIComponent(ref)+"&limit=100");
- const candidates=Array.isArray(list.data)
-  ? list.data.filter((c:Record<string,unknown>)=>c.externalReference===ref):[];
+ const candidates=await listarAsaasPorReferencia("customers",ref);
  // Nunca criar novo cliente ao recuperar cobranca ja existente: a identidade
  // do pagador vem da fatura bancária e precisa coincidir com cadastro remoto.
  let customer=expectedCustomerId
@@ -404,9 +428,7 @@ async function createInvoice(uid:string,body:Record<string,unknown>,email:string
   throw new Failure("Não foi possível reservar a fatura para cobrança.",503);
  const novoClaim=!claimError&&Boolean(claim);
  const ref=reference(store,month);
- const list=await asaas("/payments?externalReference="+encodeURIComponent(ref)+"&limit=100");
- const candidates=Array.isArray(list.data)
-  ? list.data.filter((p:Record<string,unknown>)=>p.externalReference===ref) : [];
+ const candidates=await listarAsaasPorReferencia("payments",ref);
  if(candidates.length>1)
   throw new Failure("Há mais de uma cobrança com a mesma referência no Asaas. Revisão manual necessária.",409);
  let payment=candidates[0]||null;
