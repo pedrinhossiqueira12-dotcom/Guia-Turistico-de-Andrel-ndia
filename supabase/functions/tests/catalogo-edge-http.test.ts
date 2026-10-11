@@ -503,6 +503,69 @@ Deno.test("varredura em duas paginas detecta ID de transferencia repetido e mant
  }finally{currentMockFetch=denyNetwork;}
 });
 
+Deno.test("varredura marca IDs ausentes ou malformados mesmo fora da referencia",async()=>{
+ const edge=handlers.get("asaas")!;
+ const separacaoId="ad400001-1111-4111-8111-111111111111";
+ const requestId="ad400002-1111-4111-8111-111111111111";
+ const motoboyId="edededed-eded-4ede-8ede-ededededed10";
+ const adminUid="4b9a0233-6b72-4573-aebd-d596c5b15e1b";
+ let bankGets=0;
+ try{
+  currentMockFetch=async(input:RequestInfo|URL,init?:RequestInit)=>{
+   const raw=typeof input==="string"?input:input instanceof URL?input.toString():input.url;
+   const u=new URL(raw);
+   assert((init?.method??"GET")==="GET","Auditoria de IDs ausentes tentou escrita");
+   if(u.host==="ci-supabase.invalid"&&u.pathname==="/auth/v1/user")
+    return result({id:adminUid,aud:"authenticated",role:"authenticated",
+     app_metadata:{},user_metadata:{}});
+   if(u.host==="ci-supabase.invalid"&&
+      u.pathname==="/rest/v1/catalogo_asaas_separacoes_excepcionais")
+    return result({id:separacaoId,tipo:"saida",solicitacao_id:requestId,
+     motoboy_id:motoboyId,valor_centavos:12000,situacao:"congelada"});
+   if(u.host==="ci-supabase.invalid"&&
+      u.pathname==="/rest/v1/catalogo_asaas_transferencias_excepcionais_auditoria")
+    return result(null);
+   if(u.host==="ci-supabase.invalid"&&u.pathname==="/rest/v1/catalogo_asaas_saques")
+    throw Error("Nenhum ID da referencia alvo exige consulta de saques");
+   if(u.host==="api-sandbox.asaas.com"&&u.pathname==="/v3/transfers"){
+    bankGets++;
+    return result({limit:100,offset:0,totalCount:3,hasMore:false,data:[
+     {externalReference:"ref-nao-relacionada",value:120,status:"DONE",
+      pixAddressKey:"CHAVE_PRIVADA_NAO_EXIBIR"},
+     {id:" ci-id-com-espacos ",externalReference:"outra-referencia",
+      value:120,status:"PENDING"},
+     {id:"ci-id-valido",externalReference:"outra-referencia",value:120,
+      status:"PENDING"},
+    ]});
+   }
+   throw Error("Rota inesperada no ensaio de IDs malformados: "+u.pathname);
+  };
+  const response=await edge(post("/functions/v1/catalogo-asaas-financeiro",{
+   acao:"auditar_historico_transferencias_excepcionais_sandbox_admin",
+   separacao_id:separacaoId,
+  },{authorization:"Bearer ci-admin-test-token"}));
+  assertions(response,200,"IDs bancarios globais invalidos");
+  const payload=await response.json();
+  const audit=payload.relatorio;
+  assert(bankGets===1&&audit?.listagem_consultada_ate_o_fim===true,
+   "Varredura pontual nao concluiu consulta da pagina");
+  assert(audit?.referencias_iguais_encontradas===0 &&
+   audit?.ids_sem_identificador_globais===2 &&
+   audit?.ids_repetidos_globais===0 &&
+   audit?.conflito_identificado===true,
+   "Registros sem ID bancario fora da referencia nao geraram conflito");
+  assert(audit?.ausencia_de_pix_anterior_comprovada===false &&
+   audit?.destinatario_original_confirmado===false &&
+   audit?.pagamento_autorizado===false &&
+   audit?.liberacao_autorizada===false &&
+   audit?.baixa_realizada===false&&audit?.movimenta_dinheiro===false,
+   "ID invalido desbloqueou valor ou afirmou prova bancaria");
+  assert(!JSON.stringify(payload).includes("CHAVE_PRIVADA_NAO_EXIBIR") &&
+   !JSON.stringify(payload).includes("ci-id-com-espacos"),
+   "Identificador bancario ou chave Pix vazaram ao navegador");
+ }finally{currentMockFetch=denyNetwork;}
+});
+
 Deno.test("varredura detecta ID repetido fora da referencia mesmo com totalCount estavel",async()=>{
  const edge=handlers.get("asaas")!;
  const separacaoId="ad300001-1111-4111-8111-111111111111";
