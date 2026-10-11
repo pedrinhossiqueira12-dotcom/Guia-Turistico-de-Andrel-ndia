@@ -194,3 +194,113 @@ REVOKE ALL ON FUNCTION
  catalogo_ci_intencao_pix_inerte.rejeitar_mutacao()
  FROM PUBLIC,anon,authenticated,service_role;
 -- Marco de envio nao e POST, e nao e evidencia de liquidacao.
+
+
+-- #41 + #42 + #43: porta de DIAGNOSTICO, nunca uma autorizacao.
+-- Conecta as duas RPCs SOMENTE-LEITURA existentes ao journal de CI.
+-- p_sinais_cliente simula JSON falsificado e e IGNORADO deliberadamente.
+CREATE FUNCTION catalogo_ci_intencao_pix_inerte.diagnosticar_portas_hold(
+ p_separacao uuid,p_sinais_cliente jsonb DEFAULT '{}'::jsonb
+) RETURNS jsonb LANGUAGE plpgsql VOLATILE SECURITY INVOKER SET search_path=''
+AS $diagnosticar$
+DECLARE
+ v_uid uuid;
+ v_escrow public.catalogo_asaas_separacoes_excepcionais%ROWTYPE;
+ v_matriz jsonb:='{}'::jsonb;
+ v_revisores jsonb:='{}'::jsonb;
+ v_contagem bigint:=0;
+ v_marcos bigint:=0;
+ v_banco_ok boolean:=false;
+ v_revisoes_documentais boolean:=false;
+ v_matriz_ok boolean:=false;
+ v_revisores_ok boolean:=false;
+BEGIN
+ IF p_separacao IS NULL THEN
+  RETURN jsonb_build_object('ok',false,'motivo','separacao_invalida',
+   'status_operacional','HOLD_OBRIGATORIO','pode_enviar_post',false,
+   'pode_reenviar_post',false,'pagamento_autorizado',false,
+   'liberacao_autorizada',false,'baixa_realizada',false,'movimenta_dinheiro',false);
+ END IF;
+ SELECT motoboy_id INTO v_uid
+ FROM public.catalogo_asaas_separacoes_excepcionais WHERE id=p_separacao;
+ IF v_uid IS NULL THEN
+  RETURN jsonb_build_object('ok',false,'motivo','separacao_ausente',
+   'status_operacional','HOLD_OBRIGATORIO','pode_enviar_post',false,
+   'pode_reenviar_post',false,'pagamento_autorizado',false,
+   'liberacao_autorizada',false,'baixa_realizada',false,'movimenta_dinheiro',false);
+ END IF;
+ PERFORM pg_catalog.pg_advisory_xact_lock(
+  pg_catalog.hashtextextended('asaas-saque:'||v_uid::text,0));
+ SELECT * INTO v_escrow FROM public.catalogo_asaas_separacoes_excepcionais
+ WHERE id=p_separacao FOR UPDATE;
+ IF NOT FOUND OR v_escrow.motoboy_id IS DISTINCT FROM v_uid
+ OR v_escrow.situacao IS DISTINCT FROM 'congelada' THEN
+  RETURN jsonb_build_object('ok',false,'motivo','separacao_nao_congelada',
+   'status_operacional','HOLD_OBRIGATORIO','pode_enviar_post',false,
+   'pode_reenviar_post',false,'pagamento_autorizado',false,
+   'liberacao_autorizada',false,'baixa_realizada',false,'movimenta_dinheiro',false);
+ END IF;
+
+ SELECT count(*)::bigint INTO v_contagem
+ FROM catalogo_ci_intencao_pix_inerte.intencoes i
+ WHERE i.separacao_id=p_separacao AND i.motoboy_id=v_escrow.motoboy_id
+ AND i.valor_centavos=v_escrow.valor_centavos
+ AND i.fingerprint_sha256=v_escrow.fingerprint_sha256
+ AND i.referencia_externa=
+  'guia-exc:'||v_escrow.tipo||':'||v_escrow.solicitacao_id::text;
+ SELECT count(*)::bigint INTO v_marcos
+ FROM catalogo_ci_intencao_pix_inerte.marcos_inicio m
+ JOIN catalogo_ci_intencao_pix_inerte.intencoes i
+ ON i.tentativa_id=m.tentativa_id
+ WHERE i.separacao_id=p_separacao;
+
+ -- Cada diagnostico pode falhar se nao houver evidencias locais; nesse
+ -- caso o erro vira HOLD e nunca uma permissao implicita.
+ BEGIN
+  v_matriz:=public.catalogo_asaas_matriz_conciliacao_escrow(p_separacao);
+  v_matriz_ok:=(v_matriz->>'ok'='true');
+ EXCEPTION WHEN OTHERS THEN
+  v_matriz_ok:=false;
+  v_matriz:='{}'::jsonb;
+ END;
+ BEGIN
+  v_revisores:=public.catalogo_asaas_diagnosticar_dupla_conferencia_inerte(
+   p_separacao);
+  v_revisores_ok:=(v_revisores->>'ok'='true');
+ EXCEPTION WHEN OTHERS THEN
+  v_revisores_ok:=false;
+  v_revisores:='{}'::jsonb;
+ END;
+
+ v_banco_ok:=v_matriz_ok
+  AND v_matriz->>'evidencia_suficiente_para_liquidar'='true'
+  AND v_matriz->>'destino_pix_original_vinculado_com_prova'='true'
+  AND v_matriz->>'destino_pix_confirmado_no_provedor'='true'
+  AND v_matriz->>'ausencia_de_pix_anterior_comprovada'='true';
+ v_revisoes_documentais:=v_revisores_ok
+  AND v_revisores->>'duas_conferencias_documentais_registradas'='true';
+ RETURN jsonb_build_object(
+  'ok',true,
+  'journal_intencoes_validas_no_ci',v_contagem,
+  'journal_marcos_de_inicio_no_ci',v_marcos,
+  'diagnostico_matriz_disponivel',v_matriz_ok,
+  'diagnostico_pareceres_disponivel',v_revisores_ok,
+  'duas_conferencias_documentais_observadas',v_revisoes_documentais,
+  -- Conta auditorias do banco: nenhuma prova independente surge de GET.
+  'evidencia_independente_bancaria_suficiente',v_banco_ok,
+  'revisores_mfa_credenciados_confirmados',false,
+  'dupla_aprovacao_financeira_confirmada',false,
+  'transacao_de_baixa_habilitada',false,
+  'status_operacional','HOLD_OBRIGATORIO',
+  'pode_enviar_post',false,'pode_reenviar_post',false,
+  'pagamento_autorizado',false,'liberacao_autorizada',false,
+  'baixa_realizada',false,'movimenta_dinheiro',false
+ );
+END
+$diagnosticar$;
+
+REVOKE ALL ON FUNCTION
+ catalogo_ci_intencao_pix_inerte.diagnosticar_portas_hold(uuid,jsonb)
+ FROM PUBLIC,anon,authenticated,service_role;
+-- Esta funcao nao toma qualquer decisao, nao consome sinais do cliente e
+-- nunca retorna dados pessoais nem credenciais bancarias.
