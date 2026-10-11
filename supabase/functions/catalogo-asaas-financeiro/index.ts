@@ -1550,13 +1550,13 @@ async function webhook(request:Request){
 // Invocacao periodica independente de novas notificacoes. Exige token exclusivo
 // enviado pelo agendador (nunca o token de Asaas nem o service_role no header).
 async function executarWorkerWebhooksAsaas(request:Request){
- if(!WEBHOOK_WORKER_ON)throw new Failure("Rotina financeira periódica desativada.",503);
- enabled("billing"); // Inclusive a aprovacao explicita de faturamento produtivo.
  if(!WEBHOOK_WORKER_TOKEN || WEBHOOK_WORKER_TOKEN.length<48)
   throw new Failure("Token do worker financeiro não configurado.",503);
  const received=request.headers.get("x-guia-asaas-worker-token")||"";
  if(!(await equalSecret(received,WEBHOOK_WORKER_TOKEN)))
   throw new Failure("Rotina não autorizada.",401);
+ if(!WEBHOOK_WORKER_ON)throw new Failure("Rotina financeira periódica desativada.",503);
+ enabled("billing"); // Inclusive a aprovacao explicita de faturamento produtivo.
  // Nunca emitir fatura, alterar permissoes, autorizar saque ou iniciar POST Pix.
  const result=await processarWebhooksAsaasPendentes(10);
  return respond({success:true,processados:result.concluido,em_erro:result.falhou});
