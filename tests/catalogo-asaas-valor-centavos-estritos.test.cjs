@@ -34,7 +34,7 @@ test("Asaas: verifica montante ANTES de cadastrar cliente e de criar cobranca",(
  assert.ok(guard>=0&&customer>guard&&claim>guard&&post>claim,
   "fatura invalida poderia produzir efeitos externos");
  assert.match(fn,/value:money\(invoiceCents\)/);
- assert.doesNotMatch(fn,/Math\.round\(/);
+ assert.doesNotMatch(fn.replace(/^\s*\/\/.*$/gm,""),/Math\.round\(/);
 });
 test("Asaas: inclusive saque usa helper sem arredondar",()=>{
  const a=src.indexOf("async function withdraw(uid:string)");
@@ -42,5 +42,5 @@ test("Asaas: inclusive saque usa helper sem arredondar",()=>{
  assert.ok(a>=0&&b>a);
  const fn=src.slice(a,b);
  assert.match(fn,/value:money\(amount\)/);
- assert.doesNotMatch(fn,/Math\.round\(/);
+ assert.doesNotMatch(fn.replace(/^\s*\/\/.*$/gm,""),/Math\.round\(/);
 });
