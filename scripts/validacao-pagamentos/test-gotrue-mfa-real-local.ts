@@ -168,6 +168,13 @@ async function criarRevisorGoTrueLocal(
   ensure(typeof secret === "string" && secret.length >= 16,
     "Auth nao devolveu segredo de inscricao TOTP local");
 
+  const identidade={revisorId:String(initial.sub),sessaoId:String(initial.session_id),
+    fatorId:id,decisaoId:SNAP_CI.decisaoId,separacaoId:SNAP_CI.separacaoId,
+    fingerprint:SNAP_CI.fingerprint,dossieHash:SNAP_CI.dossieHash};
+  // O contexto de operacao e ligado ANTES do challenge verdadeiro no GoTrue local.
+  const reserved=binder.preparar(identidade);
+  ensure(reserved.ok && typeof reserved.nonce==="string",
+    "CI local nao vinculou identidade/versao antes do challenge");
   const challenge = await gotrue.call("POST", "/factors/"+id+"/challenge", before,{});
   ensure(challenge.status >= 200 && challenge.status < 300,
     "Challenge TOTP real nao iniciou: HTTP "+challenge.status);
@@ -175,6 +182,9 @@ async function criarRevisorGoTrueLocal(
   ensure(typeof cid === "string" && /^[a-f0-9-]{36}$/i.test(cid),
     "Challenge GoTrue sem ID");
 
+  const linked=binder.vincularChallenge(reserved.nonce,cid);
+  ensure(linked.ok && linked.status_operacional==="HOLD_OBRIGATORIO",
+    "Challenge verdadeiro nao foi vinculado ao contexto local");
   const code = await totp(secret,Date.now());
   result = await gotrue.call("POST", "/factors/"+id+"/verify", before,
     {challenge_id:cid,code});
