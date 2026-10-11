@@ -107,6 +107,10 @@ export class StagingMfaManual{
    ...(method==="POST"?{body:JSON.stringify(body??{})}:{}),
    signal:AbortSignal.timeout(12000),
   });
+  // GoTrue envia JSON em todas as rotas usadas nesta ferramenta.
+  // Rejeitar resposta HTML/texto de proxy mesmo que contenha JSON sintatico.
+  check(/^application\/json(?:\s*;|$)/i.test(res.headers.get("content-type")??""),
+    "GoTrue respondeu Content-Type inesperado");
   const limit=method==="POST"&&path==="/factors"?1048576:65536;
   const declared=res.headers.get("content-length");
   check(declared===null||(/^\d+$/.test(declared)&&Number(declared)<=limit),
@@ -169,15 +173,26 @@ export class StagingMfaManual{
    "Segredo TOTP inesperado");
   return {id:data.id,secret};
  }
- async verify(token:string,factor:string,code:string):Promise<string>{
-  check(UUID.test(factor)&&/^\d{6}$/.test(code),"ID de fator ou OTP invalido");
+ async verifyComCodigoAposDesafio(
+  token:string,factor:string,obterCodigo:()=>Promise<string>,
+ ):Promise<string>{
+  check(UUID.test(factor)&&typeof obterCodigo==="function",
+   "Fator ou leitor TOTP invalido");
+  // Criar challenge ANTES de pedir o OTP, nunca aceitar ID do browser.
   const ch=await this.call("POST","/factors/"+factor+"/challenge",token,{});
   check(typeof ch.id==="string"&&UUID.test(ch.id),"Challenge sem UUID");
+  const code=await obterCodigo();
+  check(typeof code==="string"&&/^\d{6}$/.test(code),"Codigo TOTP invalido");
   const result=await this.call("POST","/factors/"+factor+"/verify",token,
    {challenge_id:ch.id,code});
   check(typeof result.access_token==="string"&&BEARER.test(result.access_token),
    "Verify nao retornou JWT AAL2");
   return result.access_token;
+ }
+ async verify(token:string,factor:string,code:string):Promise<string>{
+  // Compatibilidade com testes existentes; valida OTP antes de criar challenge.
+  check(UUID.test(factor)&&/^\d{6}$/.test(code),"ID de fator ou OTP invalido");
+  return this.verifyComCodigoAposDesafio(token,factor,async()=>code);
  }
 }
 async function hiddenInput(title:string):Promise<string>{
@@ -248,9 +263,9 @@ export async function main(){
   // Exibicao local consciente, nunca em job CI/issue/chat. Nao salvo no disco.
   console.log("Segredo TOTP de HOMOLOGACAO (CONFIDENCIAL): "+enrollment.secret);
  }
- const otp=await hiddenInput("Codigo TOTP de 6 digitos (oculto): ");
  const inicioVerifyMs=Date.now();
- const upgraded=await auth.verify(jwt,factor,otp);
+ const upgraded=await auth.verifyComCodigoAposDesafio(jwt,factor,
+  ()=>hiddenInput("Desafio criado. Codigo TOTP de 6 digitos (oculto): "));
  const after=inspectSmokeJwt(upgraded);
  check(claimsAal2FrescasDoStaging(before,after,inicioVerifyMs,Date.now()),
    "JWT GoTrue pos-verificacao tem emissor, vigencia ou emissao inconsistentes");
