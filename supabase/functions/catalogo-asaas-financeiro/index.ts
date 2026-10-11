@@ -352,7 +352,9 @@ async function loadOrCreateCustomer(
    });
   }
  }
- check(Boolean(customer?.id),"Não foi possível confirmar o cadastro do pagador no Asaas.",503);
+ check(customer!==null&&customer!==undefined&&
+  typeof customer.id==="string"&&customer.id.length>0,
+  "Não foi possível confirmar o cadastro do pagador no Asaas.",503);
  // INSERT, nao UPSERT: jamais sobrescrever cliente bancario ja consolidado
  // por outra requisicao concorrente (inclusive outra competencia mensal).
  const customerId=String(customer.id);
