@@ -243,8 +243,15 @@ async function verifyInvoice(paymentId:string,charge:Record<string,unknown>,stor
  const {data:client}=await db.from("catalogo_asaas_clientes").select("cliente_id").eq("comercio_id",store).maybeSingle();
  check(Boolean(client?.cliente_id) && client?.cliente_id===payment.customer,"Pagador da cobrança não confere.",409);
  const status=value(payment.status,50);
+ // O Asaas pode retornar CONFIRMED para Pix ainda sob bloqueio preventivo.
+ // Nunca liberar credito nem expor novo QR nesse estado. Status desconhecido
+ // exige revisao: nao inferir PENDING a partir de evento novo do provedor.
+ check(["PENDING","OVERDUE","CONFIRMED","RECEIVED","REFUNDED",
+  "PARTIALLY_REFUNDED","REFUND_IN_PROGRESS","CHARGEBACK_REQUESTED",
+  "DELETED"].includes(status),
+  "Status da cobrança Asaas não reconhecido. Pagamento em análise.",409);
  let estado:"pago"|"pendente"|"estornado"|"contestado"|"cancelado"="pendente";
- if(status==="RECEIVED")estado="pago"; // CONFIRMED ainda não é saldo bancário disponível.
+ if(status==="RECEIVED")estado="pago"; // CONFIRMED não é quitação comprovada.
  else if(status==="REFUNDED")estado="estornado";
  else if(["PARTIALLY_REFUNDED","REFUND_IN_PROGRESS","CHARGEBACK_REQUESTED"].includes(status))estado="contestado";
  else if(status==="DELETED")estado="cancelado";
@@ -294,7 +301,8 @@ async function reconcileInvoice(uid:string,body:Record<string,unknown>){
  // Ela nao deve ser reaproveitada como um Pix ainda valido, mesmo se o
  // endpoint pixQrCode devolver um payload legado.
  const bloqueadaParaPagamento=["estornado","contestado","cancelado"].includes(proof.estado);
- const qr=proof.estado==="pago"||bloqueadaParaPagamento?{}:
+ const somenteConferencia=value(proof.payment.status,50)==="CONFIRMED";
+ const qr=proof.estado==="pago"||bloqueadaParaPagamento||somenteConferencia?{}:
    await asaas("/payments/"+encodeURIComponent(String(charge.order_id))+"/pixQrCode");
  // A observacao bancária negativa prevalece mesmo que o SQL ainda retorne
  // um estado local antigo ("pago") enquanto a contestacao e conciliada.
@@ -306,6 +314,8 @@ async function reconcileInvoice(uid:string,body:Record<string,unknown>){
    ?"Pagamento reconhecido e fatura quitada. Créditos são disponibilizados somente quando houver remunerações elegíveis."
    :bloqueadaParaPagamento
    ?"Esta cobrança está cancelada, estornada ou contestada. Não utilize o Pix anterior. Solicite regularização à administração."
+   :somenteConferencia
+   ?"Pagamento em confirmação no Asaas. Aguarde a verificação bancária; não faça outro Pix."
    :"Aguardando liquidação da cobrança."});
 }
 async function createInvoice(uid:string,body:Record<string,unknown>,email:string){
@@ -355,10 +365,17 @@ async function createInvoice(uid:string,body:Record<string,unknown>,email:string
  check(verified.customer===customerId && verified.externalReference===ref &&
   verified.billingType==="PIX" && cents(verified.value)===Number(f.total_comissao_centavos),
   "Cobrança divergente; operação reservada para revisão.",409);
- const alreadyPaid=verified.status==="RECEIVED";
- const qr=alreadyPaid?{}:await asaas("/payments/"+encodeURIComponent(String(payment.id))+"/pixQrCode");
+ // Em recuperação após timeout, somente um status PENDING/OVERDUE
+ // pode receber Pix. Status desconhecido, estornado ou contestado: HOLD.
+ const providerStatus=value(verified.status,50);
+ const pagavel=["PENDING","OVERDUE"].includes(providerStatus);
+ const alreadyPaid=providerStatus==="RECEIVED";
+ const emConferencia=providerStatus==="CONFIRMED";
+ check(pagavel||alreadyPaid||emConferencia,
+  "Cobrança anterior indisponível para Pix. Consulte a administração antes de emitir outra.",409);
+ const qr=pagavel?await asaas("/payments/"+encodeURIComponent(String(payment.id))+"/pixQrCode"):{};
  const pix=parsePix(verified,qr);
- if(!alreadyPaid)check(Boolean(pix.code),"Pix sem copia e cola. Consulte a cobrança no provedor.",502);
+ if(pagavel)check(Boolean(pix.code),"Pix sem copia e cola. Consulte a cobrança no provedor.",502);
  await rpc("catalogo_asaas_registrar_fatura",{
   p_fechamento:f.id,p_payment:verified.id,p_valor:f.total_comissao_centavos,
   p_qr:pix.code,p_imagem:pix.imageBase64,p_url:pix.ticketUrl,
@@ -368,7 +385,9 @@ async function createInvoice(uid:string,body:Record<string,unknown>,email:string
   {order_id:verified.id,valor_centavos:f.total_comissao_centavos},store,month);
  return respond({success:true,order_id:verified.id,fatura:f,valor_centavos:f.total_comissao_centavos,
   cobranca_status:alreadyPaid?"pago":"pendente",pix,
-  mensagem:alreadyPaid?"Cobrança recuperada e pagamento conciliado.":"Pix Asaas emitido. Aguarde a confirmação do recebimento."});
+  mensagem:alreadyPaid?"Cobrança recuperada e pagamento conciliado."
+   :emConferencia?"Pagamento em confirmação no Asaas. Não realize outro Pix."
+   :"Pix Asaas emitido. Aguarde a confirmação do recebimento."});
 }
 function pixDestination(key:string){
  const cleaned=key.trim(),digits=cleaned.replace(/\D/g,"");
