@@ -190,7 +190,8 @@ jobs:
         run: |
           deno check scripts/validacao-pagamentos/test-gotrue-mfa-real-local.ts
           deno check scripts/validacao-pagamentos/test-gotrue-mfa-real-local.unit.test.ts
-          deno test --no-check scripts/validacao-pagamentos/test-gotrue-mfa-real-local.unit.test.ts
+          deno check scripts/validacao-pagamentos/vinculo-mfa-dossie-local-ci.ts scripts/validacao-pagamentos/vinculo-mfa-dossie-local-ci.test.ts
+          deno test --no-check scripts/validacao-pagamentos/test-gotrue-mfa-real-local.unit.test.ts scripts/validacao-pagamentos/vinculo-mfa-dossie-local-ci.test.ts
       - name: Verify available local CLI commands
         run: |
           supabase --version
