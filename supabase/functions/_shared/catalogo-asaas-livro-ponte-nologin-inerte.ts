@@ -44,6 +44,7 @@ function hold(raw:unknown):RespostaBancoPrechallengeInerte {
     // Recusas nao podem entregar nonce validavel ao chamador: o banco
     // deve falhar FECHADO antes de queimar ou emitir um nonce do revisor.
     || (raw.ok===false && raw.nonce!==null && raw.nonce!==undefined)
+    || (raw.ok===true && !uuid(raw.nonce))
     || raw.status_operacional!=="HOLD_OBRIGATORIO"
     || raw.pagamento_autorizado!==false
     || raw.challenge_go_true_verificado!==false
