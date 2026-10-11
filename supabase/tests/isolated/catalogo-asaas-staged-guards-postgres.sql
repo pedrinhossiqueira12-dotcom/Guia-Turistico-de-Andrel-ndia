@@ -2743,4 +2743,113 @@ BEGIN
  RAISE NOTICE 'PASS: 2 itens (R$120), separação contábil bloqueia baixa, saque comum e duplicação; zero Pix';
 END $escrow_creditos$;
 
+-- #43 / teste real de volume PostgreSQL: 1.201 creditos FINANCIADOS,
+-- duas competencias, mesmo fluxo contábil, tudo descartado pelo ROLLBACK.
+-- Nao executar em STAGING/PROD nem mover para migrations.
+DO $escrow_bulk_1201$
+DECLARE
+ v_uid uuid:='edededed-eded-4ede-8ede-ededededed43';
+ v_store text:='ci-escrow-1201-sem-pix';
+ v_month integer;
+ v_i integer;
+ v_target integer;
+ v_competencia date;
+ v_fechamento uuid;
+ v_pedido uuid;
+ v_saida uuid;
+ v_reserva jsonb;
+ v_previa jsonb;
+ v_saldo jsonb;
+ v_total bigint:=1201*6000;
+ v_contagem bigint;
+ v_soma bigint;
+BEGIN
+ INSERT INTO auth.users(id) VALUES(v_uid);
+ INSERT INTO public.comercios_publicados(local_id,status) VALUES(v_store,'ativo');
+ INSERT INTO public.catalogos(comercio_id,proprietario_id) VALUES(v_store,v_uid);
+ INSERT INTO public.catalogo_motoboys(comercio_id,usuario_id,nome,email,ativo,autorizado_por)
+ VALUES(v_store,v_uid,'Entregador CI 1201','ci-1201@example.invalid',true,v_uid);
+
+ FOR v_month IN 1..2 LOOP
+  v_competencia:=make_date(2097,v_month,1);
+  v_target:=CASE WHEN v_month=1 THEN 601 ELSE 600 END;
+  INSERT INTO public.catalogo_fechamentos_offline(
+   comercio_id,competencia,total_pedidos,total_comissao_centavos,status,pago_em
+  ) VALUES(v_store,v_competencia,v_target,v_target*21000,'pago',now())
+  RETURNING id INTO v_fechamento;
+  INSERT INTO public.catalogo_fatura_cobrancas(
+   fechamento_id,comercio_id,competencia,gateway,payment_id,status,valor_centavos,pago_em
+  ) VALUES(v_fechamento,v_store,v_competencia,'asaas',
+   'ci-pagamento-escrow-bulk-'||v_month,'pago',v_target*21000,now());
+
+  FOR v_i IN 1..v_target LOOP
+   INSERT INTO public.catalogo_pedidos(
+    comercio_id,referencia_externa,provedor,idempotency_key,status,
+    status_pagamento,modalidade,forma_pagamento,subtotal_produtos_centavos,
+    entrega_centavos,total_centavos,taxa_plataforma_centavos,
+    repasse_bruto_comercio_centavos,cliente_nome,cliente_telefone,
+    versao_financeira,taxa_motoboy_centavos,taxa_total_centavos,
+    entrega_status,metadata
+   ) VALUES(v_store,'ci-1201-'||v_month||'-'||v_i,
+    'offline',gen_random_uuid(),'entregue','aprovado','entrega','dinheiro',
+    300000,0,300000,15000,279000,'Cliente CI 1201','00000000000',
+    2,6000,21000,'entregue',jsonb_build_object(
+     'ensaio','1201-remuneracoes-pg','mes',v_month,'i',v_i))
+   RETURNING id INTO v_pedido;
+   INSERT INTO public.catalogo_fatura_componentes_v2(
+    fechamento_id,pedido_id,tipo,valor_centavos
+   ) VALUES(v_fechamento,v_pedido,'plataforma',15000),
+           (v_fechamento,v_pedido,'logistica',6000);
+   INSERT INTO public.catalogo_comissoes_offline(
+    pedido_id,comercio_id,competencia,subtotal_produtos_centavos,
+    taxa_percentual,valor_comissao_centavos,status,pago_em,
+    taxa_plataforma_centavos,taxa_motoboy_centavos,valor_total_centavos,
+    versao_financeira,motoboy_id,financiamento_logistica_comprovado
+   ) VALUES(v_pedido,v_store,v_competencia,300000,5,21000,'paga',now(),
+    15000,6000,21000,2,v_uid,true);
+   INSERT INTO public.catalogo_remuneracoes_v2(
+    pedido_id,comercio_id,motoboy_id,valor_centavos,status,financiamento_comprovado
+   ) VALUES(v_pedido,v_store,v_uid,6000,'disponivel',true);
+  END LOOP;
+ END LOOP;
+
+ SELECT public.catalogo_asaas_saldo_historico(v_uid) INTO v_saldo;
+ IF (v_saldo->>'disponivel_centavos')::bigint IS DISTINCT FROM v_total
+ THEN RAISE EXCEPTION 'Saldo CI 1201 divergiu: %',v_saldo; END IF;
+
+ DELETE FROM public.catalogo_motoboys WHERE usuario_id=v_uid;
+ INSERT INTO public.catalogo_asaas_regularizacoes_inativos(
+  motoboy_id,saldo_snapshot_centavos,motivo
+ ) VALUES(v_uid,v_total,'inatividade')
+ RETURNING id INTO v_saida;
+ SELECT public.catalogo_asaas_separar_creditos_excepcionais(
+  'saida',v_saida) INTO v_reserva;
+ IF v_reserva->>'ok' IS DISTINCT FROM 'true'
+  OR v_reserva->>'creditos_separados' IS DISTINCT FROM '1201'
+  OR (v_reserva->>'valor_centavos')::bigint IS DISTINCT FROM v_total
+  OR v_reserva->>'pagamento_autorizado' IS DISTINCT FROM 'false'
+ THEN RAISE EXCEPTION 'Separacao de 1201 itens nao foi concluida: %',v_reserva; END IF;
+
+ SELECT count(*)::bigint,coalesce(sum(i.valor_centavos::bigint),0)
+ INTO v_contagem,v_soma
+ FROM public.catalogo_asaas_separacoes_excepcionais_itens i
+ WHERE i.separacao_id=(v_reserva->>'separacao_id')::uuid;
+ IF v_contagem<>1201 OR v_soma<>v_total
+ THEN RAISE EXCEPTION 'Itens escrow 1201 incorretos % %',v_contagem,v_soma; END IF;
+
+ SELECT pg_temp.catalogo_asaas_previsualizar_resolucao_inerte(
+  (v_reserva->>'separacao_id')::uuid) INTO v_previa;
+ IF v_previa->>'composicao_local_consistente' IS DISTINCT FROM 'true'
+  OR v_previa->>'creditos_lidos_do_livro' IS DISTINCT FROM '1201'
+  OR (v_previa->>'total_centavos_no_livro')::numeric IS DISTINCT FROM v_total
+  OR v_previa->>'classificacao_documental' IS DISTINCT FROM 'revisao'
+  OR v_previa->>'status_operacional' IS DISTINCT FROM 'HOLD_OBRIGATORIO'
+  OR v_previa->>'pagamento_autorizado' IS DISTINCT FROM 'false'
+  OR v_previa->>'liberacao_autorizada' IS DISTINCT FROM 'false'
+  OR v_previa->>'baixa_realizada' IS DISTINCT FROM 'false'
+  OR v_previa->>'movimenta_dinheiro' IS DISTINCT FROM 'false'
+ THEN RAISE EXCEPTION 'Preview 1201 nao manteve HOLD: %',v_previa; END IF;
+ RAISE NOTICE 'PASS #43 PostgreSQL: 1201 remuneracoes reais em 2 competencias, HOLD, zero Pix';
+END $escrow_bulk_1201$;
+
 ROLLBACK;
