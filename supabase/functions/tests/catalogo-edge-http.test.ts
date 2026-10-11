@@ -221,7 +221,7 @@ Deno.test("varredura de listagem incompleta preserva HOLD em 12 paginas",async()
     assert(Number(u.searchParams.get("offset"))===pages*100,
      "Deslocamento de paginação Asaas incorreto");
     pages++;
-    return result({offset:(pages-1)*100,hasMore:true,
+    return result({offset:(pages-1)*100,limit:100,totalCount:1201,hasMore:true,
      data:Array.from({length:100},(_,i)=>({
       id:"ci-irrelevante-"+pages+"-"+i,externalReference:"outra-referencia",
       status:"DONE",value:120
@@ -242,6 +242,61 @@ Deno.test("varredura de listagem incompleta preserva HOLD em 12 paginas",async()
    audit?.pagamento_autorizado===false&&audit?.baixa_realizada===false,
    "Varredura truncada não manteve HOLD");
  }finally{currentMockFetch=denyNetwork;}
+});
+
+Deno.test("varredura recusa paginas Asaas parciais, parametros incoerentes e totalCount invalido",async()=>{
+ const edge=handlers.get("asaas")!;
+ const separacaoId="ac100001-1111-4111-8111-111111111111";
+ const requestId="ac100002-1111-4111-8111-111111111111";
+ const motoboyId="edededed-eded-4ede-8ede-ededededed10";
+ const adminUid="4b9a0233-6b72-4573-aebd-d596c5b15e1b";
+ const full=Array.from({length:100},(_,i)=>({
+  id:"ci-irrelevante-"+i,externalReference:"outra-referencia",value:100,status:"PENDING"
+ }));
+ const malformed=[
+  {label:"pagina parcial com hasMore=true",page:{limit:100,offset:0,totalCount:500,hasMore:true,data:full.slice(0,40)}},
+  {label:"pagina vazia com hasMore=true",page:{limit:100,offset:0,totalCount:500,hasMore:true,data:[]}},
+  {label:"limite reduzido pelo provedor",page:{limit:20,offset:0,totalCount:500,hasMore:true,data:full.slice(0,20)}},
+  {label:"limite omitido",page:{offset:0,totalCount:2,hasMore:false,data:full.slice(0,2)}},
+  {label:"offset divergente",page:{limit:100,offset:50,totalCount:500,hasMore:true,data:full}},
+  {label:"offset omitido",page:{limit:100,totalCount:2,hasMore:false,data:full.slice(0,2)}},
+  {label:"totalCount nao inteiro",page:{limit:100,offset:0,totalCount:"2",hasMore:false,data:full.slice(0,2)}},
+  {label:"totalCount menor que dados",page:{limit:100,offset:0,totalCount:1,hasMore:false,data:full.slice(0,2)}},
+ ];
+ for(const scenario of malformed){
+  let bankGets=0;
+  try{
+   currentMockFetch=async(input:RequestInfo|URL,init?:RequestInit)=>{
+    const raw=typeof input==="string"?input:input instanceof URL?input.toString():input.url;
+    const u=new URL(raw);
+    assert((init?.method??"GET")==="GET","A auditoria tentou mutar estado");
+    if(u.host==="ci-supabase.invalid"&&u.pathname==="/auth/v1/user")
+     return result({id:adminUid,aud:"authenticated",role:"authenticated",
+      app_metadata:{},user_metadata:{}});
+    if(u.host==="ci-supabase.invalid"&&
+       u.pathname==="/rest/v1/catalogo_asaas_separacoes_excepcionais")
+     return result({id:separacaoId,tipo:"saida",solicitacao_id:requestId,
+      motoboy_id:motoboyId,valor_centavos:12000,situacao:"congelada"});
+    if(u.host==="ci-supabase.invalid"&&
+       u.pathname==="/rest/v1/catalogo_asaas_transferencias_excepcionais_auditoria")
+     return result(null);
+    if(u.host==="api-sandbox.asaas.com"&&u.pathname==="/v3/transfers"){
+     bankGets++;
+     return result(scenario.page);
+    }
+    throw Error("Caminho inesperado: "+u.pathname);
+   };
+   const response=await edge(post("/functions/v1/catalogo-asaas-financeiro",{
+    acao:"auditar_historico_transferencias_excepcionais_sandbox_admin",
+    separacao_id:separacaoId,
+   },{authorization:"Bearer ci-admin-test-token"}));
+   assertions(response,503,scenario.label);
+   const body=await response.json();
+   assert(body.success===false && !JSON.stringify(body).includes("listagem_consultada_ate_o_fim"),
+    "Falha de paginacao foi tratada como auditoria concluida: "+scenario.label);
+   assert(bankGets===1,"Paginacao ruim consultou paginas adicionais: "+scenario.label);
+  }finally{currentMockFetch=denyNetwork;}
+ }
 });
 
 Deno.test("checkouts desligados recusam criacao HTTP antes de qualquer acesso externo", async () => {
