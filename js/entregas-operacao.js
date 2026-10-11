@@ -382,6 +382,9 @@
   }
   async function restaurarSessao() { const client = obterCliente(); if (!client) return; const { data, error } = await client.auth.getSession(); if (!error && !state.destroyed) await aplicarSessao(data?.session || null); }
   async function iniciar() {
+    // O botao de homologacao nao aparece no painel produtivo.
+    if (!QA_SANDBOX && $("asaasSandboxFaturasCard"))
+      $("asaasSandboxFaturasCard").style.display = "none";
     iniciarEventos(); const client = obterCliente(); if (!client) { aviso("Login indisponível", "Não foi possível carregar o serviço de autenticação.", "erro"); return; }
     const listener = client.auth.onAuthStateChange((_event, session) => { window.setTimeout(() => aplicarSessao(session), 0); }); state.subscription = listener?.data?.subscription || null;
     const { data, error } = await client.auth.getSession(); if (error) { aviso("Sessão não confirmada", "Entre novamente para continuar.", "erro"); return; } await aplicarSessao(data?.session || null);
