@@ -17,10 +17,10 @@ test("todas as chamadas HTTP Asaas diretas possuem timeout finito",()=>{
  assert.match(src,/async function asaas\(path:string,method="GET",body\?:unknown,timeoutMs=ASAAS_HTTP_TIMEOUT_MS\)/);
  const segments=src.split("await fetch(API_BASE+");
  assert.equal(segments.length-1,2,"nova chamada externa deve ser auditada");
- for(const call of segments.slice(1)){
-  const options=call.slice(0,call.indexOf("});")+3);
-  assert.match(options,/signal:AbortSignal\.timeout\(timeoutMs\)/);
- }
+ const helper=segments[1].slice(0,segments[1].indexOf("});")+3);
+ const consultaDireta=segments[2].slice(0,segments[2].indexOf("});")+3);
+ assert.match(helper,/signal:AbortSignal\.timeout\(timeoutMs\)/);
+ assert.match(consultaDireta,/signal:AbortSignal\.timeout\(ASAAS_HTTP_TIMEOUT_MS\)/);
 });
 test("historico legado usa o mesmo leitor com limite de bytes e timeout",()=>{
  const history=section("async function auditPendingSandboxTransfer(","async function withdraw(");
