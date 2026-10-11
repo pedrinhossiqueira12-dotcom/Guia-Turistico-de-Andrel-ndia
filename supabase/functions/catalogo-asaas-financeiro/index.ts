@@ -634,6 +634,9 @@ async function auditarHistoricoTransferenciasExcepcionaisSandboxAdmin(
  let valoresDivergentes=0,idsSemReferencia=0,identificadoresInvalidos=0;
  let listaRepetida=0,estadosDone=0,formatosAmbiguos=0,achouIdVinculado=false;
  const vistos=new Set<string>();
+ // totalCount deve permanecer estavel ao longo da varredura; paginacao
+ // offset nao representa snapshot transacional do banco externo.
+ let totalInicial:number|null=null;
  let completa=false;
  for(let page=0;page<MAX_PAGINAS;page++){
   const offset=page*LIMIT;
@@ -654,6 +657,9 @@ async function auditarHistoricoTransferenciasExcepcionaisSandboxAdmin(
    (result.hasMore===true&&result.totalCount<=offset+result.data.length)||
    (result.hasMore===false&&result.totalCount!==offset+result.data.length))
    throw new Failure("Paginação bancária inválida: histórico inconclusivo. HOLD.",503);
+  if(totalInicial===null)totalInicial=result.totalCount;
+  else if(result.totalCount!==totalInicial)
+   throw new Failure("Histórico Asaas mudou entre páginas: auditoria inconclusiva. HOLD.",503);
   paginas++;
   examinadas+=result.data.length;
   for(const raw of result.data){
