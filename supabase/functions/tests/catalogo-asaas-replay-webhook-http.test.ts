@@ -161,3 +161,35 @@ Deno.test("webhook nao arredonda fracao de centavo em payload ou GET Asaas",asyn
    "GET bancario com centavos inexatos foi aprovado: "+amount);
  }
 });
+
+
+Deno.test("Asaas nao aceita chave Pix alheia com prefixo, sufixo, espaco ou truncamento",async()=>{
+ const adulteradas:unknown[]=[
+  SAND_KEY+"extra", "falso-"+SAND_KEY, " "+SAND_KEY, SAND_KEY+" ",
+  SAND_KEY+".", SAND_KEY+"\n", SAND_KEY+"a".repeat(254),
+  47996515839, {}, null,
+ ];
+ for(const adulterada of adulteradas){
+  reset({remote:{...fields,pixAddressKey:adulterada}});
+  const response=await invoke({...fields});
+  assert(response.status==="REFUSED",
+   "chave adulterada pelo banco foi interpretada como valida");
+  assert(bankReads===1&&writes===0,"GET adulterado disparou escrita");
+ }
+});
+Deno.test("Asaas exige ambas as chaves Pix consistentes quando aparecem no mesmo GET",async()=>{
+ reset({remote:{...fields,bankAccount:{pixAddressKey:SAND_KEY+"extra"}}});
+ const response=await invoke({...fields});
+ assert(response.status==="REFUSED"&&bankReads===1&&writes===0,
+  "chave Pix divergente dentro de bankAccount foi ignorada");
+ reset({remote:{...fields}});
+ const incoming=await invoke({...fields,pixAddressKey:SAND_KEY+"extra"});
+ assert(incoming.status==="REFUSED"&&bankReads===1&&writes===0,
+  "chave Pix malformada no webhook foi aceita");
+});
+Deno.test("Asaas permite normalizacao estrita +55 sem ignorar caracteres espurios",async()=>{
+ reset({remote:{...fields,pixAddressKey:"+55"+SAND_KEY}});
+ const response=await invoke({...fields});
+ assert(response.status==="APPROVED"&&bankReads===1&&writes===0,
+  "numero de telefone brasileiro valido foi rejeitado");
+});
