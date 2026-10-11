@@ -26,7 +26,19 @@ type Observacao=Credencial&{
   challengeId:string;aal:string;usuarioAuthId:string;factorAuthId:string;
   sessaoAuthId:string;autenticacaoLocalGoTrueConfirmada:boolean;
 };
-const resposta=(ok:boolean,motivo:string,extra:Record<string,unknown>={})=>Object.freeze({
+type RespostaCi=Readonly<{
+  ok:boolean;motivo:string;nonce?:string;
+  revisores_distintos_vinculados_na_versao?:number;
+  duas_observacoes_locais_vinculadas?:boolean;
+  autenticacao_real_de_revisores_formais_comprovada?:false;
+  status_operacional:"HOLD_OBRIGATORIO";
+  credenciamento_formal_comprovado:false;
+  dois_revisores_reais_autorizados:false;
+  aprovacao_financeira:false;pagamento_autorizado:false;
+  liberacao_autorizada:false;baixa_realizada:false;
+  movimenta_dinheiro:false;pode_enviar_pix:false;
+}>;
+const resposta=(ok:boolean,motivo:string,extra:Partial<RespostaCi>={}):RespostaCi=>Object.freeze({
   ok,motivo,...extra,
   status_operacional:"HOLD_OBRIGATORIO" as const,
   credenciamento_formal_comprovado:false as const,
