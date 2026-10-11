@@ -30,6 +30,7 @@ async function consultar(estado,providerStatus=estado){
   },
   parsePix:(payment,qr)=>({code:qr.payload||"",imageBase64:qr.encodedImage||"",
    ticketUrl:payment.invoiceUrl||""}),
+  value:(x,max=200)=>typeof x==="string"?x.trim().slice(0,max):"",
   respond:(obj)=>obj,
   encodeURIComponent, String,
   Failure:class Failure extends Error{constructor(message,status){super(message);this.status=status;}}
