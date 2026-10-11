@@ -31,7 +31,13 @@ class SandboxTransferRejected extends Failure {}
 const respond=(payload:unknown,status=200)=>new Response(JSON.stringify(payload),{status,headers:JSON_HEADERS});
 const input=(x:unknown)=>x&&typeof x==="object"&&!Array.isArray(x)?x as Record<string,unknown>:{};
 const value=(x:unknown,max=200)=>typeof x==="string"?x.trim().slice(0,max):"";
-const money=(cents:number)=>Math.round(cents)/100;
+// Valores enviados ao provedor sao em CENTAVOS INTEIROS, sem arredondamento.
+// Uma quantia fracionaria ou acima de Number.MAX_SAFE_INTEGER nunca gera POST.
+function money(cents:number):number{
+ if(!Number.isSafeInteger(cents)||cents<=0)
+  throw new Failure("Valor financeiro em centavos inválido. Operação não enviada.",503);
+ return cents/100;
+}
 // Valores retornados pelo banco precisam ter PRECISAO de centavos;
 // Math.round() aqui aceitaria 100.004 como R$ 100,00 na conciliacao.
 // Convertemos a representacao decimal canonica via BigInt para evitar
@@ -350,6 +356,11 @@ async function createInvoice(uid:string,body:Record<string,unknown>,email:string
  const {store,month,f,charge}=await invoice(uid,body);
  check(f&&["faturado","vencido","bloqueado"].includes(String(f.status))&&
    Number(f.total_comissao_centavos)>0,"A fatura ainda não está fechada ou já foi paga.",409);
+ // Validar ANTES de cadastrar cliente, reservar emissao ou chamar o Asaas.
+ // Jamais usar Math.round() em total informado pelo livro financeiro.
+ const invoiceCents=Number(f.total_comissao_centavos);
+ check(Number.isSafeInteger(invoiceCents)&&invoiceCents>0,
+  "Total da fatura inconsistente. Nenhuma cobrança será criada.",503);
  if(charge){
   if(charge.gateway==="asaas")return await reconcileInvoice(uid,body);
   throw new Failure("Cobrança Mercado Pago existente. Não é seguro emitir outra.",409);
@@ -373,7 +384,7 @@ async function createInvoice(uid:string,body:Record<string,unknown>,email:string
   throw new Failure("Emissão reservada e ainda não localizada no Asaas. Não é seguro emitir outro Pix automaticamente.",409);
  if(!payment){
   payment=await asaas("/payments","POST",{
-   customer:customerId,billingType:"PIX",value:money(Number(f.total_comissao_centavos)),
+   customer:customerId,billingType:"PIX",value:money(invoiceCents),
    dueDate:value(f.vencimento_em,10)>=new Date().toISOString().slice(0,10)?
      value(f.vencimento_em,10):new Date().toISOString().slice(0,10),
    externalReference:ref,description:"Fatura Guia Andrelândia "+month,
