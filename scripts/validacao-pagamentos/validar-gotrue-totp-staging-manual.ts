@@ -39,6 +39,26 @@ export function sameSessionAal2(a:Json,b:Json,user:Json):boolean{
   &&typeof a.session_id==="string"&&UUID.test(a.session_id)
   &&a.session_id===b.session_id;
 }
+/** Apenas check auxiliar do operador: GET /user autenticado deve confirmar
+ * exatamente o fator TOTP usado no challenge da conta exclusiva de STAGING.
+ * Nao verifica assinatura JWT nem transforma AAL2 em prova financeira.
+ */
+export function fatorTotpConfirmadoNoUsuarioStaging(
+ usuario:Json, userId:string, factorId:string, email:string,
+):boolean{
+ if(!UUID.test(userId)||!UUID.test(factorId)||!TEST_ACCOUNT.test(email)
+   ||usuario.id!==userId||typeof usuario.email!=="string"
+   ||usuario.email.trim().toLowerCase()!==email.toLowerCase()
+   ||!Array.isArray(usuario.factors))return false;
+ const encontrados=(usuario.factors as unknown[]).filter(value=>{
+  if(value===null||typeof value!=="object"||Array.isArray(value))return false;
+  return (value as Json).id===factorId;
+ });
+ return encontrados.length===1
+  &&(encontrados[0] as Json).factor_type==="totp"
+  &&(encontrados[0] as Json).status==="verified";
+}
+
 export class StagingMfaManual{
  constructor(private readonly publishable:string,private readonly http:typeof fetch=fetch){
   check(/^sb_publishable_[A-Za-z0-9_-]{10,}$/.test(publishable),
@@ -172,6 +192,8 @@ export async function main(){
  try{jwt=await auth.login(email,password);}finally{password="";}
  const before=inspectSmokeJwt(jwt);
  const user=await auth.call("GET","/user",jwt);
+ check(typeof user.email==="string" && user.email.trim().toLowerCase()===email,
+  "Conta Auth inicial diverge do usuario de testes informado");
  check(before.aal==="aal1"&&before.role==="authenticated"
   &&before.is_anonymous===false&&before.sub===user.id,
   "Conta STAGING nao iniciou sessao AAL1 valida");
@@ -203,6 +225,8 @@ export async function main(){
  const afterUser=await auth.call("GET","/user",upgraded);
  check(sameSessionAal2(before,after,afterUser),
    "GoTrue AAL2 nao comprovou MESMO usuario e sessao");
+ check(fatorTotpConfirmadoNoUsuarioStaging(afterUser,String(before.sub),factor,email),
+   "Fator TOTP esperado nao consta como verificado na mesma conta STAGING");
  console.log("PASS: GoTrue STAGING confirmou fator TOTP, AAL1=>AAL2 e MESMA sessao.");
  console.log("FINANCEIRO: HOLD_OBRIGATORIO; nenhum Pix, parecer ou saque autorizado.");
  console.log("Informe somente 'TOTP STAGING PASS' (sem segredos/tokens/OTP).");
