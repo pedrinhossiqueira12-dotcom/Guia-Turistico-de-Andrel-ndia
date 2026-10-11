@@ -56,7 +56,7 @@ async function rpc(name:string,args:Record<string,unknown>){
 const MAX_ASAAS_LISTAGEM_BYTES=2*1024*1024;
 async function lerListagemAsaasLimitada(response:Response):Promise<unknown>{
  const mime=(response.headers.get("content-type")||"").split(";")[0].trim().toLowerCase();
- if(mime!=="application/json"&&!/^application\\/[a-z0-9.+-]+\\+json$/.test(mime))
+ if(mime!=="application/json"&&!(mime.startsWith("application/")&&mime.endsWith("+json")))
   throw new Failure("Resposta bancária não é JSON confiável. Auditoria inconclusiva. HOLD.",503);
  const declared=response.headers.get("content-length");
  if(declared!==null&&(!/^[0-9]+$/.test(declared)||
