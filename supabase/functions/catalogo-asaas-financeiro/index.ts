@@ -674,11 +674,28 @@ async function auditarHistoricoTransferenciasExcepcionaisSandboxAdmin(
   .select("transferencia_id,referencia_externa,valor_centavos,motoboy_id")
   .eq("tipo",reserva.tipo).eq("solicitacao_id",reserva.solicitacao_id).maybeSingle();
  if(vinculoError)throw new Failure("Vínculo bancário local indisponível; manter HOLD.",503);
+ // Uma linha de vinculo existente precisa trazer identificadores e centavos
+ // bem formados; campos nulos/string numerica nao equivalem a "sem vinculo".
+ // Interromper antes do GET externo. Divergencias de conteudo entre dois
+ // vinculos bem formados continuam aparecendo no relatorio administrativo.
+ if(vinculo!==null&&vinculo!==undefined){
+  if(typeof vinculo!=="object"||Array.isArray(vinculo)||
+   typeof vinculo.transferencia_id!=="string"||
+   vinculo.transferencia_id.length<1||vinculo.transferencia_id.length>180||
+   /\s/.test(vinculo.transferencia_id)||
+   typeof vinculo.referencia_externa!=="string"||
+   vinculo.referencia_externa.length<1||vinculo.referencia_externa.length>180||
+   vinculo.referencia_externa.trim()!==vinculo.referencia_externa||
+   typeof vinculo.valor_centavos!=="number"||
+   !Number.isSafeInteger(vinculo.valor_centavos)||vinculo.valor_centavos<=0||
+   typeof vinculo.motoboy_id!=="string"||!uuidValido.test(vinculo.motoboy_id))
+   throw new Failure("Vínculo bancário local inconsistente; auditoria inconclusiva. HOLD.",503);
+ }
  const referencia="guia-exc:"+reserva.tipo+":"+reserva.solicitacao_id;
  const idVinculado=typeof vinculo?.transferencia_id==="string"?vinculo.transferencia_id:"";
  const vinculoLocalDivergente=Boolean(vinculo)&&(
   vinculo?.referencia_externa!==referencia||
-  Number(vinculo?.valor_centavos)!==Number(reserva.valor_centavos)||
+  vinculo?.valor_centavos!==reserva.valor_centavos||
   vinculo?.motoboy_id!==reserva.motoboy_id);
  let mesmoIdSaqueComum=false;
  if(idVinculado){
