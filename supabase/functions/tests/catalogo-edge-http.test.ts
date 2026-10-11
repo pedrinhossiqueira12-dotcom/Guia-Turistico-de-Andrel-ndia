@@ -503,6 +503,72 @@ Deno.test("varredura em duas paginas detecta ID de transferencia repetido e mant
  }finally{currentMockFetch=denyNetwork;}
 });
 
+Deno.test("varredura detecta ID repetido fora da referencia mesmo com totalCount estavel",async()=>{
+ const edge=handlers.get("asaas")!;
+ const separacaoId="ad300001-1111-4111-8111-111111111111";
+ const requestId="ad300002-1111-4111-8111-111111111111";
+ const motoboyId="edededed-eded-4ede-8ede-ededededed10";
+ const adminUid="4b9a0233-6b72-4573-aebd-d596c5b15e1b";
+ let paginas=0;
+ const duplicada={id:"ci-id-alheio-repetido",externalReference:"ref-sem-relacao",
+  value:120,status:"PENDING",pixAddressKey:"PIX_SIGILOSO_TESTE"};
+ try{
+  currentMockFetch=async(input:RequestInfo|URL,init?:RequestInit)=>{
+   const raw=typeof input==="string"?input:input instanceof URL?input.toString():input.url;
+   const u=new URL(raw);
+   assert((init?.method??"GET")==="GET","Varredura global tentou escrita");
+   if(u.host==="ci-supabase.invalid"&&u.pathname==="/auth/v1/user")
+    return result({id:adminUid,aud:"authenticated",role:"authenticated",
+     app_metadata:{},user_metadata:{}});
+   if(u.host==="ci-supabase.invalid"&&
+      u.pathname==="/rest/v1/catalogo_asaas_separacoes_excepcionais")
+    return result({id:separacaoId,tipo:"saida",solicitacao_id:requestId,
+     motoboy_id:motoboyId,valor_centavos:12000,situacao:"congelada"});
+   if(u.host==="ci-supabase.invalid"&&
+      u.pathname==="/rest/v1/catalogo_asaas_transferencias_excepcionais_auditoria")
+    return result(null);
+   if(u.host==="ci-supabase.invalid"&&u.pathname==="/rest/v1/catalogo_asaas_saques")
+    throw Error("Nenhum ID da referencia alvo exige consulta de saques");
+   if(u.host==="api-sandbox.asaas.com"&&u.pathname==="/v3/transfers"){
+    paginas++;
+    if(u.searchParams.get("offset")==="0")return result({
+     limit:100,offset:0,totalCount:101,hasMore:true,
+     data:[duplicada,...Array.from({length:99},(_,i)=>({
+      id:"ci-id-outro-"+i,externalReference:"ref-sem-relacao",value:120,status:"PENDING"
+     }))],
+    });
+    if(u.searchParams.get("offset")==="100")return result({
+     limit:100,offset:100,totalCount:101,hasMore:false,data:[duplicada],
+    });
+   }
+   throw Error("Rota inesperada no ensaio global: "+u.pathname);
+  };
+  const response=await edge(post("/functions/v1/catalogo-asaas-financeiro",{
+   acao:"auditar_historico_transferencias_excepcionais_sandbox_admin",
+   separacao_id:separacaoId,
+  },{authorization:"Bearer ci-admin-test-token"}));
+  assertions(response,200,"ID bancario global repetido");
+  const payload=await response.json();
+  const audit=payload.relatorio;
+  assert(paginas===2&&audit?.listagem_consultada_ate_o_fim===true,
+   "Listagem paginada no Sandbox nao foi percorrida");
+  assert(audit?.referencias_iguais_encontradas===0 &&
+   audit?.ids_repetidos_na_listagem===0 &&
+   audit?.ids_repetidos_globais===1 &&
+   audit?.conflito_identificado===true,
+   "Duplicacao fora da referencia alvo nao sinalizou amostra instavel");
+  assert(audit?.ausencia_de_pix_anterior_comprovada===false &&
+   audit?.destinatario_original_confirmado===false &&
+   audit?.pagamento_autorizado===false &&
+   audit?.liberacao_autorizada===false &&
+   audit?.baixa_realizada===false && audit?.movimenta_dinheiro===false,
+   "Varredura com duplicata global permitiu dinheiro");
+  assert(!JSON.stringify(payload).includes("ci-id-alheio-repetido") &&
+   !JSON.stringify(payload).includes("PIX_SIGILOSO_TESTE"),
+   "Resposta de diagnostico revelou ID/Pix do provedor");
+ }finally{currentMockFetch=denyNetwork;}
+});
+
 Deno.test("varredura falha fechada se totalCount muda entre duas paginas",async()=>{
  const edge=handlers.get("asaas")!;
  const separacaoId="ae100001-1111-4111-8111-111111111111";
