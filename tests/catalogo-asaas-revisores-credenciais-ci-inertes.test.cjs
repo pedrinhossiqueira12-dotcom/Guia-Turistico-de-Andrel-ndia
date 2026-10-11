@@ -98,3 +98,21 @@ test("#42: SQL real da CI testa revogacao, sessao expirada, fator, claims e nao-
  ])assert.ok(runner.toLowerCase().includes(marker.toLowerCase()),marker);
  assert.match(runner,/EXPECTED_DB = "catalogo_asaas_race_ci"/);
 });
+
+
+test("#42: leitura concorrente realmente espera revogacao do revisor antes de contar",()=>{
+ for(const part of [
+  "ci_revisor_revocation_first",
+  "ci_revisor_revocation_second",
+  "SET situacao='revogado'",
+  "CI_REVOCATION_LOCKED",
+  "if wait==\"Lock\"",
+  "CI_REVOCATION_COMMITTED",
+  "CI_REVIEWER_DIAGNOSTIC_RELEASED",
+  "concurrent.get(\"pareceres_mock_elegiveis\")!=1",
+  "concurrent.get(\"duas_credenciais_sinteticas_elegiveis\") is not False",
+  "concurrent.get(\"mfa_real_validado\") is not False",
+  "CI_REVOCATION_READ_COMMITTED"
+ ])assert.ok(runner.includes(part),"Missing two-session reviewer race: "+part);
+ assert.match(ddl,/FOR SHARE OF p,c,s/);
+});
