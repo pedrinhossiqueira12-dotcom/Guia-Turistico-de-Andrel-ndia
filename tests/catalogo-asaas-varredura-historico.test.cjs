@@ -64,6 +64,7 @@ test("confronta referencia, ID, valor, status e conflitos com saques comuns",()=
   "guia-exc:", "catalogo_asaas_separacoes_excepcionais",
   "catalogo_asaas_transferencias_excepcionais_auditoria",
   "catalogo_asaas_saques", "referenciasDistintas>1",
+  "idsDaReferenciaTambemEmSaqueComum>0",
   "vinculoLocalDivergente", "vinculoNaoLocalizado",
   "tRef===referencia", "tId===idVinculado",
   "refsDeOutroId", "valoresDivergentes", "formatosAmbiguos",
@@ -72,6 +73,15 @@ test("confronta referencia, ID, valor, status e conflitos com saques comuns",()=
  assert.match(scanner,/const vistos=new Set<string>\(\)/);
  assert.match(scanner,/if\(vinculoError\)/);
  assert.match(scanner,/if\(saqueError\)/);
+ assert.match(scanner,/const MAX_IDS_CONFERENCIA=400,LOTE_IDS_CONFERENCIA=40/);
+ assert.match(scanner,/vistos\.size>MAX_IDS_CONFERENCIA/);
+ assert.match(scanner,/\.in\("transferencia_id",lote\)/);
+ assert.match(scanner,/if\(saquesError\|\|!Array\.isArray\(saques\)\)/);
+ assert.match(scanner,/ids_da_referencia_tambem_em_saques_comuns:idsDaReferenciaTambemEmSaqueComum/);
+ const edgeTests=fs.readFileSync("supabase/functions/tests/catalogo-edge-http.test.ts","utf8");
+ assert.match(edgeTests,/varredura detecta transferência de saque comum sem vínculo excepcional prévio/);
+ assert.match(edgeTests,/ids_da_referencia_tambem_em_saques_comuns===1/);
+ assert.match(admin,/ids_da_referencia_tambem_em_saques_comuns/);
 });
 
 test("nunca alega ausencia de Pix, prova original do destinatario ou autoriza baixa",()=>{
