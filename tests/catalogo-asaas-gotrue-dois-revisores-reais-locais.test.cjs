@@ -53,5 +53,5 @@ test("#42: nao devolver tokens, OTP, segredos ou fator na prova local",()=>{
 test("#42: falta de permissao externa impede prometer autorizacao real",()=>{
  assert.doesNotMatch(script,/(?:payment_authorized|approve_payment|criar_pix|liberar_saldo)\s*\(/i);
  assert.ok(script.includes("Nao retornar bearer, TOTP ou fator"));
- assert.ok(script.includes("Nao chamar nenhuma RPC de parecer, transferencia, Pix ou Asaas"));
+ assert.ok(script.includes("NAO chamar nenhuma RPC de parecer, transferencia, Pix ou Asaas"));
 });
