@@ -11,7 +11,6 @@ const TIPOS=new Set([
 const GET=new Set(["GET_PENDING","GET_DONE","GET_FAILED","GET_CANCELLED"]);
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SHA=/^[0-9a-f]{64}$/;
-const VALORES=new Set(["HTTP_ACEITO","GET_DONE","GET_FAILED","GET_CANCELLED"]);
 function isRecord(x){return x!==null&&typeof x==="object"&&!Array.isArray(x);}
 function validoId(x){return typeof x==="string"&&UUID.test(x);}
 function centavos(x){return typeof x==="number"&&Number.isSafeInteger(x)&&x>0;}
@@ -21,9 +20,11 @@ function diagnosticarEnvioPixIncertoInerte(entrada){
  const op=isRecord(x.operacao)?x.operacao:{};
  const historico=Array.isArray(x.eventos)?x.eventos:null;
  const alertas=new Set();
- if(!validoId(op.separacao_id)||!validoId(op.tentativa_id)||
+ if(!validoId(op.separacao_id)||!validoId(op.solicitacao_id)||
+    !validoId(op.tentativa_id)||
+    (op.tipo!=="saida"&&op.tipo!=="residual")||
     typeof op.referencia_externa!=="string"||
-    !/^guia-exc:(saida|residual):[0-9a-f-]{36}$/i.test(op.referencia_externa)||
+    op.referencia_externa!==("guia-exc:"+op.tipo+":"+op.solicitacao_id)||
     !centavos(op.valor_centavos)||!SHA.test(op.fingerprint_sha256))
   alertas.add("identidade_ou_valor_de_operacao_invalido");
  if(!historico)alertas.add("historico_de_eventos_ausente");
