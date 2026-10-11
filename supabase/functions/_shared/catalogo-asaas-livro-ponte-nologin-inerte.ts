@@ -103,16 +103,32 @@ export class LivroSqlPonteNoLoginInerte implements LivroPrivadoPrechallengeInert
   }
   async lerContexto(id:string):Promise<ContextoPrivadoPrechallengeInerte|null>{
     const v=await this.run(sql.contexto,[id]);
-    return v===null?null:contexto(v);
+    if(v===null)return null;
+    const row=contexto(v);
+    // A consulta privada nao pode devolver dados de outro contexto, mesmo
+    // quando todas as propriedades isoladamente sao UUIDs validos.
+    if(row.id!==id)throw Error("ponte_sql_contexto_trocado");
+    return row;
   }
   async registrarDesafio(nonce:string,challengeId:string,attempt:string){
-    return hold(await this.run(sql.registrar,[nonce,challengeId,attempt]));
+    const response=hold(await this.run(sql.registrar,[nonce,challengeId,attempt]));
+    // Operacoes aceitas devem atestar o MESMO nonce que foi fornecido.
+    // Nao aceitar nonce de outro revisor/operacao pelo resultado do SQL.
+    if(response.ok && response.nonce!==nonce)
+      throw Error("ponte_sql_nonce_de_operacao_divergente");
+    return response;
   }
   async lerTentativa(id:string):Promise<DesafioPrivadoPrechallengeInerte|null>{
     const v=await this.run(sql.tentativa,[id]);
-    return v===null?null:tentativa(v);
+    if(v===null)return null;
+    const row=tentativa(v);
+    if(row.tentativa!==id)throw Error("ponte_sql_tentativa_trocada");
+    return row;
   }
   async consumirDesafio(nonce:string,challengeId:string,attempt:string){
-    return hold(await this.run(sql.consumir,[nonce,challengeId,attempt]));
+    const response=hold(await this.run(sql.consumir,[nonce,challengeId,attempt]));
+    if(response.ok && response.nonce!==nonce)
+      throw Error("ponte_sql_nonce_de_operacao_divergente");
+    return response;
   }
 }
