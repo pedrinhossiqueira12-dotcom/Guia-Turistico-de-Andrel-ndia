@@ -5,7 +5,7 @@ const vm=require("node:vm");
 const fs=require("node:fs");
 const edge=fs.readFileSync("supabase/functions/catalogo-asaas-financeiro/index.ts","utf8");
 const a=edge.indexOf("async function diagnosticarFaturasSandboxAdmin(");
-const b=edge.indexOf("// Recuperação segura",a);
+const b=edge.indexOf("async function confirmarFaturaSandboxAdmin(",a);
 assert.ok(a>=0&&b>a);
 const real=edge.slice(a,b)
  .replace("async function diagnosticarFaturasSandboxAdmin(uid:string)",
