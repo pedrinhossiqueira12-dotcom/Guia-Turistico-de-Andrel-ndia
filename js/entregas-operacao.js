@@ -63,6 +63,7 @@
     if ($("listaSaquesAsaas")) $("listaSaquesAsaas").innerHTML = "";
     feedback("saquesAsaasFeedback", "");
     feedback("conciliarSaqueAsaasFeedback", "");
+    feedback("asaasWebhookInboxResumo", "");
     $("conciliarSaqueAsaasForm")?.reset();
     $("repassePreview").innerHTML = '<p class="empty-state">Selecione um crédito disponível para revisar as provas antes de registrar o repasse.</p>';
   }
@@ -145,6 +146,32 @@
       if (!state.authorized) return;
       $("listaSaquesAsaas").innerHTML = '<p class="empty-state">Auditoria Asaas indisponível neste ambiente.</p>';
       feedback("saquesAsaasFeedback", "Este módulo só estará disponível após instalar a nova função financeira.", true);
+    }
+  }
+
+  async function verificarFilaWebhookAsaas(reprocessar = false) {
+    if (!state.authorized) return;
+    const generation = state.generation, userId = state.userId;
+    const botao = $(reprocessar ? "asaasWebhookInboxReprocessar" : "asaasWebhookInboxConsultar");
+    if (botao) botao.disabled = true;
+    feedback("asaasWebhookInboxResumo", reprocessar
+      ? "Reconciliando eventos recebidos com o provedor (nenhum Pix será criado)..."
+      : "Consultando notificações Asaas não conciliadas...");
+    try {
+      const acao = reprocessar ? "reprocessar_webhooks_asaas_admin" : "diagnosticar_webhooks_asaas_admin";
+      const res = await chamarApi(acao, {}, generation, userId, ASAAS_ADMIN_URL);
+      validarSessao(generation, userId);
+      if (reprocessar) {
+        feedback("asaasWebhookInboxResumo", "Processamento concluído: " + Number(res.concluido || 0) + " evento(s) verificados, " + Number(res.falhou || 0) + " com erro. Reconsulte a fila para acompanhar.");
+      } else {
+        const limit = res.amostra_limitada ? " (primeiros 100 eventos)" : "";
+        feedback("asaasWebhookInboxResumo", "Não conciliados: " + Number(res.pendentes || 0) + limit + ". Aguardando: " + Number(res.aguardando || 0) + " · em andamento: " + Number(res.em_processamento || 0) + " · erro: " + Number(res.em_erro || 0) + ".");
+      }
+    } catch (error) {
+      if (error.message !== STALE_SESSION_REQUEST) feedback("asaasWebhookInboxResumo",
+        error.message || "Não foi possível consultar a fila.", true);
+    } finally {
+      if (generation === state.generation && botao) botao.disabled = false;
     }
   }
 
@@ -271,6 +298,8 @@
     $("ocorrenciaForm").addEventListener("submit", resolverOcorrencia);
     $("repasseForm").addEventListener("submit", registrarRepasse);
     $("conciliarSaqueAsaasForm")?.addEventListener("submit", conciliarSaqueAsaas);
+    $("asaasWebhookInboxConsultar")?.addEventListener("click", () => verificarFilaWebhookAsaas(false));
+    $("asaasWebhookInboxReprocessar")?.addEventListener("click", () => verificarFilaWebhookAsaas(true));
     $("repasseCredito").addEventListener("change", (event) => selecionarCredito(event.target.value));
     $("listaRepasses").addEventListener("click", (event) => { const button = event.target.closest("[data-preview-credit]"); if (button) { $("repasseCredito").value = button.dataset.previewCredit; selecionarCredito(button.dataset.previewCredit); } });
     window.addEventListener("pagehide", () => { state.destroyed = true; state.generation += 1; state.session = null; state.userId = ""; state.token = ""; state.subscription?.unsubscribe?.(); state.subscription = null; limparDados(); });
