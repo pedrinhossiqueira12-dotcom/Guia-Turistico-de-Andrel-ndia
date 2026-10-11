@@ -642,8 +642,11 @@ async function auditarHistoricoTransferenciasExcepcionaisSandboxAdmin(
   // Uma pagina parcial com hasMore=true seguida de offset += LIMIT
   // pularia transferencias na listagem. Nunca usar essa amostra como completa.
   if(!Array.isArray(result.data)||typeof result.hasMore!=="boolean"||
+   typeof result.limit!=="number"||
    !Number.isSafeInteger(result.limit)||result.limit!==LIMIT||
+   typeof result.offset!=="number"||
    !Number.isSafeInteger(result.offset)||result.offset!==offset||
+   typeof result.totalCount!=="number"||
    !Number.isSafeInteger(result.totalCount)||result.totalCount<0||
    result.data.length>LIMIT||
    (result.hasMore===true&&result.data.length!==LIMIT)||
