@@ -3,7 +3,7 @@
  */
 import {
  STAGING,TEST_ACCOUNT,fixedStagingUrl,inspectSmokeJwt,sameSessionAal2,
- fatorTotpConfirmadoNoUsuarioStaging,
+ fatorTotpConfirmadoNoUsuarioStaging,claimsAal2FrescasDoStaging,
  StagingMfaManual,
 } from "./validar-gotrue-totp-staging-manual.ts";
 const UID="aaaa1111-1111-4111-8111-111111111111";
@@ -14,8 +14,10 @@ function ok(cond:unknown,message:string){if(!cond)throw Error(message);}
 function jwt(aal:"aal1"|"aal2",sess=SID,user=UID):string{
  const b64=(v:unknown)=>btoa(JSON.stringify(v)).replace(/\+/g,"-")
   .replace(/\//g,"_").replace(/=/g,"");
+ const iat=Math.floor(Date.now()/1000);
  return b64({alg:"none",typ:"JWT"})+"."
-  +b64({aal,sub:user,session_id:sess,role:"authenticated",is_anonymous:false})
+  +b64({aal,sub:user,session_id:sess,role:"authenticated",is_anonymous:false,
+   iss:STAGING+"/auth/v1",aud:"authenticated",iat,exp:iat+3600})
   +".fake-signature-only-for-offline-unit-test";
 }
 async function denied(fn:()=>unknown|Promise<unknown>):Promise<void>{
@@ -54,6 +56,37 @@ Deno.test("AAL2 exige mesmo sub, session_id e usuario validado por Auth",()=>{
  ok(!sameSessionAal2(a,{...b,aal:"aal1"},{id:UID}),"not stepup");
  ok(!sameSessionAal2({...a,is_anonymous:true},b,{id:UID}),"anonymous");
 });
+Deno.test("claims AAL2 antigas, expiradas ou de outro projeto nao validam smoke",()=>{
+ const nowSec=2_000_000_000;
+ const now=nowSec*1000;
+ const validBase={iss:STAGING+"/auth/v1",aud:"authenticated",
+  iat:nowSec-20,exp:nowSec+3600};
+ const validAfter={...validBase,iat:nowSec-1};
+ const good=()=>claimsAal2FrescasDoStaging(validBase,validAfter,now-10000,now);
+ ok(good(),"new AAL2 from same GoTrue should be accepted for smoke");
+ const failed=[
+  [{...validBase,iss:"https://fake.supabase.co/auth/v1"},validAfter],
+  [validBase,{...validAfter,iss:"https://fake.supabase.co/auth/v1"}],
+  [validBase,{...validAfter,aud:"anon"}],
+  [validBase,{...validAfter,iat:nowSec-400}],
+  [validBase,{...validAfter,iat:nowSec+50}],
+  [validBase,{...validAfter,exp:nowSec}],
+  [validBase,{...validAfter,exp:nowSec-1}],
+  [{...validBase,exp:nowSec-100},validAfter],
+  [{...validBase,iat:nowSec+100},validAfter],
+  [validBase,{...validAfter,iat:"fake"}],
+  [validBase,{...validAfter,exp:null}],
+ ];
+ for(const [a,b] of failed){
+  ok(!claimsAal2FrescasDoStaging(a,b,now-10000,now),
+   "stale/broken AAL2 claims were accepted");
+ }
+ ok(!claimsAal2FrescasDoStaging(validBase,validAfter,now+5000,now),
+   "future operation start accepted");
+ ok(!claimsAal2FrescasDoStaging(validBase,validAfter,Number.NaN,now),
+   "invalid terminal clock accepted");
+});
+
 Deno.test("fator TOTP escolhido precisa estar verificado na conta STAGING original",()=>{
  const email="mfa-teste+qa@example.com";
  const factor={id:FACTOR,factor_type:"totp",status:"verified"};
@@ -123,7 +156,10 @@ Deno.test("GoTrue STAGING falso end-to-end: AAL1 => enroll => challenge => AAL2,
  await denied(()=>go.call("GET","/factors",before));
  const enroll=await go.enroll(before);
  ok(enroll.id===FACTOR,"wrong factor id");
+ const started=Date.now();
  const upgraded=await go.verify(before,enroll.id,"123456");
+ ok(claimsAal2FrescasDoStaging(inspectSmokeJwt(before),inspectSmokeJwt(upgraded),
+  started,Date.now()),"new JWT was not tied to verification window");
  const depois=await go.call("GET","/user",upgraded);
  ok(sameSessionAal2(inspectSmokeJwt(before),inspectSmokeJwt(upgraded),
   depois),"session mismatch");
