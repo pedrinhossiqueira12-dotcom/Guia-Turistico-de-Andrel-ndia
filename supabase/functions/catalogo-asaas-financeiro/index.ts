@@ -59,6 +59,9 @@ async function rpc(name:string,args:Record<string,unknown>){
 const MAX_ASAAS_LISTAGEM_BYTES=2*1024*1024;
 // Timeout nao comprova rejeicao: POST de transferencia incerto permanece em revisao.
 const ASAAS_HTTP_TIMEOUT_MS=15000;
+// A validacao de saida por Webhook exige resposta rapida (limite do Asaas).
+// Mantem budget para leituras do banco antes/depois do GET, sem aprovar por timeout.
+const ASAAS_VALIDACAO_SAQUE_HTTP_TIMEOUT_MS=3500;
 async function lerListagemAsaasLimitada(response:Response):Promise<unknown>{
  const mime=(response.headers.get("content-type")||"").split(";")[0].trim().toLowerCase();
  if(mime!=="application/json"&&!(mime.startsWith("application/")&&mime.endsWith("+json")))
@@ -97,7 +100,9 @@ async function lerListagemAsaasLimitada(response:Response):Promise<unknown>{
   throw new Failure("JSON bancário inválido. Auditoria inconclusiva. HOLD.",503);
  }
 }
-async function asaas(path:string,method="GET",body?:unknown){
+async function asaas(path:string,method="GET",body?:unknown,timeoutMs=ASAAS_HTTP_TIMEOUT_MS){
+ if(!Number.isSafeInteger(timeoutMs)||timeoutMs<500||timeoutMs>ASAAS_HTTP_TIMEOUT_MS)
+  throw new Failure("Prazo HTTP do provedor inválido.",503);
  // Defesa independente, na saída HTTP: esta implementação não envia saques na produção.
  if(method==="POST" && path==="/transfers"){
   if(ENVIRONMENT!=="sandbox")
@@ -114,7 +119,7 @@ async function asaas(path:string,method="GET",body?:unknown){
   method,headers:{"access_token":ASAAS_TOKEN,"accept":"application/json",
     "content-type":"application/json","User-Agent":"GuiaAndrelandia/1.0"},
   body:body===undefined?undefined:JSON.stringify(body),
-  signal:AbortSignal.timeout(ASAAS_HTTP_TIMEOUT_MS),
+  signal:AbortSignal.timeout(timeoutMs),
  });
  const result=method==="GET"&&path.startsWith("/transfers?")
   ?await lerListagemAsaasLimitada(response)
@@ -1435,7 +1440,15 @@ async function authorizeWithdrawal(request:Request){
     Number.isFinite(Date.parse(saque.pix_destino_registrado_em)) &&
     cents(incoming.value)===localAmount && value(incoming.operationType,12)==="PIX"){
   // Confere por API autenticada para não confiar apenas nos dados do webhook.
-  const remote=await asaas("/transfers/"+encodeURIComponent(id));
+  // Falha ou timeout de consulta recusa o webhook. Nunca aprovar sem prova
+  // bancaria autenticada nem consumir o prazo de 10 segundos do Asaas.
+  let remote:Record<string,unknown>;
+  try {
+   remote=await asaas("/transfers/"+encodeURIComponent(id),"GET",undefined,
+    ASAAS_VALIDACAO_SAQUE_HTTP_TIMEOUT_MS);
+  }catch{
+   return approveResponse("REFUSED","Consulta bancária indisponível; transferência não autorizada.");
+  }
   if(remote.id===id && remote.externalReference===ref &&
     cents(remote.value)===localAmount && value(remote.operationType,12)==="PIX" &&
     !["DONE","FAILED","CANCELLED"].includes(value(remote.status,60)) &&
