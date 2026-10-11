@@ -53,6 +53,19 @@ Referências:
 - https://docs.asaas.com/reference/listagem-e-paginacao
 - https://docs.asaas.com/reference/listar-transferencias
 
+## Regra de totalCount entre páginas — 11/10/2026
+
+A auditoria exige que o `totalCount` retornado pelo Asaas seja igual
+em todas as páginas. Se variar, responde HTTP 503 e mantém HOLD, mesmo
+quando os metadados de cada página forem individualmente consistentes.
+Teste isolado: `totalCount=101` na primeira página e `102` na
+segunda. Isso não habilita transferência, baixa nem pagamento.
+
+A verificação reduz falsos relatórios causados por histórico mutável,
+mas **não cria um snapshot bancário atômico**. Uma inserção e uma
+exclusão simultâneas podem manter a mesma contagem. A titularidade
+original e a ausência independente de Pix anterior continuam sem prova.
+
 ## O que esta auditoria NÃO garante
 
 1. `listagem_consultada_ate_o_fim=true` só significa que o endpoint devolveu `hasMore=false` nessa consulta **àquela conta Asaas**. Não há atestado de outras contas, histórico deletado/fora de banda, ou transferência de referência diferente.
