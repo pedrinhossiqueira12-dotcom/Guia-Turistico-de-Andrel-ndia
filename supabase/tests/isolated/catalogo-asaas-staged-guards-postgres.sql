@@ -101,6 +101,80 @@ CREATE TEMP TABLE catalogo_ci_escrow_planos_itens_shadow_inertes(
  UNIQUE(tentativa_id,remuneracao_id)
 ) ON COMMIT DROP;
 
+-- #43: comparacao PER-CREDIT do plano inerte com o livro autoritativo.
+-- O total em centavos pode coincidir mesmo com +1/-1 em itens diferentes.
+-- Funcao pg_temp da fixture isolada, nunca RPC de producao.
+CREATE FUNCTION pg_temp.catalogo_asaas_validar_itens_sombra_inerte(
+ p_separacao uuid,p_tentativa uuid
+) RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY INVOKER SET search_path=''
+AS $shadow_compare$
+DECLARE
+ v_escrow public.catalogo_asaas_separacoes_excepcionais%ROWTYPE;
+ v_plano pg_temp.catalogo_ci_escrow_planos_shadow_inertes%ROWTYPE;
+ v_diferentes bigint;
+ v_esperados bigint;
+ v_planejados bigint;
+ v_valor numeric;
+ v_fingerprint text;
+ v_ok boolean;
+BEGIN
+ SELECT * INTO v_escrow FROM public.catalogo_asaas_separacoes_excepcionais
+ WHERE id=p_separacao;
+ SELECT * INTO v_plano FROM pg_temp.catalogo_ci_escrow_planos_shadow_inertes
+ WHERE tentativa_id=p_tentativa;
+ WITH esperados AS (
+  SELECT i.remuneracao_id,i.valor_centavos
+  FROM public.catalogo_asaas_separacoes_excepcionais_itens i
+  WHERE i.separacao_id=p_separacao
+ ), sombra AS (
+  SELECT si.remuneracao_id,si.valor_centavos
+  FROM pg_temp.catalogo_ci_escrow_planos_itens_shadow_inertes si
+  WHERE si.tentativa_id=p_tentativa
+ ), comparados AS (
+  SELECT e.remuneracao_id AS esperado_id,
+   s.remuneracao_id AS sombra_id,
+   e.valor_centavos AS esperado_centavos,
+   s.valor_centavos AS sombra_centavos
+  FROM esperados e FULL OUTER JOIN sombra s
+  ON s.remuneracao_id=e.remuneracao_id
+ )
+ SELECT count(*) FILTER (
+   WHERE esperado_id IS NULL OR sombra_id IS NULL
+    OR esperado_centavos IS DISTINCT FROM sombra_centavos
+  )::bigint
+ INTO v_diferentes FROM comparados;
+
+ SELECT count(*)::bigint INTO v_esperados
+ FROM public.catalogo_asaas_separacoes_excepcionais_itens
+ WHERE separacao_id=p_separacao;
+ SELECT count(*)::bigint,coalesce(sum(valor_centavos::numeric),0),
+  pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(
+   pg_catalog.string_agg(remuneracao_id::text||':'||valor_centavos::text,
+    '|' ORDER BY remuneracao_id),'UTF8')),'hex')
+ INTO v_planejados,v_valor,v_fingerprint
+ FROM pg_temp.catalogo_ci_escrow_planos_itens_shadow_inertes
+ WHERE tentativa_id=p_tentativa;
+
+ v_ok:=v_escrow.id IS NOT NULL
+  AND v_escrow.situacao IS NOT DISTINCT FROM 'congelada'
+  AND v_plano.tentativa_id IS NOT NULL
+  AND v_plano.separacao_id IS NOT DISTINCT FROM v_escrow.id
+  AND v_plano.fingerprint_sha256 IS NOT DISTINCT FROM v_escrow.fingerprint_sha256
+  AND v_diferentes=0 AND v_esperados=v_escrow.creditos
+  AND v_planejados=v_escrow.creditos AND v_valor=v_escrow.valor_centavos
+  AND v_fingerprint IS NOT DISTINCT FROM v_escrow.fingerprint_sha256;
+ RETURN jsonb_build_object(
+  'integridade_sombra_por_credito',coalesce(v_ok,false),
+  'itens_divergentes_ou_ausentes',v_diferentes,
+  'creditos_esperados',v_esperados,'creditos_planejados',v_planejados,
+  'total_na_sombra_centavos',v_valor,
+  'status_operacional','HOLD_OBRIGATORIO',
+  'pagamento_autorizado',false,'liberacao_autorizada',false,
+  'baixa_realizada',false,'movimenta_dinheiro',false
+ );
+END
+$shadow_compare$;
+
 -- Compromisso Pix prospectivo: WRITE-ONCE, sem transferencia ou baixa.
 DO $pix_compromisso_original$
 DECLARE
