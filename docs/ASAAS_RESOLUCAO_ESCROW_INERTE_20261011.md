@@ -99,3 +99,26 @@ Foram adicionados cenários reais do PostgreSQL efêmero em que:
 - **Rollback de cada ataque:** subtransações de teste revertem as alterações temporárias; a comparação posterior deve voltar a indicar integridade sem modificar `catalogo_remuneracoes_v2`.
 
 **Fronteira:** é uma prova negativa de integridade de *plano documental temporário*, não o mecanismo final de transferência ou baixa. A resolução real continua bloqueada por evidência bancária independente (#41), revisores MFA (#42) e projeto transacional idempotente auditado (#43).
+
+## Recuperação de resultado bancário incerto — 11/10/2026
+
+Novo laboratório de **função pura, sem I/O**, `scripts/validacao-pagamentos/simular-envio-pix-incerto-inerte.cjs`, acompanhado de testes Node. Ele modela o problema em que a aplicação iniciou uma tentativa de Pix mas perdeu a resposta, recebeu um erro HTTP ou viu respostas GET que não constituem prova bancária independente.
+
+A tentativa exige identificação de separação, solicitação, tentativa, referência externa determinística (`guia-exc:<tipo>:<solicitacao_id>`), valor inteiro positivo em centavos e fingerprint SHA-256. Cada evento inclui identificador, sequência, tipo, tentativa, referência e centavos. Lacunas na sequência, IDs duplicados, referências diferentes e valores inconsistentes produzem `historico_inconsistente`, nunca autorização.
+
+| Evento/observação de teste | Classificação ou bloqueio |
+|---|---|
+| Intenção registrada, sem marco de envio | Não prova que o Pix nunca existiu; manter HOLD |
+| Envio iniciado + resposta perdida ou HTTP 5xx | **Resultado potencialmente efetivado**; não reenviar POST |
+| Resposta HTTP aceita | Não equivale a liquidação bancária independente |
+| GET com `DONE` | Não comprova sozinho o beneficiário original |
+| GET com `FAILED`/`CANCELLED` | Não prova ausência de execução anterior ou de outro Pix |
+| GET com `DONE` e `FAILED` ou `CANCELLED` | Observações contraditórias; investigação obrigatória |
+| Reenvio solicitado sobre histórico parcial | Sinaliza reenvio bloqueado; não abre novo saque |
+| Mais de 1.600 GETs sintéticos | Percorre a amostra inteira sem impor limite oculto de 1.000 |
+
+A saída do simulador **nunca contém beneficiário, CPF, chave Pix, credencial, valor de autorização ou nova requisição bancária**. Mesmo com observação `DONE`, retorna `HOLD_OBRIGATORIO`, `pode_reenviar_post=false`, `pode_criar_novo_saque=false`, `pagamento_autorizado=false`, `liberacao_autorizada=false`, `baixa_realizada=false` e `movimenta_dinheiro=false`.
+
+**Semântica crítica:** um GET do Asaas não estabelece por si só que *nenhum* outro envio existiu. Uma resposta perdida depois de iniciar um envio deve ser investigada por canal bancário independente, comparando ID bancário, referência, valor, conta de destino originalmente autorizada, liquidação e histórico de transferências anteriores. O simulador não coleta essas provas e, por isso, jamais conclui "pago" ou "não pago".
+
+**Próximo requisito de implementação real:** journal de intenção imutável e idempotente gravado no banco **antes** de qualquer POST; controle transacional por tentativa, lock por motoboy, proibição de segundo POST enquanto houver resultado incerto, conciliação independente e transição de estado com MFA/segregação efetivos. Isso ainda é **projeto**, não código financeiro habilitado. Mantém #41, #42 e #43 abertos.
