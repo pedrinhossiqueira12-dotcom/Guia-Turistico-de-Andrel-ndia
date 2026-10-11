@@ -69,6 +69,14 @@
             <p id="repasseFeedback" class="form-feedback" role="status"></p>
           </form>
         </section>
+        <section class="admin-card wide" aria-labelledby="asaasSandboxFaturasTitulo">
+          <span class="eyebrow">HOMOLOGAÇÃO SOMENTE LEITURA</span>
+          <h2 id="asaasSandboxFaturasTitulo">Faturas Pix aptas para teste — Asaas Sandbox</h2>
+          <p>Consulta faturas já fechadas com valor devido. Não emite cobranças, não confirma pagamento, não movimenta Pix e não altera o histórico financeiro. Resultado disponível exclusivamente no Sandbox.</p>
+          <div class="form-actions"><button id="asaasSandboxFaturasConsultar" class="button button-secondary" type="button">Verificar faturas de teste</button></div>
+          <p id="asaasSandboxFaturasFeedback" class="form-feedback" role="status"></p>
+          <div id="asaasSandboxFaturasLista" class="manager-list" aria-live="polite"></div>
+        </section>
         <section class="admin-card wide" aria-labelledby="saquesAsaasTitulo">
           <span class="eyebrow">AUDITORIA FINANCEIRA</span><h2 id="saquesAsaasTitulo">Saques Pix — Asaas</h2>
           <p>Visualização somente para a administração da plataforma. Nenhum botão nesta seção envia dinheiro ou libera um crédito manualmente. Transferências em revisão exigem conciliação bancária antes de qualquer intervenção.</p>
@@ -101,6 +109,6 @@
     </section>
   </main>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="../js/entregas-operacao.js?v=operacao-v2-asaas-webhook-20261011"></script>
+  <script src="../js/entregas-operacao.js?v=operacao-v2-asaas-faturas-sandbox-20261011"></script>
 </body>
 </html>
