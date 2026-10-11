@@ -287,27 +287,56 @@ async function verifyInvoice(paymentId:string,charge:Record<string,unknown>,stor
  });
  return {payment,conciliado,estado};
 }
-async function loadOrCreateCustomer(store:string,body:Record<string,unknown>,email:string){
- const {data:found,error}=await db.from("catalogo_asaas_clientes").select("cliente_id").eq("comercio_id",store).maybeSingle();
+async function loadOrCreateCustomer(
+ store:string,body:Record<string,unknown>,email:string,expectedCustomerId?:string
+){
+ const {data:found,error}=await db.from("catalogo_asaas_clientes")
+  .select("cliente_id").eq("comercio_id",store).maybeSingle();
  if(error)throw new Failure("Falha ao consultar cadastro Asaas.",503);
- if(found?.cliente_id)return found.cliente_id;
- const doc=value(body.documento,30).replace(/\D/g,"");
- const nome=value(body.nome_pagador,120);
- check([11,14].includes(doc.length)&&nome.length>=3,
-  "Para a primeira fatura, informe nome completo ou razão social e CPF/CNPJ do pagador.",400);
+ if(found?.cliente_id){
+  check(!expectedCustomerId||found.cliente_id===expectedCustomerId,
+   "Pagador remoto diferente do cadastro financeiro local. Revisão necessária.",409);
+  return String(found.cliente_id);
+ }
  const ref="guia-comercio-"+store;
  const list=await asaas("/customers?externalReference="+encodeURIComponent(ref)+"&limit=100");
- let customer=Array.isArray(list.data)?list.data.find((c:Record<string,unknown>)=>c.externalReference===ref):null;
- if(!customer){
-  customer=await asaas("/customers","POST",{
-   name:nome,cpfCnpj:doc,email,externalReference:ref,notificationDisabled:true,
-  });
+ const candidates=Array.isArray(list.data)
+  ? list.data.filter((c:Record<string,unknown>)=>c.externalReference===ref):[];
+ // Nunca criar novo cliente ao recuperar cobranca ja existente: a identidade
+ // do pagador vem da fatura bancária e precisa coincidir com cadastro remoto.
+ let customer=expectedCustomerId
+  ? candidates.find((c:Record<string,unknown>)=>c.id===expectedCustomerId):null;
+ if(expectedCustomerId && !customer)
+  throw new Failure("Cliente da cobrança não localizado no Asaas. Manter revisão, sem cadastrar outro.",409);
+ if(!expectedCustomerId){
+  if(candidates.length>1)
+   throw new Failure("Existem clientes duplicados no Asaas. Conciliação administrativa necessária.",409);
+  customer=candidates[0]||null;
+  if(!customer){
+   const doc=value(body.documento,30).replace(/\D/g,"");
+   const nome=value(body.nome_pagador,120);
+   check([11,14].includes(doc.length)&&nome.length>=3,
+    "Para a primeira fatura, informe nome completo ou razão social e CPF/CNPJ do pagador.",400);
+   customer=await asaas("/customers","POST",{
+    name:nome,cpfCnpj:doc,email,externalReference:ref,notificationDisabled:true,
+   });
+  }
  }
  check(Boolean(customer?.id),"Não foi possível confirmar o cadastro do pagador no Asaas.",503);
+ // INSERT, nao UPSERT: jamais sobrescrever cliente bancario ja consolidado
+ // por outra requisicao concorrente (inclusive outra competencia mensal).
+ const customerId=String(customer.id);
  const {error:saveError}=await db.from("catalogo_asaas_clientes")
-  .upsert({comercio_id:store,cliente_id:String(customer.id)},{onConflict:"comercio_id"});
- if(saveError)throw new Failure("O cliente foi criado no provedor, mas precisa ser conciliado antes de cobrar.",503);
- return String(customer.id);
+  .insert({comercio_id:store,cliente_id:customerId});
+ if(saveError){
+  if(saveError.code==="23505"){
+   const {data:committed,error:lookupError}=await db.from("catalogo_asaas_clientes")
+    .select("cliente_id").eq("comercio_id",store).maybeSingle();
+   if(!lookupError&&committed?.cliente_id===customerId)return customerId;
+  }
+  throw new Failure("Cadastro bancário concorrente ou inconclusivo. Não emitir Pix antes da conciliação.",503);
+ }
+ return customerId;
 }
 async function showInvoice(uid:string,body:Record<string,unknown>){
  const {f,charge}=await invoice(uid,body);
@@ -365,7 +394,8 @@ async function createInvoice(uid:string,body:Record<string,unknown>,email:string
   if(charge.gateway==="asaas")return await reconcileInvoice(uid,body);
   throw new Failure("Cobrança Mercado Pago existente. Não é seguro emitir outra.",409);
  }
- const customerId=await loadOrCreateCustomer(store,body,email);
+ // Primeiro reservar a emissao local; chamadas concorrentes da mesma fatura
+ // nunca devem cadastrar pagadores diferentes antes de ter um claim unico.
  const {data:claim,error:claimError}=await db.from("catalogo_asaas_emissoes")
   .insert({fechamento_id:f.id}).select("operacao_id").single();
  // Claim único impede duas cobranças durante chamadas concorrentes ou timeout.
@@ -382,6 +412,14 @@ async function createInvoice(uid:string,body:Record<string,unknown>,email:string
  let payment=candidates[0]||null;
  if(!payment&&!novoClaim)
   throw new Failure("Emissão reservada e ainda não localizada no Asaas. Não é seguro emitir outro Pix automaticamente.",409);
+ const expectedCustomerId=payment
+  ?(typeof payment.customer==="string" && payment.customer.length>=5 &&
+    payment.customer.length<=120 && payment.customer===payment.customer.trim()
+     ?payment.customer:"")
+  :undefined;
+ if(payment)check(Boolean(expectedCustomerId),
+  "Cobrança bancária sem pagador identificável. Não cadastrar novo cliente.",409);
+ const customerId=await loadOrCreateCustomer(store,body,email,expectedCustomerId);
  if(!payment){
   payment=await asaas("/payments","POST",{
    customer:customerId,billingType:"PIX",value:money(invoiceCents),
