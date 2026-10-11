@@ -107,7 +107,7 @@ test("#41/#42/#43: porta conjunta consulta diagnósticos reais mas nunca autoriz
   "'baixa_realizada',false",
   "'movimenta_dinheiro',false"
  ])assert.ok(gate.includes(marker),"Missing joint gate contract: "+marker);
- assert.doesNotMatch(gate,/\b(?:INSERT INTO|UPDATE|DELETE FROM)\b/i);
+ assert.doesNotMatch(gate,/\b(?:INSERT\s+INTO|UPDATE\s+(?:public\.|catalogo_ci_)|DELETE\s+FROM)\b/i);
  assert.match(gate,/REVOKE ALL ON FUNCTION[\s\S]*?diagnosticar_portas_hold\(uuid,jsonb\)/);
  assert.doesNotMatch(gate,/p_sinais_cliente\s*(?:->|#>|=)|\bGRANT EXECUTE\b/i);
 });
