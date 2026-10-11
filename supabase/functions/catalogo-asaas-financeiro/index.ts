@@ -1454,7 +1454,15 @@ async function processarEventoAsaasPendente(row:AsaasWebhookPendente){
   const {data:charge,error}=await db.from("catalogo_fatura_cobrancas")
    .select("*").eq("gateway","asaas").eq("order_id",row.recurso_id).maybeSingle();
   if(error)throw new Failure("Falha ao localizar fatura do Webhook.",503);
-  if(!charge)return; // cobranca da conta Asaas que nao pertence ao Guia
+  if(!charge){
+   // Webhook pode chegar ANTES do INSERT da fatura local. Nunca marcar
+   // como concluido um evento do Guia sem seu vinculo contabil.
+   const remote=await asaas("/payments/"+encodeURIComponent(row.recurso_id));
+   const ref=value(remote.externalReference,180);
+   if(/^fatura-[a-z0-9-]+-20\d\d-(0[1-9]|1[0-2])$/.test(ref))
+    throw new Failure("Fatura do Guia ainda nao registrada; reprocessar depois.",503);
+   return; // outro pagamento na mesma conta Asaas, fora do modulo Guia
+  }
   await verifyInvoice(row.recurso_id,charge,String(charge.comercio_id),
    String(charge.competencia).slice(0,7));
   return;
