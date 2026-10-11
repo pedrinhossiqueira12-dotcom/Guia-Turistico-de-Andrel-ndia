@@ -1612,6 +1612,243 @@ def scenario_intencao_prepost_duravel_concorrente() -> None:
     print("PASS #43 journal PRE-POST imutavel, locks 2 sessoes, "
           "COMMIT/ROLLBACK, zero Pix, HOLD",flush=True)
 
+
+# #42: identidades e AAL2 100% SINTETICOS, nao sao sessao Auth validada.
+CI_REVIEW_OWNER = "fa970000-0000-4000-8000-000000000001"
+CI_REVIEW_A = "fa970000-0000-4000-8000-000000000002"
+CI_REVIEW_B = "fa970000-0000-4000-8000-000000000003"
+CI_REVIEW_VIEWER = "fa970000-0000-4000-8000-000000000004"
+CI_REVIEW_ESCROW = "ea970000-0000-4000-8000-000000000001"
+CI_REVIEW_REQUEST = "da970000-0000-4000-8000-000000000001"
+CI_REVIEW_SESSION_A = "ca970000-0000-4000-8000-000000000002"
+CI_REVIEW_SESSION_B = "ca970000-0000-4000-8000-000000000003"
+CI_REVIEW_SESSION_OWNER = "ca970000-0000-4000-8000-000000000001"
+CI_REVIEW_SESSION_VIEWER = "ca970000-0000-4000-8000-000000000004"
+
+
+def reviewer_diag_ci(escrow: str, forged: bool = False) -> dict:
+    import json
+    injected = (
+      '{"user_id":"' + CI_REVIEW_A + '","mfa":"verified",'
+      '"aal":"aal2","role":"admin","aprovacao":true,'
+      '"cpf":"NAO_MOSTRAR_CPF","pix":"NAO_MOSTRAR_PIX"}'
+      if forged else '{}'
+    )
+    raw = run_sql(
+      "SELECT catalogo_ci_revisores_inertes.diagnosticar_elegibilidade_mock("
+      f"'{escrow}'::uuid,'{injected}'::jsonb)"
+    )
+    data = json.loads(raw)
+    if data.get("status_operacional") != "HOLD_OBRIGATORIO":
+        raise AssertionError("Pareceres mock deram permissao financeira")
+    for flag in (
+      "mfa_real_validado","dupla_aprovacao_financeira",
+      "pagamento_autorizado","liberacao_autorizada",
+      "baixa_realizada","movimenta_dinheiro"
+    ):
+        if data.get(flag) is not False:
+            raise AssertionError(f"Parecer mock habilitou {flag}: {data}")
+    if "NAO_MOSTRAR" in raw:
+        raise AssertionError("Diag de identidade retornou dados sensiveis da requisicao")
+    return data
+
+
+def scenario_revisores_credenciais_mock_hold() -> None:
+    source=Path(
+        "supabase/tests/isolated/catalogo-asaas-revisores-identidade-race-inerte.sql"
+    ).read_text(encoding="utf8")
+    if ("catalogo_asaas_race_ci" not in source or
+        "duas_credenciais_sinteticas_elegiveis" not in source or
+        "mfa_real_validado',false" not in source):
+        raise AssertionError("Fixture de identidade deixou de ser sintética e HOLD")
+    run_sql("SET app.catalogo_ci_revisores_test='enabled';\n"+source)
+    users=(CI_REVIEW_OWNER,CI_REVIEW_A,CI_REVIEW_B,CI_REVIEW_VIEWER)
+    sessions=(CI_REVIEW_SESSION_OWNER,CI_REVIEW_SESSION_A,
+              CI_REVIEW_SESSION_B,CI_REVIEW_SESSION_VIEWER)
+    run_sql(f"""
+    BEGIN;
+    INSERT INTO auth.users(id) VALUES
+     ('{users[0]}'),('{users[1]}'),('{users[2]}'),('{users[3]}');
+    INSERT INTO public.catalogo_asaas_separacoes_excepcionais(
+     id,tipo,solicitacao_id,motoboy_id,valor_centavos,creditos,fingerprint_sha256
+    ) VALUES ('{CI_REVIEW_ESCROW}','saida','{CI_REVIEW_REQUEST}',
+      '{CI_REVIEW_OWNER}',12000,2,repeat('b',64));
+    INSERT INTO catalogo_ci_revisores_inertes.credenciais_ci(
+      revisor_id,papel,situacao,valido_ate
+    ) VALUES
+     ('{CI_REVIEW_OWNER}','revisor_escrow','habilitado',now()+interval '2 hours'),
+     ('{CI_REVIEW_A}','revisor_escrow','habilitado',now()+interval '2 hours'),
+     ('{CI_REVIEW_B}','revisor_escrow','habilitado',now()+interval '2 hours'),
+     ('{CI_REVIEW_VIEWER}','leitor','habilitado',now()+interval '2 hours');
+    INSERT INTO catalogo_ci_revisores_inertes.sessoes_mock_ci(
+      sessao_id,revisor_id,fator_id,aal_mock,fator_estado_mock,
+      ultimo_desafio_mock_em,expira_em
+    ) VALUES
+     ('{sessions[0]}','{users[0]}',gen_random_uuid(),
+      'aal2','verified',now()-interval '1 minute',now()+interval '30 minutes'),
+     ('{sessions[1]}','{users[1]}',gen_random_uuid(),
+      'aal2','verified',now()-interval '1 minute',now()+interval '30 minutes'),
+     ('{sessions[2]}','{users[2]}',gen_random_uuid(),
+      'aal2','verified',now()-interval '1 minute',now()+interval '30 minutes'),
+     ('{sessions[3]}','{users[3]}',gen_random_uuid(),
+      'aal2','verified',now()-interval '1 minute',now()+interval '30 minutes');
+    INSERT INTO catalogo_ci_revisores_inertes.pareceres_mock_ci(
+     id,separacao_id,revisor_id,sessao_id,
+     fingerprint_creditos_sha256,resultado,expira_em
+    ) VALUES
+     (gen_random_uuid(),'{CI_REVIEW_ESCROW}','{users[0]}',
+      '{sessions[0]}',repeat('b',64),'manter_hold',now()+interval '1 hour'),
+     (gen_random_uuid(),'{CI_REVIEW_ESCROW}','{users[1]}',
+      '{sessions[1]}',repeat('b',64),'manter_hold',now()+interval '1 hour'),
+     (gen_random_uuid(),'{CI_REVIEW_ESCROW}','{users[2]}',
+      '{sessions[2]}',repeat('b',64),'manter_hold',now()+interval '1 hour'),
+     (gen_random_uuid(),'{CI_REVIEW_ESCROW}','{users[3]}',
+      '{sessions[3]}',repeat('b',64),'manter_hold',now()+interval '1 hour');
+    COMMIT;
+    """)
+    valid=reviewer_diag_ci(CI_REVIEW_ESCROW)
+    if (valid.get("pareceres_mock_encontrados")!=4 or
+        valid.get("pareceres_mock_elegiveis")!=2 or
+        valid.get("pareceres_mock_recusados")!=2 or
+        valid.get("revisores_mock_distintos")!=2 or
+        valid.get("duas_credenciais_sinteticas_elegiveis") is not True):
+        raise AssertionError("Duas identidades elegiveis, proprietario e leitor: "+str(valid))
+    forged=reviewer_diag_ci(CI_REVIEW_ESCROW,forged=True)
+    if forged != valid:
+        raise AssertionError("Dados do browser falsificaram papel/MFA")
+    nonexistent=reviewer_diag_ci("00000000-0000-4000-8000-000000000042")
+    if nonexistent.get("ok") is not False:
+        raise AssertionError("Reserva desconhecida resultou na aprovacao")
+
+    # Vincular a sessao do revisor B a um parecer do revisor A deve
+    # falhar com FK composta (impossivel forjar identidade de outro fator).
+    run_sql(f"""
+    DO $forged_session$
+    BEGIN
+     BEGIN
+      INSERT INTO catalogo_ci_revisores_inertes.pareceres_mock_ci(
+       id,separacao_id,revisor_id,sessao_id,
+       fingerprint_creditos_sha256,resultado,expira_em)
+      VALUES(gen_random_uuid(),'{CI_REVIEW_ESCROW}',
+       '{CI_REVIEW_A}','{CI_REVIEW_SESSION_B}',
+       repeat('b',64),'manter_hold',now()+interval '1 hour');
+      RAISE EXCEPTION 'Sessao de outro revisor aceita';
+     EXCEPTION WHEN foreign_key_violation THEN NULL;
+     END;
+    END $forged_session$;
+    """)
+
+    # Qualquer revogacao derruba a elegibilidade documental; continua
+    # impossivel converter isso em AAL2 real ou aprovacao financeira.
+    run_sql(f"""
+      UPDATE catalogo_ci_revisores_inertes.credenciais_ci
+      SET situacao='revogado' WHERE revisor_id='{CI_REVIEW_B}';
+    """)
+    revoked=reviewer_diag_ci(CI_REVIEW_ESCROW)
+    if (revoked.get("pareceres_mock_elegiveis")!=1 or
+        revoked.get("duas_credenciais_sinteticas_elegiveis") is not False):
+        raise AssertionError("Revogacao nao derrubou a dupla revisao documental")
+    run_sql(f"""
+      UPDATE catalogo_ci_revisores_inertes.credenciais_ci
+      SET situacao='habilitado' WHERE revisor_id='{CI_REVIEW_B}';
+      UPDATE catalogo_ci_revisores_inertes.sessoes_mock_ci
+      SET ultimo_desafio_mock_em=now()-interval '10 minutes'
+      WHERE sessao_id='{CI_REVIEW_SESSION_A}';
+    """)
+    stale=reviewer_diag_ci(CI_REVIEW_ESCROW)
+    if stale.get("pareceres_mock_elegiveis")!=1:
+        raise AssertionError("Desafio antigo deveria desqualificar uma revisao")
+    run_sql(f"""
+      UPDATE catalogo_ci_revisores_inertes.sessoes_mock_ci
+      SET ultimo_desafio_mock_em=now()-interval '1 minute',
+          aal_mock='aal1' WHERE sessao_id='{CI_REVIEW_SESSION_A}';
+    """)
+    if reviewer_diag_ci(CI_REVIEW_ESCROW).get("pareceres_mock_elegiveis")!=1:
+        raise AssertionError("AAL1 local nao pode satisfazer predicado AAL2")
+    run_sql(f"""
+      UPDATE catalogo_ci_revisores_inertes.sessoes_mock_ci
+      SET aal_mock='aal2',fator_estado_mock='revoked'
+      WHERE sessao_id='{CI_REVIEW_SESSION_A}';
+    """)
+    if reviewer_diag_ci(CI_REVIEW_ESCROW).get("pareceres_mock_elegiveis")!=1:
+        raise AssertionError("Fator revogado nao pode participar do par de revisores")
+    run_sql(f"""
+      UPDATE catalogo_ci_revisores_inertes.sessoes_mock_ci
+      SET fator_estado_mock='verified',revogada_em=now()
+      WHERE sessao_id='{CI_REVIEW_SESSION_A}';
+    """)
+    if reviewer_diag_ci(CI_REVIEW_ESCROW).get("pareceres_mock_elegiveis")!=1:
+        raise AssertionError("Sessao revogada nao bloqueou elegibilidade")
+    run_sql(f"""
+      UPDATE catalogo_ci_revisores_inertes.sessoes_mock_ci
+      SET revogada_em=NULL,expira_em=now()-interval '1 minute'
+      WHERE sessao_id='{CI_REVIEW_SESSION_A}';
+    """)
+    if reviewer_diag_ci(CI_REVIEW_ESCROW).get("pareceres_mock_elegiveis")!=1:
+        raise AssertionError("Sessao expirada ainda foi aceita")
+    run_sql(f"""
+      UPDATE catalogo_ci_revisores_inertes.sessoes_mock_ci
+      SET expira_em=now()+interval '30 minutes'
+      WHERE sessao_id='{CI_REVIEW_SESSION_A}';
+      UPDATE catalogo_ci_revisores_inertes.pareceres_mock_ci
+      SET fingerprint_creditos_sha256=repeat('c',64)
+      WHERE revisor_id='{CI_REVIEW_A}' AND separacao_id='{CI_REVIEW_ESCROW}';
+    """)
+    if reviewer_diag_ci(CI_REVIEW_ESCROW).get("pareceres_mock_elegiveis")!=1:
+        raise AssertionError("Parecer com fingerprint antigo parece elegivel")
+    run_sql(f"""
+      UPDATE catalogo_ci_revisores_inertes.pareceres_mock_ci
+      SET fingerprint_creditos_sha256=repeat('b',64),
+          expira_em=now()-interval '1 minute'
+      WHERE revisor_id='{CI_REVIEW_A}' AND separacao_id='{CI_REVIEW_ESCROW}';
+    """)
+    if reviewer_diag_ci(CI_REVIEW_ESCROW).get("pareceres_mock_elegiveis")!=1:
+        raise AssertionError("Parecer documental expirado ainda vale")
+    # Nao se torna um aprovador com duas sessoes simultaneas do MESMO usuario:
+    # chave unica da tabela pareceres impede repeticoes.
+    run_sql(f"""
+    DO $same_user$
+    BEGIN
+     BEGIN
+      INSERT INTO catalogo_ci_revisores_inertes.pareceres_mock_ci(
+       id,separacao_id,revisor_id,sessao_id,
+       fingerprint_creditos_sha256,resultado,expira_em)
+      VALUES(gen_random_uuid(),'{CI_REVIEW_ESCROW}',
+       '{CI_REVIEW_B}','{CI_REVIEW_SESSION_B}',repeat('b',64),
+       'manter_hold',now()+interval '1 hour');
+      RAISE EXCEPTION 'Mesmo revisor contou duas vezes';
+     EXCEPTION WHEN unique_violation THEN NULL;
+     END;
+    END $same_user$;
+    """)
+
+    grants=run_sql("""
+      SELECT (
+       has_schema_privilege('service_role','catalogo_ci_revisores_inertes','USAGE')
+       OR has_table_privilege('anon',
+        'catalogo_ci_revisores_inertes.credenciais_ci','SELECT')
+       OR has_table_privilege('authenticated',
+        'catalogo_ci_revisores_inertes.sessoes_mock_ci','SELECT')
+       OR has_function_privilege('service_role',
+        'catalogo_ci_revisores_inertes.diagnosticar_elegibilidade_mock(uuid,jsonb)',
+        'EXECUTE')
+      )::text
+    """)
+    if grants!="false":
+        raise AssertionError("Diag de identidade mock foi exposto a API")
+    if run_sql(
+      "SELECT count(*) FROM public.catalogo_asaas_saques "
+      f"WHERE motoboy_id='{CI_REVIEW_OWNER}'"
+    )!="0":
+        raise AssertionError("Pareceres sintéticos criaram saque")
+    if run_sql(
+      "SELECT count(*) FROM public.catalogo_asaas_separacoes_excepcionais "
+      f"WHERE id='{CI_REVIEW_ESCROW}' AND situacao='congelada'"
+    )!="1":
+        raise AssertionError("Pareceres sintéticos liberaram reserva")
+    print("PASS #42: dois revisores mock com sessao/fator, revogacao, "
+          "AAL1/expiry, autor impedido, ataque de claims e HOLD",flush=True)
+
 def main() -> None:
     guard_environment()
     prepare()
@@ -1624,6 +1861,7 @@ def main() -> None:
     scenario_escrow_preview_concurrent_hold()
     scenario_resolucao_documental_idempotente_concorrente()
     scenario_intencao_prepost_duravel_concorrente()
+    scenario_revisores_credenciais_mock_hold()
     print("PASS: concorrencia real com 2 sessoes, IDs e usuarios sinteticos, zero Pix", flush=True)
 
 
