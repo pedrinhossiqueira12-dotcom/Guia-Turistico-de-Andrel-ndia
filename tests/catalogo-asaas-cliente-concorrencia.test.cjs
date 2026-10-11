@@ -47,6 +47,11 @@ function fixture({local=null,remote=[],insertConflict=false}={}){
   throw Error("Unexpected external HTTP call "+method+" "+path);
  };
  const context={db,asaas,Failure,check:(b,msg,status=409)=>{if(!b)throw new Failure(msg,status);},
+  listarAsaasPorReferencia:async(tipo,reference)=>{
+   assert.equal(tipo,"customers");
+   state.remoteReads++;
+   return state.remote.filter(x=>x.externalReference===reference);
+  },
   value:(x,max=200)=>typeof x==="string"?x.trim().slice(0,max):"",
   encodeURIComponent,String,Array};
  const func=vm.runInNewContext(real+"\nloadOrCreateCustomer",context);
