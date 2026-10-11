@@ -52,3 +52,18 @@ test("#43: PostgreSQL disposable ensaia 2 creditos e reversao sem baixas",()=>{
  assert.match(sql,/v_preview_resolucao->>'pagamento_autorizado' IS DISTINCT FROM 'false'/);
  assert.match(sql,/v_preview_resolucao->>'baixa_realizada' IS DISTINCT FROM 'false'/);
 });
+
+test("#43: PostgreSQL descartavel valida 1201 remuneracoes em 2 meses antes de HOLD",()=>{
+ assert.match(sql,/DO \$escrow_bulk_1201\$/);
+ assert.match(sql,/v_total bigint:=1201\*6000/);
+ assert.match(sql,/v_target:=CASE WHEN v_month=1 THEN 601 ELSE 600 END/);
+ assert.match(sql,/v_competencia:=make_date\(2097,v_month,1\)/);
+ assert.match(sql,/FOR v_i IN 1\.\.v_target LOOP/);
+ assert.match(sql,/catalogo_asaas_separar_creditos_excepcionais\(\s*'saida',v_saida\)/);
+ assert.match(sql,/v_reserva->>'creditos_separados' IS DISTINCT FROM '1201'/);
+ assert.match(sql,/v_previa->>'creditos_lidos_do_livro' IS DISTINCT FROM '1201'/);
+ assert.match(sql,/v_previa->>'status_operacional' IS DISTINCT FROM 'HOLD_OBRIGATORIO'/);
+ assert.match(sql,/v_previa->>'pagamento_autorizado' IS DISTINCT FROM 'false'/);
+ assert.match(sql,/v_previa->>'movimenta_dinheiro' IS DISTINCT FROM 'false'/);
+ assert.match(sql,/PASS #43 PostgreSQL: 1201 remuneracoes reais em 2 competencias, HOLD, zero Pix/);
+});
