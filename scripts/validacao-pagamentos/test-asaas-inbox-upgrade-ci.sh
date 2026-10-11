@@ -62,8 +62,8 @@ BEGIN
     RAISE EXCEPTION 'Webhook repetido nao foi deduplicado';
   END IF;
   reserva:=public.catalogo_asaas_webhook_claim(10);
-  SELECT elem INTO item FROM jsonb_array_elements(reserva) AS elem
-    WHERE elem->>'id'='ci-evento-novo-001';
+  SELECT value INTO item FROM jsonb_array_elements(reserva) AS item_row(value)
+    WHERE value->>'id'='ci-evento-novo-001';
   IF item IS NULL THEN
     RAISE EXCEPTION 'Evento novo nao entrou na fila';
   END IF;
