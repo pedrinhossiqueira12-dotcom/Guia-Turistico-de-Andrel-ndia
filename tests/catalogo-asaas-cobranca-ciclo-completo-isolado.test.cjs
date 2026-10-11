@@ -31,7 +31,8 @@ function fixture(){
  const f={id:"fechamento-ci-001",comercio_id:store,competencia:month+"-01",
   total_comissao_centavos:7000,status:"faturado",vencimento_em:"2026-10-30"};
  const state={f,charge:null,claim:false,provider:[],events:[],posts:0,qrs:0,
-   reconciles:[],rpcCalls:[],providerCalls:[],getErrors:0,customer};
+   reconciles:[],rpcCalls:[],providerCalls:[],getErrors:0,customer,
+   registrarAckOverride:undefined};
  let counter=0;
  const clientQuery=(table)=>{
   const conditions={};
@@ -106,6 +107,8 @@ function fixture(){
   rpc:async(name,params)=>{
    state.rpcCalls.push({name,params});
    if(name==="catalogo_asaas_registrar_fatura"){
+    if(state.registrarAckOverride!==undefined)
+     return state.registrarAckOverride;
     state.charge={comercio_id:store,competencia:month+"-01",
      gateway:"asaas",order_id:params.p_payment,
      valor_centavos:params.p_valor,status:"pendente"};
@@ -254,5 +257,30 @@ test("chargeback/estorno apos fatura paga nao autoriza QR nem volta a emitir",as
   assert.equal(r.pix.code,"");
   assert.equal(x.state.reconciles.at(-1).p_estado,expected);
   assert.equal(x.state.posts,1);
+ }
+});
+
+
+test("fatura criada no Asaas SEM ACK confirmado do banco nunca aparenta sucesso",async()=>{
+ for(const invalid of [
+  null,
+  {ok:false,mensagem:"SQL recusou o fechamento"},
+  {ok:true,order_id:"pay_outro",cobranca_id:"charge-ci"},
+  {ok:true,order_id:"pay_ci_1",cobranca_id:""}
+ ]){
+  const x=fixture();
+  x.state.registrarAckOverride=invalid;
+  await assert.rejects(x.request(),e=>e.status===503
+   && /registro local não foi confirmado/.test(e.message));
+  assert.equal(x.state.posts,1,"A cobranca remota foi criada uma unica vez");
+  assert.equal(x.state.claim,true,"Journal de emissão deve permanecer reservado");
+  assert.equal(x.state.charge,null,"Não simular fatura salva sem ACK SQL");
+  assert.equal(x.state.reconciles.length,0,"Sem ACK, proibido liberar pagamento");
+  // Recuperação por GET da mesma cobrança, após restabelecer banco.
+  x.state.registrarAckOverride=undefined;
+  const recovered=await x.request();
+  assert.equal(recovered.cobranca_status,"pendente");
+  assert.equal(x.state.posts,1,"Recuperação não faz segundo POST ao Asaas");
+  assert.equal(x.state.charge.order_id,"pay_ci_1");
  }
 });
