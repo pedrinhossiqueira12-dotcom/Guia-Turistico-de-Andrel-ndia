@@ -135,7 +135,7 @@ Deno.test("varredura bloqueia vinculo bancario local malformado antes de GET Asa
   {nome:"id de transferencia ausente",vinculo:{...valido,transferencia_id:null}},
   {nome:"id de transferencia vazio",vinculo:{...valido,transferencia_id:""}},
   {nome:"id com espaços externos",vinculo:{...valido,transferencia_id:" ci-transfer "}},
-  {nome:"id com quebra de linha",vinculo:{...valido,transferencia_id:"ci-transfer\\nmalformado"}},
+  {nome:"id com quebra de linha",vinculo:{...valido,transferencia_id:"ci-transfer\nmalformado"}},
   {nome:"id com tamanho excessivo",vinculo:{...valido,transferencia_id:"x".repeat(181)}},
   {nome:"referencia externa ausente",vinculo:{...valido,referencia_externa:null}},
   {nome:"referencia externa vazia",vinculo:{...valido,referencia_externa:""}},
