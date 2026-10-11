@@ -122,6 +122,68 @@ Deno.test("Asaas com validacao desativada recusa por HTTP sem consultar rede", a
 
 // #41: exercita a Edge REAL com autenticação e histórico Asaas inteiramente
 // FICTÍCIOS. Nenhuma rede é permitida fora dos mocks da CI.
+Deno.test("varredura bloqueia separacao congelada inconsistente antes de consultar banco",async()=>{
+ const edge=handlers.get("asaas")!;
+ const separacaoId="ad700001-1111-4111-8111-111111111111";
+ const requestId="ad700002-1111-4111-8111-111111111111";
+ const motoboyId="edededed-eded-4ede-8ede-ededededed10";
+ const adminUid="4b9a0233-6b72-4573-aebd-d596c5b15e1b";
+ const valida={id:separacaoId,tipo:"saida",solicitacao_id:requestId,
+  motoboy_id:motoboyId,valor_centavos:12000,situacao:"congelada"};
+ const casos:{nome:string,altera:Record<string,unknown>}[]=[
+  {nome:"id local diferente",altera:{id:"ad700003-1111-4111-8111-111111111111"}},
+  {nome:"tipo inesperado",altera:{tipo:"outro"}},
+  {nome:"solicitacao inexistente",altera:{solicitacao_id:null}},
+  {nome:"solicitacao nao UUID",altera:{solicitacao_id:"pedido-sem-uuid"}},
+  {nome:"motoboy nao UUID",altera:{motoboy_id:"beneficiario-invalido"}},
+  {nome:"valor zerado",altera:{valor_centavos:0}},
+  {nome:"valor negativo",altera:{valor_centavos:-1}},
+  {nome:"valor fracionario",altera:{valor_centavos:12000.5}},
+  {nome:"valor numerico nao seguro",altera:{valor_centavos:1e20}},
+  {nome:"valor local tipo string",altera:{valor_centavos:"12000"}},
+ ];
+ for(const caso of casos){
+  let requisicoesBanco=0,requisicoesVinculo=0;
+  try{
+   currentMockFetch=async(input:RequestInfo|URL,init?:RequestInit)=>{
+    const raw=typeof input==="string"?input:input instanceof URL?input.toString():input.url;
+    const u=new URL(raw);
+    assert((init?.method??"GET")==="GET","Conferencia local tentou escrita");
+    if(u.host==="ci-supabase.invalid"&&u.pathname==="/auth/v1/user")
+     return result({id:adminUid,aud:"authenticated",role:"authenticated",
+      app_metadata:{},user_metadata:{}});
+    if(u.host==="ci-supabase.invalid"&&
+       u.pathname==="/rest/v1/catalogo_asaas_separacoes_excepcionais")
+     return result({...valida,...caso.altera});
+    if(u.host==="ci-supabase.invalid"&&
+       u.pathname==="/rest/v1/catalogo_asaas_transferencias_excepcionais_auditoria"){
+     requisicoesVinculo++;
+     throw Error("A auditoria consultou vinculo invalido: "+caso.nome);
+    }
+    if(u.host==="api-sandbox.asaas.com"&&u.pathname==="/v3/transfers"){
+     requisicoesBanco++;
+     throw Error("A auditoria consultou banco com escrow invalido: "+caso.nome);
+    }
+    throw Error("Rota inesperada no ensaio de escrow: "+u.pathname);
+   };
+   const response=await edge(post("/functions/v1/catalogo-asaas-financeiro",{
+    acao:"auditar_historico_transferencias_excepcionais_sandbox_admin",
+    separacao_id:separacaoId,
+   },{authorization:"Bearer ci-admin-test-token"}));
+   assertions(response,503,caso.nome);
+   const payload=await response.json();
+   assert(requisicoesBanco===0&&requisicoesVinculo===0,
+    "Dados locais inconsistentes acionaram busca posterior: "+caso.nome);
+   assert(payload?.success===false&&
+    typeof payload.mensagem==="string"&&payload.mensagem.includes("HOLD"),
+    "Resposta nao exigiu bloqueio diante de reserva invalida: "+caso.nome);
+   assert(!JSON.stringify(payload).includes(motoboyId)&&
+    !JSON.stringify(payload).includes(requestId),
+    "Auditoria expos beneficiario ou solicitacao: "+caso.nome);
+  }finally{currentMockFetch=denyNetwork;}
+ }
+});
+
 Deno.test("varredura rejeita fracoes de centavo sem arredondar o valor bancario",async()=>{
  const edge=handlers.get("asaas")!;
  const separacaoId="ad600001-1111-4111-8111-111111111111";
