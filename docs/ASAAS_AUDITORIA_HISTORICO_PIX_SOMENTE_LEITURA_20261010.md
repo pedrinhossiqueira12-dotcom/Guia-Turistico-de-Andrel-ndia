@@ -66,6 +66,31 @@ mas **não cria um snapshot bancário atômico**. Uma inserção e uma
 exclusão simultâneas podem manter a mesma contagem. A titularidade
 original e a ausência independente de Pix anterior continuam sem prova.
 
+## Conflitos entre referências excepcionais e saques comuns — 11/10/2026
+
+A consulta de saques comuns verificava antes somente o `transferencia_id`
+já associado ao vínculo excepcional local. Agora **todos os IDs distintos**
+retornados pelo Asaas **com a referência da separação consultada** são
+conferidos também no histórico local de saques comuns. Isso cobre inclusive
+uma referência excepcional cujo vínculo ainda não existe, mas cujo ID do
+banco já foi utilizado em saque ordinário.
+
+- As verificações são feitas por `SELECT` em lotes de até 40 IDs, somente
+  no backend administrativo. A consulta aceita no máximo 400 IDs distintos;
+  volume maior retorna HTTP 503, com investigação manual e HOLD.
+- Falha no banco ou resposta inconsistente aborta o relatório; não existe
+  interpretação permissiva na indisponibilidade.
+- O painel exibe apenas **quantos IDs bancários coincidiram** com saques
+  comuns, nunca os IDs, chaves Pix, contas ou documentos.
+- Testes da Edge com Asaas e Supabase fictícios verificam conflito mesmo
+  sem vínculo excepcional local e mantêm todas as flags financeiras falsas.
+
+Esse cotejo revela possíveis reutilizações **dentro dos registros disponíveis
+na conta e banco consultados**, não comprova a inexistência de transferência
+anterior, a identidade do destinatário ou que o mesmo ID represente
+liquidação efetiva. Não configura reembolso, quitação ou liberação.
+**Nenhuma migração, deploy de Edge, Pix ou mudança em produção.**
+
 ## O que esta auditoria NÃO garante
 
 1. `listagem_consultada_ate_o_fim=true` só significa que o endpoint devolveu `hasMore=false` nessa consulta **àquela conta Asaas**. Não há atestado de outras contas, histórico deletado/fora de banda, ou transferência de referência diferente.
