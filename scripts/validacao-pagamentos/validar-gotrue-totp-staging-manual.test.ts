@@ -3,6 +3,7 @@
  */
 import {
  STAGING,TEST_ACCOUNT,fixedStagingUrl,inspectSmokeJwt,sameSessionAal2,
+ fatorTotpConfirmadoNoUsuarioStaging,
  StagingMfaManual,
 } from "./validar-gotrue-totp-staging-manual.ts";
 const UID="aaaa1111-1111-4111-8111-111111111111";
@@ -53,8 +54,39 @@ Deno.test("AAL2 exige mesmo sub, session_id e usuario validado por Auth",()=>{
  ok(!sameSessionAal2(a,{...b,aal:"aal1"},{id:UID}),"not stepup");
  ok(!sameSessionAal2({...a,is_anonymous:true},b,{id:UID}),"anonymous");
 });
+Deno.test("fator TOTP escolhido precisa estar verificado na conta STAGING original",()=>{
+ const email="mfa-teste+qa@example.com";
+ const factor={id:FACTOR,factor_type:"totp",status:"verified"};
+ const user={id:UID,email,factors:[factor]};
+ ok(fatorTotpConfirmadoNoUsuarioStaging(user,UID,FACTOR,email),
+   "fator verificado da mesma conta deveria passar");
+ const foreignFactor={...factor,id:crypto.randomUUID()};
+ const refused=[
+  {...user,id:crypto.randomUUID()},
+  {...user,email:"outro@example.com"},
+  {...user,email:"mfa-teste+outro@example.com"},
+  {...user,factors:[]},
+  {...user,factors:undefined},
+  {...user,factors:"forjado"},
+  {...user,factors:[{...factor,status:"unverified"}]},
+  {...user,factors:[{...factor,factor_type:"phone"}]},
+  {...user,factors:[foreignFactor]},
+  {...user,factors:[factor,factor]},
+  {...user,factors:[null, {...factor,status:"unverified"}]},
+ ];
+ for(const candidato of refused){
+  ok(!fatorTotpConfirmadoNoUsuarioStaging(candidato,UID,FACTOR,email),
+   "GET /user inconsistente foi aceito: "+JSON.stringify(candidato));
+ }
+ ok(!fatorTotpConfirmadoNoUsuarioStaging(user,UID,FACTOR,"contato@real.com"),
+   "conta nao dedicada foi aceita");
+ ok(!fatorTotpConfirmadoNoUsuarioStaging(user,UID,crypto.randomUUID(),email),
+   "factorId alheio foi aceito");
+});
+
 Deno.test("GoTrue STAGING falso end-to-end: AAL1 => enroll => challenge => AAL2, sem Pix",async()=>{
  const routes:string[]=[];
+ let factorVerified=false;
  const http:typeof fetch=async(input,init)=>{
   const url=new URL(String(input));
   ok(url.origin===STAGING && url.pathname.startsWith("/auth/v1/"),
@@ -68,7 +100,8 @@ Deno.test("GoTrue STAGING falso end-to-end: AAL1 => enroll => challenge => AAL2,
      "login payload mismatch");
    return Response.json({access_token:jwt("aal1")});
   }
-  if(path==="/user")return Response.json({id:UID,factors:[]});
+  if(path==="/user")return Response.json({id:UID,email:"mfa-teste+qa@example.com",
+   factors:factorVerified?[{id:FACTOR,factor_type:"totp",status:"verified"}]:[]});
   if(path==="/factors"&&method==="POST"){
    ok(body.factor_type==="totp","factor type changed");
    return Response.json({id:FACTOR,totp:{secret:"GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"}});
@@ -76,6 +109,7 @@ Deno.test("GoTrue STAGING falso end-to-end: AAL1 => enroll => challenge => AAL2,
   if(path==="/factors/"+FACTOR+"/challenge")return Response.json({id:CHALLENGE});
   if(path==="/factors/"+FACTOR+"/verify"){
    ok(body.challenge_id===CHALLENGE&&body.code==="123456","OTP challenge binding");
+   factorVerified=true;
    return Response.json({access_token:jwt("aal2")});
   }
   throw Error("Unexpected Auth request");
@@ -90,8 +124,11 @@ Deno.test("GoTrue STAGING falso end-to-end: AAL1 => enroll => challenge => AAL2,
  const enroll=await go.enroll(before);
  ok(enroll.id===FACTOR,"wrong factor id");
  const upgraded=await go.verify(before,enroll.id,"123456");
+ const depois=await go.call("GET","/user",upgraded);
  ok(sameSessionAal2(inspectSmokeJwt(before),inspectSmokeJwt(upgraded),
-  await go.call("GET","/user",upgraded)),"session mismatch");
+  depois),"session mismatch");
+ ok(fatorTotpConfirmadoNoUsuarioStaging(depois,UID,FACTOR,"mfa-teste+qa@example.com"),
+  "fator verificado nao vinculado ao usuario original");
  ok(routes.join("|").includes("POST /factors/"+FACTOR+"/verify"),"no verify");
  ok(routes.every(x=>!/(payment|saque|pix|asaas|rpc|function|admin)/i.test(x)),
   "financial HTTP request");
