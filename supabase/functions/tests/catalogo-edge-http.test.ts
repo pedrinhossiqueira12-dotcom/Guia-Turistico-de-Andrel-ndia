@@ -373,6 +373,61 @@ Deno.test("varredura em duas paginas detecta ID de transferencia repetido e mant
  }finally{currentMockFetch=denyNetwork;}
 });
 
+Deno.test("varredura falha fechada se totalCount muda entre duas paginas",async()=>{
+ const edge=handlers.get("asaas")!;
+ const separacaoId="ae100001-1111-4111-8111-111111111111";
+ const requestId="ae100002-1111-4111-8111-111111111111";
+ const motoboyId="edededed-eded-4ede-8ede-ededededed10";
+ const adminUid="4b9a0233-6b72-4573-aebd-d596c5b15e1b";
+ let pages=0;
+ const calls:string[]=[];
+ try{
+  currentMockFetch=async(input:RequestInfo|URL,init?:RequestInit)=>{
+   const raw=typeof input==="string"?input:input instanceof URL?input.toString():input.url;
+   const u=new URL(raw);
+   calls.push((init?.method??"GET")+" "+u.pathname);
+   assert((init?.method??"GET")==="GET","Auditoria tentou escrita");
+   if(u.host==="ci-supabase.invalid"&&u.pathname==="/auth/v1/user")
+    return result({id:adminUid,aud:"authenticated",role:"authenticated",
+     app_metadata:{},user_metadata:{}});
+   if(u.host==="ci-supabase.invalid"&&
+      u.pathname==="/rest/v1/catalogo_asaas_separacoes_excepcionais")
+    return result({id:separacaoId,tipo:"saida",solicitacao_id:requestId,
+     motoboy_id:motoboyId,valor_centavos:12000,situacao:"congelada"});
+   if(u.host==="ci-supabase.invalid"&&
+      u.pathname==="/rest/v1/catalogo_asaas_transferencias_excepcionais_auditoria")
+    return result(null);
+   if(u.host==="api-sandbox.asaas.com"&&u.pathname==="/v3/transfers"){
+    const offset=Number(u.searchParams.get("offset"));
+    pages++;
+    if(offset===0)return result({
+     limit:100,offset:0,totalCount:101,hasMore:true,
+     data:Array.from({length:100},(_,i)=>({
+      id:"ci-first-"+i,externalReference:"outra-referencia",
+      value:120,status:"PENDING"
+     }))
+    });
+    if(offset===100)return result({
+     limit:100,offset:100,totalCount:102,hasMore:false,
+     data:[{id:"ci-second-1",externalReference:"outra-referencia",value:120,status:"DONE"},
+      {id:"ci-second-2",externalReference:"outra-referencia",value:120,status:"DONE"}]
+    });
+   }
+   throw Error("Rota inesperada no teste de contagem: "+u.pathname);
+  };
+  const response=await edge(post("/functions/v1/catalogo-asaas-financeiro",{
+   acao:"auditar_historico_transferencias_excepcionais_sandbox_admin",
+   separacao_id:separacaoId
+  },{authorization:"Bearer ci-admin-test-token"}));
+  assertions(response,503,"Mudanca de totalCount invalida auditoria");
+  const payload=await response.json();
+  assert(payload.success===false&&!JSON.stringify(payload).includes("listagem_consultada_ate_o_fim"),
+   "Paginacao variavel foi tratada como consulta conclusiva");
+  assert(pages===2,"Nao detectou mudanca na segunda pagina");
+  assert(calls.every(c=>c.startsWith("GET ")),"Acesso de escrita durante auditoria");
+ }finally{currentMockFetch=denyNetwork;}
+});
+
 Deno.test("checkouts desligados recusam criacao HTTP antes de qualquer acesso externo", async () => {
   const start = forbiddenRequests;
   const pix = handlers.get("pix")!;
