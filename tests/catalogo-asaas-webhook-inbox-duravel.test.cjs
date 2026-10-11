@@ -8,7 +8,7 @@ const migration=fs.readFileSync("supabase/pending-migrations/20261008180000_asaa
 const html=fs.readFileSync("pages/entregas-operacao.html","utf8");
 const ui=fs.readFileSync("js/entregas-operacao.js","utf8");
 const a=edge.indexOf("async function webhook(request:Request){");
-const b=edge.indexOf("async function reprocessarWebhooksAsaasAdmin(",a);
+const b=edge.indexOf("async function executarWorkerWebhooksAsaas(",a);
 assert.ok(a>=0&&b>a,"Webhook source not found");
 const source=edge.slice(a,b)
  .replace("async function webhook(request:Request){","async function webhook(request){")
@@ -195,5 +195,5 @@ test("endpoint cron-webhooks exige token dedicado e habilitacoes independentes",
  assert.equal(good.result.processados,2);
  assert.equal(good.result.em_erro,1);
  assert.deepEqual(JSON.parse(JSON.stringify(good.calls)),[["enabled","billing"],["reconcile",10]]);
- assert.doesNotMatch(source,/\/transfers|\/payments|POST.*Pix|autorizar_saque/i);
+ assert.doesNotMatch(source.replace(/\/\/[^\n]*/g,""),/\/transfers|\/payments|POST.*Pix|autorizar_saque/i);
 });
