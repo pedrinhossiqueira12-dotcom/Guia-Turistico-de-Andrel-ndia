@@ -203,3 +203,32 @@ cinco wrappers pela proteção instalada.
 A etapa de **conexão privada funcional STAGING** continua **PENDENTE**.
 A migration 21000 não deve ser aplicada a STAGING/PROD. Nenhuma
 movimentação financeira autorizada: `HOLD_OBRIGATORIO`.
+
+## Revisao de seguranca do incremento 21 — respostas SQL (10/10/2026)
+
+O adaptador da ponte NOLOGIN **ja existia** e tinha protecao
+`CASE WHEN current_database()/current_user/session_user` em cada um
+dos cinco statements. Uma versao paralela temporariamente criada
+durante a auditoria foi descartada, evitando caminhos concorrentes
+ou manutencao de validadores distintos.
+
+O parser da implementacao original
+`catalogo-asaas-livro-ponte-nologin-inerte.ts` agora exige:
+
+- `ok=false` implica **nonce ausente** (`null` ou campo omitido).
+  Uma negacao com nonce UUID e recusada como resposta inconsistente,
+  sem entregá-lo ao orquestrador.
+- `ok=true` exige **nonce UUID**. Nenhuma operacao de reserva,
+  registro ou consumo pode afirmar sucesso sem nonce que vincule
+  explicitamente a tentativa.
+- Todas as flags financeiras seguem estritamente `false`, com
+  `status_operacional='HOLD_OBRIGATORIO'`. `NULL` de wrapper
+  continua recusado em todas as tres operacoes de escrita.
+- Os testes Deno exercitam nonce de recusa vazado, nonce de sucesso
+  ausente/malformado, snapshots de contexto/tentativa adulterados,
+  sessao/UUID forjados e bloqueio de consultas ao executor.
+
+Este incremento nao estabelece conexao ou identidade autentica com
+STAGING: o executor injetado e **somente o contrato para clone CI**,
+nao um papel de banco utilizavel. Nenhum deploy, token, credencial,
+configuracao de Asaas ou movimento financeiro.
