@@ -37,6 +37,25 @@ test("varredura somente admin e Sandbox, com ID de reserva UUID",()=>{
  assert.match(scanner,/reserva\.situacao!=="congelada"/);
 });
 
+test("valida a integridade da reserva congelada ANTES de qualquer consulta bancaria",()=>{
+ const orderIdCheck=scanner.indexOf("reserva.id!==id");
+ const orderLinkLookup=scanner.indexOf('db.from(\n  "catalogo_asaas_transferencias_excepcionais_auditoria")');
+ const orderBankLookup=scanner.indexOf('await asaas("/transfers?limit="');
+ assert.ok(orderIdCheck>=0&&orderLinkLookup>orderIdCheck&&orderBankLookup>orderLinkLookup);
+ for(const expected of [
+  'reserva.tipo!=="residual"&&reserva.tipo!=="saida"',
+  '!uuidValido.test(reserva.solicitacao_id)',
+  '!uuidValido.test(reserva.motoboy_id)',
+  'typeof reserva.valor_centavos!=="number"',
+  '!Number.isSafeInteger(reserva.valor_centavos)',
+  'reserva.valor_centavos<=0',
+  'Separação financeira inconsistente; auditoria inconclusiva. HOLD.',
+ ])assert.ok(scanner.includes(expected),expected);
+ const edgeTests=fs.readFileSync("supabase/functions/tests/catalogo-edge-http.test.ts","utf8");
+ assert.ok(edgeTests.includes("varredura bloqueia separacao congelada inconsistente antes de consultar banco"));
+ assert.ok(edgeTests.includes("requisicoesBanco===0&&requisicoesVinculo===0"));
+});
+
 test("usa apenas listagem GET paginada com limite, nunca um POST de transferencia",()=>{
  assert.match(scanner,/const LIMIT=100,MAX_PAGINAS=12/);
  assert.match(scanner,/for\(let page=0;page<MAX_PAGINAS;page\+\+\)/);
