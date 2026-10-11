@@ -246,14 +246,20 @@ async function invoice(uid:string,body:Record<string,unknown>){
  const {data:f,error}=await db.from("catalogo_fechamentos_offline").select("*")
   .eq("comercio_id",store).eq("competencia",month+"-01").maybeSingle();
  if(error)throw new Failure("Não foi possível consultar a fatura.",503);
- let charge=null;
+ let charge=null,emissao=null;
  if(f){
   const {data,error:e}=await db.from("catalogo_fatura_cobrancas").select("*")
     .eq("fechamento_id",f.id).maybeSingle();
   if(e)throw new Failure("Falha ao consultar cobrança.",503);
   charge=data;
+  if(!charge){
+   const {data:reserved,error:r}=await db.from("catalogo_asaas_emissoes")
+    .select("estado").eq("fechamento_id",f.id).maybeSingle();
+   if(r)throw new Failure("Não foi possível conferir reserva de emissão da fatura.",503);
+   emissao=reserved;
+  }
  }
- return {store,month,f,charge};
+ return {store,month,f,charge,emissao};
 }
 function reference(store:string,month:string){return "fatura-"+store+"-"+month;}
 function parsePix(payment:Record<string,unknown>,qr:Record<string,unknown>){
@@ -363,16 +369,23 @@ async function loadOrCreateCustomer(
  return customerId;
 }
 async function showInvoice(uid:string,body:Record<string,unknown>){
- const {f,charge}=await invoice(uid,body);
- return respond({success:true,fatura:f,cobranca_status:charge?.status||null,
+ const {f,charge,emissao}=await invoice(uid,body);
+ return respond({success:true,fatura:f,
+  cobranca_status:charge?.status||(emissao?"emissao_reservada":null),
   metodo_cobranca:"pix_manual",pix_automatico_disponivel:false,
   valor_centavos:f?.total_comissao_centavos||0,provedor:charge?.gateway||"asaas",
   mensagem:charge?.gateway==="mercadopago"?
-    "Existe uma fatura do Mercado Pago. Ela não será migrada ou cobrada duas vezes.":undefined});
+    "Existe uma fatura do Mercado Pago. Ela não será migrada ou cobrada duas vezes.":
+    !charge&&emissao?
+    "A emissão Pix já foi reservada. Aguarde a conciliação ou solicite suporte; não gere uma segunda cobrança.":undefined});
 }
 async function reconcileInvoice(uid:string,body:Record<string,unknown>){
- const {f,charge,store,month}=await invoice(uid,body);
- if(!charge)return respond({success:true,fatura:f,cobranca_status:null,mensagem:"Ainda não há cobrança nesta fatura."});
+ const {f,charge,emissao,store,month}=await invoice(uid,body);
+ if(!charge)return respond({success:true,fatura:f,
+  cobranca_status:emissao?"emissao_reservada":null,
+  mensagem:emissao?
+   "Há uma emissão Pix reservada, mas sem cobrança local confirmada. Consulte a administração para conciliar no Asaas; não pague ou gere outro Pix.":
+   "Ainda não há cobrança nesta fatura."});
  if(charge.gateway!=="asaas")throw new Failure("Esta fatura pertence ao Mercado Pago. Continue pelo fluxo original.",409);
  enabled("billing");
  const proof=await verifyInvoice(String(charge.order_id),charge,store,month);
