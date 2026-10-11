@@ -38,6 +38,17 @@ function obj(v:unknown):v is Record<string,unknown>{
 }
 function uuid(v:unknown):v is string{return typeof v==="string"&&UUID.test(v);}
 function hold(raw:unknown):RespostaBancoPrechallengeInerte {
+  // Contrato fechado: novas propriedades financeiras adicionadas pelo SQL
+  // nao podem ser ignoradas por uma versao antiga do adaptador CI.
+  // Mudancas no contrato exigem revisao e testes explicitos.
+  const chaves=new Set([
+    "ok","motivo","nonce","status_operacional","pagamento_autorizado",
+    "challenge_go_true_verificado","desafio_mfa_da_sessao_comprovado",
+    "pode_registrar_parecer","dupla_aprovacao_financeira",
+    "liberacao_autorizada","baixa_realizada","movimenta_dinheiro",
+  ]);
+  if(!obj(raw)||Object.keys(raw).some(key=>!chaves.has(key)))
+    throw Error("ponte_sql_contrato_inesperado");
   if(!obj(raw)||typeof raw.ok!=="boolean" ||typeof raw.motivo!=="string"
     || raw.motivo.length<1 ||raw.motivo.length>160
     || (![undefined,null].includes(raw.nonce as undefined|null) && !uuid(raw.nonce))
