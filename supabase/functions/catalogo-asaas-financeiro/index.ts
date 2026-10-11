@@ -638,6 +638,10 @@ async function auditarHistoricoTransferenciasExcepcionaisSandboxAdmin(
  // aparecer primeiro numa referencia alheia e so depois na referencia alvo.
  const primeiraReferenciaPorId=new Map<string,string>();
  const idsComReferenciaDivergente=new Set<string>();
+ // Paginas com totalCount constante ainda podem se sobrepor por insercoes
+ // e remocoes concorrentes. IDs repetidos fora da referencia do pedido
+ // tambem invalidam a confiabilidade da varredura amostral.
+ const idsRepetidosGlobalmente=new Set<string>();
  // totalCount deve permanecer estavel ao longo da varredura; paginacao
  // offset nao representa snapshot transacional do banco externo.
  let totalInicial:number|null=null;
@@ -672,8 +676,11 @@ async function auditarHistoricoTransferenciasExcepcionaisSandboxAdmin(
    const tRef=typeof t.externalReference==="string"?t.externalReference:"";
    if(tId){
     if(!primeiraReferenciaPorId.has(tId))primeiraReferenciaPorId.set(tId,tRef);
-    else if(primeiraReferenciaPorId.get(tId)!==tRef)
-     idsComReferenciaDivergente.add(tId);
+    else{
+     idsRepetidosGlobalmente.add(tId);
+     if(primeiraReferenciaPorId.get(tId)!==tRef)
+      idsComReferenciaDivergente.add(tId);
+    }
    }
    const refCorresponde=tRef===referencia;
    const idCorresponde=Boolean(idVinculado)&&tId===idVinculado;
@@ -701,6 +708,7 @@ async function auditarHistoricoTransferenciasExcepcionaisSandboxAdmin(
    throw new Failure("Listagem bancária vazia com hasMore=true: inconclusiva.",503);
  }
  const referenciasDistintas=vistos.size;
+ const idsRepetidosGlobais=idsRepetidosGlobalmente.size;
  const idsDaReferenciaComOutraReferencia=[...vistos]
   .filter(tId=>idsComReferenciaDivergente.has(tId)).length;
  // #41: o Asaas pode devolver transferencia com a referencia alvo, MAS
@@ -729,7 +737,8 @@ async function auditarHistoricoTransferenciasExcepcionaisSandboxAdmin(
  const vinculoNaoLocalizado=completa&&Boolean(idVinculado)&&!achouIdVinculado;
  const conflito=refsDeOutroId>0||referenciasDistintas>1||
   valoresDivergentes>0||idsSemReferencia>0||identificadoresInvalidos>0||
-  listaRepetida>0||formatosAmbiguos>0||mesmoIdSaqueComum||
+  listaRepetida>0||idsRepetidosGlobais>0||
+  formatosAmbiguos>0||mesmoIdSaqueComum||
   idsDaReferenciaTambemEmSaqueComum>0||
   idsDaReferenciaComOutraReferencia>0||
   vinculoLocalDivergente||vinculoNaoLocalizado;
@@ -743,6 +752,7 @@ async function auditarHistoricoTransferenciasExcepcionaisSandboxAdmin(
   divergencias_de_valor:valoresDivergentes,
   ids_ausentes:identificadoresInvalidos,
   ids_repetidos_na_listagem:listaRepetida,
+  ids_repetidos_globais:idsRepetidosGlobais,
   estados_done_encontrados:estadosDone,
   estados_ambiguos:formatosAmbiguos,
   id_tambem_usado_em_saque_comum:mesmoIdSaqueComum,
