@@ -1058,6 +1058,235 @@ def scenario_escrow_preview_concurrent_hold() -> None:
     )
 
 
+
+# #43: decisao DOCUMENTAL no clone real de CI, nunca baixa nem Pix.
+RESOLUCAO_CI_OWNER_A = "fd944444-4444-4444-8444-444444444444"
+RESOLUCAO_CI_OWNER_B = "fd955555-5555-4555-8555-555555555555"
+RESOLUCAO_CI_ESCROW_A = "ed944444-4444-4444-8444-444444444444"
+RESOLUCAO_CI_ESCROW_B = "ed955555-5555-4555-8555-555555555555"
+RESOLUCAO_CI_PEDIDO_A = "dd944444-4444-4444-8444-444444444444"
+RESOLUCAO_CI_PEDIDO_B = "dd955555-5555-4555-8555-555555555555"
+RESOLUCAO_CI_TENTATIVA_A = "ad944444-4444-4444-8444-444444444444"
+RESOLUCAO_CI_TENTATIVA_B = "ad955555-5555-4555-8555-555555555555"
+RESOLUCAO_CI_HASH = "a" * 64
+
+
+def assert_resolucao_inerte(response: str, *, ok: bool, replay: bool, motivo: str) -> None:
+    import json
+    linha = next((row for row in response.splitlines() if row.strip().startswith("{")), None)
+    if linha is None:
+        raise AssertionError("Resposta de resolucao CI sem JSON: " + response[-750:])
+    dados = json.loads(linha)
+    if (dados.get("ok") is not ok or
+            dados.get("replay", False) is not replay or
+            dados.get("motivo") != motivo or
+            dados.get("status_operacional") != "HOLD_OBRIGATORIO"):
+        raise AssertionError(f"Idempotencia documental inesperada: {dados}")
+    for flag in ("movimenta_dinheiro", "pagamento_autorizado",
+                 "liberacao_autorizada", "baixa_realizada"):
+        if dados.get(flag) is not False:
+            raise AssertionError(f"{flag} nao bloqueado na resposta: {dados}")
+
+
+def resolucao_call(escrow: str, attempt: str, *, classification: str = "revisao") -> str:
+    return (
+        "SELECT catalogo_ci_escrow_resolucao_inerte.registrar_tentativa("
+        f"'{escrow}'::uuid,'{attempt}'::uuid,'{RESOLUCAO_CI_HASH}',"
+        f"'{classification}');"
+    )
+
+
+def scenario_resolucao_documental_idempotente_concorrente() -> None:
+    ddl_path = Path(
+        "supabase/tests/isolated/catalogo-asaas-resolucao-idempotencia-race-inerte.sql"
+    )
+    ddl = ddl_path.read_text(encoding="utf-8")
+    if ("catalogo_asaas_race_ci" not in ddl or "HOLD_OBRIGATORIO" not in ddl or
+            "UNIQUE(separacao_id,fingerprint_sha256)" not in ddl):
+        raise AssertionError("DDL do laboratorio #43 sem isolamento, UNIQUE ou HOLD")
+    run_sql("SET app.catalogo_ci_escrow_race_test='enabled';\n" + ddl)
+
+    run_sql(f"""
+    BEGIN;
+    INSERT INTO auth.users(id) VALUES
+      ('{RESOLUCAO_CI_OWNER_A}'),('{RESOLUCAO_CI_OWNER_B}');
+    INSERT INTO public.catalogo_asaas_separacoes_excepcionais(
+      id,tipo,solicitacao_id,motoboy_id,valor_centavos,creditos,fingerprint_sha256
+    ) VALUES
+      ('{RESOLUCAO_CI_ESCROW_A}','saida','{RESOLUCAO_CI_PEDIDO_A}',
+       '{RESOLUCAO_CI_OWNER_A}',12000,2,repeat('a',64)),
+      ('{RESOLUCAO_CI_ESCROW_B}','saida','{RESOLUCAO_CI_PEDIDO_B}',
+       '{RESOLUCAO_CI_OWNER_B}',15000,3,repeat('a',64));
+    COMMIT;
+    """)
+
+    # Mesmo id na mesma versao: segundo operador espera o advisory lock, e
+    # recebe replay de resultado DOCUMENTAL, nunca nova linha ou autorizacao.
+    first = Session.start("ci_resolucao_idempotencia_primeira")
+    second = None
+    try:
+        first.send("BEGIN;\n" + resolucao_call(
+            RESOLUCAO_CI_ESCROW_A, RESOLUCAO_CI_TENTATIVA_A
+        ) + "\n\\echo CI_RESOLUCAO_A_REGISTRADA")
+        result1 = first.until("CI_RESOLUCAO_A_REGISTRADA")
+        assert_resolucao_inerte(
+            result1, ok=True, replay=False, motivo="documento_inerte_registrado"
+        )
+        second = Session.start("ci_resolucao_idempotencia_segunda")
+        second.send(
+            "SET lock_timeout='10s';\nBEGIN;\n" +
+            resolucao_call(RESOLUCAO_CI_ESCROW_A, RESOLUCAO_CI_TENTATIVA_A) +
+            "\n\\echo CI_RESOLUCAO_A_REPLAY"
+        )
+        assert_waiting_advisory(second.name)
+        first.send("COMMIT;\n\\echo CI_RESOLUCAO_A_COMMIT")
+        first.until("CI_RESOLUCAO_A_COMMIT")
+        result2 = second.until("CI_RESOLUCAO_A_REPLAY")
+        assert_resolucao_inerte(
+            result2, ok=True, replay=True, motivo="replay_idempotente_documental"
+        )
+        second.send("COMMIT;\n\\echo CI_RESOLUCAO_REPLAY_COMMIT")
+        second.until("CI_RESOLUCAO_REPLAY_COMMIT")
+        second.finish()
+        second = None
+        first.finish()
+    finally:
+        if second:
+            second.abort()
+        first.abort()
+
+    if run_sql(
+        "SELECT count(*) FROM "
+        "catalogo_ci_escrow_resolucao_inerte.tentativas_documentais"
+    ) != "1":
+        raise AssertionError("Replay inseriu duas decisoes documentais")
+
+    # Tentativa igual com classificacao alterada e tentativa nova sobre a
+    # mesma versao nao podem registrar um novo documento nem reabrir Pix.
+    same = run_sql(resolucao_call(
+        RESOLUCAO_CI_ESCROW_A, RESOLUCAO_CI_TENTATIVA_A,
+        classification="contestacao"
+    ))
+    assert_resolucao_inerte(
+        same, ok=False, replay=False,
+        motivo="tentativa_reutilizada_com_outros_dados"
+    )
+    different_id = run_sql(resolucao_call(
+        RESOLUCAO_CI_ESCROW_A, RESOLUCAO_CI_TENTATIVA_B
+    ))
+    assert_resolucao_inerte(
+        different_id, ok=False, replay=False,
+        motivo="outra_tentativa_ja_registrada_na_mesma_versao"
+    )
+    no_payment = run_sql(resolucao_call(
+        RESOLUCAO_CI_ESCROW_A, RESOLUCAO_CI_TENTATIVA_A,
+        classification="pago_comprovado"
+    ))
+    assert_resolucao_inerte(
+        no_payment, ok=False, replay=False, motivo="entrada_invalida"
+    )
+
+    # ROLLBACK da primeira tentativa: o processo concorrente assume e
+    # cria exatamente UMA linha na segunda versao/titular.
+    first = Session.start("ci_resolucao_rollback_primeira")
+    second = None
+    try:
+        first.send("BEGIN;\n" + resolucao_call(
+            RESOLUCAO_CI_ESCROW_B, RESOLUCAO_CI_TENTATIVA_B
+        ) + "\n\\echo CI_RESOLUCAO_B_ANTES_ROLLBACK")
+        result1 = first.until("CI_RESOLUCAO_B_ANTES_ROLLBACK")
+        assert_resolucao_inerte(
+            result1, ok=True, replay=False, motivo="documento_inerte_registrado"
+        )
+        second = Session.start("ci_resolucao_rollback_segunda")
+        second.send(
+            "SET lock_timeout='10s';\nBEGIN;\n" +
+            resolucao_call(RESOLUCAO_CI_ESCROW_B, RESOLUCAO_CI_TENTATIVA_B) +
+            "\n\\echo CI_RESOLUCAO_B_APOS_ROLLBACK"
+        )
+        assert_waiting_advisory(second.name)
+        first.send("ROLLBACK;\n\\echo CI_RESOLUCAO_B_ROLLBACK")
+        first.until("CI_RESOLUCAO_B_ROLLBACK")
+        result2 = second.until("CI_RESOLUCAO_B_APOS_ROLLBACK")
+        assert_resolucao_inerte(
+            result2, ok=True, replay=False, motivo="documento_inerte_registrado"
+        )
+        second.send("COMMIT;\n\\echo CI_RESOLUCAO_B_COMMIT")
+        second.until("CI_RESOLUCAO_B_COMMIT")
+        second.finish()
+        second = None
+        first.finish()
+    finally:
+        if second:
+            second.abort()
+        first.abort()
+
+    if run_sql(
+        "SELECT count(*) FROM "
+        "catalogo_ci_escrow_resolucao_inerte.tentativas_documentais"
+    ) != "2":
+        raise AssertionError("ROLLBACK deixou tentativa duplicada ou perdeu registro")
+
+    # A mesma chave da tentativa antiga tambem nao serve para outra reserva.
+    reused_elsewhere = run_sql(resolucao_call(
+        RESOLUCAO_CI_ESCROW_B, RESOLUCAO_CI_TENTATIVA_A
+    ))
+    assert_resolucao_inerte(
+        reused_elsewhere, ok=False, replay=False,
+        motivo="tentativa_reutilizada_com_outros_dados"
+    )
+
+    run_sql("""
+    DO $immutable_ci$
+    BEGIN
+      BEGIN
+        UPDATE catalogo_ci_escrow_resolucao_inerte.tentativas_documentais
+        SET classificacao='contestacao';
+        RAISE EXCEPTION 'UPDATE indevido permitido no livro CI';
+      EXCEPTION WHEN check_violation THEN NULL;
+      END;
+      BEGIN
+        DELETE FROM catalogo_ci_escrow_resolucao_inerte.tentativas_documentais;
+        RAISE EXCEPTION 'DELETE indevido permitido no livro CI';
+      EXCEPTION WHEN check_violation THEN NULL;
+      END;
+    END $immutable_ci$;
+    """)
+
+    grants = run_sql("""
+    SELECT (
+      has_table_privilege('anon',
+       'catalogo_ci_escrow_resolucao_inerte.tentativas_documentais','INSERT')
+      OR has_table_privilege('authenticated',
+       'catalogo_ci_escrow_resolucao_inerte.tentativas_documentais','SELECT')
+      OR has_table_privilege('service_role',
+       'catalogo_ci_escrow_resolucao_inerte.tentativas_documentais','UPDATE')
+      OR has_function_privilege('service_role',
+       'catalogo_ci_escrow_resolucao_inerte.registrar_tentativa(uuid,uuid,text,text)',
+       'EXECUTE')
+    )::text
+    """)
+    if grants != "false":
+        raise AssertionError("Livro documental CI esta disponivel por API")
+
+    if run_sql(
+        "SELECT count(*) FROM public.catalogo_asaas_saques "
+        f"WHERE motoboy_id IN ('{RESOLUCAO_CI_OWNER_A}',"
+        f"'{RESOLUCAO_CI_OWNER_B}')"
+    ) != "0":
+        raise AssertionError("Idempotencia documental provocou saque real")
+    if run_sql(
+        "SELECT count(*) FROM public.catalogo_asaas_separacoes_excepcionais "
+        f"WHERE id IN ('{RESOLUCAO_CI_ESCROW_A}',"
+        f"'{RESOLUCAO_CI_ESCROW_B}') AND situacao='congelada'"
+    ) != "2":
+        raise AssertionError("Decisao documental modificou o escrow")
+
+    print(
+        "PASS #43: registro CI append-only, duas sessoes, nonce unico, "
+        "idempotencia/versao, COMMIT/ROLLBACK, HOLD e zero Pix", flush=True
+    )
+
 def main() -> None:
     guard_environment()
     prepare()
@@ -1068,6 +1297,7 @@ def main() -> None:
     scenario_stepup_attempts_concurrent_and_quota()
     scenario_prechallenge_shared_reservation_and_challenge()
     scenario_escrow_preview_concurrent_hold()
+    scenario_resolucao_documental_idempotente_concorrente()
     print("PASS: concorrencia real com 2 sessoes, IDs e usuarios sinteticos, zero Pix", flush=True)
 
 
