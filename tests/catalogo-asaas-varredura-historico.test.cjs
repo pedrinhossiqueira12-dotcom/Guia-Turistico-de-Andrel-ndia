@@ -49,6 +49,11 @@ test("recusa paginacao curta e metadados incompletos do Asaas",()=>{
  assert.match(edgeTests,/totalCount menor que dados/);
  assert.match(edgeTests,/hasMore falso mas totalCount aponta mais registros/);
  assert.match(edgeTests,/hasMore verdadeiro apesar de totalCount completo/);
+ assert.match(scanner,/let totalInicial:number\|null=null/);
+ assert.match(scanner,/if\(totalInicial===null\)totalInicial=result\.totalCount/);
+ assert.match(scanner,/result\.totalCount!==totalInicial/);
+ assert.match(scanner,/Histórico Asaas mudou entre páginas: auditoria inconclusiva\. HOLD\./);
+ assert.match(edgeTests,/varredura falha fechada se totalCount muda entre duas paginas/);
  assert.match(edgeTests,/varredura em duas paginas detecta ID de transferencia repetido/);
  assert.match(edgeTests,/ids_repetidos_na_listagem===1/);
  assert.match(edgeTests,/ausencia_de_pix_anterior_comprovada===false/);
