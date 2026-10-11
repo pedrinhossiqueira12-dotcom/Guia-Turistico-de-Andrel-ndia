@@ -134,6 +134,16 @@ Para atestar o destinatário original sem improvisar:
 - **Importante:** o alerta indica resposta incompleta/inesperada e exige investigacao; nao afirma fraude, pagamento, nao pagamento ou titularidade. `listagem_consultada_ate_o_fim` apenas relata a paginacao; nao atesta integridade ou snapshot bancario.
 - Nenhuma implantacao, migracao, POST de Pix ou mudanca no ambiente de producao. PR #39 continua Draft e `HOLD_OBRIGATORIO`.
 
+## Limite de leitura de JSON paginado (11/10/2026)
+
+O `GET /v3/transfers` da auditoria em Sandbox agora usa um leitor limitado a **2 MiB por página** (não representa limite contratual do Asaas). Checa `Content-Length` quando existe e **sempre** mede os bytes recebidos no stream; recusa MIME que não seja JSON, UTF-8 inválido, corpo ausente, JSON truncado, erro de leitura e exceder o limite. A rejeição retorna HTTP 503 e mantém `HOLD` sem expor conteúdo bancário.
+
+- A regra é específica do `GET /transfers?` **paginado** usado pelo relatório administrativo; nenhuma chamada POST ou transferência/baixa foi habilitada.
+- Deno executa cinco cenários HTTP contra o handler Edge real com Asaas/Supabase inteiramente fictícios e rede bloqueada: `Content-Length` acima do limite, MIME não JSON, tamanho real excessivo, UTF-8 inválido e JSON truncado.
+- Esse teto é uma precaução operacional e pode exigir ajuste **somente após medição de resposta real e revisão**. Em caso de página legítima maior que o teto, o correto é interromper a auditoria e investigar, nunca presumir ausência de Pix.
+- Nem tamanho aceitável, nem JSON válido e nem uma listagem paginada completa comprovam destino original, liquidação, integridade de snapshot bancário ou inexistência de transferência anterior.
+- **PR #39 permanece Draft, sem deploy financeiro, saques reais, Pix ou mudanças no Supabase de produção.**
+
 ## Checklist de liberação
 
 - [ ] CI integralmente verde no commit final.
