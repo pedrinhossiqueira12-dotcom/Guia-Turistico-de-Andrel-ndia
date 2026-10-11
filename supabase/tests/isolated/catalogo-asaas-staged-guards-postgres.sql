@@ -83,6 +83,24 @@ BEGIN
 END
 $resolucao_preview$;
 
+-- #43: LIVROS TEMPORARIOS de planos documentais, jamais financeiros.
+-- ROLLBACK do teste descarta todas as linhas. Sem RPC/Edge nova.
+CREATE TEMP TABLE catalogo_ci_escrow_planos_shadow_inertes(
+ tentativa_id uuid PRIMARY KEY,
+ separacao_id uuid NOT NULL UNIQUE,
+ fingerprint_sha256 text NOT NULL CHECK(fingerprint_sha256 ~ '^[a-f0-9]{64}$'),
+ resultado text NOT NULL CHECK(resultado='plano_documental_sem_execucao')
+) ON COMMIT DROP;
+CREATE TEMP TABLE catalogo_ci_escrow_planos_itens_shadow_inertes(
+ tentativa_id uuid NOT NULL
+ REFERENCES pg_temp.catalogo_ci_escrow_planos_shadow_inertes(tentativa_id),
+ separacao_id uuid NOT NULL,
+ remuneracao_id uuid NOT NULL,
+ valor_centavos bigint NOT NULL CHECK(valor_centavos>0),
+ PRIMARY KEY(separacao_id,remuneracao_id),
+ UNIQUE(tentativa_id,remuneracao_id)
+) ON COMMIT DROP;
+
 -- Compromisso Pix prospectivo: WRITE-ONCE, sem transferencia ou baixa.
 DO $pix_compromisso_original$
 DECLARE
@@ -1338,6 +1356,11 @@ DECLARE
  v_claims jsonb;
  v_revisores integer:=0;
  v_preview_resolucao jsonb;
+ v_plano_tentativa uuid:='ed430043-0000-4000-8000-000000000043';
+ v_shadow_header bigint;
+ v_shadow_itens bigint;
+ v_shadow_soma bigint;
+ v_shadow_blocks integer:=0;
 BEGIN
  INSERT INTO auth.users(id) VALUES(v_uid);
  INSERT INTO public.comercios_publicados(local_id,status) VALUES(v_store,'ativo');
