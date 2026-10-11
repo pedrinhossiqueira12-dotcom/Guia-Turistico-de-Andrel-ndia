@@ -232,3 +232,34 @@ Este incremento nao estabelece conexao ou identidade autentica com
 STAGING: o executor injetado e **somente o contrato para clone CI**,
 nao um papel de banco utilizavel. Nenhum deploy, token, credencial,
 configuracao de Asaas ou movimento financeiro.
+
+## Incremento 22 — contrato integrado entre ponte e orquestrador (CI descartável)
+
+O novo teste `supabase/functions/tests/catalogo-asaas-ponte-orquestrador-integracao-inerte.test.ts`
+liga **dois adaptadores SQL de ponte**, compartilhando um mesmo simulador
+de estado do PostgreSQL descartável, ao `OrquestradorPrechallengeInerte`
+e a uma porta de Auth injetada. É um ensaio de **integração de contratos
+em memória**, não um login GoTrue ou conexão PostgreSQL real.
+
+Provas cobertas:
+- Identidade AAL1 verificada ANTES da primeira consulta SQL;
+- Duas instâncias independentes não conseguem reservar duas vezes o nonce;
+- Desafio registrado e tentativa recuperada pela segunda instância;
+- Consumo at-most-once, OTP encaminhado ao Auth **apenas uma vez**,
+  replay barrado mesmo depois da confirmação;
+- `NULL` da ponte após membership indevida causa EXCEPTION no adaptador
+  e `reserva_sql_indisponivel` no orquestrador, sem consumir nonce ou
+  chamar Auth challenge; se o grant aparecer depois do registro,
+  a leitura/consumo permanece recusada;
+- Resposta SQL adulterada que marque pagamento como autorizado, snapshot
+  inválido, fator alheio, sessão AAL2 trocada, OTP malformatado,
+  contexto expirado e falha de driver mantêm `HOLD_OBRIGATORIO`.
+
+A CI passa a compilar e executar este teste no job Deno financeiro,
+sem permissões de rede. As validações independentes de **PostgreSQL
+descartável real** e de **GoTrue local real** continuam em jobs separados
+e não devem ser confundidas com a prova integrada em memória.
+
+**Não há canal operacional** para a role NOLOGIN. Nenhuma permissão
+concedida a `service_role`, `anon`, `authenticated` ou frontend;
+migração 21000 segue exclusiva da CI e proibida em STAGING/PROD.
