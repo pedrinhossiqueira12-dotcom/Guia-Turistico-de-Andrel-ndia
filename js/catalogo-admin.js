@@ -479,12 +479,15 @@
     const pix = data.pix || {};
     const total = Number(data.valor_centavos ?? fatura.total_comissao_centavos ?? 0);
     const situacao = data.cobranca_status || fatura.status || "";
+    // Protecao adicional na interface, inclusive se um backend antigo
+    // devolver indevidamente um Pix de cobranca estornada/contestada/cancelada.
+    const cobrancaNaoPagavel = ["estornado", "contestado", "cancelado"].includes(situacao);
     const partes = [
       `<p><strong>Total a pagar:</strong> ${reais(total)}</p>`,
       `<p><strong>Situação:</strong> ${escapar(traducaoCobranca(situacao))}${fatura.vencimento_em ? ` · vencimento ${escapar(fatura.vencimento_em)}` : ""}</p>`,
     ];
     if (data.mensagem) partes.push(`<p class="form-feedback">${escapar(data.mensagem)}</p>`);
-    if (pix.code) {
+    if (pix.code && !cobrancaNaoPagavel) {
       if (pix.imageBase64) partes.push(`<img class="pix-qr" alt="QR Code Pix da fatura" src="data:image/png;base64,${pix.imageBase64}">`);
       partes.push(`<label class="pix-copy">Pix copia e cola<textarea readonly rows="3">${escapar(pix.code)}</textarea></label>`);
       partes.push('<button id="copiarPixFatura" class="small-button" type="button">Copiar código Pix</button>');
