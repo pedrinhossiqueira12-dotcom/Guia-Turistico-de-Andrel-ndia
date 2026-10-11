@@ -172,6 +172,66 @@ Deno.test("GoTrue STAGING falso end-to-end: AAL1 => enroll => challenge => AAL2,
  await denied(()=>go.verify(before,FACTOR,"1"));
  await denied(()=>new StagingMfaManual("sb_secret_admin_token",http));
 });
+Deno.test("manual pede OTP depois do challenge e usa apenas o ID emitido pelo Auth",async()=>{
+ const events:string[]=[];
+ const http:typeof fetch=async(input,init)=>{
+  const endpoint=new URL(String(input)).pathname;
+  if(endpoint==="/auth/v1/factors/"+FACTOR+"/challenge"){
+   events.push("challenge");
+   return Response.json({id:CHALLENGE});
+  }
+  if(endpoint==="/auth/v1/factors/"+FACTOR+"/verify"){
+   events.push("verify");
+   const body=JSON.parse(String(init?.body));
+   ok(body.challenge_id===CHALLENGE && body.code==="123456",
+    "verify was not bound to server challenge and typed OTP");
+   return Response.json({access_token:jwt("aal2")});
+  }
+  throw Error("unexpected Auth request");
+ };
+ const auth=new StagingMfaManual("sb_publishable_ci_fake_limited_key",http);
+ const jwt2=await auth.verifyComCodigoAposDesafio(jwt("aal1"),FACTOR,async()=>{
+  events.push("prompt");
+  ok(events.join(",")==="challenge,prompt","OTP requested before challenge");
+  return "123456";
+ });
+ ok(inspectSmokeJwt(jwt2).aal==="aal2","no upgraded Auth token");
+ ok(events.join(",")==="challenge,prompt,verify","challenge order was not enforced");
+});
+Deno.test("nao solicita OTP se desafio falha; nao verifica codigo invalido ou recusado",async()=>{
+ let prompts=0,verifies=0;
+ const key="sb_publishable_ci_fake_limited_key";
+ const refused=new StagingMfaManual(key,async()=>Response.json({error:"blocked"},{status:403}));
+ await denied(()=>refused.verifyComCodigoAposDesafio(jwt("aal1"),FACTOR,async()=>{
+  prompts++;return "123456";
+ }));
+ ok(prompts===0,"prompt ran despite challenge refusal");
+ const http:typeof fetch=async(input)=>{
+  if(String(input).endsWith("/challenge"))return Response.json({id:CHALLENGE});
+  if(String(input).endsWith("/verify")){verifies++;return Response.json({access_token:jwt("aal2")});}
+  throw Error("unexpected Auth request");
+ };
+ const auth=new StagingMfaManual(key,http);
+ await denied(()=>auth.verifyComCodigoAposDesafio(jwt("aal1"),FACTOR,async()=>{
+  prompts++; return "short";
+ }));
+ ok(prompts===1 && verifies===0,"invalid OTP was sent for verification");
+ await denied(()=>auth.verifyComCodigoAposDesafio(jwt("aal1"),FACTOR,async()=>{
+  prompts++; throw Error("operador cancelou digitacao");
+ }));
+ ok(prompts===2 && verifies===0,"cancelled OTP was sent to GoTrue");
+});
+Deno.test("Auth nao aceita Content-Type texto nem HTML em respostas JSON",async()=>{
+ const key="sb_publishable_ci_fake_limited_key";
+ for(const contentType of ["text/plain","text/html","application/problem+json"]){
+  const http:typeof fetch=async()=>new Response(JSON.stringify({id:UID,factors:[]}),{
+   headers:{"content-type":contentType},
+  });
+  const auth=new StagingMfaManual(key,http);
+  await denied(()=>auth.factors(jwt("aal1")));
+ }
+});
+
 Deno.test("GoTrue resposta exagerada e erros HTTP nunca chegam ao contrato",async()=>{
  const key="sb_publishable_ci_fake_limited_key";
  const huge:typeof fetch=async()=>Response.json({totp:"x".repeat(70000)});
