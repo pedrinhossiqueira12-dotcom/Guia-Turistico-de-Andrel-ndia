@@ -122,6 +122,68 @@ Deno.test("Asaas com validacao desativada recusa por HTTP sem consultar rede", a
 
 // #41: exercita a Edge REAL com autenticação e histórico Asaas inteiramente
 // FICTÍCIOS. Nenhuma rede é permitida fora dos mocks da CI.
+Deno.test("varredura rejeita fracoes de centavo sem arredondar o valor bancario",async()=>{
+ const edge=handlers.get("asaas")!;
+ const separacaoId="ad600001-1111-4111-8111-111111111111";
+ const requestId="ad600002-1111-4111-8111-111111111111";
+ const motoboyId="edededed-eded-4ede-8ede-ededededed10";
+ const adminUid="4b9a0233-6b72-4573-aebd-d596c5b15e1b";
+ const referencia="guia-exc:saida:"+requestId;
+ const casos=[
+  {nome:"centavos exatos",valor:120,divergencias:0},
+  {nome:"fracao de centavo arredondada antes",valor:120.004,divergencias:1},
+  {nome:"fracao acima do meio centavo",valor:120.006,divergencias:1},
+  {nome:"numero de valor absurdamente grande",valor:1e20,divergencias:1},
+ ];
+ for(const caso of casos){
+  let bankGets=0;
+  try{
+   currentMockFetch=async(input:RequestInfo|URL,init?:RequestInit)=>{
+    const raw=typeof input==="string"?input:input instanceof URL?input.toString():input.url;
+    const u=new URL(raw);
+    assert((init?.method??"GET")==="GET","Auditoria monetaria tentou escrita");
+    if(u.host==="ci-supabase.invalid"&&u.pathname==="/auth/v1/user")
+     return result({id:adminUid,aud:"authenticated",role:"authenticated",
+      app_metadata:{},user_metadata:{}});
+    if(u.host==="ci-supabase.invalid"&&
+       u.pathname==="/rest/v1/catalogo_asaas_separacoes_excepcionais")
+     return result({id:separacaoId,tipo:"saida",solicitacao_id:requestId,
+      motoboy_id:motoboyId,valor_centavos:12000,situacao:"congelada"});
+    if(u.host==="ci-supabase.invalid"&&
+       u.pathname==="/rest/v1/catalogo_asaas_transferencias_excepcionais_auditoria")
+     return result(null);
+    if(u.host==="ci-supabase.invalid"&&u.pathname==="/rest/v1/catalogo_asaas_saques")
+     return result([]);
+    if(u.host==="api-sandbox.asaas.com"&&u.pathname==="/v3/transfers"){
+     bankGets++;
+     return result({limit:100,offset:0,totalCount:1,hasMore:false,
+      data:[{id:"ci-valor-observado-nao-expor",externalReference:referencia,
+       value:caso.valor,status:"PENDING",pixAddressKey:"CHAVE_FICTICIA_SIGILOSA"}]});
+    }
+    throw Error("Rota inesperada na conferencia de valor: "+u.pathname);
+   };
+   const response=await edge(post("/functions/v1/catalogo-asaas-financeiro",{
+    acao:"auditar_historico_transferencias_excepcionais_sandbox_admin",
+    separacao_id:separacaoId,
+   },{authorization:"Bearer ci-admin-test-token"}));
+   assertions(response,200,caso.nome);
+   const payload=await response.json(), audit=payload.relatorio;
+   assert(bankGets===1&&audit?.divergencias_de_valor===caso.divergencias,
+    "Valor bancario nao foi validado rigorosamente: "+caso.nome);
+   assert(audit?.conflito_identificado===(caso.divergencias>0),
+    "Indicador de conflito divergente: "+caso.nome);
+   assert(audit?.pagamento_autorizado===false&&
+    audit?.liberacao_autorizada===false&&
+    audit?.baixa_realizada===false&&
+    audit?.ausencia_de_pix_anterior_comprovada===false,
+    "Valor invalido concedeu autorizacao financeira: "+caso.nome);
+   assert(!JSON.stringify(payload).includes("CHAVE_FICTICIA_SIGILOSA")&&
+    !JSON.stringify(payload).includes("ci-valor-observado-nao-expor"),
+    "Dados bancarios expostos: "+caso.nome);
+  }finally{currentMockFetch=denyNetwork;}
+ }
+});
+
 Deno.test("varredura rejeita resposta Asaas enorme ou malformada sem expor dados",async()=>{
  const edge=handlers.get("asaas")!;
  const separacaoId="ad500001-1111-4111-8111-111111111111";
