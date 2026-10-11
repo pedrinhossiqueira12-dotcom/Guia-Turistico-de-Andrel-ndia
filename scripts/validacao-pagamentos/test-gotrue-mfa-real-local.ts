@@ -200,6 +200,17 @@ async function criarRevisorGoTrueLocal(
   const verified = await gotrue.call("GET", "/user", next);
   ensure(verified.status === 200 && verified.data.id === initial.sub,
     "GoTrue rejeitou a sessao apos verificar TOTP");
+  // Confirmacao depende de resposta autentica do GoTrue local e dos
+  // mesmos identidade/sessao/fator/challenge/versao congelados antes do OTP.
+  const linkedProof=binder.registrarResultado(reserved.nonce,{
+    ...identidade,challengeId:cid,aal:String(after.aal),
+    usuarioAuthId:String(verified.data.id),
+    sessaoAuthId:String(after.session_id),factorAuthId:id,
+    autenticacaoLocalGoTrueConfirmada:true,
+  });
+  ensure(linkedProof.ok && linkedProof.status_operacional==="HOLD_OBRIGATORIO"
+    && linkedProof.pagamento_autorizado===false,
+    "Challenge concluido nao correspondeu ao dossie congelado");
 
   // Reautenticacao nao e autorizacao financeira:
   // NAO chamar nenhuma RPC de parecer, transferencia, Pix ou Asaas.
@@ -222,6 +233,15 @@ export async function exerciseLocalAuthMfa(apiKey: string) {
   const binder=new VinculoMfaDossieLocalCI(SNAP_CI,()=>Date.now(),"ci-local-descartavel");
   const a = await criarRevisorGoTrueLocal(gotrue, 1,binder);
   const b = await criarRevisorGoTrueLocal(gotrue, 2,binder);
+  const diag=binder.diagnosticar(SNAP_CI);
+  ensure(diag.duas_observacoes_locais_vinculadas===true
+    && diag.revisores_distintos_vinculados_na_versao===2
+    && diag.aprovacao_financeira===false,
+    "Nao vinculou dois desafios independentes a mesma versao");
+  const stale=binder.diagnosticar({...SNAP_CI,fingerprint:"c".repeat(64)});
+  ensure(stale.duas_observacoes_locais_vinculadas===false
+    && stale.movimenta_dinheiro===false,
+    "Revisao de versao posterior reutilizou challenges antigos");
   ensure(a.userId !== b.userId && a.sessionId !== b.sessionId
     && a.factorId !== b.factorId,
     "GoTrue reutilizou identidade, sessao ou fator entre revisores");
@@ -253,6 +273,7 @@ export async function exerciseLocalAuthMfa(apiKey: string) {
     sessionUnchanged: true,
     twoIndependentReviewers: true,
     crossUserFactorDenied: true,
+    dossierVersionBound: true,
     moneyAuthorized: false,
   } as const;
 }
@@ -267,7 +288,7 @@ if (import.meta.main) {
   const proof = await exerciseLocalAuthMfa(key);
   ensure(proof.verified && proof.sessionUnchanged
     && proof.twoIndependentReviewers && proof.crossUserFactorDenied
-    && !proof.moneyAuthorized,
+    && proof.dossierVersionBound && !proof.moneyAuthorized,
     "Prova local de duas sessoes/fatores independentes incompleta");
   console.log("PASS: GoTrue REAL LOCAL: dois usuarios e fatores TOTP, AAL1=>AAL2, mesma sessao por usuario, challenges cruzados recusados; HOLD sem dinheiro");
 }
