@@ -147,3 +147,17 @@ Deno.test("replay apos bloqueio financeiro recusa antes do GET, mesmo com APPROV
 // Sem restaurar fetch aqui: este arquivo e executado em worker Deno isolado,
 // e toda saida nao reconhecida segue expressamente bloqueada.
 void fetchBefore;
+
+
+Deno.test("webhook nao arredonda fracao de centavo em payload ou GET Asaas",async()=>{
+ for(const amount of [100.001,100.004,100.005,99.999,100.000001,1e20]){
+  reset();
+  const payload=await invoke({...fields,value:amount});
+  assert(payload.status==="REFUSED"&&bankReads===0&&cacheReads===1&&writes===0,
+   "payload bancario com centavos inexatos foi aprovado: "+amount);
+  reset({remote:{...fields,value:amount}});
+  const provider=await invoke({...fields});
+  assert(provider.status==="REFUSED"&&bankReads===1&&cacheReads===1&&writes===0,
+   "GET bancario com centavos inexatos foi aprovado: "+amount);
+ }
+});
