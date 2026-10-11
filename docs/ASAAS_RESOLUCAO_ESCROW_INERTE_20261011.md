@@ -29,3 +29,18 @@ O artefato `scripts/validacao-pagamentos/simular-resolucao-escrow-inerte.cjs` é
 - [ ] Requer autorização contratual e regularização antes de piloto controlado (#45), revisão de segurança de go-live (#44) e aprovação explícita do usuário.
 
 **Estado de entrega:** somente branch do PR #39, mantido DRAFT. `HOLD_OBRIGATORIO`. Sem merge, implantação da Edge financeira, migração de resolução, saque/PIX real, alterações no Supabase de produção ou confirmação de quitação.
+
+## Incremento PostgreSQL real descartável — 11/10/2026
+
+A fixture `supabase/tests/isolated/catalogo-asaas-staged-guards-postgres.sql` passou a definir, **dentro de uma transação de CI**, a função `pg_temp.catalogo_asaas_previsualizar_resolucao_inerte(uuid)`. A função não está numa migração e não é disponibilizada por REST, Edge Function ou SQL de produção. O `ROLLBACK` final desfaz todas as linhas sintéticas; o esquema `pg_temp` não permanece instalado.
+
+O preview consulta exclusivamente tabelas reais do PostgreSQL efêmero, sem usar array de créditos do cliente:
+
+- Busca a titularidade da separação, adquire o advisory lock transacional `asaas-saque:<motoboy UUID>` e trava a linha da separação.
+- Em uma CTE `MATERIALIZED`, lê **todos** os itens da separação e suas remunerações com `FOR UPDATE OF i,r`, sem `LIMIT` nem `OFFSET`.
+- Conta créditos, soma os centavos com `numeric`, reconstrói a fingerprint SHA-256 ordenada por remuneração e verifica titular, valor atual, status, financiamento, repasse e prova de financiamento do pedido.
+- A fixture usa dois créditos sintéticos válidos (R$ 120) e depois revoga o financiamento de um deles: o segundo diagnóstico deve marcar `contestacao` e manter HOLD, sem baixa.
+
+**Limites não resolvidos:** o teste SQL ainda não estressa 1.000+ linhas em uma reserva efetiva; a simulação Node exercita até 1.801 itens, mas não prova comportamento de locks/tempos sob concorrência real. Nem a consulta transacional local equivale a extrato bancário independente. Nenhuma função efetiva de resolução foi publicada. Antes de uma migração de produção será necessário ensaio SQL com alto volume, múltiplas conexões, dados reais anonimizados, revisão de segurança, prova do destinatário original (#41) e autorização dos revisores (#42).
+
+**Tudo permanece `HOLD_OBRIGATORIO`, com `pagamento_autorizado=false`, `liberacao_autorizada=false` e `baixa_realizada=false`. Nenhum Pix é enviado.**
