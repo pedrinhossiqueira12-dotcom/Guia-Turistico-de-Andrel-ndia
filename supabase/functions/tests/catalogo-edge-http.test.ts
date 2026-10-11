@@ -122,6 +122,77 @@ Deno.test("Asaas com validacao desativada recusa por HTTP sem consultar rede", a
 
 // #41: exercita a Edge REAL com autenticação e histórico Asaas inteiramente
 // FICTÍCIOS. Nenhuma rede é permitida fora dos mocks da CI.
+Deno.test("varredura bloqueia vinculo bancario local malformado antes de GET Asaas",async()=>{
+ const edge=handlers.get("asaas")!;
+ const separacaoId="ad800001-1111-4111-8111-111111111111";
+ const requestId="ad800002-1111-4111-8111-111111111111";
+ const motoboyId="edededed-eded-4ede-8ede-ededededed10";
+ const adminUid="4b9a0233-6b72-4573-aebd-d596c5b15e1b";
+ const referencia="guia-exc:saida:"+requestId;
+ const valido={transferencia_id:"ci-transfer-link-sandbox",referencia_externa:referencia,
+  valor_centavos:12000,motoboy_id:motoboyId};
+ const casos:{nome:string,vinculo:unknown}[]=[
+  {nome:"id de transferencia ausente",vinculo:{...valido,transferencia_id:null}},
+  {nome:"id de transferencia vazio",vinculo:{...valido,transferencia_id:""}},
+  {nome:"id com espaços externos",vinculo:{...valido,transferencia_id:" ci-transfer "}},
+  {nome:"id com quebra de linha",vinculo:{...valido,transferencia_id:"ci-transfer\\nmalformado"}},
+  {nome:"id com tamanho excessivo",vinculo:{...valido,transferencia_id:"x".repeat(181)}},
+  {nome:"referencia externa ausente",vinculo:{...valido,referencia_externa:null}},
+  {nome:"referencia externa vazia",vinculo:{...valido,referencia_externa:""}},
+  {nome:"referencia externa com espaços",vinculo:{...valido,referencia_externa:referencia+" "}},
+  {nome:"centavos string",vinculo:{...valido,valor_centavos:"12000"}},
+  {nome:"centavos zero",vinculo:{...valido,valor_centavos:0}},
+  {nome:"centavos negativos",vinculo:{...valido,valor_centavos:-12000}},
+  {nome:"centavos fracionarios",vinculo:{...valido,valor_centavos:12000.5}},
+  {nome:"centavos inseguros",vinculo:{...valido,valor_centavos:1e20}},
+  {nome:"motoboy do vinculo invalido",vinculo:{...valido,motoboy_id:"nao-e-uuid"}},
+  {nome:"objeto devolvido como array",vinculo:[valido]},
+ ];
+ for(const caso of casos){
+  let bancoGets=0,saquesGets=0;
+  try{
+   currentMockFetch=async(input:RequestInfo|URL,init?:RequestInit)=>{
+    const raw=typeof input==="string"?input:input instanceof URL?input.toString():input.url;
+    const u=new URL(raw);
+    assert((init?.method??"GET")==="GET","Auditoria com vinculo invalido tentou escrita");
+    if(u.host==="ci-supabase.invalid"&&u.pathname==="/auth/v1/user")
+     return result({id:adminUid,aud:"authenticated",role:"authenticated",
+      app_metadata:{},user_metadata:{}});
+    if(u.host==="ci-supabase.invalid"&&
+       u.pathname==="/rest/v1/catalogo_asaas_separacoes_excepcionais")
+     return result({id:separacaoId,tipo:"saida",solicitacao_id:requestId,
+      motoboy_id:motoboyId,valor_centavos:12000,situacao:"congelada"});
+    if(u.host==="ci-supabase.invalid"&&
+       u.pathname==="/rest/v1/catalogo_asaas_transferencias_excepcionais_auditoria")
+     return result(caso.vinculo);
+    if(u.host==="ci-supabase.invalid"&&u.pathname==="/rest/v1/catalogo_asaas_saques"){
+     saquesGets++;
+     throw Error("Vinculo local invalido acionou saques comuns: "+caso.nome);
+    }
+    if(u.host==="api-sandbox.asaas.com"&&u.pathname==="/v3/transfers"){
+     bancoGets++;
+     throw Error("Vinculo local invalido acionou Asaas: "+caso.nome);
+    }
+    throw Error("Rota inesperada para vinculo local invalido: "+u.pathname);
+   };
+   const response=await edge(post("/functions/v1/catalogo-asaas-financeiro",{
+    acao:"auditar_historico_transferencias_excepcionais_sandbox_admin",
+    separacao_id:separacaoId,
+   },{authorization:"Bearer ci-admin-test-token"}));
+   assertions(response,503,caso.nome);
+   const payload=await response.json();
+   assert(bancoGets===0&&saquesGets===0,
+    "Vinculo local inconsistente permitiu consulta externa: "+caso.nome);
+   assert(payload?.success===false&&
+    typeof payload.mensagem==="string"&&payload.mensagem.includes("HOLD"),
+    "Vinculo invalido nao gerou bloqueio obrigatorio: "+caso.nome);
+   assert(!JSON.stringify(payload).includes(motoboyId)&&
+    !JSON.stringify(payload).includes("ci-transfer-link-sandbox"),
+    "Auditoria vazou identificador financeiro: "+caso.nome);
+  }finally{currentMockFetch=denyNetwork;}
+ }
+});
+
 Deno.test("varredura bloqueia separacao congelada inconsistente antes de consultar banco",async()=>{
  const edge=handlers.get("asaas")!;
  const separacaoId="ad700001-1111-4111-8111-111111111111";
