@@ -1356,6 +1356,9 @@ async function pixDestinationsMatch(fingerprint:string,transfers:Record<string,u
    // No payload da Asaas a chave aparece em bankAccount.pixAddressKey
    // sem informar necessariamente pixAddressKeyType.
    for(const t of ["CPF","CNPJ","EMAIL","PHONE","EVP"]){
+    // Resposta bancaria com chave malformada nao pode provocar HTTP 400
+    // (nem interromper o Webhook): cada tipo invalido e apenas nao-match.
+    if(!canonicalPix(t,key))continue;
     if((await pixFingerprint(t,key))===fingerprint){match=true;break;}
    }
    if(!match)return false;
