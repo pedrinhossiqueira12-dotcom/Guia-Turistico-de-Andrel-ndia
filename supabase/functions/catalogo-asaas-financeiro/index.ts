@@ -638,8 +638,16 @@ async function auditarHistoricoTransferenciasExcepcionaisSandboxAdmin(
  for(let page=0;page<MAX_PAGINAS;page++){
   const offset=page*LIMIT;
   const result=await asaas("/transfers?limit="+LIMIT+"&offset="+offset);
+  // O GET /transfers do Asaas devolve limit, offset e totalCount.
+  // Uma pagina parcial com hasMore=true seguida de offset += LIMIT
+  // pularia transferencias na listagem. Nunca usar essa amostra como completa.
   if(!Array.isArray(result.data)||typeof result.hasMore!=="boolean"||
-   result.data.length>LIMIT||(result.offset!==undefined&&Number(result.offset)!==offset))
+   !Number.isSafeInteger(result.limit)||result.limit!==LIMIT||
+   !Number.isSafeInteger(result.offset)||result.offset!==offset||
+   !Number.isSafeInteger(result.totalCount)||result.totalCount<0||
+   result.data.length>LIMIT||
+   (result.hasMore===true&&result.data.length!==LIMIT)||
+   result.totalCount<offset+result.data.length)
    throw new Failure("Paginação bancária inválida: histórico inconclusivo. HOLD.",503);
   paginas++;
   examinadas+=result.data.length;
