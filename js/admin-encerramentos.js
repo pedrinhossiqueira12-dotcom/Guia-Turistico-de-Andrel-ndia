@@ -323,7 +323,9 @@
             Number(a.ids_repetidos_na_listagem||0)+" ID(s) repetido(s), "+
             Number(a.estados_done_encontrados||0)+" DONE(s), "+
             Number(a.ids_da_referencia_tambem_em_saques_comuns||0)+
-            " ID(s) da referência já usados em saques comuns. "+
+            " ID(s) da referência já usados em saques comuns, "+
+            Number(a.ids_da_referencia_com_outra_referencia||0)+
+            " ID(s) bancários com referência externa conflitante. "+
             (a.id_tambem_usado_em_saque_comum===true?
              "ALERTA: ID também pertence a saque comum. ":"")+
             (a.vinculo_local_nao_encontrado_na_listagem===true?
