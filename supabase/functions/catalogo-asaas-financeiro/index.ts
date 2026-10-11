@@ -1509,7 +1509,9 @@ async function webhook(request:Request){
   throw new Failure("Webhook não autorizado.",401);
  const raw=await request.text();
  if(raw.length>65536)throw new Failure("Evento fora do limite.",413);
- const body=input(JSON.parse(raw||"{}"));
+ let body:Record<string,unknown>;
+ try {body=input(JSON.parse(raw||"{}"));}
+ catch {throw new Failure("JSON de Webhook inválido.",400);}
  const event=value(body.event,80),id=value(body.id,180);
  const resource=input(body.payment||body.transfer);
  const resourceId=value(resource.id,150);
