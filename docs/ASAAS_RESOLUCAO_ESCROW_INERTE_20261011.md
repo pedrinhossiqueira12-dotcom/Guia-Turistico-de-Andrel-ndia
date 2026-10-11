@@ -73,3 +73,16 @@ O cenário `scenario_resolucao_documental_idempotente_concorrente()`, no script 
 **Limite fundamental:** esse livro não prova pagamento, ausência de Pix anterior, identidade bancária, consentimento, MFA nem dupla aprovação. Sua singularidade não demonstra idempotência de uma transferência real no Asaas. A futura resolução transacional de créditos permanece bloqueada por #41, #42 e pelas demais tarefas de #43. Nenhuma tabela de produção, crédito ou saldo é modificado por esta etapa.
 
 **Toda resposta tem `HOLD_OBRIGATORIO`, `pagamento_autorizado=false`, `liberacao_autorizada=false`, `baixa_realizada=false` e `movimenta_dinheiro=false`.**
+
+## Simulação SQL de falha no meio de uma operação — 11/10/2026
+
+Na fixture de PostgreSQL descartável, `supabase/tests/isolated/catalogo-asaas-staged-guards-postgres.sql`, duas tabelas `TEMP` (com `ON COMMIT DROP`) registram **exclusivamente planos documentais de sombra**, vinculando um identificador de tentativa e versão dos créditos à reserva congelada. Elas não atualizam `catalogo_remuneracoes_v2`, não alteram estados da reserva e não chamam o Asaas.
+
+O teste usa a separação previamente criada com **2 remunerações financiadas, total R$ 120**:
+
+1. Dentro de um subbloco transacional, grava o cabeçalho e **apenas o primeiro item de sombra** e injeta uma exceção `P4301`. O savepoint implícito do PL/pgSQL deve reverter **as duas gravações**; são exigidos **zero** cabeçalhos e **zero** itens após a falha.
+2. Repete a preparação com a mesma identificação de tentativa e insere **todos os itens** em `INSERT ... SELECT`, verificando contagem integral e soma de centavos.
+3. Simula um replay idêntico: valida identificador, separação e fingerprint, sem criar novas linhas. Uma tentativa diferente para a mesma reserva encontra `UNIQUE(separacao_id)` e deve ser rejeitada.
+4. Confirma que as remunerações verdadeiras continuam `disponivel`, com `repasse_id IS NULL`. A fixture termina com `ROLLBACK`.
+
+**Limitação essencial:** esta é uma simulação da *atomicidade de preparação documental em tabelas temporárias*. Não há executor de Pix, baixa, liberação ou migração de resolução. Ela não comprova concorrência de uma baixa real nem recuperação após resposta bancária ambígua. O livro de duas sessões mencionado acima cobre concorrência de tentativas documentais, não execução financeira. As dependências #41 e #42 permanecem obrigatórias.
