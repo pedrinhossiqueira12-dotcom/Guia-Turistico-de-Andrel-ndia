@@ -70,7 +70,8 @@ test("confronta referencia, ID, valor, status e conflitos com saques comuns",()=
   "vinculoLocalDivergente", "vinculoNaoLocalizado",
   "tRef===referencia", "tId===idVinculado",
   "refsDeOutroId", "valoresDivergentes", "formatosAmbiguos",
-  "idsSemReferencia", "listaRepetida", "estadosDone",
+  "idsSemReferencia", "listaRepetida", "idsRepetidosGlobalmente",
+  "idsRepetidosGlobais>0", "estadosDone",
  ])assert.ok(scanner.includes(item),item);
  assert.match(scanner,/const vistos=new Set<string>\(\)/);
  assert.match(scanner,/if\(vinculoError\)/);
@@ -81,6 +82,9 @@ test("confronta referencia, ID, valor, status e conflitos com saques comuns",()=
  assert.match(scanner,/if\(saquesError\|\|!Array\.isArray\(saques\)\)/);
  assert.match(scanner,/ids_da_referencia_tambem_em_saques_comuns:idsDaReferenciaTambemEmSaqueComum/);
  assert.match(scanner,/ids_da_referencia_com_outra_referencia:idsDaReferenciaComOutraReferencia/);
+ assert.match(scanner,/ids_repetidos_globais:idsRepetidosGlobais/);
+ assert.match(scanner,/idsRepetidosGlobalmente\\.add\\(tId\\)/);
+ assert.match(admin,/ids_repetidos_globais/);
  const edgeTests=fs.readFileSync("supabase/functions/tests/catalogo-edge-http.test.ts","utf8");
  assert.match(edgeTests,/varredura detecta transferência de saque comum sem vínculo excepcional prévio/);
  assert.match(edgeTests,/ids_da_referencia_tambem_em_saques_comuns===1/);
