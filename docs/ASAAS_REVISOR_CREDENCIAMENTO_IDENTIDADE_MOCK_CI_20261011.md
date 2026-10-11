@@ -29,3 +29,14 @@ O teste Python `scenario_revisores_credenciais_mock_hold()` acrescenta dados de 
 O ensaio foi estendido para duas sessões PostgreSQL independentes. A primeira inicia uma transação e revoga a credencial fictícia do segundo revisor, **sem confirmar a transação imediatamente**. A segunda executa o diagnóstico do mesmo escrow e precisa aguardar um bloqueio PostgreSQL `Lock` sobre a credencial, porque o diagnóstico usa `FOR SHARE OF p,c,s`. Depois do `COMMIT` da revogação, a segunda deve contar **somente um revisor elegível** e retornar `HOLD_OBRIGATORIO` com `mfa_real_validado=false`. Esse teste cobre a atualização simultânea da qualificação local, não uma revogação ou autenticação verdadeira do Supabase Auth.
 
 O contrato `tests/catalogo-asaas-revisores-credenciais-ci-inertes.test.cjs` também verifica a presença do cenário concorrente. **Não há liberação ou pagamento mesmo antes da revogação.**
+
+
+## Ensaio de duas identidades reais no GoTrue local — 11/10/2026
+
+O script já existente `scripts/validacao-pagamentos/test-gotrue-mfa-real-local.ts`, que executa apenas com `--native-ci-local-only` no Supabase **local descartável** e com rede restrita a `127.0.0.1:54321`, passou a inscrever **dois usuários diferentes** (não apenas um). Para cada um executa de verdade `signup` ou login, `GET /user`, `TOTP enroll`, `challenge`, `verify`, e verifica que o token atualizado declara `aal2` com o **mesmo** usuário e a **mesma** sessão de sua fase AAL1.
+
+Depois, o script exige que os dois `user_id`, dois `session_id` e dois `factor_id` sejam diferentes. Executa testes negativos cruzados: o token AAL1 do usuário A tenta criar um challenge para o fator TOTP do usuário B, e vice-versa. **Ambos precisam ser recusados pelo próprio GoTrue**, com HTTP 4xx. Também relê `GET /user` com cada token AAL2 e recusa troca de identidades. Nenhum token, OTP, QR, segredo TOTP ou identificador de fator sai no resultado do teste ou nos logs, apenas booleanos não sensíveis.
+
+A suite Node `tests/catalogo-asaas-gotrue-dois-revisores-reais-locais.test.cjs` acompanha contratos de isolamento de rede, cruzamento de fatores e proibição de usar MFA como autorização financeira. O GoTrue do teste é **real**, mas os dois usuários não têm credenciamento financeiro e a stack é apagada ao terminar a CI.
+
+**Fronteira não ultrapassada:** essa prova não liga um token GoTrue a uma concessão de permissão de revisor, não prova que as duas pessoas reais foram designadas para a decisão, nem vincula seus challenges criptograficamente ao dossiê financeiro. #42 continuará aberta até MFA + autorização segregada de operadores reais. #41 ainda exige banco independente; #43 ainda precisa de liquidação transacional auditada. Permanece `HOLD_OBRIGATORIO` em todos os pagamentos.
