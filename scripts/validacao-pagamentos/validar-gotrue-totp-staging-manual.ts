@@ -59,6 +59,35 @@ export function fatorTotpConfirmadoNoUsuarioStaging(
   &&(encontrados[0] as Json).status==="verified";
 }
 
+/**
+ * Smoke test adicional APENAS: claims de JWT retornado pelo GoTrue
+ * devem ter emissor fixo, vigencia e iat posterior ao inicio do verify.
+ * Claims aqui NAO sao prova criptografica e NUNCA autorizam financeiro.
+ * O backend financeiro precisara verificar assinatura + sessao server-side.
+ */
+export function claimsAal2FrescasDoStaging(
+ antes:Json, depois:Json, inicioVerifyMs:number, agoraMs:number,
+):boolean{
+ const inteiro=(v:unknown):v is number=>
+  typeof v==="number"&&Number.isSafeInteger(v)&&v>=0;
+ if(!Number.isFinite(inicioVerifyMs)||!Number.isFinite(agoraMs)
+   ||inicioVerifyMs>agoraMs || inicioVerifyMs<0)return false;
+ const inicio=Math.floor(inicioVerifyMs/1000), agora=Math.floor(agoraMs/1000);
+ const issuer=STAGING+"/auth/v1";
+ if(antes.iss!==issuer||depois.iss!==issuer
+   ||antes.aud!=="authenticated"||depois.aud!=="authenticated"
+   ||!inteiro(antes.iat)||!inteiro(antes.exp)
+   ||!inteiro(depois.iat)||!inteiro(depois.exp))return false;
+ return antes.iat<=agora+30
+  &&antes.exp>inicio&&antes.exp>antes.iat
+  &&depois.iat>=antes.iat
+  // A mesma verificacao pode ocorrer no segundo da emissao: tolerar
+  // ate 30s de diferenca entre relogio GoTrue e terminal do operador.
+  &&depois.iat>=inicio-30
+  &&depois.iat<=agora+30
+  &&depois.exp>agora&&depois.exp>depois.iat;
+}
+
 export class StagingMfaManual{
  constructor(private readonly publishable:string,private readonly http:typeof fetch=fetch){
   check(/^sb_publishable_[A-Za-z0-9_-]{10,}$/.test(publishable),
@@ -220,8 +249,11 @@ export async function main(){
   console.log("Segredo TOTP de HOMOLOGACAO (CONFIDENCIAL): "+enrollment.secret);
  }
  const otp=await hiddenInput("Codigo TOTP de 6 digitos (oculto): ");
+ const inicioVerifyMs=Date.now();
  const upgraded=await auth.verify(jwt,factor,otp);
  const after=inspectSmokeJwt(upgraded);
+ check(claimsAal2FrescasDoStaging(before,after,inicioVerifyMs,Date.now()),
+   "JWT GoTrue pos-verificacao tem emissor, vigencia ou emissao inconsistentes");
  const afterUser=await auth.call("GET","/user",upgraded);
  check(sameSessionAal2(before,after,afterUser),
    "GoTrue AAL2 nao comprovou MESMO usuario e sessao");
