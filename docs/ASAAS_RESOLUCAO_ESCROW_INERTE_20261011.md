@@ -54,3 +54,22 @@ O preview consulta exclusivamente tabelas reais do PostgreSQL efêmero, sem usar
 - Estas verificações **não são uma migração de resolução**, não autenticam revisores reais, não comprovam transferência externa nem habilitam Pix. O laboratório usa banco de CI descartável, não STAGING nem PROD. Nenhum código desta etapa pode mover dinheiro.
 
 **Ainda pendente para finalizar #43:** produção de extratos/conciliação independente (#41); MFA e dupla aprovação de responsáveis reais (#42); projeto e validação da máquina de estados, transações de baixa/liberação idempotentes, compensação e recuperação; revisão de segurança e piloto autorizado. Os limites acima dizem respeito a testes, não a garantias de produção.
+
+## Incremento de idempotência documental com duas sessões — 11/10/2026
+
+O novo `supabase/tests/isolated/catalogo-asaas-resolucao-idempotencia-race-inerte.sql` é **uma fixture, não uma migração**. Existe somente no banco `catalogo_asaas_race_ci` do GitHub Actions e exige uma configuração de laboratório presente na sessão. A criação de schema/tabela/função é rejeitada em qualquer outro banco. O clone é destruído ao final do job. Não há grants para `anon`, `authenticated` nem `service_role`; nenhuma aplicação ou Edge financeira chama essa fixture.
+
+A fixture contém um livro **append-only de decisões puramente documentais** (`revisao` ou `contestacao`). O banco trava primeiro o mesmo mutex `asaas-saque:<titular>`, depois a linha da reserva, confere `situacao='congelada'` e sua fingerprint local e só então olha a tentativa e a versão. Duas restrições únicas impõem:
+
+- **Mesma `tentativa_id`, mesmos dados e versão:** retorno idempotente, sem nova linha; não equivale a segunda revisão, aprovação financeira ou pagamento.
+- **Mesma `tentativa_id` com classificação/escrow diferentes:** conflito, sem escrita.
+- **Outro identificador para a mesma separação+fingerprint:** conflito, sem escrita.
+- **Tentativa em transação que sofreu `ROLLBACK`:** uma segunda sessão que aguardou o mutex pode registrar apenas **uma** linha documental; testes confirmam não haver registro duplicado.
+- **Tentativa de classificar como `pago_comprovado` ou liberar:** entrada inválida e HOLD, já que só `revisao/contestacao` são permitidos.
+- **UPDATE/DELETE:** proibidos por trigger de laboratório.
+
+O cenário `scenario_resolucao_documental_idempotente_concorrente()`, no script de testes com duas sessões PostgreSQL reais, verifica espera pelo mutex, COMMIT, replay, troca de dados, reutilização de identificadores, ROLLBACK e ausência de saques; contrato Node adicional detecta regressões no isolamento da fixture.
+
+**Limite fundamental:** esse livro não prova pagamento, ausência de Pix anterior, identidade bancária, consentimento, MFA nem dupla aprovação. Sua singularidade não demonstra idempotência de uma transferência real no Asaas. A futura resolução transacional de créditos permanece bloqueada por #41, #42 e pelas demais tarefas de #43. Nenhuma tabela de produção, crédito ou saldo é modificado por esta etapa.
+
+**Toda resposta tem `HOLD_OBRIGATORIO`, `pagamento_autorizado=false`, `liberacao_autorizada=false`, `baixa_realizada=false` e `movimenta_dinheiro=false`.**
