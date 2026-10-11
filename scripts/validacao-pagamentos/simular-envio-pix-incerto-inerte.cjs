@@ -76,7 +76,7 @@ function diagnosticarEnvioPixIncertoInerte(entrada){
 
  const inconsistente=[...alertas].some(a=>[
   "identidade_ou_valor_de_operacao_invalido","historico_de_eventos_ausente",
-  "evento_malformado","identificador_de_evento_reutilizado",
+  "historico_vazio","evento_malformado","identificador_de_evento_reutilizado",
   "replay_com_conteudo_contraditorio","sequencia_incompleta_ou_fora_de_ordem",
   "identidade_bancaria_observada_divergente","intencao_inicial_ausente",
   "observacao_sem_intencao","resultado_sem_marco_de_envio"
