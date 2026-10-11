@@ -28,7 +28,7 @@ test("MFA real local faz signup e challenge+verify e exige AAL2 da mesma sessao"
   assert.match(app,/initial\.aal === "aal1"/);
   assert.match(app,/after\.aal === "aal2" && after\.sub === initial\.sub/);
   assert.match(app,/after\.session_id === initial\.session_id/);
-  assert.match(app,/moneyAuthorized:false/);
+  assert.match(app,/moneyAuthorized\s*:\s*false/);
   assert.match(vec,/RFC 6238/);
   assert.match(vec,/94287082/);
   assert.match(vec,/07081804/);
