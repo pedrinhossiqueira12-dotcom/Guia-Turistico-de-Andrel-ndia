@@ -1618,6 +1618,7 @@ CI_REVIEW_OWNER = "fa970000-0000-4000-8000-000000000001"
 CI_REVIEW_A = "fa970000-0000-4000-8000-000000000002"
 CI_REVIEW_B = "fa970000-0000-4000-8000-000000000003"
 CI_REVIEW_VIEWER = "fa970000-0000-4000-8000-000000000004"
+CI_REVIEW_IMPOSTOR = "fa970000-0000-4000-8000-000000000005"
 CI_REVIEW_ESCROW = "ea970000-0000-4000-8000-000000000001"
 CI_REVIEW_REQUEST = "da970000-0000-4000-8000-000000000001"
 CI_REVIEW_SESSION_A = "ca970000-0000-4000-8000-000000000002"
@@ -1662,13 +1663,13 @@ def scenario_revisores_credenciais_mock_hold() -> None:
         "mfa_real_validado',false" not in source):
         raise AssertionError("Fixture de identidade deixou de ser sintética e HOLD")
     run_sql("SET app.catalogo_ci_revisores_test='enabled';\n"+source)
-    users=(CI_REVIEW_OWNER,CI_REVIEW_A,CI_REVIEW_B,CI_REVIEW_VIEWER)
+    users=(CI_REVIEW_OWNER,CI_REVIEW_A,CI_REVIEW_B,CI_REVIEW_VIEWER,CI_REVIEW_IMPOSTOR)
     sessions=(CI_REVIEW_SESSION_OWNER,CI_REVIEW_SESSION_A,
               CI_REVIEW_SESSION_B,CI_REVIEW_SESSION_VIEWER)
     run_sql(f"""
     BEGIN;
     INSERT INTO auth.users(id) VALUES
-     ('{users[0]}'),('{users[1]}'),('{users[2]}'),('{users[3]}');
+     ('{users[0]}'),('{users[1]}'),('{users[2]}'),('{users[3]}'),('{users[4]}');
     INSERT INTO public.catalogo_asaas_separacoes_excepcionais(
      id,tipo,solicitacao_id,motoboy_id,valor_centavos,creditos,fingerprint_sha256
     ) VALUES ('{CI_REVIEW_ESCROW}','saida','{CI_REVIEW_REQUEST}',
@@ -1730,7 +1731,7 @@ def scenario_revisores_credenciais_mock_hold() -> None:
        id,separacao_id,revisor_id,sessao_id,
        fingerprint_creditos_sha256,resultado,expira_em)
       VALUES(gen_random_uuid(),'{CI_REVIEW_ESCROW}',
-       '{CI_REVIEW_A}','{CI_REVIEW_SESSION_B}',
+       '{CI_REVIEW_IMPOSTOR}','{CI_REVIEW_SESSION_B}',
        repeat('b',64),'manter_hold',now()+interval '1 hour');
       RAISE EXCEPTION 'Sessao de outro revisor aceita';
      EXCEPTION WHEN foreign_key_violation THEN NULL;
