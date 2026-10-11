@@ -449,6 +449,7 @@
       aberto: "Em aberto",
       faturado: "Fechada, aguardando pagamento",
       pendente: "Pix pendente",
+      emissao_reservada: "Pix em conciliação — nenhuma nova cobrança deve ser gerada",
       pago: "Paga",
       vencido: "Vencida",
       bloqueado: "Bloqueada por inadimplência",
@@ -481,7 +482,7 @@
     const situacao = data.cobranca_status || fatura.status || "";
     // Protecao adicional na interface, inclusive se um backend antigo
     // devolver indevidamente um Pix de cobranca estornada/contestada/cancelada.
-    const cobrancaNaoPagavel = ["estornado", "contestado", "cancelado"].includes(situacao);
+    const cobrancaNaoPagavel = ["estornado", "contestado", "cancelado", "pago", "emissao_reservada"].includes(situacao);
     const partes = [
       `<p><strong>Total a pagar:</strong> ${reais(total)}</p>`,
       `<p><strong>Situação:</strong> ${escapar(traducaoCobranca(situacao))}${fatura.vencimento_em ? ` · vencimento ${escapar(fatura.vencimento_em)}` : ""}</p>`,
