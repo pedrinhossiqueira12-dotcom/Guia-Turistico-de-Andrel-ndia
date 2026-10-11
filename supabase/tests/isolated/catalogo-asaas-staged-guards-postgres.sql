@@ -1450,6 +1450,82 @@ BEGIN
  THEN RAISE EXCEPTION 'Preview escrow puro local nao conferiu, HOLD: %',
   v_preview_resolucao; END IF;
 
+ -- #43: falha forjada APOS inserir header e um item SOMENTE em pg_temp.
+ -- EXCEPTION usa um savepoint interno: ambas as linhas sao revertidas.
+ BEGIN
+  INSERT INTO pg_temp.catalogo_ci_escrow_planos_shadow_inertes(
+   tentativa_id,separacao_id,fingerprint_sha256,resultado
+  ) VALUES(v_plano_tentativa,(v_reserva->>'separacao_id')::uuid,
+   v_reserva->>'fingerprint_sha256','plano_documental_sem_execucao');
+  INSERT INTO pg_temp.catalogo_ci_escrow_planos_itens_shadow_inertes(
+   tentativa_id,separacao_id,remuneracao_id,valor_centavos
+  )
+  SELECT v_plano_tentativa,i.separacao_id,i.remuneracao_id,i.valor_centavos
+  FROM public.catalogo_asaas_separacoes_excepcionais_itens i
+  WHERE i.separacao_id=(v_reserva->>'separacao_id')::uuid
+  ORDER BY i.remuneracao_id LIMIT 1;
+  RAISE EXCEPTION 'Falha simulada apos primeiro item documental'
+   USING ERRCODE='P4301';
+ EXCEPTION WHEN SQLSTATE 'P4301' THEN NULL;
+ END;
+ SELECT count(*)::bigint INTO v_shadow_header
+ FROM pg_temp.catalogo_ci_escrow_planos_shadow_inertes;
+ SELECT count(*)::bigint INTO v_shadow_itens
+ FROM pg_temp.catalogo_ci_escrow_planos_itens_shadow_inertes;
+ IF v_shadow_header<>0 OR v_shadow_itens<>0 THEN
+  RAISE EXCEPTION 'Falha parcial deixou linha na sombra % %',
+   v_shadow_header,v_shadow_itens; END IF;
+
+ -- Retentativa com MESMO identificador grava todos os itens em uma so
+ -- transacao documental; fonte sao linhas reais do banco descartavel.
+ INSERT INTO pg_temp.catalogo_ci_escrow_planos_shadow_inertes(
+  tentativa_id,separacao_id,fingerprint_sha256,resultado
+ ) VALUES(v_plano_tentativa,(v_reserva->>'separacao_id')::uuid,
+  v_reserva->>'fingerprint_sha256','plano_documental_sem_execucao');
+ INSERT INTO pg_temp.catalogo_ci_escrow_planos_itens_shadow_inertes(
+  tentativa_id,separacao_id,remuneracao_id,valor_centavos
+ )
+ SELECT v_plano_tentativa,i.separacao_id,i.remuneracao_id,i.valor_centavos
+ FROM public.catalogo_asaas_separacoes_excepcionais_itens i
+ WHERE i.separacao_id=(v_reserva->>'separacao_id')::uuid;
+ SELECT count(*)::bigint,coalesce(sum(valor_centavos::bigint),0)
+ INTO v_shadow_itens,v_shadow_soma
+ FROM pg_temp.catalogo_ci_escrow_planos_itens_shadow_inertes;
+ IF v_shadow_itens<>2 OR v_shadow_soma<>12000
+ THEN RAISE EXCEPTION 'Retentativa de sombra incompleta % %',
+  v_shadow_itens,v_shadow_soma; END IF;
+
+ -- Replay de IDENTICA tentativa/versao: comparacao nao cria outras linhas.
+ IF NOT EXISTS(SELECT 1 FROM pg_temp.catalogo_ci_escrow_planos_shadow_inertes
+  WHERE tentativa_id=v_plano_tentativa
+  AND separacao_id=(v_reserva->>'separacao_id')::uuid
+  AND fingerprint_sha256=v_reserva->>'fingerprint_sha256')
+ THEN RAISE EXCEPTION 'Identidade/versao de replay divergente'; END IF;
+ -- Uma segunda tentativa para mesma separacao precisa ser rejeitada.
+ BEGIN
+  INSERT INTO pg_temp.catalogo_ci_escrow_planos_shadow_inertes(
+   tentativa_id,separacao_id,fingerprint_sha256,resultado
+  ) VALUES(gen_random_uuid(),(v_reserva->>'separacao_id')::uuid,
+   v_reserva->>'fingerprint_sha256','plano_documental_sem_execucao');
+  RAISE EXCEPTION 'Segundo plano documental nao deveria ser aceito';
+ EXCEPTION WHEN unique_violation THEN v_shadow_blocks:=v_shadow_blocks+1;
+ END;
+ IF v_shadow_blocks<>1 THEN
+  RAISE EXCEPTION 'Identidade duplicada nao gerou conflito'; END IF;
+ SELECT count(*)::bigint INTO v_shadow_header
+ FROM pg_temp.catalogo_ci_escrow_planos_shadow_inertes;
+ SELECT count(*)::bigint INTO v_shadow_itens
+ FROM pg_temp.catalogo_ci_escrow_planos_itens_shadow_inertes;
+ IF v_shadow_header<>1 OR v_shadow_itens<>2 THEN
+  RAISE EXCEPTION 'Replay ou conflito criou planos extras % %',
+   v_shadow_header,v_shadow_itens; END IF;
+ IF EXISTS(SELECT 1 FROM public.catalogo_remuneracoes_v2 r
+  JOIN public.catalogo_asaas_separacoes_excepcionais_itens i
+  ON i.remuneracao_id=r.id
+  WHERE i.separacao_id=(v_reserva->>'separacao_id')::uuid
+  AND (r.status IS DISTINCT FROM 'disponivel' OR r.repasse_id IS NOT NULL))
+ THEN RAISE EXCEPTION 'Sombra alterou credito real do teste'; END IF;
+
  SELECT public.catalogo_asaas_preconferir_pagamento_excepcional('saida',v_saida)
  INTO v_posreserva;
  IF v_posreserva->>'separacoes_contabeis_sem_liquidacao' IS DISTINCT FROM '1'
