@@ -1468,6 +1468,39 @@ def scenario_intencao_prepost_duravel_concorrente() -> None:
     if run_sql("SELECT count(*) FROM catalogo_ci_intencao_pix_inerte.marcos_inicio") != "1":
         raise AssertionError("Criou marco de envio apos rollback sem envio")
 
+    # Se o marco da primeira sessao for revertido, a segunda pode
+    # anexar exatamente UM marco documental. Sem POST em nenhuma sessao.
+    first = Session.start("ci_intencao_marco_rollback_first")
+    second = None
+    try:
+        first.send("BEGIN;\n" + intent_mark(
+            INTENT_ATTEMPT_B, INTENT_MARK_B
+        ) + "\n\\echo INTENT_B_MARK_BEFORE_ROLLBACK")
+        result1 = first.until("INTENT_B_MARK_BEFORE_ROLLBACK")
+        assert_intent_hold(result1,ok=True,motivo="inicio_documental_gravado")
+        second = Session.start("ci_intencao_marco_rollback_second")
+        second.send("SET lock_timeout='10s';\nBEGIN;\n" + intent_mark(
+            INTENT_ATTEMPT_B, INTENT_MARK_B
+        ) + "\n\\echo INTENT_B_MARK_AFTER_ROLLBACK")
+        assert_waiting_advisory(second.name)
+        first.send("ROLLBACK;\n\\echo INTENT_B_MARK_FIRST_ROLLED_BACK")
+        first.until("INTENT_B_MARK_FIRST_ROLLED_BACK")
+        result2 = second.until("INTENT_B_MARK_AFTER_ROLLBACK")
+        assert_intent_hold(result2,ok=True,motivo="inicio_documental_gravado")
+        second.send("COMMIT;\n\\echo INTENT_B_MARK_SECOND_COMMITTED")
+        second.until("INTENT_B_MARK_SECOND_COMMITTED")
+        second.finish()
+        second = None
+        first.finish()
+    finally:
+        if second:
+            second.abort()
+        first.abort()
+    if run_sql(
+        "SELECT count(*) FROM catalogo_ci_intencao_pix_inerte.marcos_inicio"
+    ) != "2":
+        raise AssertionError("Rollback criou marcos duplicados ou perdidos")
+
     run_sql("""
     DO $immutability$
     BEGIN
