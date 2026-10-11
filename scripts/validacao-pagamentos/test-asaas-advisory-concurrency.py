@@ -1739,6 +1739,63 @@ def scenario_revisores_credenciais_mock_hold() -> None:
     END $forged_session$;
     """)
 
+    # Duas sessoes: a primeira mantem uma revogacao SEM COMMIT, enquanto
+    # a segunda consulta todas as credenciais sob FOR SHARE. A consulta
+    # nao pode contar a credencial antiga nem ignorar revogacao concorrente.
+    first=Session.start("ci_revisor_revocation_first")
+    second=None
+    try:
+        first.send(
+          "BEGIN;\nUPDATE catalogo_ci_revisores_inertes.credenciais_ci "
+          f"SET situacao='revogado' WHERE revisor_id='{CI_REVIEW_B}';"
+          "\n\\echo CI_REVOCATION_LOCKED"
+        )
+        first.until("CI_REVOCATION_LOCKED")
+        second=Session.start("ci_revisor_revocation_second")
+        second.send(
+          "SET lock_timeout='10s';\nBEGIN;\n"
+          "SELECT catalogo_ci_revisores_inertes.diagnosticar_elegibilidade_mock("
+          f"'{CI_REVIEW_ESCROW}'::uuid,'{{\"mfa_real\":true}}'::jsonb);"
+          "\n\\echo CI_REVIEWER_DIAGNOSTIC_RELEASED"
+        )
+        deadline=time.monotonic()+POLL_TIMEOUT_SECONDS
+        observed=False
+        while time.monotonic()<deadline:
+            wait=run_sql(
+              "SELECT COALESCE(wait_event_type,'none') "
+              "FROM pg_stat_activity WHERE application_name="
+              "'ci_revisor_revocation_second' AND datname=current_database() "
+              "ORDER BY backend_start DESC LIMIT 1"
+            )
+            if wait=="Lock":
+                observed=True
+                break
+            time.sleep(0.10)
+        if not observed:
+            raise AssertionError("Diagnostico nao esperou FOR SHARE contra revogacao")
+        first.send("COMMIT;\n\\echo CI_REVOCATION_COMMITTED")
+        first.until("CI_REVOCATION_COMMITTED")
+        import json
+        resp=second.until("CI_REVIEWER_DIAGNOSTIC_RELEASED")
+        jsonline=next((x for x in resp.splitlines() if x.strip().startswith("{")),None)
+        if not jsonline:
+            raise AssertionError("Diagnostico concorrente sem JSON")
+        concurrent=json.loads(jsonline)
+        if (concurrent.get("pareceres_mock_elegiveis")!=1 or
+            concurrent.get("duas_credenciais_sinteticas_elegiveis") is not False or
+            concurrent.get("status_operacional")!="HOLD_OBRIGATORIO" or
+            concurrent.get("mfa_real_validado") is not False):
+            raise AssertionError("Revogacao concorrente nao refletiu HOLD: "+str(concurrent))
+        second.send("COMMIT;\n\\echo CI_REVOCATION_READ_COMMITTED")
+        second.until("CI_REVOCATION_READ_COMMITTED")
+        second.finish()
+        second=None
+        first.finish()
+    finally:
+        if second is not None:
+            second.abort()
+        first.abort()
+
     # Qualquer revogacao derruba a elegibilidade documental; continua
     # impossivel converter isso em AAL2 real ou aprovacao financeira.
     run_sql(f"""
