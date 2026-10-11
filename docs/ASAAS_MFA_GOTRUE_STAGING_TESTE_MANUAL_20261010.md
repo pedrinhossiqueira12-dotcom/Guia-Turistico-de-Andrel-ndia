@@ -62,8 +62,11 @@ o e-mail exclusivo e a senha de testes (entrada de senha oculta). Se
 a conta não tiver TOTP, cadastrará um fator **nesse usuário de testes**,
 pedirá aprovação para exibir **uma única vez no seu próprio terminal**
 a chave Base32 gerada pelo GoTrue e solicitará que você a cadastre em
-um aplicativo autenticador. Em seguida solicitará o código de 6
-dígitos e executará `challenge` + `verify`.
+um aplicativo autenticador. Depois de o GoTrue criar e confirmar
+o `challenge`, o script pedirá o código TOTP de 6 dígitos e executará
+o `verify`. O identificador do desafio permanece apenas no processo
+local: não é solicitado nem informado pelo navegador. Cancelar ou
+informar código inválido bloqueia a verificação.
 
 **A chave Base32 é confidencial.** Se ela apareceu na tela, evite
 gravação de sessão, captura de tela, transmissão ao vivo e
@@ -129,6 +132,20 @@ financeira. Nenhum segredo ou OTP deve ser copiado para GitHub/CI/chat.
 **Próximo bloqueio material:** um operador precisa concluir a prova TOTP
 com conta exclusiva de testes no projeto STAGING, usando o procedimento
 acima. Mesmo com sucesso, permanecem `HOLD_OBRIGATORIO`, #41 e #43.
+
+
+### Endurecimento do teste manual — 11/10/2026
+
+O script de homologação agora valida o `Content-Type: application/json`
+em todas as respostas GoTrue antes de aceitar seus dados. Desafios
+recusados nunca solicitam código TOTP, e códigos inválidos ou leitura
+cancelada não são enviados a `/verify`. Testes offline cobrem a
+ordem `challenge → solicitação de OTP → verify`, respostas de proxy
+não-JSON e cancelamentos.
+
+Essas verificações não provam vínculo entre um desafio específico e
+uma operação financeira: **somente teste local de Auth STAGING**.
+Produção, Asaas e Pix continuam proibidos neste procedimento.
 
 ## Bloqueios que continuam
 
