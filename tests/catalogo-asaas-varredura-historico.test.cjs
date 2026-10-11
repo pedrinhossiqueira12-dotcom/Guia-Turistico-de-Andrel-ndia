@@ -71,7 +71,7 @@ test("confronta referencia, ID, valor, status e conflitos com saques comuns",()=
   "tRef===referencia", "tId===idVinculado",
   "refsDeOutroId", "valoresDivergentes", "formatosAmbiguos",
   "idsSemReferencia", "listaRepetida", "idsRepetidosGlobalmente",
-  "idsRepetidosGlobais>0", "estadosDone",
+  "idsRepetidosGlobais>0", "idsSemIdentificadorGlobais>0", "estadosDone",
  ])assert.ok(scanner.includes(item),item);
  assert.match(scanner,/const vistos=new Set<string>\(\)/);
  assert.match(scanner,/if\(vinculoError\)/);
@@ -83,6 +83,9 @@ test("confronta referencia, ID, valor, status e conflitos com saques comuns",()=
  assert.match(scanner,/ids_da_referencia_tambem_em_saques_comuns:idsDaReferenciaTambemEmSaqueComum/);
  assert.match(scanner,/ids_da_referencia_com_outra_referencia:idsDaReferenciaComOutraReferencia/);
  assert.match(scanner,/ids_repetidos_globais:idsRepetidosGlobais/);
+ assert.match(scanner,/ids_sem_identificador_globais:idsSemIdentificadorGlobais/);
+ assert.match(admin,/ids_sem_identificador_globais/);
+ assert.match(scanner,/if\\(!tId\\)idsSemIdentificadorGlobais\\+\\+/);
  assert.ok(scanner.includes("idsRepetidosGlobalmente.add(tId)"));
  assert.match(admin,/ids_repetidos_globais/);
  const edgeTests=fs.readFileSync("supabase/functions/tests/catalogo-edge-http.test.ts","utf8");
