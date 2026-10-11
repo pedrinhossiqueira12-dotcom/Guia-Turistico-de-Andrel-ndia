@@ -76,8 +76,13 @@ function hold(raw:unknown):RespostaBancoPrechallengeInerte {
     liberacao_autorizada:false,baixa_realizada:false,movimenta_dinheiro:false,
   };
 }
+function chavesExatas(raw:Record<string,unknown>,permitidas:readonly string[]):boolean{
+  return Object.keys(raw).every(chave=>permitidas.includes(chave));
+}
 function contexto(raw:unknown):ContextoPrivadoPrechallengeInerte{
-  if(!obj(raw)||!uuid(raw.id)||!uuid(raw.userId)||!uuid(raw.sessionId)
+  if(!obj(raw)||!chavesExatas(raw,[
+    "id","userId","sessionId","factorId","separationId","evidenceHash","expiresAt",
+  ])||!uuid(raw.id)||!uuid(raw.userId)||!uuid(raw.sessionId)
     ||!uuid(raw.factorId)||!uuid(raw.separationId)
     ||typeof raw.evidenceHash!=="string"||!SHA.test(raw.evidenceHash)
     ||typeof raw.expiresAt!=="number"||!Number.isSafeInteger(raw.expiresAt)
@@ -89,7 +94,9 @@ function contexto(raw:unknown):ContextoPrivadoPrechallengeInerte{
   };
 }
 function tentativa(raw:unknown):DesafioPrivadoPrechallengeInerte{
-  if(!obj(raw)||!uuid(raw.nonce)||!uuid(raw.tentativa)||!uuid(raw.challengeId))
+  if(!obj(raw)||!chavesExatas(raw,[
+    "nonce","tentativa","challengeId","contexto",
+  ])||!uuid(raw.nonce)||!uuid(raw.tentativa)||!uuid(raw.challengeId))
     throw Error("ponte_sql_tentativa_invalida");
   return {nonce:raw.nonce,tentativa:raw.tentativa,challengeId:raw.challengeId,
     contexto:contexto(raw.contexto)};
