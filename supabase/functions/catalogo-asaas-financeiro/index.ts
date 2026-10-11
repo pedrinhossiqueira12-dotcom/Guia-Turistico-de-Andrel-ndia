@@ -10,6 +10,9 @@ try { const keys = BUNDLE ? JSON.parse(BUNDLE) : null; serviceKey = keys?.defaul
 const db = createClient(SUPABASE_URL, serviceKey, {auth:{persistSession:false,autoRefreshToken:false}});
 const ASAAS_TOKEN = Deno.env.get("ASAAS_API_KEY") || "";
 const WEBHOOK_TOKEN = Deno.env.get("ASAAS_WEBHOOK_TOKEN") || "";
+// Credencial isolada do Asaas e dos tokens administrativos; desabilitada ate homologacao.
+const WEBHOOK_WORKER_TOKEN = Deno.env.get("ASAAS_WEBHOOK_WORKER_TOKEN") || "";
+const WEBHOOK_WORKER_ON = Deno.env.get("ASAAS_WEBHOOK_WORKER_ENABLED") === "true";
 // Token e flag próprios; não reutilizar o token do webhook de eventos comuns.
 const WITHDRAWAL_AUTH_TOKEN = Deno.env.get("ASAAS_SAQUE_VALIDACAO_TOKEN") || "";
 const WITHDRAWAL_AUTH_ON = Deno.env.get("ASAAS_SAQUE_VALIDACAO_ENABLED") === "true";
@@ -1544,6 +1547,20 @@ async function webhook(request:Request){
  else await task; // fallback somente para testes offline sem EdgeRuntime
  return respond({success:true,recebido:true,duplicado:stored.duplicado===true});
 }
+// Invocacao periodica independente de novas notificacoes. Exige token exclusivo
+// enviado pelo agendador (nunca o token de Asaas nem o service_role no header).
+async function executarWorkerWebhooksAsaas(request:Request){
+ if(!WEBHOOK_WORKER_ON)throw new Failure("Rotina financeira periódica desativada.",503);
+ enabled("billing"); // Inclusive a aprovacao explicita de faturamento produtivo.
+ if(!WEBHOOK_WORKER_TOKEN || WEBHOOK_WORKER_TOKEN.length<48)
+  throw new Failure("Token do worker financeiro não configurado.",503);
+ const received=request.headers.get("x-guia-asaas-worker-token")||"";
+ if(!(await equalSecret(received,WEBHOOK_WORKER_TOKEN)))
+  throw new Failure("Rotina não autorizada.",401);
+ // Nunca emitir fatura, alterar permissoes, autorizar saque ou iniciar POST Pix.
+ const result=await processarWebhooksAsaasPendentes(10);
+ return respond({success:true,processados:result.concluido,em_erro:result.falhou});
+}
 async function reprocessarWebhooksAsaasAdmin(uid:string){
  if(uid!==ADMIN_USER_ID)throw new Failure("Acesso restrito à administração.",403);
  const resultado=await processarWebhooksAsaasPendentes(10);
@@ -1572,6 +1589,7 @@ Deno.serve(async (request:Request)=>{
   const pathname=new URL(request.url).pathname;
   if(pathname.endsWith("/saque-autorizacao"))return await authorizeWithdrawal(request);
   if(pathname.endsWith("/webhook"))return await webhook(request);
+  if(pathname.endsWith("/cron-webhooks"))return await executarWorkerWebhooksAsaas(request);
   const user=await auth(request);
   const body=input(await request.json().catch(()=>({})));
   switch(value(body.acao,60)){
