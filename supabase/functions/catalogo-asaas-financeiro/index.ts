@@ -634,6 +634,10 @@ async function auditarHistoricoTransferenciasExcepcionaisSandboxAdmin(
  let valoresDivergentes=0,idsSemReferencia=0,identificadoresInvalidos=0;
  let listaRepetida=0,estadosDone=0,formatosAmbiguos=0,achouIdVinculado=false;
  const vistos=new Set<string>();
+ // Captura colisao entre referencias de qualquer pagina, inclusive se o ID
+ // aparecer primeiro numa referencia alheia e so depois na referencia alvo.
+ const primeiraReferenciaPorId=new Map<string,string>();
+ const idsComReferenciaDivergente=new Set<string>();
  // totalCount deve permanecer estavel ao longo da varredura; paginacao
  // offset nao representa snapshot transacional do banco externo.
  let totalInicial:number|null=null;
@@ -666,6 +670,11 @@ async function auditarHistoricoTransferenciasExcepcionaisSandboxAdmin(
    const t=input(raw);
    const tId=typeof t.id==="string"?t.id:"";
    const tRef=typeof t.externalReference==="string"?t.externalReference:"";
+   if(tId){
+    if(!primeiraReferenciaPorId.has(tId))primeiraReferenciaPorId.set(tId,tRef);
+    else if(primeiraReferenciaPorId.get(tId)!==tRef)
+     idsComReferenciaDivergente.add(tId);
+   }
    const refCorresponde=tRef===referencia;
    const idCorresponde=Boolean(idVinculado)&&tId===idVinculado;
    if(!refCorresponde&&!idCorresponde)continue;
@@ -692,6 +701,8 @@ async function auditarHistoricoTransferenciasExcepcionaisSandboxAdmin(
    throw new Failure("Listagem bancária vazia com hasMore=true: inconclusiva.",503);
  }
  const referenciasDistintas=vistos.size;
+ const idsDaReferenciaComOutraReferencia=[...vistos]
+  .filter(tId=>idsComReferenciaDivergente.has(tId)).length;
  // #41: o Asaas pode devolver transferencia com a referencia alvo, MAS
  // diferente do unico ID ja vinculado no nosso livro (ou sem vinculo).
  // Conferir TODOS os IDs dessa referencia contra saques comuns, nao apenas
@@ -720,6 +731,7 @@ async function auditarHistoricoTransferenciasExcepcionaisSandboxAdmin(
   valoresDivergentes>0||idsSemReferencia>0||identificadoresInvalidos>0||
   listaRepetida>0||formatosAmbiguos>0||mesmoIdSaqueComum||
   idsDaReferenciaTambemEmSaqueComum>0||
+  idsDaReferenciaComOutraReferencia>0||
   vinculoLocalDivergente||vinculoNaoLocalizado;
  return respond({success:true,relatorio:{
   paginas_examinadas:paginas,transferencias_examinadas:examinadas,
@@ -735,6 +747,7 @@ async function auditarHistoricoTransferenciasExcepcionaisSandboxAdmin(
   estados_ambiguos:formatosAmbiguos,
   id_tambem_usado_em_saque_comum:mesmoIdSaqueComum,
   ids_da_referencia_tambem_em_saques_comuns:idsDaReferenciaTambemEmSaqueComum,
+  ids_da_referencia_com_outra_referencia:idsDaReferenciaComOutraReferencia,
   vinculo_local_nao_encontrado_na_listagem:vinculoNaoLocalizado,
   referencia_ja_encontrada_no_banco:referencias>0,
   vinculo_local_divergente:vinculoLocalDivergente,
