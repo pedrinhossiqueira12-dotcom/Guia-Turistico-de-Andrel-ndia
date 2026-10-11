@@ -655,6 +655,20 @@ async function auditarHistoricoTransferenciasExcepcionaisSandboxAdmin(
   .eq("id",id).maybeSingle();
  if(reservaError||!reserva||reserva.situacao!=="congelada")
   throw new Failure("Separação congelada não encontrada; não consultar banco.",404);
+ // O retorno local pode estar corrompido ou parcialmente preenchido mesmo
+ // com situacao='congelada'. Nao construir referencia bancária com IDs,
+ // tipo, beneficiario ou centavos inconsistentes.
+ const uuidValido=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+ if(reserva.id!==id||
+  (reserva.tipo!=="residual"&&reserva.tipo!=="saida")||
+  typeof reserva.solicitacao_id!=="string"||
+  !uuidValido.test(reserva.solicitacao_id)||
+  typeof reserva.motoboy_id!=="string"||
+  !uuidValido.test(reserva.motoboy_id)||
+  typeof reserva.valor_centavos!=="number"||
+  !Number.isSafeInteger(reserva.valor_centavos)||
+  reserva.valor_centavos<=0)
+  throw new Failure("Separação financeira inconsistente; auditoria inconclusiva. HOLD.",503);
  const {data:vinculo,error:vinculoError}=await db.from(
   "catalogo_asaas_transferencias_excepcionais_auditoria")
   .select("transferencia_id,referencia_externa,valor_centavos,motoboy_id")
