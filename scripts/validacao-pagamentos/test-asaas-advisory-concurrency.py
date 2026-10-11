@@ -1335,6 +1335,41 @@ def assert_intent_hold(result: str, *, ok: bool, motivo: str) -> None:
             raise AssertionError("Journal habilitou recurso proibido: " + field)
 
 
+
+def diagnosticar_portas_hold_ci(escrow: str, *, forged: bool = False) -> dict:
+    import json
+    sinais = (
+        '{"mfa":true,"dupla_aprovacao_financeira":true,'
+        '"pix_pago":true,"ausencia_pix_anterior":true,'
+        '"pode_reenviar_post":true,"chave_pix":"NUNCA_EXIBIR_PIX",'
+        '"cpf":"NUNCA_EXIBIR_CPF"}'
+        if forged else '{}'
+    )
+    resposta = run_sql(
+        "SELECT catalogo_ci_intencao_pix_inerte.diagnosticar_portas_hold("
+        f"'{escrow}'::uuid,'{sinais}'::jsonb)"
+    )
+    try:
+        parsed = json.loads(resposta)
+    except json.JSONDecodeError as exc:
+        raise AssertionError("Diagnostico conjunto de CI nao retornou JSON") from exc
+    if not isinstance(parsed, dict) or parsed.get("status_operacional") != "HOLD_OBRIGATORIO":
+        raise AssertionError("A porta de reconciliacao e dupla conferencia nao manteve HOLD")
+    for field in (
+        "pode_enviar_post","pode_reenviar_post","pagamento_autorizado",
+        "liberacao_autorizada","baixa_realizada","movimenta_dinheiro",
+        "revisores_mfa_credenciados_confirmados",
+        "dupla_aprovacao_financeira_confirmada",
+        "transacao_de_baixa_habilitada",
+        "evidencia_independente_bancaria_suficiente"
+    ):
+        if parsed.get(field) is not False:
+            raise AssertionError(f"Diagnostico conjunto habilitou {field}")
+    if "NUNCA_EXIBIR" in resposta:
+        raise AssertionError("Porta conjunta retornou CPF, chave Pix ou dados forjados")
+    return parsed
+
+
 def scenario_intencao_prepost_duravel_concorrente() -> None:
     source = Path(
         "supabase/tests/isolated/catalogo-asaas-journal-intencao-prepost-race-inerte.sql"
@@ -1357,6 +1392,12 @@ def scenario_intencao_prepost_duravel_concorrente() -> None:
      ('{INTENT_ESCROW_B}','saida','{INTENT_REQ_B}','{INTENT_OWNER_B}',15000,3,repeat('a',64));
     COMMIT;
     """)
+    # #41 + #42 + #43: diagnosticos REAIS permanecem nao autorizadores
+    # antes de existir qualquer intencao ou marco de envio.
+    porta_antes = diagnosticar_portas_hold_ci(INTENT_ESCROW_A)
+    if (porta_antes.get("journal_intencoes_validas_no_ci") != 0 or
+            porta_antes.get("journal_marcos_de_inicio_no_ci") != 0):
+        raise AssertionError("Porta conjunta mostrou journal antes de preparo")
     no_intent = run_sql(intent_mark(INTENT_ATTEMPT_A, INTENT_MARK_A))
     assert_intent_hold(no_intent, ok=False, motivo="intencao_ausente")
 
@@ -1392,6 +1433,11 @@ def scenario_intencao_prepost_duravel_concorrente() -> None:
         "SELECT count(*) FROM catalogo_ci_intencao_pix_inerte.intencoes"
     ) != "1":
         raise AssertionError("Duas intencoes foram criadas no replay concorrente")
+
+    porta_intencao = diagnosticar_portas_hold_ci(INTENT_ESCROW_A)
+    if (porta_intencao.get("journal_intencoes_validas_no_ci") != 1 or
+            porta_intencao.get("journal_marcos_de_inicio_no_ci") != 0):
+        raise AssertionError("Porta conjunta confundiu intencao com inicio de envio")
 
     altered = run_sql(intent_prepare(
         INTENT_ESCROW_A, INTENT_ATTEMPT_A, INTENT_REQ_A, amount=12001
@@ -1429,6 +1475,17 @@ def scenario_intencao_prepost_duravel_concorrente() -> None:
         if second:
             second.abort()
         first.abort()
+
+    porta_marcada = diagnosticar_portas_hold_ci(INTENT_ESCROW_A)
+    if (porta_marcada.get("journal_intencoes_validas_no_ci") != 1 or
+            porta_marcada.get("journal_marcos_de_inicio_no_ci") != 1):
+        raise AssertionError("Porta conjunta ignorou o marco de inicio de CI")
+    porta_falsificada = diagnosticar_portas_hold_ci(INTENT_ESCROW_A, forged=True)
+    if porta_falsificada != porta_marcada:
+        raise AssertionError("Sinais de cliente alteraram decisao financeira da porta")
+    if (porta_marcada.get("diagnostico_matriz_disponivel") is not True or
+            porta_marcada.get("diagnostico_pareceres_disponivel") is not True):
+        raise AssertionError("Porta conjunta nao consultou matriz e revisores reais")
 
     changed_mark = run_sql(intent_mark(INTENT_ATTEMPT_A, INTENT_MARK_B))
     assert_intent_hold(changed_mark,ok=False,motivo="tentativa_ja_tem_marco_diferente")
@@ -1500,6 +1557,16 @@ def scenario_intencao_prepost_duravel_concorrente() -> None:
         "SELECT count(*) FROM catalogo_ci_intencao_pix_inerte.marcos_inicio"
     ) != "2":
         raise AssertionError("Rollback criou marcos duplicados ou perdidos")
+
+    porta_outro_titular = diagnosticar_portas_hold_ci(INTENT_ESCROW_B, forged=True)
+    if (porta_outro_titular.get("journal_intencoes_validas_no_ci") != 1 or
+            porta_outro_titular.get("journal_marcos_de_inicio_no_ci") != 1):
+        raise AssertionError("Intencao/marco de outro titular nao foram isolados")
+    porta_ausente = diagnosticar_portas_hold_ci(
+        "00000000-0000-4000-8000-000000000043"
+    )
+    if porta_ausente.get("ok") is not False:
+        raise AssertionError("Reserva ausente gerou diagnostico operacional valido")
 
     run_sql("""
     DO $immutability$
