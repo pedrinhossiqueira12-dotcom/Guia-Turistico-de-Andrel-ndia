@@ -376,11 +376,17 @@ async function createInvoice(uid:string,body:Record<string,unknown>,email:string
  const qr=pagavel?await asaas("/payments/"+encodeURIComponent(String(payment.id))+"/pixQrCode"):{};
  const pix=parsePix(verified,qr);
  if(pagavel)check(Boolean(pix.code),"Pix sem copia e cola. Consulte a cobrança no provedor.",502);
- await rpc("catalogo_asaas_registrar_fatura",{
+ const registrada=await rpc("catalogo_asaas_registrar_fatura",{
   p_fechamento:f.id,p_payment:verified.id,p_valor:f.total_comissao_centavos,
   p_qr:pix.code,p_imagem:pix.imageBase64,p_url:pix.ticketUrl,
   p_expira:qr.expirationDate||null
  });
+ // Um RPC sem erro de transporte nao significa INSERT/UPDATE confirmado.
+ // Exigir ACK e IDs do banco; caso nao existam, a reserva continua no
+ // journal para recuperacao manual sem repetir POST no Asaas.
+ check(registrada?.ok===true && String(registrada.order_id||"")===String(verified.id)
+  && Boolean(registrada.cobranca_id),
+  "Cobrança identificada no Asaas, mas o registro local não foi confirmado. Consulte a administração antes de pagar.",503);
  if(alreadyPaid)await verifyInvoice(String(verified.id),
   {order_id:verified.id,valor_centavos:f.total_comissao_centavos},store,month);
  return respond({success:true,order_id:verified.id,fatura:f,valor_centavos:f.total_comissao_centavos,
