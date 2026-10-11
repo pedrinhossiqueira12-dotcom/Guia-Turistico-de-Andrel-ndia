@@ -1702,11 +1702,43 @@ async function webhook(request:Request){
  const token=request.headers.get("asaas-access-token")||"";
  if(!(await equalSecret(token,WEBHOOK_TOKEN)))
   throw new Failure("Webhook não autorizado.",401);
- const raw=await request.text();
- if(raw.length>65536)throw new Failure("Evento fora do limite.",413);
+ // Limitar BYTES durante a leitura. request.text() leria o corpo inteiro
+ // antes de impor o limite; Unicode e chunked podem superar 64 KiB sem
+ // Content-Length confiavel, causando consumo de memoria desnecessario.
+ const MAX_WEBHOOK_BYTES=65536;
+ const lengthHeader=request.headers.get("content-length");
+ if(lengthHeader!==null&&(!/^[0-9]+$/.test(lengthHeader)||
+   !Number.isSafeInteger(Number(lengthHeader))||
+   Number(lengthHeader)>MAX_WEBHOOK_BYTES))
+  throw new Failure("Evento fora do limite.",413);
+ if(!request.body)throw new Failure("Corpo do Webhook ausente.",400);
+ const reader=request.body.getReader();
+ const chunks:Uint8Array[]=[];
+ let received=0,finished=false;
+ try {
+  while(true){
+   const part=await reader.read();
+   if(part.done){finished=true;break;}
+   received+=part.value.byteLength;
+   if(received>MAX_WEBHOOK_BYTES)
+    throw new Failure("Evento fora do limite.",413);
+   chunks.push(part.value);
+  }
+ }catch(e){
+  if(e instanceof Failure)throw e;
+  throw new Failure("Não foi possível receber o Webhook.",400);
+ }finally{
+  if(!finished)await reader.cancel().catch(()=>{});
+  reader.releaseLock();
+ }
+ const bytes=new Uint8Array(received);
+ let offset=0;
+ for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.byteLength;}
  let body:Record<string,unknown>;
- try {body=input(JSON.parse(raw||"{}"));}
- catch {throw new Failure("JSON de Webhook inválido.",400);}
+ try {
+  const raw=new TextDecoder("utf-8",{fatal:true}).decode(bytes);
+  body=input(JSON.parse(raw||"{}"));
+ }catch {throw new Failure("JSON de Webhook inválido.",400);}
  const event=value(body.event,80),id=value(body.id,180);
  const resource=input(body.payment||body.transfer);
  const resourceId=value(resource.id,150);
