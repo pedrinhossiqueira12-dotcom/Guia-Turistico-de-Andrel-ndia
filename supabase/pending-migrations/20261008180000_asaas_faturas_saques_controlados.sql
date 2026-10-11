@@ -79,8 +79,16 @@ BEGIN
  END IF;
  SELECT * INTO c FROM public.catalogo_fatura_cobrancas WHERE fechamento_id=f.id FOR UPDATE;
  IF FOUND THEN
-   IF c.gateway<>'asaas' OR c.order_id<>p_payment THEN
-     RETURN jsonb_build_object('ok',false,'mensagem','Já existe outra cobrança vinculada à fatura.');
+   IF c.gateway IS DISTINCT FROM 'asaas' OR c.order_id IS DISTINCT FROM p_payment
+      OR c.valor_centavos IS DISTINCT FROM p_valor
+      OR c.comercio_id IS DISTINCT FROM f.comercio_id
+      OR c.competencia IS DISTINCT FROM f.competencia THEN
+     RETURN jsonb_build_object('ok',false,'mensagem','Já existe outra cobrança ou dados divergentes vinculados à fatura.');
+   END IF;
+   -- Uma segunda tentativa de registro jamais reabre uma fatura liquidada,
+   -- contestada ou cancelada nem substitui o comprovante bancário anterior.
+   IF c.status NOT IN ('pendente','vencido') THEN
+     RETURN jsonb_build_object('ok',false,'mensagem','Cobrança já liquidada ou bloqueada. Não modificar o Pix.');
    END IF;
    UPDATE public.catalogo_fatura_cobrancas
      SET qr_code=p_qr,qr_code_base64=p_imagem,ticket_url=p_url,expira_em=p_expira
