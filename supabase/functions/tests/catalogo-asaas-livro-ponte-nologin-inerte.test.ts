@@ -138,6 +138,17 @@ Deno.test("resposta permissiva, autenticacao forjada, SQL invalido e rows extras
   .registrarDesafio(NONCE,CHALLENGE,ATTEMPT),"multiples SQL rows");
 });
 
+Deno.test("sucesso sem nonce UUID e recusado em todas as operacoes documentais",async()=>{
+ for(const broken of [null,undefined,"evil"]){
+  const {adapter}=mk(()=>({...result(),nonce:broken}));
+  await denied(()=>adapter.reservarInicioVinculado(ID,USER,SESSION),
+   "reserva com nonce ausente ou malformado");
+  await denied(()=>adapter.registrarDesafio(NONCE,CHALLENGE,ATTEMPT),
+   "challenge com nonce ausente ou malformado");
+  await denied(()=>adapter.consumirDesafio(NONCE,CHALLENGE,ATTEMPT),
+   "consumo com nonce ausente ou malformado");
+ }
+});
 Deno.test("negativa SQL com nonce reutilizavel deve falhar fechada",async()=>{
  const {adapter}=mk(()=>({...result(false),nonce:NONCE}));
  await denied(()=>adapter.reservarInicioVinculado(ID,USER,SESSION),
