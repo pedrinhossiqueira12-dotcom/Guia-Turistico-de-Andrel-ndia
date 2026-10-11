@@ -23,3 +23,9 @@ O teste Python `scenario_revisores_credenciais_mock_hold()` acrescenta dados de 
 - A implementação real deve usar JWT assinada e verificada, sessão ativa de servidor, fator TOTP/GoTrue realmente verificado e associado à operação, autorização de papel externo à requisição, prevenção de autoaprovação e credenciais formalmente nomeadas e revogáveis. As provas independentes do banco (#41) e a resolução atômica (#43) seguem bloqueadores antes de qualquer autorização.
 
 **Proibido:** merge da PR #39, mudança de status de escrow real, deploy financeiro, Pix de teste/produção, liberação de crédito ou mudança de chaves Asaas enquanto o HOLD estiver ativo.
+
+## Revogação concorrente sob bloqueio real
+
+O ensaio foi estendido para duas sessões PostgreSQL independentes. A primeira inicia uma transação e revoga a credencial fictícia do segundo revisor, **sem confirmar a transação imediatamente**. A segunda executa o diagnóstico do mesmo escrow e precisa aguardar um bloqueio PostgreSQL `Lock` sobre a credencial, porque o diagnóstico usa `FOR SHARE OF p,c,s`. Depois do `COMMIT` da revogação, a segunda deve contar **somente um revisor elegível** e retornar `HOLD_OBRIGATORIO` com `mfa_real_validado=false`. Esse teste cobre a atualização simultânea da qualificação local, não uma revogação ou autenticação verdadeira do Supabase Auth.
+
+O contrato `tests/catalogo-asaas-revisores-credenciais-ci-inertes.test.cjs` também verifica a presença do cenário concorrente. **Não há liberação ou pagamento mesmo antes da revogação.**
