@@ -30,6 +30,24 @@ test("usa apenas listagem GET paginada com limite, nunca um POST de transferenci
  assert.doesNotMatch(scanner,/\.insert\(|\.update\(|\.delete\(/);
 });
 
+test("recusa paginacao curta e metadados incompletos do Asaas",()=>{
+ assert.match(scanner,/typeof result\.limit!=="number"/);
+ assert.match(scanner,/Number\.isSafeInteger\(result\.limit\)/);
+ assert.match(scanner,/result\.limit!==LIMIT/);
+ assert.match(scanner,/typeof result\.offset!=="number"/);
+ assert.match(scanner,/result\.offset!==offset/);
+ assert.match(scanner,/typeof result\.totalCount!=="number"/);
+ assert.match(scanner,/Number\.isSafeInteger\(result\.totalCount\)/);
+ assert.match(scanner,/result\.totalCount<offset\+result\.data\.length/);
+ assert.match(scanner,/result\.hasMore===true&&result\.data\.length!==LIMIT/);
+ assert.match(scanner,/Paginação bancária inválida: histórico inconclusivo\. HOLD\./);
+ const edgeTests=fs.readFileSync("supabase/functions/tests/catalogo-edge-http.test.ts","utf8");
+ assert.match(edgeTests,/varredura recusa paginas Asaas parciais/);
+ assert.match(edgeTests,/pagina parcial com hasMore=true/);
+ assert.match(edgeTests,/limite reduzido pelo provedor/);
+ assert.match(edgeTests,/totalCount menor que dados/);
+});
+
 test("confronta referencia, ID, valor, status e conflitos com saques comuns",()=>{
  for(const item of [
   "guia-exc:", "catalogo_asaas_separacoes_excepcionais",
