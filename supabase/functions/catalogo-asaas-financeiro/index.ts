@@ -1410,7 +1410,9 @@ async function confirmarFaturaSandboxAdmin(uid:string,body:Record<string,unknown
  if(local.error||invoiceRow.error)
   throw new Failure("Falha ao verificar fatura local de homologação.",503);
  const charge=local.data,f=invoiceRow.data;
- check(Boolean(charge&&f)&&charge.gateway==="asaas"&&
+ check(charge!==null&&f!==null,
+  "Fatura inexistente. Nenhuma simulação executada.",409);
+ check(charge.gateway==="asaas"&&
   charge.comercio_id===f.comercio_id&&charge.competencia===f.competencia&&
   ["faturado","vencido","bloqueado"].includes(String(f.status))&&
   ["pendente","vencido"].includes(String(charge.status))&&
