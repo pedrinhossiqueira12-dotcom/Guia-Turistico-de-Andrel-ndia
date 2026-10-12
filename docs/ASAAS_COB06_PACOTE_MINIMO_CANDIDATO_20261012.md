@@ -63,6 +63,15 @@ A comparação PROD/STAGING demonstrou **3 assinaturas iguais** (`catalogo_pedid
 Adicionado ao GitHub Actions um gate que compara, **ANTES de aplicar qualquer SQL candidato**, o clone sintético do baseline original contra **as seis assinaturas capturadas da PRODUÇÃO**. Se houver deriva, a etapa deve falhar sem modificar produção e o pacote só poderá seguir após corrigir o baseline/planejamento. O resultado da execução deste novo gate precisa ser confirmado na CI; aprovação anterior não equivale a aceite automático deste gate.
 
 **Limites:** igualdade de seis assinaturas não prova que toda a base, grants, Auth, Storage, extensões, jobs, rotas HTTP ou dados de negócio sejam idênticos. Ainda exigem teste independente antes de implantação.
+### Limite financeiro real do Asaas — dívida mensal abaixo de R$ 5
+
+Conforme a [documentação oficial do Asaas atualizada em 19/08/2026](https://central.ajuda.asaas.com/hc/pt-br/articles/31972480144795-Quais-s%C3%A3o-os-limites-para-cria%C3%A7%C3%A3o-de-cobran%C3%A7as), **contas PF e PJ só podem criar uma cobrança a partir de R$ 5,00**. O serviço atual trabalha com fechamento mensal pela comissão efetivamente vendida; meses de pouco movimento podem gerar R$ 0,01–R$ 4,99. A operação não pode cobrar R$ 5 quando a dívida real é inferior.
+
+**Correção fail-closed 12/10/2026, PR #39:** `supabase/functions/catalogo-asaas-financeiro/index.ts` agora exige `invoiceCents>=ASAAS_COBRANCA_MINIMA_CENTAVOS` (500) **depois de tratar cobranças já existentes** e **antes da reserva, cadastro do pagador ou POST /payments**. Faturas menores recebem HTTP 409 informando que o Pix não foi emitido; permanecem registradas no valor original, sem alteração financeira. Testes da fixture em `tests/catalogo-asaas-cobranca-ciclo-completo-isolado.test.cjs` cobrem 1/100/499 centavos sem efeitos colaterais, 500 aceito e reconciliação de cobrança antiga inferior a R$5, sem segundo POST.
+
+Leitura agregada realizada nos dois bancos PROD/STAGING em 12/10/2026 (sem dados pessoais): **0 faturas abertas inferiores a R$ 5 e 0 faturas em aberto >= R$5**, resultado válido apenas no instante da consulta. Futuros comércios reais ainda poderão gerar saldos pequenos.
+
+**Decisão operacional pendente para COB-06/COB-07:** implementar mecanismo contábil de **acumulação de valores realmente devidos** até ultrapassar R$5, preservando competências e evitando duplicidade, *ou* escolher outro método de pagamento autorizado para faturas pequenas. A simples guarda impede tentativa rejeitada pelo provedor, mas **não resolve a cobrança desses valores**. Não aumentar artificialmente fatura, cancelar obrigação ou ignorar bloqueio de encerramento por dívida. Nenhuma regra de acumulação foi ativada.
 ### Arquivos de Edge e interface — pacote ainda NÃO fechado
 
 - Edge `supabase/functions/catalogo-asaas-financeiro/index.ts` é grande e contém rotas de **cobranças e saques no mesmo código**. Não considerar pronto o release apenas porque as migrations foram separadas. Preparar versão/manifesto que mantenha rotas de saque inacessíveis na produção, com flags de saques desligadas, sem `POST /transfers`.
