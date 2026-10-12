@@ -1,0 +1,153 @@
+# BACKLOG FINANCEIRO CANÔNICO — Guia Andrelândia / PR #39
+
+**Auditoria e congelamento de escopo:** 11/10/2026 (última atualização pela análise de histórico, branch, GitHub Actions e leitura dos projetos Supabase).  
+**Repositório:** `pedrinhossiqueira12-dotcom/Guia-Turistico-de-Andrel-ndia`.  
+**Branch:** `feat/asaas-faturas-saques-seguros`.  
+**PR:** [#39 — Draft](https://github.com/pedrinhossiqueira12-dotcom/Guia-Turistico-de-Andrel-ndia/pull/39).  
+**Commit de referência da auditoria:** `b7d1d0b5bed28e37dcda1d3aaba39508c27f53e0`.  
+**CI aprovada:** [run 38186833319](https://github.com/pedrinhossiqueira12-dotcom/Guia-Turistico-de-Andrel-ndia/actions/runs/38186833319) — 12/12 jobs.
+
+## Contrato de execução: não ampliar o escopo
+
+Este documento é a **única fila operacional** do trabalho financeiro do PR #39. O backlog geral `docs/BACKLOG_GUIA_ANDRELANDIA.md` e as issues existentes são histórico e rastreabilidade, **não autorização para iniciar trabalhos paralelos**.
+
+1. **Concluir as tarefas COB-01 a COB-08, nesta ordem, antes das tarefas SAQ**. Só interromper a ordem por um bug que comprovadamente impeça ou torne insegura a própria etapa atual; registrar evidência e a correção mínima no item, sem criar uma nova frente de trabalho.
+2. Uma tarefa é considerada concluída somente com **evidência de teste e ambiente**. CI verde não é homologação bancária; código no PR não significa publicação.
+3. Reutilizar a **chave API e o webhook Asaas Sandbox já criados com o usuário nos dias 08–09/10**, a menos que uma verificação prove incorreção ou revogação. **NÃO gerar outra chave, excluir webhook, rotacionar token, alterar Secrets, reiniciar banco ou refazer a integração sem motivo verificado e consentimento.**
+4. Não tocar na produção, mesclar #39, cobrar comerciantes reais, transferir Pix real ou habilitar débito automático sem autorização **expressa e específica** do proprietário na etapa de go-live apropriada.
+5. Não realizar operações SQL manuais para simular quitação, lançar créditos fictícios, reabrir faturas pagas ou forçar reserva; dados do teste E2E devem nascer do **fluxo legítimo** do catálogo/fechamento.
+6. Não adicionar funcionalidades de turismo, layout, anúncios, delivery não financeiro, arquiteturas paralelas, novos módulos de MFA/escrow/âncoras ou experimentos: tais trabalhos **não são tarefas deste backlog**. Revisar apenas os controles que bloqueiam diretamente o lançamento exigido.
+7. Não solicitar ou publicar senhas, CPF/CNPJ, API keys, tokens ou chaves Pix. Pode-se verificar **nomes e presença** de Secrets pelo operador, nunca valores no chat, código ou issues.
+8. Ao concluir cada item, editar sua marcação e anexar: commit/CI, ambiente, resultado e bloqueio restante. **Próxima ação = primeiro item não concluído da etapa ativa.** Não considerar "prossiga" como autorização para criar trabalho fora da lista.
+
+## Regras financeiras aprovadas nas conversas — NÃO REDESENHAR
+
+- Cobrança do estabelecimento por **fatura mensal Pix manual** no Asaas. **5% para a plataforma e 2% para o motoboy somente quando a entrega/pagamento offline for elegível** (dinheiro/cartão, conforme regras de pedidos implementadas); **não atribuir automaticamente os 2% ao motoboy em pedidos Pix online**. Manter a taxa contratual de 7% e verificar, em teste, os cenários de elegibilidade e contabilização exata.
+- O comerciante deve ver sua fatura, competência, vencimento, situação, Pix e histórico. A quitação só ocorre após confirmação válida e conciliação com o Asaas; sem dupla emissão/cobrança. O inadimplente deve regularizar dívidas; **não permitir exclusão/arquivamento definitivo que apague fatura ou dívida**, mantendo histórico e fluxo controlado de encerramento.
+- Termos de estabelecimentos e motoboys + ciência da política de privacidade exigem aceite explícito/versionado; revisão jurídica antes de operação produtiva.
+- **Pix Automático fica somente preparado para o futuro**; não habilitar mandato, assinatura/débito ou cobrança recorrente automática agora.
+- Carteira do motoboy com 2% elegível efetivamente financiado, crédito acumulável por meses, **saque mínimo comum R$ 100**, **sem limite artificial de 1.000 comissões**. Teto técnico de teste de R$ 5.000 **por transferência**, não por carteira. Saldos inferiores ao mínimo em encerramento/inatividade não podem ser confiscados; exigem regularização segura e comprovada, não baixa inventada.
+- O custo de transações/tarifas de repasse foi tratado nas conversas como custo da **plataforma**; confirmar tarifas contratuais da conta específica antes de ativar saques. Não descontar silenciosamente tarifas da comissão.
+- Saques reais e Pix Automático têm liberação **independente** das cobranças mensais. Não habilitar transferência com as mesmas flags do faturamento.
+
+## Inventário comprovado — estado de partida
+
+**GitHub:** #39 aberto **Draft**, 899 commits à frente de `main`, **238 arquivos no diff** (212 adicionados, 26 modificados); grande parte inclui testes, documentação e experimentos de segurança posteriores à implementação inicial. **Não mesclar integralmente sem selecionar e revisar as alterações indispensáveis**. CI 38186833319: 12/12.
+
+**Supabase STAGING `jbttwihctuibchhcyqtl`:** Edge `catalogo-asaas-financeiro` v44 ACTIVE, com autenticação de rota própria; tabelas/RPCs Asaas e restrição de gateway adequadas (preflight anterior: 14/14). Última leitura: **2 usuários confirmados, 1 catálogo, 1 cliente Asaas, 2 emissões reservadas históricas, 2 faturas pagas, 0 faturas abertas, 4 eventos de webhook registrados, 0 pendentes, 0 saques não finais**. Competências já pagas do comércio atual: setembro e outubro de 2026. **Não reaproveitá-las.** Cron ativo para fechamento offline diário, mas **não existe Cron `guia-asaas-reconciliar-webhook`** para processar fila financeira automaticamente. O frontend QA com `?asaas-sandbox=1` existe **somente na branch** e não foi promovido ao site público.
+
+**Histórico Asaas Sandbox:** conversas de 08–09/10 registram **criação de chave e webhook**, testes antigos de fatura/saldo e saque Pix de R$ 2,00 `DONE`. O roteiro/documento `docs/ASAAS_PLANO_LIBERACAO_PRODUCAO.md` também registra essa prova histórica. **Não afirmar que nada foi homologado antes**, mas **não tratar o teste antigo como validação da Edge atual v44**; chaves/Secret/URLs/flags **não são legíveis pelo conector disponível**. Não presumir que estão ausentes nem que continuam corretos.
+
+**Supabase PRODUÇÃO `xdmbkflufsfqziixzpxc`:** funções existentes Mercado Pago + `catalogo-fatura-pix`; **Edge Asaas ainda não publicada**. Faltam as tabelas `catalogo_asaas_clientes`, `catalogo_asaas_emissoes`, `catalogo_asaas_webhook_eventos`, `catalogo_cobranca_preferencias`; RPCs `catalogo_asaas_registrar_fatura`, `catalogo_asaas_webhook_receber`, `catalogo_asaas_webhook_claim`, `catalogo_asaas_webhook_finalizar`; CHECK de gateway ainda aceita **somente `mercadopago`**. Históricos de migrações dos dois projetos são distintos. **Produção não foi alterada nesta auditoria.**
+
+**Evidências auxiliares:** `docs/ASAAS_HOMOLOGACAO_COBRANCA_SANDBOX_20261011.md`, `docs/ASAAS_CORTE_COBRANCA_PRODUCAO_PENDENCIAS_20261011.md`, `scripts/validacao-pagamentos/asaas-producao-readiness-readonly.sql`, `docs/ASAAS_WEBHOOK_CRON_AGENDAMENTO_MANUAL_20261011.md`, `docs/EVOLUCAO_PIX_MANUAL_TERMOS_ENCERRAMENTO.md`.
+
+## FASE A — COBRANÇAS MENSAIS DOS COMÉRCIOS (PRIORIDADE ABSOLUTA)
+
+### [x] COB-00 — Auditar o que existe; congelar esta sequência
+
+- **Estado:** auditoria inicial feita e documentada; não é auditoria linha a linha de 238 arquivos.
+- Evidências: histórico recuperado, PR/CI, inspeção de funções de cobrança, documentos e UI, consultas somente leitura nos dois bancos.
+- Saída: **este backlog**, sem mudança de regra, segredo, serviço ou autorização de dinheiro.
+- A partir daqui não abrir novas frentes de trabalho sem um defeito reprodutível que impeça os passos COB.
+
+### [ ] COB-01 — Conferir a configuração Asaas Sandbox **existente**, sem recriá-la
+
+- **Estado:** AGUARDANDO CONFERÊNCIA DO OPERADOR; a chave e webhook foram criados no histórico.
+- Na conta **Asaas Sandbox que já existe**, conferir em tela se a chave está ativa e se o webhook existente está ativo, com URL HTTPS de STAGING correta e eventos de cobrança necessários, autenticação por token `asaas-access-token`. Não compartilhar valores.
+- No **Supabase STAGING**, conferir apenas a **presença e correspondência** de `ASAAS_API_KEY`, `ASAAS_WEBHOOK_TOKEN`, `ASAAS_ENVIRONMENT=sandbox`, `ASAAS_BILLING_ENABLED`; **não sobrescrever**. A flag `ASAAS_SANDBOX_QA_CONFIRM_ENABLED` e o UUID `ASAAS_SANDBOX_ADMIN_USER_ID` só precisam ser habilitados/separadamente autorizados se for usado o **botão administrativo** de simulação; confirmar diretamente no painel Asaas Sandbox evita tratá-los como pré-requisito universal.
+- Confirmar que `ASAAS_PAYOUTS_ENABLED`, `ASAAS_SAQUE_VALIDACAO_ENABLED` e quaisquer flags de **produção** não são usadas para liberar saques.
+- **Aceite:** operador confirma configuração da chave/webhook existentes (sem segredos expostos) e uma consulta de diagnóstico/autenticação permitida funciona; se falhar, corrigir apenas o campo concreto que falhou.
+- **Próximo passo obrigatório.** Não solicitar uma nova chave ou webhook como padrão.
+
+### [ ] COB-02 — Obter **uma nova fatura legítima e aberta** no STAGING
+
+- **Estado:** BLOQUEADO POR AUSÊNCIA DE FATURA (0 abertas).
+- Utilizar preview **da branch** em `pages/catalogo.html?asaas-sandbox=1` e `pages/catalogo-admin.html?asaas-sandbox=1`, com contas de teste autorizadas, se o catálogo existente for elegível. Testar pedidos somente offline; sem Pix real do comprador.
+- Um pedido de teste deve passar pelo fluxo normal de estabelecimento/entrega, gerar comissão e fechamento de **competência ainda não paga** ou de comércio de teste independente autorizado. **Não** reabrir setembro/outubro do comércio que já tem ambas pagas e **não** inserir cobranças/saques/créditos manualmente no SQL.
+- **Aceite:** fechamento com status `faturado`/`vencido`/`bloqueado`, valor de comissão positivo e comprovadamente decorrente de pedido legítimo; **sem cobrança Asaas prévia** da mesma referência.
+
+### [ ] COB-03 — Homologar a **cobrança Pix mensal completa**, na versão atual
+
+- **Estado:** EM ESPERA DE COB-01 E COB-02; existem testes bancários históricos, porém não este percurso sobre a v44.
+- Proprietário autenticado/termos aceitos → `criar_cobranca` → conferir ID, cliente, `externalReference`, valor, QR e 1 única cobrança → consultar novamente **sem repetir POST**.
+- Confirmar **no Asaas Sandbox já configurado** (painel ou botão QA autenticado, se optado) → verificar webhook recebido **de fato**, token aceito, evento persistido e conciliado com GET do provedor → fatura `pago` **uma única vez** somente em `RECEIVED`; `CONFIRMED` exige prudência.
+- Reentrega do webhook, timeouts, resposta inconclusiva, pedido repetido, estorno/cancelamento/contestação e provedor indisponível devem **impedir duplicidade e crédito indevido**. Apenas correção de bug comprovado, não nova arquitetura.
+- **Aceite:** evidências anonimizadas do antes/depois no Asaas e Supabase, fatura quitada exatamente uma vez, eventos conciliados, nenhuma nova emissão em retries e **nenhum Pix de saque iniciado**.
+
+### [ ] COB-04 — Validar regras de negócio de cobrança, dívidas e efeitos contábeis
+
+- **Estado:** IMPLEMENTADO NA BRANCH/TESTES ISOLADOS; necessita prova integrada.
+- Conferir cálculos de 5% plataforma / 2% motoboy para pedido offline elegível, ausência de crédito de 2% no Pix online, estorno e cancelamento; nenhuma disponibilização de comissão do motoboy antes de quitação comprovada do comércio.
+- Conferir fechamento mensal, vencimento, inadimplência, possibilidade de pagar fatura bloqueada e **não exclusão/arquivamento irregular** do comércio endividado, inclusive rota legada `whatsapp-bot` e catálogo/listagens.
+- Conferir aceite dos termos de ambos os papéis, preservação de históricos, cobranças legadas **Mercado Pago não migradas/cobradas novamente**.
+- **Aceite:** matriz de cenários com resultados/consultas, sem diferenças contábeis, sem fuga por endpoint antigo e sem regressões de produção.
+
+### [ ] COB-05 — Habilitar e provar reprocessamento operacional de webhooks
+
+- **Estado:** ROTA IMPLEMENTADA; AGENDAMENTO NÃO EXISTE NO STAGING.
+- Testar `/cron-webhooks` com token/flag de serviço independentes e erro 401 para token inválido; job permitido somente para fila de homologação, sem expor segredo no SQL/GitHub.
+- Depois do teste manual da fila, configurar **no STAGING**, com aval do operador, worker + Vault/Cron descritos em `docs/ASAAS_WEBHOOK_CRON_AGENDAMENTO_MANUAL_20261011.md`; verificar monitoramento, idempotência, backoff, evento falho e reprocessamento.
+- **Aceite:** job agendado e executado com evidência de evento consumido, estado/erros auditáveis, sem nova cobrança nem transferências.
+
+### [ ] COB-06 — Preparar implantação **mínima e segura** no banco/site de produção
+
+- **Estado:** BLOQUEADO ATÉ COB-03–COB-05; gate atual de PROD reprovado.
+- Revisar e **selecionar apenas migrações/arquivos necessários à cobrança**, ao aceite e à proteção de dívidas, pois #39 possui **899 commits / 238 arquivos** e inclui experimentos de saque/MFA/escrow que **NÃO** devem ser publicados em lote. Extrair sequência de deploy enxuta, com referência ao PR #39; não exigir reescrita do sistema.
+- Aplicar a sequência primeiro em **clone isolado da estrutura de produção** (não copiar dados de STAGING), inspecionar RLS/EXECUTE/segredos, proteção de endpoints legados, backup e rollback. Testar coexistência com Mercado Pago sem mudar faturas antigas.
+- Gate `asaas-producao-readiness-readonly.sql` deve passar, mas **sozinho não autoriza** deploy; revisar atualização da interface do catálogo para falar com a função Asaas efetivamente publicada.
+- **Aceite:** pacote de lançamento revisado, CI, inventário de SQL forward-only, rollback/backup, testes no clone, plano de preservação de dados e lista exata de ações/arquivos. Nenhum `merge` automático do PR gigante.
+
+### [ ] COB-07 — Configurar PRODUÇÃO e habilitar **somente cobranças**, com autorização
+
+- **Estado:** BLOQUEADO POR COB-06 + AUTORIZAÇÃO EXPRESSA + CONDIÇÕES CADASTRAIS DA CONTA.
+- Proprietário confirma conta Asaas produtiva apta ao recebimento, cadastro/documentação exigidos pelo Asaas, tarifas da conta, titularidade, termos e responsabilidade operacional. O usuário declarou anteriormente não ter CNPJ ativo: **não presumir** que os recursos bancários estão disponíveis ou obrigar cadastro não confirmado.
+- Após **autorização específica**, migrar só esquema de cobranças, publicar Edge, configurar chave de **produção** separada e webhook de produção; manter `ASAAS_BILLING_ENABLED=false` / `ASAAS_PRODUCTION_BILLING_APPROVED=false` inicialmente; validar gates e recuperação de falhas; ativar somente cobranças com nova autorização de go-live.
+- **Aceite:** migração auditada, app exibindo Pix Asaas no fluxo real, rotas protegidas, sem segundo gateway disputando mesma fatura, saques produtivos e Pix Automático **desligados**.
+
+### [ ] COB-08 — Conferir primeira fatura real e encerrar entrega de cobrança
+
+- **Estado:** BLOQUEADO por COB-07.
+- Piloto de comércio autorizado e fatura real elegível; confirmar emissão única, Pix, webhook, baixa, histórico, inadimplência/estorno, notificações, suporte e observabilidade, sem exposição de dados sensíveis.
+- **Aceite:** primeira fatura real concluída/conciliada, acompanhamento demonstrado, contingência documentada e aprovação do proprietário. Só aqui dizer **“cobrança mensal Asaas pronta em produção”**.
+
+## FASE B — SAQUES E CARTEIRA DOS MOTOBOYS (SÓ DEPOIS DE COB-08)
+
+### [ ] SAQ-01 — Revisar regras existentes, carteira e crédito financiado
+
+- **Estado:** IMPLEMENTADO EM TESTES, NÃO LIBERADO.
+- Verificar mínimo R$100, acúmulo por meses sem expiração arbitrária, >1.000 comissões, teto por transferência R$5.000, saldo residual, motoboy inativo, proteção de contestações, rateio 2% em offline elegível e taxas da plataforma.
+- **Aceite:** matriz de valores e estado consistente; nenhuma comissão duplicada ou crédito fictício, inclusive fatura estornada após crédito.
+
+### [ ] SAQ-02 — Comprovar **elegibilidade comercial e autorização técnica Money Out**
+
+- **Estado:** DEPENDÊNCIA EXTERNA; histórico de saque R$2 Sandbox não equivale a aprovação produtiva.
+- Contatar Asaas sobre **Pix para motoboys terceiros via API**, documentação/cadastro do titular, validação de destinatário Pix, tarifas/limites, webhook de validação e aprovação comercial/contratual exigida.
+- **Aceite:** autorização escrita/indicação inequívoca do Asaas e controles que devem ser exigidos em produção, sem usar a confirmação Sandbox como atalho.
+
+### [ ] SAQ-03 — Homologar saques na versão atual, inclusive casos excepcionais
+
+- **Estado:** TESTES HISTÓRICOS/CI EXISTENTES, NÃO CERTIFICAÇÃO ATUAL.
+- Testar reserva e GET bancário, `APPROVED/REFUSED`, `DONE/FAILED/CANCELLED`, timeout e recuperação sem segundo POST, MFA/dupla conferência **somente se necessários à operação aprovada**, HMAC e destinatário original, concorrência/idempotência.
+- Tratar saldos **inferiores a R$100** e saldo de entregador inativo: não permitir baixa com base em evidência incompleta; comprovar liquidação antes de concluir o histórico ou manter **HOLD com direito preservado**.
+- **Aceite:** provas rastreáveis para cada transferência e teste de não duplicação/estorno; encerramento financeiro sem perda de saldo. Não criar laboratório novo sem bug concreto.
+
+### [ ] SAQ-04 — Liberar produção de saques **independentemente** das cobranças
+
+- **Estado:** BLOQUEADO por SAQ-01–SAQ-03 + autorização específica do proprietário.
+- Preparar somente migrations/Edge/Secrets necessários a saques, revisar segurança e credenciais, ativar Money Out após autorização do Asaas, acompanhar primeira transferência real e conciliação até `DONE`.
+- **Aceite:** repasse autorizado, único, conciliado, transparência do extrato e monitoramento; não considerar `POST` aceito como transferência quitada.
+
+## Não fazem parte desta entrega
+
+**Fora do escopo e sem execução automática:** Pix Automático agora; novas opções de monetização, turismo/mapas/notícias; identidade visual; mudanças de cancelamento/atribuição que não alterem diretamente a segurança financeira; novo desenho de escrow/ancoragem/MFA laboratorial; pagamentos produtivos de teste; reimplementação completa do site; reemissão de credenciais existentes sem comprovar falha.
+
+## Como atualizar sem virar backlog infinito
+
+- Ao terminar cada COB/SAQ: substituir somente sua marcação, data, ambiente, evidência e próxima ação.
+- Bugs encontrados são **subtarefas do item ativo**; registrar causa, teste antes/depois e commit. Só exigir uma **nova** etapa com autorização explícita do usuário.
+- Se depender de configuração externa, a execução para nesse item com um único passo a passo relevante para o usuário, **sem implementar distrações enquanto aguarda**.
+- Critério de encerramento do trabalho de **cobranças:** COB-01…COB-08 todos concluídos.
+- Critério de encerramento do **sistema financeiro completo:** COB-01…COB-08 + SAQ-01…SAQ-04 concluídos. Futuro Pix Automático explicitamente excluído.
+
+**Próxima ação obrigatória:** **COB-01 — CONFERIR** o webhook e a chave Asaas Sandbox que **já existem**; não solicitar criação de novos. Só avançar para COB-02 após evidência de que o Sandbox atual está corretamente ligado ao STAGING.
