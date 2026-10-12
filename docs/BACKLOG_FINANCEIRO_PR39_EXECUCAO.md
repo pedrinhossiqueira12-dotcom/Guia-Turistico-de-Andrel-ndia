@@ -72,6 +72,14 @@ Este documento é a **única fila operacional** do trabalho financeiro do PR #39
 - Um pedido de teste deve passar pelo fluxo normal de estabelecimento/entrega, gerar comissão e fechamento de **competência ainda não paga** ou de comércio de teste independente autorizado. **Não** reabrir setembro/outubro do comércio que já tem ambas pagas e **não** inserir cobranças/saques/créditos manualmente no SQL.
 - **Aceite:** fechamento com status `faturado`/`vencido`/`bloqueado`, valor de comissão positivo e comprovadamente decorrente de pedido legítimo; **sem cobrança Asaas prévia** da mesma referência.
 
+#### COB-02 — Reteste da página corrigida: ainda bloqueado (11/10/2026)
+
+- Operador respondeu "pronto" após receber o HTML com a correção de checkout.
+- Inspeção **somente leitura** do Supabase STAGING: `asaas-cob02` segue com **0 pedidos, 0 comissões, 0 faturas e 0 cobranças Pix**, sem duplicação.
+- Logs confirmam novo `POST /functions/v1/catalogo-pedido-offline` em **2026-10-12 02:03:24 UTC**, rejeitado com **HTTP 503** (`response.headers.content_length=132`); anteriormente houve duas rejeições HTTP 503 (01:49 e 01:50 UTC). Edge atual `catalogo-pedido-offline` v32 **ACTIVE**; CI do commit `82ce601989e837f461d32d94a63e94c4f3c5c5ab` retornou **12/12 SUCCESS**.
+- **Não concluir COB-02, não fazer novo pedido/fechamento/Asaas Pix** até identificar causa do 503. Código tem requisito inalterado de **chave de comprovante AES 32 bytes**, cuja ausência origina HTTP 503 antes de qualquer pedido; a causa exata **não é comprovável somente pelo código HTTP e pelos logs (sem corpo da resposta)**. Solicitar ao operador **somente o texto da mensagem vermelha** sob os botões na versão HTML corrigida. Não pedir ou expor chave/token, não desligar criptografia.
+- Próximo trabalho estritamente na COB-02: corrigir a dependência específica reportada pela mensagem, em STAGING, e retestar uma vez com registro de ID.
+
 #### COB-02 — Diagnóstico do primeiro teste do usuário e correção (11/10/2026)
 
 - **Incidente confirmado, sem dados duplicados:** Supabase STAGING `asaas-cob02` tinha **2 linhas legítimas de aceite** (`termos` e `privacidade`), mas **0 pedidos, 0 comissões, 0 faturas e 0 cobranças Asaas**. HTTP logs da Edge `catalogo-pedido-offline` identificam **dois POSTs HTTP 503** (em 12/10/2026 01:49 e 01:50 UTC); portanto, o usuário não errou na sequência: o endpoint de pedido recusou suas duas tentativas. Os botões seguintes foram usados sem pedido prévio e não produziram faturas.
