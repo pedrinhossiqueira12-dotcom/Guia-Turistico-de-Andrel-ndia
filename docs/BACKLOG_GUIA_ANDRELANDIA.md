@@ -1,5 +1,14 @@
 # Backlog de desenvolvimento — Guia Andrelândia
 
+> **EXECUÇÃO FINANCEIRA ATUAL (11/10/2026):** a fonte única e prioritária é
+> [BACKLOG_FINANCEIRO_PR39_EXECUCAO.md](BACKLOG_FINANCEIRO_PR39_EXECUCAO.md).
+> A fila está **congelada** em COB-01…COB-08 (lançamento de cobrança mensal)
+> e SAQ-01…SAQ-04 (saques depois). As tabelas e issues abaixo são **histórico
+> geral de desenvolvimento**, não uma ordem para iniciar novas frentes durante
+> a finalização de pagamentos. Não refazer chaves/webhooks Sandbox já criados
+> sem constatar um defeito, não liberar produção ou saque por CI verde.
+
+
 **Índice oficial do backlog:** [GitHub Issue #56](https://github.com/pedrinhossiqueira12-dotcom/Guia-Turistico-de-Andrel-ndia/issues/56)
 
 **Referência técnica da fase financeira:** [PR #39 (Draft)](https://github.com/pedrinhossiqueira12-dotcom/Guia-Turistico-de-Andrel-ndia/pull/39).
