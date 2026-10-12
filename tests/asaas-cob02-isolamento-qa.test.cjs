@@ -75,3 +75,23 @@ test("COB-04: fechamento exige entrega física e pagamento confirmado para TODOS
  assert.match(guardSql,/IF v_status='pago'/);
  assert.doesNotMatch(guardSql,/\b(?:TRUNCATE|DROP TABLE)\b/i);
 });
+
+test("COB-04: valida o e-mail de motoboy e codigo antes da API, sem exigir UID manual",()=>{
+ const vm=require("node:vm");
+ const matchEmail=qaHtml.match(/if\(!([^\n]+?)\.test\(email\)\|\|!nome\)/);
+ assert.ok(matchEmail,"validador de e-mail QA encontrado");
+ const regexEmail=vm.runInNewContext(matchEmail[1]);
+ assert.equal(regexEmail.test("entregador.teste@exemplo.com"),true);
+ assert.equal(regexEmail.test("sem-arroba.exemplo.com"),false);
+ assert.equal(regexEmail.test("a@b"),false);
+ const matchCode=qaHtml.match(/if\(!([^\n]+?)\.test\(code\)\)/);
+ assert.ok(matchCode,"validador de codigo QA encontrado");
+ const regexCode=vm.runInNewContext(matchCode[1]);
+ assert.equal(regexCode.test("123456"),true);
+ assert.equal(regexCode.test("12345"),false);
+ assert.equal(regexCode.test("12345a"),false);
+ assert.match(qaHtml,/id="qa-moto-id" readonly/);
+ assert.match(qaHtml,/id="qa-delivery-feedback" role="status"/);
+ assert.match(qaHtml,/id="qa-delivery-result"/);
+ assert.match(qaHtml,/\$\("qa-delivery-feedback"\)\.textContent=\$\("qa-feedback"\)\.textContent/);
+});
