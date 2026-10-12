@@ -459,7 +459,11 @@ Deno.serve(async (request: Request) => {
     if (action === "consultar_status") return await orderStatus(body, request, ip);
     if (action === "cancelar_pedido") return await cancelOrder(body, ip);
     if (action === "criar_pedido_offline") {
-      if (!OFFLINE_CHECKOUT_ENABLED) return json({ success: false, mensagem: "O pagamento offline ainda não está habilitado." }, 503);
+      // COB-02: ativar checkout OFFLINE apenas na loja QA e no projeto STAGING.
+      // Fora dela, preservar integralmente o flag OFFLINE_CHECKOUT_ENABLED.
+      const qaCheckout = comercio === "asaas-cob02" && QA_STAGING_COMMERCE_IDS.has(comercio);
+      if (!OFFLINE_CHECKOUT_ENABLED && !qaCheckout)
+        return json({ success: false, mensagem: "O pagamento offline ainda não está habilitado." }, 503);
       return await createOfflineOrder(body, `${ip}|${comercio}|create`);
     }
     if (action === "confirmar_entrega") return json({ success: false, mensagem: "A confirmação deve ser feita pelo painel autenticado do comércio." }, 410);
