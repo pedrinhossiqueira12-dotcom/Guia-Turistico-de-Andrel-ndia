@@ -27,12 +27,12 @@ try {
   if ([string]::IsNullOrWhiteSpace($chave)) { throw 'Chave vazia.' }
   $cabecalhos = @{ 'access_token' = $chave; 'accept'='application/json' }
   function Api([string]$Metodo,[string]$Caminho,$Corpo=$null) {
-    $args = @{ Method=$Metodo; Uri=($base+$Caminho); Headers=$cabecalhos; TimeoutSec=20 }
+    $parametros = @{ Method=$Metodo; Uri=($base+$Caminho); Headers=$cabecalhos; TimeoutSec=20 }
     if ($null -ne $Corpo) {
-      $args.ContentType='application/json'
-      $args.Body=($Corpo | ConvertTo-Json -Depth 8 -Compress)
+      $parametros.ContentType='application/json'
+      $parametros.Body=($Corpo | ConvertTo-Json -Depth 8 -Compress)
     }
-    try { return Invoke-RestMethod @args }
+    try { return Invoke-RestMethod @parametros }
     catch {
       # Evitar imprimir headers, respostas de clientes ou chaves em erros.
       throw ('Chamada ao Asaas Sandbox falhou no metodo {0}, caminho {1}. Verifique o painel antes de repetir.' -f $Metodo,$Caminho.Split('?')[0])
