@@ -1121,6 +1121,14 @@
   }
 
   document.addEventListener("DOMContentLoaded", () => {
+    if (QA_SANDBOX) {
+      if ($("qaSandboxBanner")) $("qaSandboxBanner").hidden = false;
+      const voltar=$("voltarPerfil");
+      if (voltar) {
+        voltar.href=`catalogo-admin.html?id=${encodeURIComponent(comercioId)}&asaas-sandbox=1`;
+        voltar.textContent="‹ Administração de teste";
+      }
+    }
     configurarEventos();
     carregarCatalogo();
   });
