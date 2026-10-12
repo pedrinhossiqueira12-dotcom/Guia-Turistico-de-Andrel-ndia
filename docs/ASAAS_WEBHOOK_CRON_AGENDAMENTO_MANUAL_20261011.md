@@ -124,6 +124,17 @@ Se o Cron ficar sem executar, responder diferente de 200 ou a fila acumular `err
 
 **Evidência inicial:** 12/10/2026, primeira chamada automática às 16:32 UTC; execuções subsequentes às 16:34, 16:36, 16:38 e 16:40 UTC, todas com HTTP 200, 0 eventos processados (fila limpa). Validação da recuperação real de um evento com falha permanece em aberto na backlog COB-05.
 
+## Duas filas distintas: recebimento Asaas × processamento interno
+
+O `pg_cron` recupera **somente eventos que já foram persistidos** na tabela `catalogo_asaas_webhook_eventos`. Não consegue buscar eventos que o **Asaas ainda não conseguiu entregar** por erro de rede, token incorreto ou falha antes da gravação no endpoint. Há, portanto, dois caminhos independentes de recuperação:
+
+- **Erro antes do ACK HTTP 200:** verificar **Integrações → Logs de Webhooks** no Asaas Sandbox; o próprio Asaas tenta reenviar. A documentação Asaas informa que **15 falhas consecutivas** podem interromper a fila de envio e que eventos da fila interrompida são preservados por **até 14 dias**. Corrigir a causa e reativar a fila no painel, se necessário; não criar outra fatura para compensar evento não recebido.
+- **ACK 200 após persistir, seguido de falha na reconciliação:** o evento permanece como `pendente`/`erro` no PostgreSQL, a RPC `catalogo_asaas_webhook_finalizar` aplica backoff e o worker agendado usa `SKIP LOCKED` e lease com token para tentar novamente. Conferir `cron.job_run_details`, `net._http_response` e a tabela da fila antes de qualquer intervenção.
+
+A prova de que o worker executa automaticamente (HTTP 200, fila vazia) **não substitui** um teste de recuperação de evento persistido e falho; e reenviar um evento **já concluído** prova idempotência, não retentativa.
+
+Referências oficiais Asaas: [recebimento e logs de Webhook](https://docs.asaas.com/docs/receba-eventos-do-asaas-no-seu-endpoint-de-webhook), [status HTTP e fila de retentativas](https://central.ajuda.asaas.com/hc/pt-br/articles/55716750746907-Como-funciona-o-status-de-resposta-HTTP-nos-webhooks-do-Asaas), [fila interrompida e retenção](https://central.ajuda.asaas.com/hc/pt-br/articles/55669757165211-O-que-fazer-quando-a-fila-de-sincroniza%C3%A7%C3%A3o-do-Webhook-for-interrompida).
+
 ## Critério de pronto
 
 **Código e testes da rota** não são implantação. Antes de ativar, exigir: CI verde, testes HTTP de autenticação e fila em STAGING, teste de reconciliação com Asaas Sandbox, revisão das migrations, conta apta a cobranças, agendamento/alertas ativos e aprovação explícita para o projeto de produção. O recebimento das faturas pode ser homologado separadamente dos repasses, sem permitir dívidas escondidas ao motoboy.
