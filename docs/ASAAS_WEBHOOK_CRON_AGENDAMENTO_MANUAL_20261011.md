@@ -80,6 +80,50 @@ Desative também a flag da Edge para bloqueio em profundidade.
 
 Referências oficiais: https://supabase.com/docs/guides/cron/quickstart ; https://supabase.com/docs/guides/database/extensions/pg_net ; https://supabase.com/docs/guides/functions/background-tasks
 
+## Acompanhamento somente leitura (COB-05, STAGING)
+
+Executar as consultas no **SQL Editor do projeto de testes** `jbttwihctuibchhcyqtl`. Elas não criam eventos, não expõem segredos e não movimentam dinheiro.
+
+**Execuções do Cron nas últimas 24 horas:**
+
+```sql
+SELECT j.jobid, j.jobname, j.active, j.schedule,
+       max(d.start_time) AS ultima_execucao,
+       count(*) FILTER (WHERE d.status='succeeded') AS execucoes_bem_sucedidas_24h,
+       count(*) FILTER (WHERE d.status<>'succeeded') AS execucoes_com_problema_24h
+FROM cron.job j
+LEFT JOIN cron.job_run_details d
+  ON d.jobid=j.jobid AND d.start_time > now()-interval '24 hours'
+WHERE j.jobname='guia-asaas-reconciliar-webhook'
+GROUP BY j.jobid,j.jobname,j.active,j.schedule;
+```
+
+**Fila dos webhooks e próximo horário de retentativa:**
+
+```sql
+SELECT estado, count(*) AS quantidade,
+       min(criado_em) AS evento_mais_antigo,
+       min(proxima_tentativa_em)
+         FILTER (WHERE estado IN ('erro','pendente')) AS proxima_tentativa
+FROM public.catalogo_asaas_webhook_eventos
+GROUP BY estado ORDER BY estado;
+```
+
+**Respostas HTTP do `pg_net`, sem corpo e sem headers:**
+
+```sql
+SELECT status_code, count(*) AS respostas, max(created) AS resposta_mais_recente
+FROM net._http_response
+WHERE created > now()-interval '24 hours'
+GROUP BY status_code ORDER BY status_code;
+```
+
+A tabela `net._http_response` inclui também **chamadas manuais de teste** (HTTP 401 e 503 esperados nos testes de acesso). Assim, a agregação não é específica do Cron: correlacione o horário de um erro com `cron.job_run_details` antes de considerá-lo uma falha operacional. `succeeded` no Cron apenas confirma a execução do comando SQL; a resposta HTTP do worker precisa ser **200**. Um HTTP 200 com `processados=0` não prova recuperação de evento falho: comprova somente que o agendador conectou à Edge com autenticação válida.
+
+Se o Cron ficar sem executar, responder diferente de 200 ou a fila acumular `erro` além do backoff, investigar o evento e a origem do provedor sem gerar outra cobrança. Para interromper somente o agendamento de STAGING: `SELECT cron.unschedule('guia-asaas-reconciliar-webhook');`. Não alterar outros jobs nem as flags de saques.
+
+**Evidência inicial:** 12/10/2026, primeira chamada automática às 16:32 UTC; execuções subsequentes às 16:34, 16:36, 16:38 e 16:40 UTC, todas com HTTP 200, 0 eventos processados (fila limpa). Validação da recuperação real de um evento com falha permanece em aberto na backlog COB-05.
+
 ## Critério de pronto
 
 **Código e testes da rota** não são implantação. Antes de ativar, exigir: CI verde, testes HTTP de autenticação e fila em STAGING, teste de reconciliação com Asaas Sandbox, revisão das migrations, conta apta a cobranças, agendamento/alertas ativos e aprovação explícita para o projeto de produção. O recebimento das faturas pode ser homologado separadamente dos repasses, sem permitir dívidas escondidas ao motoboy.
