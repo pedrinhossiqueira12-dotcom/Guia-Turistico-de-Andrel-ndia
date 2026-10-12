@@ -244,3 +244,93 @@ test("COB-05: cron STAGING tem preflight Vault, URL exata e não duplica agendam
  assert.match(cron,/jbttwihctuibchhcyqtl\.supabase\.co\/functions\/v1\/catalogo-asaas-financeiro\/cron-webhooks/);
  assert.doesNotMatch(cron,/ASAAS_API_KEY|SUPABASE_SERVICE_ROLE_KEY|\/transfers|\/payments/);
 });
+
+
+test("COB-05: worker Edge reprocessa falha apenas após backoff, com nova tentativa e sem duplicar",async()=>{
+ // Cenário inteiramente simulado no Node, sem criar eventos no STAGING
+ // e sem reprocessar qualquer webhook real já concluído.
+ const first=edge.indexOf("async function processarWebhooksAsaasPendentes(limit=5){");
+ const last=edge.indexOf("async function webhook(request:Request){",first);
+ assert.ok(first>=0 && last>first,"worker Edge deve existir");
+ const source=edge.slice(first,last)
+   .replace(" as unknown as AsaasWebhookPendente","")
+   .replace(/\(e as Error\)\.name/g,"e.name");
+ const queue={
+   id:"evt-unit-backoff",evento:"PAYMENT_RECEIVED",
+   recurso_id:"pay-unit-only",referencia_externa:"test-unit",
+   estado:"pendente",tentativas:0,token:null,proxima_tentativa:0
+ };
+ let segundos=0,consultasRemotas=0;
+ const finalizacoes=[],claims=[];
+ const rpc=async(name,args)=>{
+   if(name==="catalogo_asaas_webhook_claim"){
+     claims.push(args.p_limite);
+     assert.ok(args.p_limite<=10);
+     const elegivel=queue.estado==="pendente" ||
+       (queue.estado==="erro" && segundos>=queue.proxima_tentativa);
+     if(!elegivel)return [];
+     queue.estado="processando";
+     queue.tentativas++;
+     queue.token="lease-"+queue.tentativas;
+     return [{
+       id:queue.id,evento:queue.evento,recurso_id:queue.recurso_id,
+       tentativa_token:queue.token,referencia_externa:queue.referencia_externa
+     }];
+   }
+   if(name==="catalogo_asaas_webhook_finalizar"){
+     finalizacoes.push({id:args.p_id,token:args.p_token,sucesso:args.p_sucesso});
+     if(args.p_id!==queue.id || queue.estado!=="processando" || args.p_token!==queue.token)
+       return {ok:false};
+     queue.token=null;
+     if(args.p_sucesso)queue.estado="concluido";
+     else{
+       queue.estado="erro";
+       queue.proxima_tentativa=segundos+Math.min(900,30*2**Math.min(queue.tentativas-1,5));
+     }
+     return {ok:true};
+   }
+   throw new Error("RPC inesperada: "+name);
+ };
+ const context={
+   rpc,
+   input:x=>x&&typeof x==="object"&&!Array.isArray(x)?x:{},
+   processarEventoAsaasPendente:async()=>{
+     consultasRemotas++;
+     if(consultasRemotas===1)throw new Error("Indisponibilidade transitória simulada");
+   },
+   Failure:class Failure extends Error{constructor(message,status){super(message);this.status=status;}},
+   console:{error(){}}
+ };
+ const worker=vm.runInNewContext(source+"\nprocessarWebhooksAsaasPendentes",context);
+ const primeira=await worker(10);
+ assert.equal(primeira.concluido,0);
+ assert.equal(primeira.falhou,1);
+ assert.equal(queue.estado,"erro");
+ assert.equal(queue.tentativas,1);
+ assert.equal(queue.proxima_tentativa,30);
+ assert.deepEqual(finalizacoes.map(x=>x.sucesso),[false]);
+ // Cron antes do backoff não reivindica o evento nem chama o provedor.
+ segundos=29;
+ const cedo=await worker(10);
+ assert.equal(cedo.concluido,0);
+ assert.equal(cedo.falhou,0);
+ assert.equal(consultasRemotas,1);
+ assert.equal(queue.tentativas,1);
+ // Depois do backoff há novo lease e conclusão do mesmo evento.
+ segundos=30;
+ const recuperado=await worker(10);
+ assert.equal(recuperado.concluido,1);
+ assert.equal(recuperado.falhou,0);
+ assert.equal(queue.estado,"concluido");
+ assert.equal(queue.tentativas,2);
+ assert.equal(consultasRemotas,2);
+ assert.deepEqual(finalizacoes.map(x=>x.token),["lease-1","lease-2"]);
+ assert.deepEqual(finalizacoes.map(x=>x.sucesso),[false,true]);
+ // Repetição posterior não gera uma segunda conciliação.
+ segundos=999;
+ const duplicado=await worker(10);
+ assert.equal(duplicado.concluido,0);
+ assert.equal(duplicado.falhou,0);
+ assert.equal(consultasRemotas,2);
+ assert.deepEqual(claims,[10,10,10,10]);
+});
