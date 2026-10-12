@@ -345,6 +345,16 @@ test("COB-05: ensaio Asaas real permanece restrito ao Sandbox e não paga a cobr
  assert.match(ps,/PAYMENT_CREATED/);
  assert.match(ps,/COB-05 ENSAIO SANDBOX NAO PAGAR SEM PEDIDO GUIA/);
  assert.match(ps,/fatura-cob05-lab-/);
+ assert.match(ps,/value=5\.00/);
+ assert.match(ps,/\[decimal\]\$atual\.value -ne \[decimal\]5/);
+ assert.match(ps,/function EncontrarEnsaios/);
+ assert.match(ps,/if \(\$Modo -eq 'Diagnosticar'\)/);
+ assert.match(ps,/Cobranca de ensaio ja existente/);
+ assert.match(ps,/dateCreated%5Bge%5D/);
+ assert.match(ps,/HTTP=\{2\} codigos=\{3\}/);
+ assert.equal(ps.split("function EncontrarEnsaios(").length-1,1);
+ assert.equal(ps.split("if ($Modo -eq 'Criar')").length-1,1);
+
  assert.match(ps,/@\('PENDING','OVERDUE'\) -notcontains/);
  assert.match(ps,/externalReference=\$refNeutra/);
  assert.doesNotMatch(ps,/['"]\/transfers['"]|['"]\/payments\/[^'"]*\/receive['"]/);
