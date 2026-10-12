@@ -22,7 +22,7 @@ Este documento é a **única fila operacional** do trabalho financeiro do PR #39
 
 ## Regras financeiras aprovadas nas conversas — NÃO REDESENHAR
 
-- Cobrança do estabelecimento por **fatura mensal Pix manual** no Asaas. **5% para a plataforma e 2% para o motoboy somente quando a entrega/pagamento offline for elegível** (dinheiro/cartão, conforme regras de pedidos implementadas); **não atribuir automaticamente os 2% ao motoboy em pedidos Pix online**. Manter a taxa contratual de 7% e verificar, em teste, os cenários de elegibilidade e contabilização exata.
+- **Regra corrigida em 12/10 conforme decisões explícitas do usuário de 07–08/10, confirmadas pelas migrations já existentes:** taxa V2 fixa de **7%**; com entrega, **5% plataforma + 2% motoboy**, inclusive Pix; retirada/consumo local: **7% plataforma, 0 motoboy**. Arredondar total de 7% uma vez, calcular 2% e atribuir diferença à plataforma. Pagamentos offline geram fatura mensal Pix manual Asaas; Pix online conserva seu fluxo Mercado Pago e exige financiamento comprovado e entrega confirmada. A redação anterior desta backlog restringia incorretamente o motoboy ao offline. Pedidos V1 históricos de 5% permanecem preservados.
 - O comerciante deve ver sua fatura, competência, vencimento, situação, Pix e histórico. A quitação só ocorre após confirmação válida e conciliação com o Asaas; sem dupla emissão/cobrança. O inadimplente deve regularizar dívidas; **não permitir exclusão/arquivamento definitivo que apague fatura ou dívida**, mantendo histórico e fluxo controlado de encerramento.
 - Termos de estabelecimentos e motoboys + ciência da política de privacidade exigem aceite explícito/versionado; revisão jurídica antes de operação produtiva.
 - **Pix Automático fica somente preparado para o futuro**; não habilitar mandato, assinatura/débito ou cobrança recorrente automática agora.
@@ -125,8 +125,27 @@ Este documento é a **única fila operacional** do trabalho financeiro do PR #39
 
 ### [ ] COB-04 — Validar regras de negócio de cobrança, dívidas e efeitos contábeis
 
+- **EM EXECUÇÃO — divergência do STAGING corrigida em 12/10/2026.** A auditoria encontrou a regra antiga na backlog e no cálculo do STAGING. A regra aprovada de 7% já está versionada em `20261007190000_taxa_fixa_7_porcento.sql` e `20261007213000_arredondamento_taxa_total_7.sql`, mas faltava neste banco. O pedido da COB-02 foi `versao_financeira=1`, retirada de R$100 com R$5 de comissão. COB-02/03 comprovam o ciclo bancário **V1**, não a taxa V2.
+- Aplicada **somente em STAGING** migration `cob04_staging_taxa_fixa_e_arredondamento_existentes`, reutilizando integralmente essas duas migrations existentes, retirando apenas seus BEGIN/COMMIT externos para execução atômica pelo conector. Inclui modalidade no snapshot da comissão, CHECKs compatíveis com V1 preservado/V2 7%, precificação e registro de plataforma; não substitui rotinas posteriores de encerramento ou conciliação. **Não reaplicada** `20261007203000_finalizar_regras_financeiras_e_offline.sql`: avaliar diferenças necessárias sem sobrescrever proteções posteriores.
+- **Verificação real do cálculo no PostgreSQL STAGING:** ativação V2 temporária apenas para `asaas-cob02` dentro de BEGIN/ROLLBACK; R$100 entrega = 700 centavos (500 plataforma + 200 motoboy); retirada/consumo local = 700 plataforma + zero motoboy; R$0,33 entrega = 2 centavos (1 + 1); loja fora do piloto continua V1; EXECUTE de precificação negado a anon/authenticated. Todos passaram. Configuração revertida: **V2 continua desativada persistentemente**.
+- Comparação MD5 dos conjuntos completos de pedidos, fechamentos e cobranças antes/depois foi idêntica. Fatura V1 paga de R$5 e seu webhook preservados. Nenhum pedido, comissão monetária, cobrança, saque ou crédito sintético foi criado; apenas modalidade histórica foi preenchida pela relação com o pedido.
+- Security Advisor executado: avisos de RPC pública `catalogo_status_publicacao`, tabelas privadas com RLS sem políticas e proteção de senhas vazadas desativada; RPC de precificação permanece privada. Referências: [RPC SECURITY DEFINER](https://supabase.com/docs/guides/database/database-linter?lint=0028_anon_security_definer_function_executable), [RLS sem políticas](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy), [proteção de senhas](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection). Não abrir frente paralela por avisos preexistentes.
+
+| Cenário | Evidência atual | Resultado/limite |
+| --- | --- | --- |
+| Taxa e arredondamento V2 | RPC real STAGING em transação revertida | Aprovado nas três modalidades e centavos |
+| Pedido/fatura/Asaas real Sandbox | COB-02/03 | Aprovado **somente V1**, sem duplicação |
+| Dinheiro/cartão, retenção até fatura, quitação e estorno | CI #1385, job 114636995826, etapa 19; `catalogo-offline-fatura-e2e-postgres.sql` | Aprovado em PostgreSQL descartável, não prova do esquema STAGING completo |
+| Pix com entrega, cancelamento e 2% | Mesmo job, etapa 17; `catalogo-pedidos-entregas-e2e-postgres.sql` | Aprovado em PostgreSQL descartável e compatível com regra histórica recuperada |
+| Exclusão/republicação com dívida | CI #1385, etapa 10; triggers ativos inspecionados no STAGING | Teste isolado aprovado; manter verificação da rota legada no pacote de publicação |
+| Histórico financeiro | Hashes antes/depois no STAGING | Pedidos, fechamentos e cobranças integralmente preservados |
+| Aceites dos dois papéis, fatura bloqueada, convivência MP/Asaas | Código/testes existentes | Consolidar prova integrada antes de concluir COB-04 |
+
+**Próxima subtarefa indispensável:** conferir as demais diferenças das rotinas V2 do STAGING com a branch (principalmente confirmação de fatura e registro de comissão), preparar piloto V2 restrito à loja QA e validar novo pedido pelo endpoint autenticado. Não alterar/reabrir a fatura V1 paga, não habilitar V2 globalmente e não tratar CI isolada como prova de integração remota.
+
+
 - **Estado:** IMPLEMENTADO NA BRANCH/TESTES ISOLADOS; necessita prova integrada.
-- Conferir cálculos de 5% plataforma / 2% motoboy para pedido offline elegível, ausência de crédito de 2% no Pix online, estorno e cancelamento; nenhuma disponibilização de comissão do motoboy antes de quitação comprovada do comércio.
+- Conferir V2: 7% total, divisão 5% plataforma / 2% motoboy nas entregas inclusive Pix, 7% plataforma sem entrega, estorno e cancelamento; offline exige quitação comprovada da fatura e confirmação física; Pix online exige financiamento comprovado do provedor e confirmação física.
 - Conferir fechamento mensal, vencimento, inadimplência, possibilidade de pagar fatura bloqueada e **não exclusão/arquivamento irregular** do comércio endividado, inclusive rota legada `whatsapp-bot` e catálogo/listagens.
 - Conferir aceite dos termos de ambos os papéis, preservação de históricos, cobranças legadas **Mercado Pago não migradas/cobradas novamente**.
 - **Aceite:** matriz de cenários com resultados/consultas, sem diferenças contábeis, sem fuga por endpoint antigo e sem regressões de produção.
@@ -164,7 +183,7 @@ Este documento é a **única fila operacional** do trabalho financeiro do PR #39
 ### [ ] SAQ-01 — Revisar regras existentes, carteira e crédito financiado
 
 - **Estado:** IMPLEMENTADO EM TESTES, NÃO LIBERADO.
-- Verificar mínimo R$100, acúmulo por meses sem expiração arbitrária, >1.000 comissões, teto por transferência R$5.000, saldo residual, motoboy inativo, proteção de contestações, rateio 2% em offline elegível e taxas da plataforma.
+- Verificar mínimo R$100, acúmulo por meses sem expiração arbitrária, >1.000 comissões, teto por transferência R$5.000, saldo residual, motoboy inativo, proteção de contestações, rateio 2% em entrega elegível, inclusive Pix com financiamento comprovado e taxas da plataforma.
 - **Aceite:** matriz de valores e estado consistente; nenhuma comissão duplicada ou crédito fictício, inclusive fatura estornada após crédito.
 
 ### [ ] SAQ-02 — Comprovar **elegibilidade comercial e autorização técnica Money Out**
