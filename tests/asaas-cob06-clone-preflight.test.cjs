@@ -16,8 +16,8 @@ test("COB-06: preflight de clone só pode consultar metadados, sem comandos Cron
 });
 test("COB-06: restauração não pode acionar crons produtivos ou presumir backup",()=>{
  for(const s of [
-  "pg_cron","pg_net","isolamento","ANTES de restaurar dados reais",
-  "Backups","NÃO executar clone físico",
+  "pg_cron","pg_net","isolamento **antes** do primeiro job",
+  "documentação oficial de backups","NÃO executar clone físico",
   "plano e a existência de um backup recuperável deste projeto NÃO foram confirmados"
  ])assert.ok(runbook.includes(s),s);
  assert.match(runbook,/sem alterar.*produção|Nenhuma alteração realizada no Supabase de produção/i);
