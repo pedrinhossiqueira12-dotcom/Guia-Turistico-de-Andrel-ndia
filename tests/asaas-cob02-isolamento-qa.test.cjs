@@ -58,3 +58,20 @@ test("COB-04: modalidade entrega somente em asaas-cob02 STAGING, sem linhas fina
  assert.doesNotMatch(qaDeliverySql,/\b(?:INSERT|DELETE)\b/i);
  assert.doesNotMatch(qaDeliverySql,/\bUPDATE\s+public\.(?:catalogo_pedidos|catalogo_fechamentos_offline|catalogo_fatura_cobrancas|catalogo_remuneracoes_v2)\b/i);
 });
+
+test("COB-04: botões de retirada antiga indisponíveis durante teste de entrega",()=>{
+ assert.match(qaHtml, /id="qa-create" disabled/);
+ assert.match(qaHtml, /id="qa-finish" disabled/);
+ assert.match(qaHtml, /COB-04 · Entrega V2 com motoboy/);
+ assert.match(qaHtml, /value="2026-12"/);
+});
+test("COB-04: fechamento exige entrega física e pagamento confirmado para TODOS os componentes",()=>{
+ const guardSql=fs.readFileSync("supabase/pending-migrations/20261012104000_cob04_fechamento_apenas_entregas_confirmadas.sql","utf8");
+ const matches=guardSql.match(/p\\.codigo_entrega_usado_em IS NOT NULL/g)||[];
+ assert.equal(matches.length,5,"soma, dois componentes e duas atualizações precisam aplicar guarda idêntica");
+ assert.match(guardSql,/p\\.status='entregue'/);
+ assert.match(guardSql,/p\\.status_pagamento='aprovado'/);
+ assert.match(guardSql,/p\\.provedor='offline'/);
+ assert.match(guardSql,/IF v_status='pago'/);
+ assert.doesNotMatch(guardSql,/\\b(?:TRUNCATE|DROP TABLE)\\b/i);
+});
