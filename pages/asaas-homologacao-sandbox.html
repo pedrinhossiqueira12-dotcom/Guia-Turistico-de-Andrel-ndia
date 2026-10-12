@@ -37,12 +37,29 @@ pre{white-space:pre-wrap;word-break:break-all;padding:14px;background:#f3f5f1;bo
 </form>
 <p id="session" class="muted">Não autenticado.</p><p id="uid" class="muted" hidden></p>
 </section>
+<section id="qa-order" hidden>
+<h2>2. Criar venda offline de homologação</h2>
+<p class="muted">Somente <strong>asaas-cob02</strong> no Supabase STAGING. O produto de teste custa R$100. Este fluxo utiliza os endpoints reais de pedidos e fechamento, sem mercadoria nem dinheiro real. Nunca use dados pessoais reais.</p>
+<div class="actions">
+<button type="button" id="qa-terms">1 · Aceitar termos de comércio</button>
+<button type="button" id="qa-create">2 · Criar pedido em dinheiro (retirada)</button>
+<button type="button" id="qa-accept">3 · Aceitar pedido</button>
+<button type="button" id="qa-ready">4 · Marcar pronto</button>
+</div>
+<label>ID do pedido de teste<input id="qa-order-id" placeholder="Preenchido ao criar pedido; reutilizável se necessário"></label>
+<label>Código de 6 dígitos gerado pelo comprador<input id="qa-delivery-code" inputmode="numeric" maxlength="6" placeholder="Preenchido ao criar pedido"></label>
+<div class="actions">
+<button type="button" id="qa-finish">5 · Confirmar entrega com código</button>
+<button type="button" id="qa-close">6 · Fechar competência da fatura</button>
+</div>
+<pre id="qa-result">Aguardando pedido do Sandbox. Nenhuma cobrança foi criada.</pre>
+</section>
 <section id="billing" hidden>
-<h2>2. Consultar fatura de homologação</h2>
-<p>O comércio <strong>asaas-homologacao</strong> precisa estar vinculado a este usuário no banco de testes e ter uma fatura fictícia fechada para a competência indicada.</p>
-<label>Competência da fatura<input id="competencia" type="month" value="2026-09"></label>
+<h2>3. Consultar fatura de homologação</h2>
+<p>O comércio <strong>asaas-cob02</strong> está vinculado à conta existente de homologação. Primeiro conclua o pedido do Sandbox e feche a competência.</p>
+<label>Competência da fatura<input id="competencia" type="month" value="2026-10"></label>
 <div class="actions"><button id="consultar" type="button">Consultar fatura</button><button class="secondary" id="conciliar" type="button">Verificar pagamento no Asaas</button></div>
-<h2 style="margin-top:25px">3. Emitir Pix fictício da fatura</h2>
+<h2 style="margin-top:25px">4. Emitir Pix fictício da fatura</h2>
 <p class="muted">Execute somente depois de habilitar <code>ASAAS_BILLING_ENABLED=true</code> no Supabase de testes. A emissão é recuperável e não deve ser feita novamente para a mesma competência se existir cobrança anterior.</p>
 <label>Nome/razão social do pagador<input id="nome" maxlength="120" autocomplete="off"></label>
 <label>CPF/CNPJ autorizado para testes<input id="documento" maxlength="30" autocomplete="off"></label>
@@ -66,6 +83,7 @@ pre{white-space:pre-wrap;word-break:break-all;padding:14px;background:#f3f5f1;bo
 "use strict";
 const $=id=>document.getElementById(id);
 const PROJECT="jbttwihctuibchhcyqtl";
+const STORE="asaas-cob02";
 const URL_SUPABASE="https://"+PROJECT+".supabase.co";
 const PUBLIC_KEY="sb_publishable_W80rooaGpHP4voYiLwtz7w_-k32qHsF";
 const client=window.supabase?.createClient(URL_SUPABASE,PUBLIC_KEY,{auth:{persistSession:true,autoRefreshToken:true}});
@@ -74,7 +92,7 @@ const pretty=data=>{const {pix,...publicResult}=data||{};return JSON.stringify(p
 async function refresh(){
  const {data}=await client.auth.getUser();
  const u=data?.user||null;
- $("billing").hidden=!u;$("logout").hidden=!u;
+ $("billing").hidden=!u;$("qa-order").hidden=!u;$("logout").hidden=!u;
  $("login-form").hidden=!!u;
  $("session").textContent=u?"Autenticado no Sandbox: "+u.email:"Não autenticado.";
  $("uid").hidden=!u;$("uid").textContent=u?"Seu User UID de testes: "+u.id:"";
@@ -86,7 +104,7 @@ async function call(acao,body={}){
  const res=await fetch(URL_SUPABASE+"/functions/v1/catalogo-asaas-financeiro",{
   method:"POST",headers:{"Content-Type":"application/json",apikey:PUBLIC_KEY,
    Authorization:"Bearer "+data.session.access_token},
-  body:JSON.stringify({acao,comercio_id:"asaas-homologacao",competencia:$("competencia").value,...body}),
+  body:JSON.stringify({acao,comercio_id:STORE,competencia:$("competencia").value,...body}),
  });
  const out=await res.json().catch(()=>({}));
  if(!res.ok||out.success!==true)throw Error(out.mensagem||"Falha na API do ambiente de testes ("+res.status+").");
@@ -126,6 +144,68 @@ $("emitir").addEventListener("click",()=>withBusy($("emitir"),async()=>{
  if(!window.confirm("Confirmar emissão/recuperação de cobrança SOMENTE no Asaas Sandbox?"))return;
  const out=await call("criar_cobranca",{nome_pagador:$("nome").value.trim(),documento:$("documento").value.trim()});
  show(out);$("documento").value="";msg(out.mensagem||"Cobrança de teste criada ou recuperada.");
+}));
+// Ações de checkout são executadas no backend já existente. Nenhuma linha
+// financeira é inserida diretamente pelo browser ou fabricada via SQL.
+async function qaApi(slug,body,authenticated=true){
+ const {data,error}=await client.auth.getSession();
+ if(error||!data?.session?.access_token)throw Error("Entre com o proprietário de testes.");
+ const response=await fetch(URL_SUPABASE+"/functions/v1/"+slug,{
+   method:"POST",
+   headers:{"Content-Type":"application/json",apikey:PUBLIC_KEY,...(authenticated?{Authorization:"Bearer "+data.session.access_token}:{})},
+   body:JSON.stringify({comercio_id:STORE,...body})
+ });
+ const out=await response.json().catch(()=>({}));
+ if(!response.ok||out.success!==true)throw Error(out.mensagem||"Operação de testes não autorizada ("+response.status+").");
+ return out;
+}
+const qaLog=(o)=>{$("qa-result").textContent=JSON.stringify(o,null,2);};
+const pedido=()=>{const v=$("qa-order-id").value.trim();if(!/^[a-f0-9-]{36}$/i.test(v))throw Error("Crie um pedido de testes válido primeiro.");return v;};
+$("qa-terms").addEventListener("click",()=>withBusy($("qa-terms"),async()=>{
+ if(!window.confirm("Confirma que leu os Termos para Estabelecimentos e a Política de Privacidade nesta conta de TESTES?"))return;
+ const out=await call("aceitar_termos",{papel:"comercio",aceito_termos:true,ciente_privacidade:true});
+ qaLog({aceito:out.aceito,versao:out.versao});msg("Aceite de testes registrado.");
+}));
+$("qa-create").addEventListener("click",()=>withBusy($("qa-create"),async()=>{
+ const {data:product,error}=await client.from("catalogo_produtos")
+   .select("id,nome,preco").eq("comercio_id",STORE).eq("disponivel",true).is("deletado_em",null).limit(1).maybeSingle();
+ if(error||!product)throw Error("Não foi possível consultar o produto de homologação no STAGING.");
+ if(!window.confirm("Criar um pedido de R$"+Number(product.preco).toFixed(2)+" em DINHEIRO no STAGING? Não é uma cobrança bancária."))return;
+ const out=await qaApi("catalogo-pedido-offline",{
+   acao:"criar_pedido_offline",modalidade:"retirada",forma_pagamento:"dinheiro",entrega_centavos:0,
+   cliente:{nome:"Comprador fictício QA",email:"comprador-qa@exemplo.test",telefone:"35000000000"},
+   itens:[{id:product.id,quantidade:1}],observacoes:"COB-02; somente Supabase Sandbox"
+ },false);
+ $("qa-order-id").value=out.pedido_id||"";
+ $("qa-delivery-code").value=out.codigo_entrega||"";
+ qaLog({pedido_id:out.pedido_id,status:out.status,codigo_entrega:out.codigo_entrega,
+   subtotal_centavos:out.subtotal_centavos,taxa_total_centavos:out.taxa_total_centavos,
+   taxa_plataforma_centavos:out.taxa_plataforma_centavos,provedor:out.provedor});
+ msg("Pedido de teste criado pelo endpoint normal. Guarde o código exibido.");
+}));
+for(const [id,status,feedback] of [
+ ["qa-accept","em_preparo","Pedido aceito pelo estabelecimento de testes."],
+ ["qa-ready","pronto","Pedido pronto para retirada."]
+]){
+ $(id).addEventListener("click",()=>withBusy($(id),async()=>{
+   const out=await qaApi("catalogo-pedidos-offline-admin",{acao:"atualizar_status",pedido_id:pedido(),status});
+   qaLog(out);msg(feedback);
+ }));
+}
+$("qa-finish").addEventListener("click",()=>withBusy($("qa-finish"),async()=>{
+ const code=$("qa-delivery-code").value.trim();
+ if(!/^\\d{6}$/.test(code))throw Error("Informe o código de 6 dígitos do pedido de teste.");
+ const out=await qaApi("catalogo-pedidos-offline-admin",{
+  acao:"confirmar_entrega",pedido_id:pedido(),codigo_entrega:code
+ });
+ qaLog(out);msg("Pedido confirmado pelo servidor; consulte a comissão antes de emitir Pix.");
+}));
+$("qa-close").addEventListener("click",()=>withBusy($("qa-close"),async()=>{
+ const competencia=$("competencia").value;
+ if(!/^\\d{4}-\\d{2}$/.test(competencia))throw Error("Informe a competência da fatura.");
+ const out=await qaApi("catalogo-pedidos-offline-admin",{acao:"gerar_fechamento",competencia});
+ if(!out.fechamento_id)throw Error("Ainda não há comissão elegível para fechar. Conclua a entrega primeiro.");
+ qaLog(out);msg("Competência fechada pelo serviço normal. Consulte a fatura antes de emitir Pix Sandbox.");
 }));
 $("copy-pix").addEventListener("click",()=>navigator.clipboard?.writeText($("pix-code").textContent||"").then(()=>msg("Código do Sandbox copiado.")).catch(()=>msg("Selecione e copie o código manualmente.",true)));
 if(!client){msg("Não foi possível carregar Supabase JS. Confira sua conexão.",true);return;}
