@@ -125,6 +125,8 @@ Este documento é a **única fila operacional** do trabalho financeiro do PR #39
 
 ### [ ] COB-04 — Validar regras de negócio de cobrança, dívidas e efeitos contábeis
 
+- **Ciclo V2 de retirada quitado automaticamente — leitura de 12/10/2026, 00:45 BRT.** Cobrança `pay_0w4vnx9n45id1x1f` criada às 03:37:15 UTC por **700 centavos**, competência novembro/2026. Webhook real `PAYMENT_RECEIVED` recebido às 03:37:39 UTC e `concluido`; fatura/cobrança pagas às **03:37:41.494449 UTC**. Lançamento de comissão da plataforma passou de `retido` para **`disponivel`**, R$7,00. Há exatamente uma cobrança por competência; a V1 de outubro segue paga. O operador relatou não encontrar a cobrança; a leitura comprovou que já estava paga, portanto deve procurá-la entre recebidas/todas e não emitir outra. Este é o aceite do cenário V2 sem entrega; entrega/motoboy, termos e demais cenários integrados continuam pendentes na COB-04.
+
 - **Pedido V2/fechamento legítimo comprovados — 12/10/2026, 00:35 BRT.** Operador executou checkout, aceite, pronto, código e fechamento pela página QA. SQL confirmou pedido `a0de2d1d-ec68-4522-9048-fc15d9b99387`, V2, retirada, `entregue`, código utilizado, subtotal **10.000 centavos**, taxa **700 plataforma / 0 motoboy**. Comissão V2 `faturada` em **2026-11**; fechamento `7fbf931a-4d14-4bc4-9502-a66367248d19` `faturado`, 1 pedido, **R$7,00**, componente plataforma 700, sem cobrança prévia. Lançamento `comissao_plataforma` permanece **retido** antes da quitação, como esperado. Pedido/fatura V1 de outubro continuam pagos nos valores e timestamp originais. **Próximo:** emitir uma cobrança Sandbox de R$7 para novembro, confirmar no provedor e verificar liberação do lançamento pelo webhook; COB-04 ainda aberta.
 
 
@@ -226,4 +228,4 @@ Este documento é a **única fila operacional** do trabalho financeiro do PR #39
 - Critério de encerramento do trabalho de **cobranças:** COB-01…COB-08 todos concluídos.
 - Critério de encerramento do **sistema financeiro completo:** COB-01…COB-08 + SAQ-01…SAQ-04 concluídos. Futuro Pix Automático explicitamente excluído.
 
-**Próxima ação obrigatória:** **COB-04 — emitir cobrança Asaas Sandbox da fatura V2 de novembro/2026, R$7,00**, confirmar no provedor e conferir liberação da comissão retida pelo webhook. Fatura V1 de outubro preservada; sem produção ou saques.
+**Próxima ação obrigatória:** **COB-04 — validar entrega V2 com crédito do motoboy e consolidar os demais cenários integrados da matriz**. Retirada V2 de R$7 em novembro já paga por webhook e comissão disponível; não emitir novamente. Produção e saques bloqueados.
