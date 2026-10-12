@@ -763,10 +763,10 @@ jobs:
           psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -Atqc "SELECT to_regprocedure('public.catalogo_asaas_reservar_saque(uuid)') IS NULL" | grep -Fx t
           psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -At -F '|' \
             -f scripts/validacao-pagamentos/asaas-producao-readiness-readonly.sql \
-            | grep -E '^0\\|0\\|t\\|'
+            | grep -E '^0\|0\|t\|'
           psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -At -F '|' \
             -f scripts/validacao-pagamentos/asaas-cob06-seguranca-readonly.sql \
-            | grep -E '^0\\|0\\|0\\|0\\|0\\|0\\|'
+            | grep -E '^0\|0\|0\|0\|0\|0\|'
           dropdb --if-exists --force catalogo_cob06_ci
           trap - EXIT
           echo "PASS: COB-06 selective billing schema applied on disposable clone, no payout structures"
