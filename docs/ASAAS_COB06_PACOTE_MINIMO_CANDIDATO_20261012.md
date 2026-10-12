@@ -39,6 +39,12 @@ Os dois primeiros arquivos **não** pertencem a `supabase/migrations/` ou `pendi
 
 O gate não inspeciona eventuais sobrecargas de assinatura que precisem ser revisadas separadamente, nem prova ausência de bypass nas rotas antigas. Executar novamente após montar clone.
 
+### Ensaio real em PostgreSQL descartável na CI (12/10/2026)
+
+No workflow `Database tests`, job `All financial migrations except remote scheduling (disposable PostgreSQL)`, a etapa `COB-06 selective billing and safeguards on local production-like clone (no payouts)` foi acrescentada e **terminou com sucesso no run 38293614227** (verificado pelo estado da etapa). O job cria `catalogo_cob06_ci` a partir do baseline sintético de migrações reais já existentes, insere uma **fatura e cobrança Mercado Pago fictícias já pagas**, aplica em ordem as **nove** fontes selecionadas deste manifesto, executa os dois gates read-only e assegura que as estruturas e RPCs de saque **não** foram criadas. A cobrança MP de teste continua com `gateway=mercadopago`, `status=pago`, `valor_centavos=700`, uma linha e sem migração involuntária.
+
+**Limitação crucial:** é um PostgreSQL 17 descartável construído com baseline sintético do repositório, **não** um clone comprovadamente idêntico ao estado real atual da produção. O teste é prova de compatibilidade técnica do pacote selecionado, **não** autoriza aplicar migrations em produção. Ainda será preciso confrontar o inventário real de migrations e extensões, validar restauração de backup e executar testes de rota legada de exclusão em clone apropriado.
+
 ### Arquivos de Edge e interface — pacote ainda NÃO fechado
 
 - Edge `supabase/functions/catalogo-asaas-financeiro/index.ts` é grande e contém rotas de **cobranças e saques no mesmo código**. Não considerar pronto o release apenas porque as migrations foram separadas. Preparar versão/manifesto que mantenha rotas de saque inacessíveis na produção, com flags de saques desligadas, sem `POST /transfers`.
