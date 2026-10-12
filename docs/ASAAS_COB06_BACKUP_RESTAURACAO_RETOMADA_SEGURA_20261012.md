@@ -40,7 +40,7 @@ No job `All financial migrations except remote scheduling (disposable PostgreSQL
 
 ## Itens para aceite da COB-06
 
-- [x] Plano e teste de dump/recover de **clone sintético** no GitHub Actions (resultado do run a registrar após CI).
+- [x] Plano e teste de dump/recover de **clone sintético** no GitHub Actions; o workflow [38295567490](https://github.com/pedrinhossiqueira12-dotcom/Guia-Turistico-de-Andrel-ndia/actions/runs/38295567490) terminou **success (12/12 jobs)**, incluindo a etapa COB-06 de snapshot e restauração em banco descartável.
 - [x] Manifesto seletivo e gates read-only no STAGING / diagnóstico PROD.
 - [x] Teste em clone sintético com fatura antiga MP e bloqueio de exclusão de devedor.
 - [ ] Confirmar backup **real** de produção / retenção / PITR com operador e ensaiar restauração em isolamento aprovado.
