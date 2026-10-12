@@ -736,6 +736,40 @@ jobs:
           total=$(find supabase/migrations -maxdepth 1 -name '*.sql' | wc -l)
           test "$count" -eq "$((total - 1))"
           echo "Applied $count of $total real migrations to disposable catalogo_ci."
+      - name: COB-06 selective billing and safeguards on local production-like clone (no payouts)
+        run: |
+          set -euo pipefail
+          test "$PGHOST" = localhost
+          test "$PGDATABASE" = catalogo_ci
+          test -z "${DATABASE_URL:-}"
+          test -z "${PGSERVICE:-}"
+          test -z "${PGHOSTADDR:-}"
+          createdb --template=catalogo_ci catalogo_cob06_ci
+          trap 'dropdb --if-exists --force catalogo_cob06_ci' EXIT
+          for sql in \
+            supabase/production-candidate/01_asaas_cobrancas_inbox_sem_saques.sql \
+            supabase/production-candidate/02_termos_encerramento_sem_saques.sql \
+            supabase/pending-migrations/20261009162000_bloquear_exclusao_debitos_e_finalizar_arquivamento.sql \
+            supabase/pending-migrations/20261009163000_impedir_reabertura_encerramento.sql \
+            supabase/pending-migrations/20261009180000_status_publicacao_publica_restrita.sql \
+            supabase/pending-migrations/20261009183000_proteger_republicacao_legada_apos_encerramento.sql \
+            supabase/pending-migrations/20261009184000_bloquear_despublicacao_legada_qualquer_status.sql \
+            supabase/pending-migrations/20261012104000_cob04_fechamento_apenas_entregas_confirmadas.sql \
+            supabase/pending-migrations/20261012163000_cob04_pagamento_somente_componentes_da_fatura.sql; do
+            echo "COB06 isolated SQL: $sql"
+            psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -f "$sql"
+          done
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -Atqc "SELECT to_regclass('public.catalogo_asaas_saques') IS NULL" | grep -Fx t
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -Atqc "SELECT to_regprocedure('public.catalogo_asaas_reservar_saque(uuid)') IS NULL" | grep -Fx t
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -At -F '|' \
+            -f scripts/validacao-pagamentos/asaas-producao-readiness-readonly.sql \
+            | grep -E '^0\\|0\\|t\\|'
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -At -F '|' \
+            -f scripts/validacao-pagamentos/asaas-cob06-seguranca-readonly.sql \
+            | grep -E '^0\\|0\\|0\\|0\\|0\\|0\\|'
+          dropdb --if-exists --force catalogo_cob06_ci
+          trap - EXIT
+          echo "PASS: COB-06 selective billing schema applied on disposable clone, no payout structures"
       - name: Apply staged Asaas migration to disposable clone only
         run: |
           set -euo pipefail
