@@ -334,3 +334,24 @@ test("COB-05: worker Edge reprocessa falha apenas após backoff, com nova tentat
  assert.equal(consultasRemotas,2);
  assert.deepEqual(claims,[10,10,10,10]);
 });
+
+
+test("COB-05: ensaio Asaas real permanece restrito ao Sandbox e não paga a cobrança",()=>{
+ const ps=fs.readFileSync("scripts/asaas-cob05-retry-sandbox.ps1","utf8");
+ assert.match(ps,/https:\/\/api-sandbox\.asaas\.com\/v3/);
+ assert.doesNotMatch(ps,/['"]https:\/\/api\.asaas\.com\/v3['"]/);
+ assert.match(ps,/Read-Host.*-AsSecureString/);
+ assert.match(ps,/ZeroFreeBSTR/);
+ assert.match(ps,/PAYMENT_CREATED/);
+ assert.match(ps,/COB-05 ENSAIO SANDBOX NAO PAGAR SEM PEDIDO GUIA/);
+ assert.match(ps,/fatura-cob05-lab-/);
+ assert.match(ps,/@\('PENDING','OVERDUE'\) -notcontains/);
+ assert.match(ps,/externalReference=\$refNeutra/);
+ assert.doesNotMatch(ps,/['"]\/transfers['"]|['"]\/payments\/[^'"]*\/receive['"]/);
+ const guide=fs.readFileSync("docs/ASAAS_COB05_ENSAIO_WEBHOOK_REAL_20261012.md","utf8");
+ assert.match(guide,/PAYMENT_CREATED/);
+ assert.match(guide,/N[aã]o pagar|NÃO PAGAR/i);
+ assert.match(guide,/estado=erro/);
+ assert.match(guide,/estado=concluido/);
+ assert.match(guide,/cron\.jobid=5|jobid=5/);
+});
