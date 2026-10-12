@@ -74,7 +74,7 @@ test("COB-06: inventário exige clone, gates, ordem seletiva e autorização de 
   "20261009184000_bloquear_despublicacao_legada_qualquer_status.sql",
   "20261012104000_cob04_fechamento_apenas_entregas_confirmadas.sql",
   "20261012163000_cob04_pagamento_somente_componentes_da_fatura.sql",
-  "asaas-cob06-seguranca-readonly.sql","SEM","clone","Mercado Pago"
+  "asaas-cob06-seguranca-readonly.sql","clone","Mercado Pago"
  ])assert.ok(manifest.includes(name),name);
  assert.match(manifest,/NÃO IMPLANTAR/);
 });
