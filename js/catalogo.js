@@ -1,13 +1,20 @@
 (function () {
   "use strict";
 
-  const SUPABASE_URL = "https://xdmbkflufsfqziixzpxc.supabase.co";
-  const SUPABASE_KEY = "sb_publishable_dvwNkLDf3oZrCqvZ5uAaRA_VsfiuZFy";
+  // Acessar a base de testes somente por opt-in explicito na pagina
+  // de catalogo. Sem a flag, a aplicacao publica nao muda de projeto.
+  const parametros = new URLSearchParams(window.location.search);
+  const QA_SANDBOX = parametros.get("asaas-sandbox") === "1";
+  const SUPABASE_URL = QA_SANDBOX
+    ? "https://jbttwihctuibchhcyqtl.supabase.co"
+    : "https://xdmbkflufsfqziixzpxc.supabase.co";
+  const SUPABASE_KEY = QA_SANDBOX
+    ? "sb_publishable_W80rooaGpHP4voYiLwtz7w_-k32qHsF"
+    : "sb_publishable_dvwNkLDf3oZrCqvZ5uAaRA_VsfiuZFy";
   const BUCKET = "catalogos";
   const IMAGEM_PADRAO = "../img/sem-foto.png";
-  const parametros = new URLSearchParams(window.location.search);
   const comercioId = (parametros.get("id") || parametros.get("comercio_id") || "").trim();
-  const chaveCarrinho = `guia-catalogo-cart:${comercioId}`;
+  const chaveCarrinho = `guia-catalogo-cart:${QA_SANDBOX ? "asaas-sandbox:" : ""}${comercioId}`;
 
   let supabaseClient = null;
   let catalogo = null;
@@ -36,7 +43,7 @@
 
   function clienteSupabase() {
     if (supabaseClient) return supabaseClient;
-    supabaseClient = window.supabaseLoginClient || window.supabase?.createClient(SUPABASE_URL, SUPABASE_KEY);
+    supabaseClient = QA_SANDBOX ? window.supabase?.createClient(SUPABASE_URL, SUPABASE_KEY) : (window.supabaseLoginClient || window.supabase?.createClient(SUPABASE_URL, SUPABASE_KEY));
     return supabaseClient;
   }
 
