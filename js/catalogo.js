@@ -43,7 +43,7 @@
 
   function clienteSupabase() {
     if (supabaseClient) return supabaseClient;
-    supabaseClient = QA_SANDBOX ? window.supabase?.createClient(SUPABASE_URL, SUPABASE_KEY) : (window.supabaseLoginClient || window.supabase?.createClient(SUPABASE_URL, SUPABASE_KEY));
+    supabaseClient = QA_SANDBOX ? (window.supabaseLoginClient?.supabaseUrl === SUPABASE_URL ? window.supabaseLoginClient : window.supabase?.createClient(SUPABASE_URL, SUPABASE_KEY)) : (window.supabaseLoginClient || window.supabase?.createClient(SUPABASE_URL, SUPABASE_KEY));
     return supabaseClient;
   }
 
@@ -795,6 +795,13 @@
   }
 
   async function gerarPixPedido() {
+    if (QA_SANDBOX) {
+      if ($("whatsappErro")) {
+        $("whatsappErro").textContent = "Pix do pedido está desativado no Sandbox de faturamento. Use pagamento na entrega.";
+        $("whatsappErro").hidden = false;
+      }
+      return;
+    }
     if (!pedidoEmRevisao || pedidoEmRevisao.pixGerado === true || !comercioId || !clienteSupabase()) return;
     const botao = $("pagarPix");
     const box = $("pixPedidoBox");
@@ -1013,6 +1020,13 @@
       }
       if (!cliente.pagamento) {
         $("checkoutErro").textContent = "Este comércio ainda não configurou uma forma de pagamento; entre em contato pelo WhatsApp.";
+        $("checkoutErro").hidden = false;
+        return;
+      }
+      // Homologacao da mensalidade usa vendas OFFLINE legitimas.
+      // Nao permitir iniciar pagamento Pix do pedido de teste.
+      if (QA_SANDBOX && cliente.pagamento === "pix") {
+        $("checkoutErro").textContent = "No Sandbox, use dinheiro ou cartão na entrega para gerar um pedido de teste. Pix do pedido está desativado.";
         $("checkoutErro").hidden = false;
         return;
       }
