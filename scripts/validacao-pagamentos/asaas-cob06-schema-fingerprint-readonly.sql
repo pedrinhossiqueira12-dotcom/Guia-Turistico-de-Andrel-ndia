@@ -31,7 +31,7 @@ WITH tabelas(nome) AS (
  GROUP BY t.nome
 ), gatilhos AS (
  SELECT t.nome,string_agg(
-   tr.tgname || ':' || pg_catalog.pg_get_triggerdef(tr.oid,true) || ':' || tr.tgenabled,
+   tr.tgname || ':' || pg_catalog.pg_get_triggerdef(tr.oid,true) || ':' || tr.tgenabled::text,
    '||' ORDER BY tr.tgname
  ) AS texto,count(tr.oid) AS total
  FROM tabelas t
