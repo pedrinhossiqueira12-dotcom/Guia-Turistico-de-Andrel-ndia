@@ -944,6 +944,13 @@
 
   async function iniciar() {
     linkPerfil();
+    if (QA_SANDBOX) {
+      if ($("qaSandboxBanner")) $("qaSandboxBanner").hidden = false;
+      // Fluxos auxiliares que nao usam o projeto de QA ficam indisponiveis,
+      // para evitar navegar sem querer para dados de producao.
+      if ($("linkGerenciarEntregadores")) $("linkGerenciarEntregadores").hidden = true;
+      if ($("linkContratacao")) $("linkContratacao").hidden = true;
+    }
     if (!comercioId) {
       setNotice("Comércio não informado", "Volte ao perfil e abra a gestão do catálogo por lá.", true);
       $("loginCard").hidden = true;
