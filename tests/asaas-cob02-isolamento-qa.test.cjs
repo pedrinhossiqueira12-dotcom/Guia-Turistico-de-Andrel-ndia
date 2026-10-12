@@ -6,8 +6,8 @@ const edge=fs.readFileSync("supabase/functions/catalogo-pedido-offline/index.ts"
 const sql=fs.readFileSync("supabase/staging-only/asaas_qa_loja_offline_20261011.sql","utf8");
 test("QA offline sem MP permanece restrito por URL EXATA do projeto STAGING",()=>{
  assert.match(edge,/SUPABASE_URL === "https:\/\/jbttwihctuibchhcyqtl\.supabase\.co"/);
- assert.match(edge,/\? "asaas-homologacao" : ""/);
- assert.match(edge,/!receiver && comercioId !== QA_STAGING_COMMERCE_ID/);
+ assert.match(edge,/new Set\(\["asaas-homologacao", "asaas-cob02"\]\) : new Set<string>\(\)/);
+ assert.match(edge,/!receiver && !QA_STAGING_COMMERCE_IDS\.has\(comercioId\)/);
  assert.match(edge,/if \(!catalog \|\| catalog\.bloqueado \|\| !published\)/);
  assert.match(edge,/if \(!OFFLINE_CHECKOUT_ENABLED\)/);
 });
