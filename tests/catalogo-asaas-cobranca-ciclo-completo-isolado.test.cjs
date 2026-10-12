@@ -89,6 +89,7 @@ function fixture(){
  };
  class Failure extends Error{constructor(message,status=409){super(message);this.status=status;}}
  const context={
+  ASAAS_COBRANCA_MINIMA_CENTAVOS:500,
   db:{from:clientQuery},asaas,
   enabled:kind=>assert.equal(kind,"billing"),
   invoice:async()=>({f:state.f,charge:state.charge,store,month}),
@@ -294,4 +295,43 @@ test("fatura criada no Asaas SEM ACK confirmado do banco nunca aparenta sucesso"
   assert.equal(x.state.posts,1,"Recuperação não faz segundo POST ao Asaas");
   assert.equal(x.state.charge.order_id,"pay_ci_1");
  }
+});
+
+
+test("COB-06: faturas de 1 a 499 centavos nao reservam emissao nem tentam Pix no Asaas",async()=>{
+ for(const cents of [1,100,499]){
+  const x=fixture();
+  x.state.f.total_comissao_centavos=cents;
+  await assert.rejects(x.request(),e=>e.status===409&&
+   /mínimo de cobrança do Asaas \(R\$ 5,00\)/.test(e.message));
+  assert.equal(x.state.claim,false,"Nao reservar fatura abaixo do minimo");
+  assert.equal(x.state.customerLoads,0,"Nao cadastrar cliente no Asaas");
+  assert.equal(x.state.providerCalls.length,0,"Nem GET nem POST de cobranca");
+  assert.equal(x.state.rpcCalls.length,0,"Nenhuma baixa ou mutacao via RPC");
+  assert.equal(x.state.f.total_comissao_centavos,cents,"Divida original preservada");
+  assert.equal(x.state.charge,null);
+ }
+});
+
+test("COB-06: exatamente 500 centavos pode emitir uma cobranca de 5 reais",async()=>{
+ const x=fixture();
+ x.state.f.total_comissao_centavos=500;
+ const y=await x.request();
+ assert.equal(y.cobranca_status,"pendente");
+ assert.equal(x.state.posts,1);
+ assert.equal(x.state.provider[0].value,5);
+ assert.equal(x.state.charge.valor_centavos,500);
+});
+
+test("COB-06: cobranca antiga ja emitida e recuperavel nao e barrada pelo novo piso",async()=>{
+ const x=fixture();
+ x.state.f.total_comissao_centavos=300;
+ x.state.charge={gateway:"asaas",order_id:"pay_legacy_300",valor_centavos:300,status:"pendente"};
+ x.state.provider.push({id:"pay_legacy_300",customer:x.state.customer,
+  value:3,billingType:"PIX",externalReference:"fatura-loja-ci-001-2026-10",status:"PENDING",
+  invoiceUrl:"https://sandbox.invalid/cobranca-antiga"});
+ const r=await x.request();
+ assert.equal(r.cobranca_status,"pendente");
+ assert.equal(x.state.posts,0,"Nunca emitir novo Pix");
+ assert.equal(x.state.claim,false,"Nunca reabrir a reserva");
 });
