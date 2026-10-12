@@ -68,7 +68,7 @@ pre{white-space:pre-wrap;word-break:break-all;padding:14px;background:#f3f5f1;bo
 <button type="button" id="qa-create-delivery">8 · Criar pedido de entrega em dinheiro</button>
 <button type="button" id="qa-assign">9 · Proprietário: atribuir pedido ao motoboy</button>
 </div>
-<p class="muted">Pelo proprietário, use também os botões 3 · Aceitar pedido e 4 · Marcar pronto acima. Depois saia e entre como motoboy de testes, sem mudar de projeto.</p>
+<p class="muted">Pelo proprietário, use também os botões 3 · Aceitar pedido e 4 · Marcar pronto acima. <strong>Para entrega V2, NÃO use o botão 5 de confirmar retirada; a entrega deve ser concluída pela conta do motoboy no botão 15.</strong> Depois saia e entre como motoboy de testes, sem mudar de projeto.</p>
 <div class="actions">
 <button type="button" id="qa-moto-terms">10 · Motoboy: aceitar termos</button>
 <button type="button" id="qa-moto-available">11 · Motoboy: ficar disponível</button>
@@ -82,7 +82,7 @@ pre{white-space:pre-wrap;word-break:break-all;padding:14px;background:#f3f5f1;bo
 <section id="billing" hidden>
 <h2>3. Consultar fatura de homologação</h2>
 <p>O comércio <strong>asaas-cob02</strong> está vinculado à conta existente de homologação. Primeiro conclua o pedido do Sandbox e feche a competência.</p>
-<label>Competência da fatura<input id="competencia" type="month" value="2026-10"></label>
+<label>Competência da fatura<input id="competencia" type="month" value="2026-12"></label><p class="muted">Para COB-04, dezembro/2026 é a próxima competência livre desta loja QA. Outubro e novembro já foram pagos; não reabra nem reemita essas competências.</p>
 <div class="actions"><button id="consultar" type="button">Consultar fatura</button><button class="secondary" id="conciliar" type="button">Verificar pagamento no Asaas</button></div>
 <h2 style="margin-top:25px">4. Emitir Pix fictício da fatura</h2>
 <p class="muted">Execute somente depois de habilitar <code>ASAAS_BILLING_ENABLED=true</code> no Supabase de testes. A emissão é recuperável e não deve ser feita novamente para a mesma competência se existir cobrança anterior.</p>
