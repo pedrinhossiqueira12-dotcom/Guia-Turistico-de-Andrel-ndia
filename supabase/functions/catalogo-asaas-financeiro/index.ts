@@ -175,6 +175,8 @@ async function owner(uid:string,commerceId:string){
 }
 
 const TERMOS_VERSAO="2026-10-09";
+// Limite oficial do Asaas para emissao de cobrancas (PF/PJ); nao inflar valores.
+const ASAAS_COBRANCA_MINIMA_CENTAVOS=500;
 const SAQUE_MINIMO_CENTAVOS=10000;
 // Teto por transação conservador para contas Asaas novas; não limita o saldo acumulado.
 const SAQUE_MAXIMO_PIX_CENTAVOS=500000;
@@ -433,6 +435,10 @@ async function createInvoice(uid:string,body:Record<string,unknown>,email:string
   if(charge.gateway==="asaas")return await reconcileInvoice(uid,body);
   throw new Failure("Cobrança Mercado Pago existente. Não é seguro emitir outra.",409);
  }
+ // Nao reservar emissao ou cadastrar cliente para valores abaixo do minimo real.
+ // A divida fica preservada na fatura original; jamais aumentar valor ate R$ 5.
+ check(invoiceCents>=ASAAS_COBRANCA_MINIMA_CENTAVOS,
+  "Fatura inferior ao mínimo de cobrança do Asaas (R$ 5,00). Nenhum Pix foi emitido; consulte a administração.",409);
  // Primeiro reservar a emissao local; chamadas concorrentes da mesma fatura
  // nunca devem cadastrar pagadores diferentes antes de ter um claim unico.
  const {data:claim,error:claimError}=await db.from("catalogo_asaas_emissoes")
