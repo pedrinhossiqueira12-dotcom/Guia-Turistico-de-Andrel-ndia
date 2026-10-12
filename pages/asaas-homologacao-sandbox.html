@@ -53,7 +53,8 @@ pre{white-space:pre-wrap;word-break:break-all;padding:14px;background:#f3f5f1;bo
 <button type="button" id="qa-finish">5 · Confirmar entrega com código</button>
 <button type="button" id="qa-close">6 · Fechar competência da fatura</button>
 </div>
-<pre id="qa-result">Aguardando pedido do Sandbox. Nenhuma cobrança foi criada.</pre>
+<p id="qa-feedback" role="status" style="font-weight:600">Execute os botões em ordem. O resultado de cada operação aparecerá aqui.</p>
+<pre id="qa-result">Nenhum pedido criado. O aceite dos termos não cria um pedido.</pre>
 </section>
 <section id="billing" hidden>
 <h2>3. Consultar fatura de homologação</h2>
@@ -123,8 +124,30 @@ function show(o){
  if(safe)$("link-asaas").href=safe;else $("link-asaas").removeAttribute("href");
 }
 async function withBusy(button,task){
+ const isQa=button?.id?.startsWith("qa-");
+ if(isQa){
+  $("qa-feedback").textContent="Executando "+button.textContent.trim()+"…";
+  $("qa-feedback").style.color="#194138";
+  $("qa-result").textContent="Aguardando resposta do servidor. Nenhuma operação concluída nesta tentativa.";
+ }
  button.disabled=true;
- try{await task();}catch(e){msg(e?.message||"Não foi possível concluir.",true);}finally{button.disabled=false;}
+ try{
+  await task();
+  if(isQa){
+   $("qa-feedback").textContent="Etapa finalizada: "+button.textContent.trim()+".";
+   $("qa-feedback").style.color="#194138";
+  }
+ }catch(e){
+  const message=e?.message||"Não foi possível concluir.";
+  msg(message,true);
+  if(isQa){
+   $("qa-feedback").textContent="FALHOU: "+message;
+   $("qa-feedback").style.color="#a12222";
+   $("qa-result").textContent="Falha na etapa "+button.textContent.trim()+": "+message;
+  }
+ }finally{
+  if(button.id!=="qa-create" || !$("qa-order-id").value.trim())button.disabled=false;
+ }
 }
 $("login-form").addEventListener("submit",e=>{e.preventDefault();withBusy($("login"),async()=>{
  const {error}=await client.auth.signInWithPassword({email:$("email").value.trim(),password:$("password").value});
@@ -165,7 +188,8 @@ const pedido=()=>{const v=$("qa-order-id").value.trim();if(!/^[a-f0-9-]{36}$/i.t
 $("qa-terms").addEventListener("click",()=>withBusy($("qa-terms"),async()=>{
  if(!window.confirm("Confirma que leu os Termos para Estabelecimentos e a Política de Privacidade nesta conta de TESTES?"))return;
  const out=await call("aceitar_termos",{papel:"comercio",aceito_termos:true,ciente_privacidade:true});
- qaLog({aceito:out.aceito,versao:out.versao});msg("Aceite de testes registrado.");
+ qaLog({aceito:out.aceito,versao:out.versao,proxima_etapa:"2 · Criar pedido em dinheiro (retirada)",pedido_criado:false});
+ msg("Aceite registrado. Agora execute Criar pedido em dinheiro.");
 }));
 $("qa-create").addEventListener("click",()=>withBusy($("qa-create"),async()=>{
  const {data:product,error}=await client.from("catalogo_produtos")
@@ -179,6 +203,7 @@ $("qa-create").addEventListener("click",()=>withBusy($("qa-create"),async()=>{
  },false);
  $("qa-order-id").value=out.pedido_id||"";
  $("qa-delivery-code").value=out.codigo_entrega||"";
+ if(out.pedido_id)$("qa-create").disabled=true; // Evita duplo clique após sucesso.
  qaLog({pedido_id:out.pedido_id,status:out.status,codigo_entrega:out.codigo_entrega,
    subtotal_centavos:out.subtotal_centavos,taxa_total_centavos:out.taxa_total_centavos,
    taxa_plataforma_centavos:out.taxa_plataforma_centavos,provedor:out.provedor});
