@@ -116,3 +116,17 @@ test("COB-04: botao 8 exige autorizacao persistida no servidor ANTES de criar en
  assert.match(qaHtml,/if\(!window\.confirm\("Criar UM pedido fictício[^\n]+\)return false;/);
  assert.match(qaHtml,/result===false\?"Operação cancelada pelo usuário/);
 });
+
+test("COB-04: conciliação da fatura só libera pedidos do snapshot pago",()=>{
+ const src=fs.readFileSync("supabase/pending-migrations/20261012163000_cob04_pagamento_somente_componentes_da_fatura.sql","utf8");
+ const guarda=/fc\.fechamento_id=v_cobranca\.fechamento_id/g;
+ assert.equal((src.match(guarda)||[]).length,7,"todas as sete mutações de pagamento/reversão precisam ser protegidas");
+ assert.equal((src.match(/fc\.pedido_id=/g)||[]).length,7,"todas as mutações vinculam pedido ao componente");
+ assert.equal((src.match(/fc\.tipo='plataforma'/g)||[]).length,1,"crédito plataforma tem componente e valor próprios");
+ assert.equal((src.match(/fc\.tipo='logistica'/g)||[]).length,2,"remuneração e seu lançamento têm componente logístico");
+ assert.match(src,/AND fc\.valor_centavos=l\.valor_centavos/);
+ assert.match(src,/AND fc\.valor_centavos=r\.valor_centavos/);
+ assert.match(src,/IF v_cobranca\.status='pago'/);
+ assert.match(src,/IF p_estado IN \('estornado','contestado'\)/);
+ assert.doesNotMatch(src,/\b(?:TRUNCATE|DROP TABLE|DELETE FROM)\b/i);
+});
