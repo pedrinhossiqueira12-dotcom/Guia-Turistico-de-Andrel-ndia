@@ -72,6 +72,14 @@ Este documento é a **única fila operacional** do trabalho financeiro do PR #39
 - Um pedido de teste deve passar pelo fluxo normal de estabelecimento/entrega, gerar comissão e fechamento de **competência ainda não paga** ou de comércio de teste independente autorizado. **Não** reabrir setembro/outubro do comércio que já tem ambas pagas e **não** inserir cobranças/saques/créditos manualmente no SQL.
 - **Aceite:** fechamento com status `faturado`/`vencido`/`bloqueado`, valor de comissão positivo e comprovadamente decorrente de pedido legítimo; **sem cobrança Asaas prévia** da mesma referência.
 
+#### COB-02 — Causa exata do HTTP 503 confirmada; configuração pendente (11/10/2026)
+
+- O operador enviou a mensagem exata do endpoint: **"A proteção do comprovante ainda não está configurada. Nenhum pedido foi criado."** A Edge executa `decodeKey(COMPROVANTE_KEY).length !== 32` antes de criar pedido; não há pedido/comissão/fatura/cobrança criados na loja QA.
+- **Correção restrita ao item:** `catalogo-pedido-offline` agora seleciona o primeiro Secret **válido de 32 bytes** na ordem `MP_OAUTH_ENCRYPTION_KEY`, `CATALOGO_COMPROVANTE_KEY`, `SUPABASE_COMPROVANTE_KEY`. Prioridade da chave existente preservada; chave antiga malformada não impede alternativa válida. **NÃO** desabilitar AES, não armazenar segredo em repo, GitHub, SQL ou chat. Função publicada **apenas no Supabase STAGING v33 ACTIVE**.
+- **Única pendência operacional externa:** usuário cadastra no **Supabase STAGING** (Dashboard → Edge Functions → Secrets) o Secret `CATALOGO_COMPROVANTE_KEY`, com valor **aleatório seguro de 32 bytes codificados em exatamente 64 caracteres hexadecimais**, gerado **localmente** no Windows PowerShell e copiado diretamente ao Dashboard. Não alterar Secrets existentes e não configurar produção. A documentação oficial Supabase confirma que Edge Functions leem novos Secrets imediatamente, sem reimplantação. Não compartilhar chave.
+- Após operador confirmar **sem revelar valor**, usar página HTML QA existente: apertar **somente "2 · Criar pedido em dinheiro (retirada)" uma vez**, aguardar resultado e verificar por SQL se há exatamente um pedido; depois proceder com os botões 3–6. COB-02 permanece aberta até existir fatura real do fluxo QA, sem Pix Asaas.
+- CI do branch deve passar após o commit da correção, mas nenhum teste automatizado substitui o E2E e a leitura de Secret real.
+
 #### COB-02 — Reteste da página corrigida: ainda bloqueado (11/10/2026)
 
 - Operador respondeu "pronto" após receber o HTML com a correção de checkout.
