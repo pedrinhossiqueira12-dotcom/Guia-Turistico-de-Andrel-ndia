@@ -78,3 +78,25 @@ test("COB-06: inventário exige clone, gates, ordem seletiva e autorização de 
  ])assert.ok(manifest.includes(name),name);
  assert.match(manifest,/NÃO IMPLANTAR/);
 });
+
+
+test("COB-06: Edge mista exige dupla aprovação para cobrar e proíbe POST Pix de saque em produção",()=>{
+ const code=read("supabase/functions/catalogo-asaas-financeiro/index.ts");
+ const enabledAt=code.indexOf('function enabled(kind:"billing"|"payouts"){');
+ const authAt=code.indexOf('async function auth(',enabledAt);
+ assert.ok(enabledAt>=0&&authAt>enabledAt);
+ const guard=code.slice(enabledAt,authAt);
+ assert.match(guard,/kind==="billing" && !PRODUCTION_BILLING_APPROVED/);
+ assert.match(guard,/BILLING_ON:PAYOUTS_ON/);
+ const postAt=code.indexOf('async function asaas(');
+ const withdrawAt=code.indexOf('async function withdraw(');
+ assert.ok(postAt>=0&&withdrawAt>postAt);
+ const provider=code.slice(postAt,postAt+2400);
+ assert.match(provider,/method==="POST" && path==="\/transfers"/);
+ assert.match(provider,/if\(ENVIRONMENT!=="sandbox"\)/);
+ assert.match(provider,/WITHDRAWAL_AUTH_ON/);
+ const withdrawal=code.slice(withdrawAt,withdrawAt+700);
+ assert.match(withdrawal,/if\(ENVIRONMENT!=="sandbox"\)/);
+ assert.ok(withdrawal.indexOf('if(ENVIRONMENT!=="sandbox")') <
+   withdrawal.indexOf('enabled("payouts")'));
+});
