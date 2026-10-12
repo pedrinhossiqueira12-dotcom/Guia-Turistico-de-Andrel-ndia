@@ -194,7 +194,7 @@ for(const [id,status,feedback] of [
 }
 $("qa-finish").addEventListener("click",()=>withBusy($("qa-finish"),async()=>{
  const code=$("qa-delivery-code").value.trim();
- if(!/^\\d{6}$/.test(code))throw Error("Informe o código de 6 dígitos do pedido de teste.");
+ if(!/^\d{6}$/.test(code))throw Error("Informe o código de 6 dígitos do pedido de teste.");
  const out=await qaApi("catalogo-pedidos-offline-admin",{
   acao:"confirmar_entrega",pedido_id:pedido(),codigo_entrega:code
  });
@@ -202,7 +202,7 @@ $("qa-finish").addEventListener("click",()=>withBusy($("qa-finish"),async()=>{
 }));
 $("qa-close").addEventListener("click",()=>withBusy($("qa-close"),async()=>{
  const competencia=$("competencia").value;
- if(!/^\\d{4}-\\d{2}$/.test(competencia))throw Error("Informe a competência da fatura.");
+ if(!/^\d{4}-\d{2}$/.test(competencia))throw Error("Informe a competência da fatura.");
  const out=await qaApi("catalogo-pedidos-offline-admin",{acao:"gerar_fechamento",competencia});
  if(!out.fechamento_id)throw Error("Ainda não há comissão elegível para fechar. Conclua a entrega primeiro.");
  qaLog(out);msg("Competência fechada pelo serviço normal. Consulte a fatura antes de emitir Pix Sandbox.");
