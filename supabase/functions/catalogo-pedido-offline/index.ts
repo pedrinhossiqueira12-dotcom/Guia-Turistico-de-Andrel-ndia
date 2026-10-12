@@ -8,8 +8,8 @@ const LEGACY_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const OFFLINE_CHECKOUT_ENABLED = Deno.env.get("OFFLINE_CHECKOUT_ENABLED") === "true";
 // COB-02: unica loja de testes sem recebedor Mercado Pago.
 // Rejeita qualquer outra loja e qualquer projeto que nao seja STAGING.
-const QA_STAGING_COMMERCE_ID = SUPABASE_URL === "https://jbttwihctuibchhcyqtl.supabase.co"
-  ? "asaas-homologacao" : "";
+const QA_STAGING_COMMERCE_IDS = SUPABASE_URL === "https://jbttwihctuibchhcyqtl.supabase.co"
+  ? new Set(["asaas-homologacao", "asaas-cob02"]) : new Set<string>();
 // Compartilhado com o PaymentAgent: chave MP_OAUTH_ENCRYPTION_KEY e AAD por pedido.
 const COMPROVANTE_KEY = Deno.env.get("MP_OAUTH_ENCRYPTION_KEY") || Deno.env.get("CATALOGO_COMPROVANTE_KEY") || Deno.env.get("SUPABASE_COMPROVANTE_KEY") || "";
 const MP_API = "https://api.mercadopago.com";
@@ -82,7 +82,7 @@ async function assertOfflineCommerceAuthorized(comercioId: string) {
     console.error("Offline authorization lookup failed", { comercioId, receiver: receiverError?.message || null, catalog: catalogError?.message || null, published: publishedError?.message || null });
     throw new Error("Falha ao validar a conta Mercado Pago e o catálogo.");
   }
-  if (!receiver && comercioId !== QA_STAGING_COMMERCE_ID)
+  if (!receiver && !QA_STAGING_COMMERCE_IDS.has(comercioId))
     throw new HttpError("Conecte a conta Mercado Pago do comércio antes de aceitar pedidos.", 403);
   if (!catalog || catalog.bloqueado || !published) throw new HttpError("Este catálogo não está ativo para receber pedidos.", 403);
 }
