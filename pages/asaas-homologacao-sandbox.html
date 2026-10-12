@@ -150,14 +150,19 @@ async function withBusy(button,task){
  const isQa=button?.id?.startsWith("qa-");
  if(isQa){
   $("qa-feedback").textContent="Executando "+button.textContent.trim()+"…";
+  $("qa-delivery-feedback").textContent=$("qa-feedback").textContent;
+  $("qa-delivery-feedback").style.color="#194138";
   $("qa-feedback").style.color="#194138";
   $("qa-result").textContent="Aguardando resposta do servidor. Nenhuma operação concluída nesta tentativa.";
+  $("qa-delivery-result").textContent=$("qa-result").textContent;
  }
  button.disabled=true;
  try{
   await task();
   if(isQa){
    $("qa-feedback").textContent="Etapa finalizada: "+button.textContent.trim()+".";
+   $("qa-delivery-feedback").textContent=$("qa-feedback").textContent;
+   $("qa-delivery-feedback").style.color="#194138";
    $("qa-feedback").style.color="#194138";
   }
  }catch(e){
@@ -165,8 +170,11 @@ async function withBusy(button,task){
   msg(message,true);
   if(isQa){
    $("qa-feedback").textContent="FALHOU: "+message;
+   $("qa-delivery-feedback").textContent=$("qa-feedback").textContent;
+   $("qa-delivery-feedback").style.color="#a12222";
    $("qa-feedback").style.color="#a12222";
    $("qa-result").textContent="Falha na etapa "+button.textContent.trim()+": "+message;
+   $("qa-delivery-result").textContent=$("qa-result").textContent;
   }
  }finally{
   if(!["qa-create","qa-create-delivery"].includes(button.id) || !$("qa-order-id").value.trim())button.disabled=false;
@@ -206,7 +214,7 @@ async function qaApi(slug,body,authenticated=true){
  if(!response.ok||out.success!==true)throw Error(out.mensagem||"Operação de testes não autorizada ("+response.status+").");
  return out;
 }
-const qaLog=(o)=>{$("qa-result").textContent=JSON.stringify(o,null,2);};
+const qaLog=(o)=>{const formatted=JSON.stringify(o,null,2);$("qa-result").textContent=formatted;$("qa-delivery-result").textContent=formatted;};
 
 async function deliveryApi(acao,body={}){
  const out=await qaApi("catalogo-entregas",{acao,...body});
