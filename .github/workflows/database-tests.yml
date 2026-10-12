@@ -745,6 +745,17 @@ jobs:
           test -z "${PGSERVICE:-}"
           test -z "${PGHOSTADDR:-}"
           createdb --template=catalogo_ci catalogo_cob06_ci
+          # Banco previo Asaas precisa ter O MESMO esquema operacional critico
+          # identificado por leitura em PROD 12/10/2026 (nao usa dados reais).
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -At -F '|' \
+            -f scripts/validacao-pagamentos/asaas-cob06-schema-fingerprint-readonly.sql \
+            > /tmp/catalogo-cob06-actual-fingerprint.txt
+          diff -u \
+            <(grep -v '^#' scripts/validacao-pagamentos/asaas-cob06-esquema-producao-golden-20261012.txt \
+              | sed '/^$/d') \
+            /tmp/catalogo-cob06-actual-fingerprint.txt
+          rm -f /tmp/catalogo-cob06-actual-fingerprint.txt
+          echo "PASS: COB06 baseline espelha estrutura critica de PROD nas 6 tabelas"
           trap 'dropdb --if-exists --force catalogo_cob06_restore_ci; dropdb --if-exists --force catalogo_cob06_ci; rm -f /tmp/catalogo-cob06-before.dump' EXIT
           # Contrato de compatibilidade: cobrança legada Mercado Pago já quitada
           # existe ANTES de introduzir o gateway Asaas neste clone sintético.
