@@ -45,6 +45,15 @@ No workflow `Database tests`, job `All financial migrations except remote schedu
 
 **Limitação crucial:** é um PostgreSQL 17 descartável construído com baseline sintético do repositório, **não** um clone comprovadamente idêntico ao estado real atual da produção. O teste é prova de compatibilidade técnica do pacote selecionado, **não** autoriza aplicar migrations em produção. Ainda será preciso confrontar o inventário real de migrations e extensões, validar restauração de backup e executar testes de rota legada de exclusão em clone apropriado.
 
+### Prova das guardas legadas no banco descartável — 12/10/2026
+
+O script `supabase/tests/isolated/asaas-cob06-guardas-legadas-clone.sql` foi incluído no teste seletivo do workflow GitHub Actions. A etapa COB-06 do run [38294353471](https://github.com/pedrinhossiqueira12-dotcom/Guia-Turistico-de-Andrel-ndia/actions/runs/38294353471) terminou **success**. O PostgreSQL é local e descartável; o ensaio usa cobrança Mercado Pago sintética de R$7 paga e fatura fictícia de R$5 em aberto.
+
+O teste SQL envolto em BEGIN/ROLLBACK comprova cinco bloqueios (SQLSTATE 23514): **1)** atualização direta de publicação para `deletado` como faz o `whatsapp-bot`; **2)** DELETE da publicação devedora; **3)** DELETE de `catalogos` com histórico financeiro; **4)** UPSERT de republicação após solicitação de encerramento; **5)** desbloqueio automático de catálogo encerrado. Confere ainda `aguardando_quitacao` na solicitação, recusa administrativa de arquivamento com débito, manutenção de fatura MP paga e ausência de fixtures persistidas.
+
+Também foi inspecionada a Edge mista Asaas e adicionado teste de não regressão em `tests/asaas-cob06-pacote-minimo.test.cjs`: a ação de saque recusa produção ANTES de reservar crédito, o cliente HTTP recusa POST /transfers de produção antes do fetch, e a cobrança produtiva exige as duas flags de aprovação. Essa análise não é permissão de publicar a Edge mista, cujas demais rotas ainda merecem revisão.
+
+**Limitação:** não foram exercitados o endpoint `whatsapp-bot` real nem a alteração do JSON público no GitHub; somente o SQL defensivo no clone sintético. A homologação da integração sem alterar dados produtivos segue pendente.
 ### Arquivos de Edge e interface — pacote ainda NÃO fechado
 
 - Edge `supabase/functions/catalogo-asaas-financeiro/index.ts` é grande e contém rotas de **cobranças e saques no mesmo código**. Não considerar pronto o release apenas porque as migrations foram separadas. Preparar versão/manifesto que mantenha rotas de saque inacessíveis na produção, com flags de saques desligadas, sem `POST /transfers`.
