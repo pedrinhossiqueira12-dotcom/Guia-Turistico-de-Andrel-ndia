@@ -95,3 +95,14 @@ test("COB-04: valida o e-mail de motoboy e codigo antes da API, sem exigir UID m
  assert.match(qaHtml,/id="qa-delivery-result"/);
  assert.match(qaHtml,/\$\("qa-delivery-feedback"\)\.textContent=\$\("qa-feedback"\)\.textContent/);
 });
+
+test("COB-04: botao 8 exige autorizacao persistida no servidor ANTES de criar entrega",()=>{
+ const guard=qaHtml.indexOf('const autorizacoes=await deliveryApi("listar_motoboys")');
+ const create=qaHtml.indexOf('const out=await qaApi("catalogo-pedido-offline"');
+ assert.ok(guard>0 && create>guard,"consulta API proprietario precede checkout");
+ assert.match(qaHtml,/item\.ativo===true && String\(item\.email\|\|""\)\.toLowerCase\(\)===motoEmail/);
+ assert.match(qaHtml,/Nenhum motoboy autorizado com este e-mail nesta loja QA/);
+ assert.match(qaHtml,/if\(!window\.confirm\("Autorizar este entregador[^\n]+\)return false;/);
+ assert.match(qaHtml,/if\(!window\.confirm\("Criar UM pedido fictício[^\n]+\)return false;/);
+ assert.match(qaHtml,/result===false\?"Operação cancelada pelo usuário/);
+});
