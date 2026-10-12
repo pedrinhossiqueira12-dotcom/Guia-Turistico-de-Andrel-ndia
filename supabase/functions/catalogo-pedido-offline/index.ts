@@ -11,7 +11,13 @@ const OFFLINE_CHECKOUT_ENABLED = Deno.env.get("OFFLINE_CHECKOUT_ENABLED") === "t
 const QA_STAGING_COMMERCE_IDS = SUPABASE_URL === "https://jbttwihctuibchhcyqtl.supabase.co"
   ? new Set(["asaas-homologacao", "asaas-cob02"]) : new Set<string>();
 // Compartilhado com o PaymentAgent: chave MP_OAUTH_ENCRYPTION_KEY e AAD por pedido.
-const COMPROVANTE_KEY = Deno.env.get("MP_OAUTH_ENCRYPTION_KEY") || Deno.env.get("CATALOGO_COMPROVANTE_KEY") || Deno.env.get("SUPABASE_COMPROVANTE_KEY") || "";
+// Preserva a prioridade da chave MP valida, mas nao bloqueia a chave
+// dedicada quando uma chave antiga existe com tamanho/formato incorretos.
+const COMPROVANTE_KEY = [
+  Deno.env.get("MP_OAUTH_ENCRYPTION_KEY"),
+  Deno.env.get("CATALOGO_COMPROVANTE_KEY"),
+  Deno.env.get("SUPABASE_COMPROVANTE_KEY"),
+].find((candidate) => typeof candidate === "string" && decodeKey(candidate).length === 32) || "";
 const MP_API = "https://api.mercadopago.com";
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
