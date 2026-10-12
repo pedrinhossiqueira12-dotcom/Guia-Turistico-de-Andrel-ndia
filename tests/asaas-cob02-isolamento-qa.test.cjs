@@ -12,6 +12,13 @@ test("QA offline sem MP permanece restrito por URL EXATA do projeto STAGING",()=
  assert.match(edge,/const qaCheckout = comercio === "asaas-cob02" && QA_STAGING_COMMERCE_IDS\.has\(comercio\)/);
  assert.match(edge,/if \(!OFFLINE_CHECKOUT_ENABLED && !qaCheckout\)/);
 });
+test("Chave AES existente valida permanece prioritária, mas legado inválido admite fallback válido",()=>{
+ assert.match(edge,/Deno\.env\.get\("MP_OAUTH_ENCRYPTION_KEY"\)/);
+ assert.match(edge,/Deno\.env\.get\("CATALOGO_COMPROVANTE_KEY"\)/);
+ assert.match(edge,/Deno\.env\.get\("SUPABASE_COMPROVANTE_KEY"\)/);
+ assert.match(edge,/\.find\(\(candidate\) => typeof candidate === "string" && decodeKey\(candidate\)\.length === 32\)/);
+ assert.match(edge,/if \(decodeKey\(COMPROVANTE_KEY\)\.length !== 32\)/);
+});
 test("migração QA está fora das migrações produtivas e mantém loja publicada/desbloqueada",()=>{
  assert.match(sql,/STAGING ONLY/);
  assert.match(sql,/cp\.status='ativo'/);
