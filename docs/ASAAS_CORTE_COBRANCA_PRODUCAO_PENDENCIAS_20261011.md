@@ -2,6 +2,29 @@
 
 **Data da auditoria:** 11/10/2026. **Escopo:** somente cobrança mensal dos comércios. **Não** libera Money Out nem saques automáticos.
 
+## Atualização de 12/10/2026 — COB-05 aprovada, início da COB-06 SEM implantação
+
+**COB-05 concluída e auditada:** Asaas Sandbox produziu `PAYMENT_CREATED` verdadeiro para cobrança fictícia pendente `pay_z7ei9tof446wxbjo`, R$5. A integração registrou erro de vínculo local não existente, usou backoff e recuperou automaticamente o mesmo evento em três tentativas. Cron `jobid=5/runid=53` às 18:04 UTC e `net._http_response.id=50` **HTTP 200, `processados=1,em_erro=0`**; evento `concluido_em=18:04:03.435282 UTC`. A execução 18:02 mostrou `em_erro=1`, 18:06 mostrou `processados=0`; nenhuma duplicação. O ensaio não recebeu pagamento; 0 cobranças de laboratório foram registradas no financeiro local, fatura anterior paga e saldo de motoboy disponível sem repasse. Evidência canônica registrada na seção COB-05 de `docs/BACKLOG_FINANCEIRO_PR39_EXECUCAO.md`.
+
+**Gate `scripts/validacao-pagamentos/asaas-producao-readiness-readonly.sql` reexecutado sem mutação nos dois bancos em 12/10/2026:**
+
+| Métrica | STAGING `jbttwihctuibchhcyqtl` | PRODUÇÃO `xdmbkflufsfqziixzpxc` |
+|---|---|---|
+| `schema_pronto` | **true** | **false** |
+| Tabelas faltando | 0 | **4** |
+| RPCs faltando | 0 | **4** |
+| Restrição gateway Asaas + Mercado Pago | compatível | **incompatível** |
+| Gatilho proteção exclusão física `catalogo_historico_guard_delete` | ativo | **ausente** |
+| Gatilho `catalogo_encerramento_sem_reabertura` | ativo | **ausente** |
+| Gatilho `catalogo_encerramento_sem_republicacao` | ativo | **ausente** |
+| Edge `catalogo-asaas-financeiro` | homologada em Sandbox | **não encontrada** |
+
+As quatro tabelas ainda ausentes de PRODUÇÃO são `catalogo_asaas_clientes`, `catalogo_asaas_emissoes`, `catalogo_asaas_webhook_eventos`, `catalogo_cobranca_preferencias`; faltam as RPCs `catalogo_asaas_registrar_fatura`, `catalogo_asaas_webhook_claim`, `catalogo_asaas_webhook_finalizar`, `catalogo_asaas_webhook_receber`. Todos os nomes foram confirmados pela própria consulta do catálogo do PostgreSQL.
+
+**Implicação de segurança COB-06:** a proteção de encerramento comercial do STAGING não está implantada em produção. A mera execução do gate de tabela/RPC **não detecta** os três gatilhos de proteção nem audita o caminho legado de excluir/despublicar. É obrigatório incluir essas barreiras na seleção mínima de migrações e testá-las em **clone descartável** da estrutura atual de produção, inclusive convivência de cobranças antigas Mercado Pago. Não copiar um banco STAGING sobre produção.
+
+**Status:** COB-06 **iniciada apenas como auditoria e preparação**; esquema produtivo incompatível, sem merge, migrations, Secrets, deploy ou habilitação de cobrança/saque de produção. Passos seguintes: definir pacote seletivo forward-only e dependências, revisar privilégios/RLS e legado de exclusão, exercitar pacote em clone com testes de dados legados, estabelecer backup/rollback, depois solicitar autorização específica para COB-07. A cobrança de laboratório R$5 permanece **pendente no Sandbox**, identificada como teste: nunca pagar.
+
 ## Resultado da verificação READ-ONLY em projetos existentes
 
 | Item | Supabase testes `jbttwihctuibchhcyqtl` | Supabase produção `xdmbkflufsfqziixzpxc` |
