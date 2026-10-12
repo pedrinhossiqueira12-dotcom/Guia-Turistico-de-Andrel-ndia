@@ -158,9 +158,9 @@ async function withBusy(button,task){
  }
  button.disabled=true;
  try{
-  await task();
+  const result=await task();
   if(isQa){
-   $("qa-feedback").textContent="Etapa finalizada: "+button.textContent.trim()+".";
+   $("qa-feedback").textContent=result===false?"Operação cancelada pelo usuário. Nenhuma ação enviada.":"Etapa finalizada: "+button.textContent.trim()+".";
    $("qa-delivery-feedback").textContent=$("qa-feedback").textContent;
    $("qa-delivery-feedback").style.color="#194138";
    $("qa-feedback").style.color="#194138";
@@ -224,7 +224,7 @@ async function deliveryApi(acao,body={}){
 $("qa-authorize").addEventListener("click",()=>withBusy($("qa-authorize"),async()=>{
  const email=$("qa-moto-email").value.trim().toLowerCase(),nome=$("qa-moto-name").value.trim();
  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||!nome)throw Error("Informe e-mail confirmado e nome do motoboy de testes.");
- if(!window.confirm("Autorizar este entregador SOMENTE para asaas-cob02 no STAGING?"))return;
+ if(!window.confirm("Autorizar este entregador SOMENTE para asaas-cob02 no STAGING?"))return false;
  const out=await deliveryApi("autorizar_motoboy",{email,nome});
  const id=out.motoboy?.usuario_id;
  if(!/^[a-f0-9-]{36}$/i.test(id||""))throw Error("A API não confirmou o usuário do entregador.");
@@ -234,10 +234,20 @@ $("qa-authorize").addEventListener("click",()=>withBusy($("qa-authorize"),async(
 }));
 $("qa-create-delivery").addEventListener("click",()=>withBusy($("qa-create-delivery"),async()=>{
  if($("qa-order-id").value.trim())throw Error("Já há um ID de pedido na página. Consulte-o antes de criar outro.");
+ // Só cria após verificar autorização realmente persistida no servidor.
+ const motoEmail=$("qa-moto-email").value.trim().toLowerCase();
+ if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(motoEmail))
+  throw Error("Informe o e-mail do motoboy. O ID não precisa ser digitado.");
+ const autorizacoes=await deliveryApi("listar_motoboys");
+ const autorizado=Array.isArray(autorizacoes.motoboys)?autorizacoes.motoboys.find(item=>
+  item.ativo===true && String(item.email||"").toLowerCase()===motoEmail):null;
+ if(!autorizado || !/^[a-f0-9-]{36}$/i.test(autorizado.usuario_id||""))
+  throw Error("Nenhum motoboy autorizado com este e-mail nesta loja QA. Use primeiro o botão 7 com a conta proprietária e confirme a autorização. O pedido NÃO foi criado.");
+ $("qa-moto-id").value=autorizado.usuario_id;
  const {data:product,error}=await client.from("catalogo_produtos")
    .select("id,nome,preco").eq("comercio_id",STORE).eq("disponivel",true).is("deletado_em",null).limit(1).maybeSingle();
  if(error||!product)throw Error("Produto fictício de homologação indisponível.");
- if(!window.confirm("Criar UM pedido fictício de ENTREGA em DINHEIRO somente no STAGING?"))return;
+ if(!window.confirm("Criar UM pedido fictício de ENTREGA em DINHEIRO somente no STAGING?"))return false;
  const out=await qaApi("catalogo-pedido-offline",{
   acao:"criar_pedido_offline",modalidade:"entrega",forma_pagamento:"dinheiro",entrega_centavos:0,
   cliente:{nome:"Comprador fictício QA",email:"comprador-qa@exemplo.test",telefone:"35000000000",
