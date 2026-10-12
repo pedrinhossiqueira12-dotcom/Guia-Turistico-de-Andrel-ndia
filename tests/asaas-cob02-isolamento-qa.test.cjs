@@ -28,3 +28,33 @@ test("migração QA está fora das migrações produtivas e mantém loja publica
  assert.match(sql,/p_comercio_id='asaas-homologacao'/);
  assert.doesNotMatch(sql,/\bINSERT\b|\bUPDATE\b.*\bcatalogo_pedidos\b|\bDELETE\b.*\bcatalogo_fechamentos\b/i);
 });
+
+const vm=require("node:vm");
+const qaHtml=fs.readFileSync("pages/asaas-homologacao-sandbox.html","utf8");
+const qaDeliverySql=fs.readFileSync("supabase/staging-only/asaas_qa_entrega_v2_cob04_20261012.sql","utf8");
+test("COB-04: entrega QA usa endpoints existentes, JWT e aceite, sem saque",()=>{
+ const inline=qaHtml.match(/<script>\s*([\s\S]*?)<\/script>/);
+ assert.ok(inline,"JS de QA existe");
+ assert.doesNotThrow(()=>new vm.Script(inline[1]));
+ assert.match(qaHtml,/id="qa-create-delivery"/);
+ assert.match(qaHtml,/id="qa-authorize"/);
+ assert.match(qaHtml,/id="qa-moto-terms"/);
+ assert.match(qaHtml,/id="qa-moto-finish"/);
+ assert.match(qaHtml,/deliveryApi\("autorizar_motoboy"/);
+ assert.match(qaHtml,/deliveryApi\("atribuir_pedido"/);
+ assert.match(qaHtml,/call\("aceitar_termos",\{papel:"motoboy"/);
+ assert.match(qaHtml,/deliveryApi\("confirmar_entrega"/);
+ assert.match(qaHtml,/recebimento_confirmado:true/);
+ assert.match(qaHtml,/taxa_total_centavos!==700/);
+ assert.match(qaHtml,/taxa_plataforma_centavos!==500/);
+ assert.match(qaHtml,/taxa_motoboy_centavos!==200/);
+ assert.doesNotMatch(qaHtml,/acao:\s*"solicitar_saque"/);
+});
+test("COB-04: modalidade entrega somente em asaas-cob02 STAGING, sem linhas financeiras",()=>{
+ assert.match(qaDeliverySql,/STAGING jbttwihctuibchhcyqtl/);
+ assert.match(qaDeliverySql,/WHERE comercio_id='asaas-cob02'/);
+ assert.match(qaDeliverySql,/ARRAY\['retirada','entrega'\]::text\[\]/);
+ assert.match(qaDeliverySql,/v_metodos IS DISTINCT FROM ARRAY\['dinheiro'\]::text\[\]/);
+ assert.doesNotMatch(qaDeliverySql,/\b(?:INSERT|DELETE)\b/i);
+ assert.doesNotMatch(qaDeliverySql,/\bUPDATE\s+public\.(?:catalogo_pedidos|catalogo_fechamentos_offline|catalogo_fatura_cobrancas|catalogo_remuneracoes_v2)\b/i);
+});
