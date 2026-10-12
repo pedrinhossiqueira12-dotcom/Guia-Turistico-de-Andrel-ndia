@@ -56,6 +56,29 @@ pre{white-space:pre-wrap;word-break:break-all;padding:14px;background:#f3f5f1;bo
 <p id="qa-feedback" role="status" style="font-weight:600">Execute os botões em ordem. O resultado de cada operação aparecerá aqui.</p>
 <pre id="qa-result">Nenhum pedido criado. O aceite dos termos não cria um pedido.</pre>
 </section>
+
+<section id="qa-delivery" hidden>
+<h2>COB-04 · Entrega V2 com motoboy (somente STAGING)</h2>
+<p class="muted">Ensaio de pedido fictício com entrega em dinheiro e taxa de R$100: R$5 plataforma + R$2 motoboy. Não é um saque. Use a competência ainda não fechada (a fatura de novembro já está paga). É necessário alternar entre a conta proprietária e a conta motoboy do projeto de testes.</p>
+<label>E-mail do motoboy de testes já cadastrado<input id="qa-moto-email" type="email" autocomplete="off" placeholder="Conta de teste confirmada no Supabase"></label>
+<label>Nome de identificação do motoboy<input id="qa-moto-name" maxlength="120" autocomplete="off" placeholder="Motoboy de homologação"></label>
+<label>ID do motoboy autorizado<input id="qa-moto-id" placeholder="Preenchido após a autorização, não é chave Pix"></label>
+<div class="actions">
+<button type="button" id="qa-authorize">7 · Proprietário: autorizar motoboy</button>
+<button type="button" id="qa-create-delivery">8 · Criar pedido de entrega em dinheiro</button>
+<button type="button" id="qa-assign">9 · Proprietário: atribuir pedido ao motoboy</button>
+</div>
+<p class="muted">Pelo proprietário, use também os botões 3 · Aceitar pedido e 4 · Marcar pronto acima. Depois saia e entre como motoboy de testes, sem mudar de projeto.</p>
+<div class="actions">
+<button type="button" id="qa-moto-terms">10 · Motoboy: aceitar termos</button>
+<button type="button" id="qa-moto-available">11 · Motoboy: ficar disponível</button>
+<button type="button" id="qa-moto-accept">12 · Motoboy: aceitar entrega</button>
+<button type="button" id="qa-moto-pickup">13 · Motoboy: confirmar coleta</button>
+<button type="button" id="qa-moto-onroad">14 · Motoboy: iniciar entrega</button>
+<button type="button" id="qa-moto-finish">15 · Motoboy: confirmar código e recebimento fictício</button>
+</div>
+<p class="muted">Após a entrega, volte à conta proprietária para fechar a competência, consultar a fatura e testar o Pix exclusivamente no Asaas Sandbox. Nunca gere outro pedido ou cobrança quando um resultado for inconclusivo; consulte o estado primeiro.</p>
+</section>
 <section id="billing" hidden>
 <h2>3. Consultar fatura de homologação</h2>
 <p>O comércio <strong>asaas-cob02</strong> está vinculado à conta existente de homologação. Primeiro conclua o pedido do Sandbox e feche a competência.</p>
@@ -94,7 +117,7 @@ const pretty=data=>{const {pix,...publicResult}=data||{};return JSON.stringify(p
 async function refresh(){
  const {data}=await client.auth.getUser();
  const u=data?.user||null;
- $("billing").hidden=!u;$("qa-order").hidden=!u;$("logout").hidden=!u;
+ $("billing").hidden=!u;$("qa-order").hidden=!u;$("qa-delivery").hidden=!u;$("logout").hidden=!u;
  $("login-form").hidden=!!u;
  $("session").textContent=u?"Autenticado no Sandbox: "+u.email:"Não autenticado.";
  $("uid").hidden=!u;$("uid").textContent=u?"Seu User UID de testes: "+u.id:"";
@@ -146,7 +169,7 @@ async function withBusy(button,task){
    $("qa-result").textContent="Falha na etapa "+button.textContent.trim()+": "+message;
   }
  }finally{
-  if(button.id!=="qa-create" || !$("qa-order-id").value.trim())button.disabled=false;
+  if(!["qa-create","qa-create-delivery"].includes(button.id) || !$("qa-order-id").value.trim())button.disabled=false;
  }
 }
 $("login-form").addEventListener("submit",e=>{e.preventDefault();withBusy($("login"),async()=>{
@@ -184,6 +207,84 @@ async function qaApi(slug,body,authenticated=true){
  return out;
 }
 const qaLog=(o)=>{$("qa-result").textContent=JSON.stringify(o,null,2);};
+
+async function deliveryApi(acao,body={}){
+ const out=await qaApi("catalogo-entregas",{acao,...body});
+ if(out.ok===false)throw Error(out.mensagem||"A operação de entregas foi recusada pelo servidor.");
+ return out;
+}
+$("qa-authorize").addEventListener("click",()=>withBusy($("qa-authorize"),async()=>{
+ const email=$("qa-moto-email").value.trim().toLowerCase(),nome=$("qa-moto-name").value.trim();
+ if(!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)||!nome)throw Error("Informe e-mail confirmado e nome do motoboy de testes.");
+ if(!window.confirm("Autorizar este entregador SOMENTE para asaas-cob02 no STAGING?"))return;
+ const out=await deliveryApi("autorizar_motoboy",{email,nome});
+ const id=out.motoboy?.usuario_id;
+ if(!/^[a-f0-9-]{36}$/i.test(id||""))throw Error("A API não confirmou o usuário do entregador.");
+ $("qa-moto-id").value=id;
+ qaLog({etapa:"motoboy_autorizado",motoboy_id:id,comercio_id:STORE});
+ msg("Motoboy autorizado pela operação autenticada da loja QA.");
+}));
+$("qa-create-delivery").addEventListener("click",()=>withBusy($("qa-create-delivery"),async()=>{
+ if($("qa-order-id").value.trim())throw Error("Já há um ID de pedido na página. Consulte-o antes de criar outro.");
+ const {data:product,error}=await client.from("catalogo_produtos")
+   .select("id,nome,preco").eq("comercio_id",STORE).eq("disponivel",true).is("deletado_em",null).limit(1).maybeSingle();
+ if(error||!product)throw Error("Produto fictício de homologação indisponível.");
+ if(!window.confirm("Criar UM pedido fictício de ENTREGA em DINHEIRO somente no STAGING?"))return;
+ const out=await qaApi("catalogo-pedido-offline",{
+  acao:"criar_pedido_offline",modalidade:"entrega",forma_pagamento:"dinheiro",entrega_centavos:0,
+  cliente:{nome:"Comprador fictício QA",email:"comprador-qa@exemplo.test",telefone:"35000000000",
+    endereco:"Rua Fictícia de Testes",numero:"0",bairro:"Homologação"},
+  itens:[{id:product.id,quantidade:1}],observacoes:"COB-04: entrega fictícia, sem dinheiro ou mercadoria real"
+ },false);
+ if(out.versao_financeira!==2||out.taxa_total_centavos!==700||out.taxa_plataforma_centavos!==500||out.taxa_motoboy_centavos!==200)
+   throw Error("ATENÇÃO: resultado financeiro divergente. Consulte o pedido no STAGING; NÃO recrie automaticamente.");
+ $("qa-order-id").value=out.pedido_id||"";
+ $("qa-delivery-code").value=out.codigo_entrega||"";
+ if(out.pedido_id){$("qa-create").disabled=true;$("qa-create-delivery").disabled=true;}
+ qaLog({pedido_id:out.pedido_id,versao_financeira:out.versao_financeira,status:out.status,
+  codigo_entrega:out.codigo_entrega,taxa_total_centavos:out.taxa_total_centavos,
+  taxa_plataforma_centavos:out.taxa_plataforma_centavos,taxa_motoboy_centavos:out.taxa_motoboy_centavos});
+ msg("Pedido V2 criado. Aceite e marque pronto como proprietário; depois atribua ao motoboy.");
+}));
+$("qa-assign").addEventListener("click",()=>withBusy($("qa-assign"),async()=>{
+ const id=$("qa-moto-id").value.trim();
+ if(!/^[a-f0-9-]{36}$/i.test(id))throw Error("Autorize o motoboy de testes antes de atribuir.");
+ const out=await deliveryApi("atribuir_pedido",{pedido_id:pedido(),motoboy_id:id});
+ qaLog({etapa:"atribuir_pedido",pedido_id:pedido(),motoboy_id:out.motoboy_preferido_id||id});
+ msg("Pedido atribuído pelo proprietário. Saia e entre como o motoboy de testes.");
+}));
+$("qa-moto-terms").addEventListener("click",()=>withBusy($("qa-moto-terms"),async()=>{
+ if(!window.confirm("Confirma que leu e aceita os Termos para Motoboys e está ciente da Política de Privacidade no STAGING?"))return;
+ const out=await call("aceitar_termos",{papel:"motoboy",aceito_termos:true,ciente_privacidade:true});
+ qaLog({papel:"motoboy",aceito:out.aceito,versao:out.versao});
+ msg("Termos do motoboy registrados no projeto de testes.");
+}));
+$("qa-moto-available").addEventListener("click",()=>withBusy($("qa-moto-available"),async()=>{
+ const out=await deliveryApi("definir_disponibilidade",{disponivel:true});
+ qaLog({etapa:"disponibilidade",disponivel:true,ok:out.ok});
+ msg("Motoboy habilitado para receber ofertas no STAGING.");
+}));
+for(const [id,acao,feedback] of [
+ ["qa-moto-accept","aceitar_entrega","Oferta reservada pelo motoboy."],
+ ["qa-moto-pickup","coletar","Coleta fictícia registrada."],
+ ["qa-moto-onroad","em_entrega","Etapa de transporte registrada."]
+]){
+ $(id).addEventListener("click",()=>withBusy($(id),async()=>{
+  const out=await deliveryApi(acao,{pedido_id:pedido()});
+  qaLog({etapa:acao,pedido_id:pedido(),resultado:out});
+  msg(feedback);
+ }));
+}
+$("qa-moto-finish").addEventListener("click",()=>withBusy($("qa-moto-finish"),async()=>{
+ const code=$("qa-delivery-code").value.trim();
+ if(!/^\\d{6}$/.test(code))throw Error("Informe o código correto de seis dígitos do pedido fictício.");
+ if(!window.confirm("Simular recebimento presencial de dinheiro e confirmar a entrega fictícia NO STAGING? Nenhum dinheiro será movimentado."))return;
+ const out=await deliveryApi("confirmar_entrega",{
+  pedido_id:pedido(),codigo_entrega:code,recebimento_confirmado:true
+ });
+ qaLog({etapa:"entrega_confirmada",pedido_id:pedido(),resultado:out.pedido});
+ msg("Entrega V2 confirmada. Volte à conta proprietária; feche somente uma competência inédita.");
+}));
 const pedido=()=>{const v=$("qa-order-id").value.trim();if(!/^[a-f0-9-]{36}$/i.test(v))throw Error("Crie um pedido de testes válido primeiro.");return v;};
 $("qa-terms").addEventListener("click",()=>withBusy($("qa-terms"),async()=>{
  if(!window.confirm("Confirma que leu os Termos para Estabelecimentos e a Política de Privacidade nesta conta de TESTES?"))return;
@@ -203,7 +304,7 @@ $("qa-create").addEventListener("click",()=>withBusy($("qa-create"),async()=>{
  },false);
  $("qa-order-id").value=out.pedido_id||"";
  $("qa-delivery-code").value=out.codigo_entrega||"";
- if(out.pedido_id)$("qa-create").disabled=true; // Evita duplo clique após sucesso.
+ if(out.pedido_id){$("qa-create").disabled=true;$("qa-create-delivery").disabled=true;} // Evita segundo pedido na mesma sessão.
  qaLog({pedido_id:out.pedido_id,status:out.status,codigo_entrega:out.codigo_entrega,
    subtotal_centavos:out.subtotal_centavos,taxa_total_centavos:out.taxa_total_centavos,
    taxa_plataforma_centavos:out.taxa_plataforma_centavos,provedor:out.provedor});
