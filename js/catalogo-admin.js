@@ -38,7 +38,7 @@
 
   function getClient() {
     if (supabaseClient) return supabaseClient;
-    supabaseClient = QA_SANDBOX ? window.supabase?.createClient(SUPABASE_URL, SUPABASE_KEY) : (window.supabaseLoginClient || window.supabase?.createClient(SUPABASE_URL, SUPABASE_KEY));
+    supabaseClient = QA_SANDBOX ? (window.supabaseLoginClient?.supabaseUrl === SUPABASE_URL ? window.supabaseLoginClient : window.supabase?.createClient(SUPABASE_URL, SUPABASE_KEY)) : (window.supabaseLoginClient || window.supabase?.createClient(SUPABASE_URL, SUPABASE_KEY));
     return supabaseClient;
   }
 
@@ -63,7 +63,7 @@
   }
 
   function linkPerfil() {
-    const url = comercioId ? `local.html?id=${encodeURIComponent(comercioId)}` : "../index.html";
+    const url = QA_SANDBOX ? `catalogo.html?id=${encodeURIComponent(comercioId)}&asaas-sandbox=1` : (comercioId ? `local.html?id=${encodeURIComponent(comercioId)}` : "../index.html");
     $("linkPerfil").href = url;
     $("linkCriarConta").href = url;
     $("linkContratacao").href = `catalogo-venda.html?id=${encodeURIComponent(comercioId)}`;
