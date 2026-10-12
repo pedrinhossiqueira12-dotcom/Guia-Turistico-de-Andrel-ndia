@@ -793,6 +793,13 @@ jobs:
           psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -At -F '|' \
             -f scripts/validacao-pagamentos/asaas-cob06-seguranca-readonly.sql \
             | grep -E '^0\|0\|0\|0\|0\|0\|'
+          # Gate comportamental: a Edge legada tenta deletar/despublicar via UPDATE.
+          # As fixture e escrituras deste ensaio sao locais e revertidas.
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
+            -f supabase/tests/isolated/asaas-cob06-guardas-legadas-clone.sql
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -Atqc \
+            "SELECT count(*) FROM public.catalogo_fechamentos_offline
+              WHERE comercio_id='comercio-de-exemplo' AND competencia='2024-02-01'" | grep -Fx 0
           dropdb --if-exists --force catalogo_cob06_ci
           trap - EXIT
           echo "PASS: COB-06 selective billing schema applied on disposable clone, no payout structures"
