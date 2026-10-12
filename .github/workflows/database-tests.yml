@@ -746,6 +746,23 @@ jobs:
           test -z "${PGHOSTADDR:-}"
           createdb --template=catalogo_ci catalogo_cob06_ci
           trap 'dropdb --if-exists --force catalogo_cob06_ci' EXIT
+          # Contrato de compatibilidade: cobrança legada Mercado Pago já quitada
+          # existe ANTES de introduzir o gateway Asaas neste clone sintético.
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO public.catalogo_fechamentos_offline
+            (comercio_id,competencia,total_pedidos,total_comissao_centavos,status)
+          VALUES ('comercio-de-exemplo','2024-01-01',1,700,'pago');
+          INSERT INTO public.catalogo_fatura_cobrancas
+            (fechamento_id,comercio_id,competencia,gateway,order_id,status,valor_centavos)
+          SELECT id,comercio_id,competencia,'mercadopago','legacy-cob06-ci','pago',700
+          FROM public.catalogo_fechamentos_offline
+          WHERE comercio_id='comercio-de-exemplo' AND competencia='2024-01-01';
+          SQL
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -Atqc \
+            "SELECT gateway||'|'||status||'|'||valor_centavos
+              FROM public.catalogo_fatura_cobrancas WHERE order_id='legacy-cob06-ci'" \
+            | grep -Fx 'mercadopago|pago|700'
+
           for sql in \
             supabase/production-candidate/01_asaas_cobrancas_inbox_sem_saques.sql \
             supabase/production-candidate/02_termos_encerramento_sem_saques.sql \
@@ -759,6 +776,15 @@ jobs:
             echo "COB06 isolated SQL: $sql"
             psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -f "$sql"
           done
+          # Aplicar o pacote nao pode migrar, baixar ou sobrescrever a cobranca MP.
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -Atqc \
+            "SELECT gateway||'|'||status||'|'||valor_centavos
+              FROM public.catalogo_fatura_cobrancas WHERE order_id='legacy-cob06-ci'" \
+            | grep -Fx 'mercadopago|pago|700'
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -Atqc \
+            "SELECT count(*) FROM public.catalogo_fatura_cobrancas
+              WHERE order_id='legacy-cob06-ci'" | grep -Fx 1
+
           psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -Atqc "SELECT to_regclass('public.catalogo_asaas_saques') IS NULL" | grep -Fx t
           psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -Atqc "SELECT to_regprocedure('public.catalogo_asaas_reservar_saque(uuid)') IS NULL" | grep -Fx t
           psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -At -F '|' \
