@@ -745,7 +745,7 @@ jobs:
           test -z "${PGSERVICE:-}"
           test -z "${PGHOSTADDR:-}"
           createdb --template=catalogo_ci catalogo_cob06_ci
-          trap 'dropdb --if-exists --force catalogo_cob06_ci' EXIT
+          trap 'dropdb --if-exists --force catalogo_cob06_restore_ci; dropdb --if-exists --force catalogo_cob06_ci; rm -f /tmp/catalogo-cob06-before.dump' EXIT
           # Contrato de compatibilidade: cobrança legada Mercado Pago já quitada
           # existe ANTES de introduzir o gateway Asaas neste clone sintético.
           psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 <<'SQL'
@@ -762,6 +762,17 @@ jobs:
             "SELECT gateway||'|'||status||'|'||valor_centavos
               FROM public.catalogo_fatura_cobrancas WHERE order_id='legacy-cob06-ci'" \
             | grep -Fx 'mercadopago|pago|700'
+
+          # Snapshot PRE-Asaas do clone com cobrança MP quitada.
+          # pg_dump 17 via container PostgreSQL descartável; nunca um DB remoto.
+          service_container="${{ job.services.postgres.id }}"
+          test -n "$service_container"
+          docker exec "$service_container" pg_dump -U postgres -Fc --no-owner --no-acl \
+            -d catalogo_cob06_ci -f /tmp/catalogo-cob06-before.dump
+          docker exec "$service_container" sh -c 'test -s /tmp/catalogo-cob06-before.dump'
+          docker cp "$service_container:/tmp/catalogo-cob06-before.dump" /tmp/catalogo-cob06-before.dump
+          test -s /tmp/catalogo-cob06-before.dump
+          sha256sum /tmp/catalogo-cob06-before.dump
 
           for sql in \
             supabase/production-candidate/01_asaas_cobrancas_inbox_sem_saques.sql \
@@ -800,9 +811,35 @@ jobs:
           psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -Atqc \
             "SELECT count(*) FROM public.catalogo_fechamentos_offline
               WHERE comercio_id='comercio-de-exemplo' AND competencia='2024-02-01'" | grep -Fx 0
+
+          # Verificar restauração do estado PRE-Asaas em outro DB local isolado.
+          createdb catalogo_cob06_restore_ci
+          docker exec "$service_container" pg_restore -U postgres \
+            --exit-on-error --no-owner --no-acl \
+            -d catalogo_cob06_restore_ci /tmp/catalogo-cob06-before.dump
+          psql -d catalogo_cob06_restore_ci -v ON_ERROR_STOP=1 -Atqc \
+            "SELECT gateway||'|'||status||'|'||valor_centavos
+              FROM public.catalogo_fatura_cobrancas WHERE order_id='legacy-cob06-ci'" \
+            | grep -Fx 'mercadopago|pago|700'
+          psql -d catalogo_cob06_restore_ci -v ON_ERROR_STOP=1 -Atqc \
+            "SELECT COUNT(*) FROM public.catalogo_fatura_cobrancas
+              WHERE order_id='legacy-cob06-ci'" | grep -Fx 1
+          psql -d catalogo_cob06_restore_ci -v ON_ERROR_STOP=1 -Atqc \
+            "SELECT to_regclass('public.catalogo_asaas_emissoes') IS NULL
+               AND to_regclass('public.catalogo_asaas_webhook_eventos') IS NULL
+               AND to_regclass('public.catalogo_asaas_saques') IS NULL" | grep -Fx t
+          psql -d catalogo_cob06_restore_ci -v ON_ERROR_STOP=1 -Atqc \
+            "SELECT COUNT(*) FROM pg_constraint
+              WHERE conname='catalogo_fatura_cobrancas_gateway_check'
+              AND pg_get_constraintdef(oid) LIKE '%mercadopago%'
+              AND pg_get_constraintdef(oid) NOT LIKE '%asaas%'" | grep -Fx 1
+          dropdb --if-exists --force catalogo_cob06_restore_ci
+          docker exec "$service_container" rm -f /tmp/catalogo-cob06-before.dump
+          rm -f /tmp/catalogo-cob06-before.dump
+
           dropdb --if-exists --force catalogo_cob06_ci
           trap - EXIT
-          echo "PASS: COB-06 selective billing schema applied on disposable clone, no payout structures"
+          echo "PASS: COB-06 selective billing and pre-Asaas dump/restore verified with paid MP intact, no payouts"
       - name: Apply staged Asaas migration to disposable clone only
         run: |
           set -euo pipefail
