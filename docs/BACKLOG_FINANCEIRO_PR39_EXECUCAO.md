@@ -111,6 +111,8 @@ Este documento é a **única fila operacional** do trabalho financeiro do PR #39
 
 ### [ ] COB-03 — Homologar a **cobrança Pix mensal completa**, na versão atual
 
+- **Ciclo nominal comprovado em 12/10/2026, 00:04 BRT — somente STAGING/Asaas Sandbox.** A cobrança única `pay_am294g213g1ylc71`, de **R$5,00**, foi criada pelo proprietário no fluxo QA e confirmada pelo operador no painel Asaas Sandbox. Consulta SQL somente leitura comprovou evento real `PAYMENT_RECEIVED` recebido às **03:04:02 UTC**, estado `concluido`; fatura `88385cf5-f9ac-4d03-8d2e-412bbaad9fa0` e cobrança `pago`, comissão `paga`, todas com baixa às **03:04:03 UTC**, sem divergência e sem segunda cobrança. A baixa ocorreu pelo webhook, antes de qualquer consulta manual de conciliação nesta conversa. **COB-03 permanece aberta:** falta registrar reconsulta autenticada após pagamento e consolidar evidências dos cenários de repetição/falhas exigidos no item; não confundir ciclo nominal aprovado com todos os testes concluídos. Nenhum saque ou pagamento real executado.
+
 - **Estado:** EM EXECUÇÃO — COB-01 e COB-02 concluídas; fatura QA de R$5,00 aberta e ainda sem cobrança. Próxima ação: consultar fatura e emitir uma única cobrança pelo fluxo autenticado no Asaas Sandbox; depois conferir webhook e conciliação.
 - Proprietário autenticado/termos aceitos → `criar_cobranca` → conferir ID, cliente, `externalReference`, valor, QR e 1 única cobrança → consultar novamente **sem repetir POST**.
 - Confirmar **no Asaas Sandbox já configurado** (painel ou botão QA autenticado, se optado) → verificar webhook recebido **de fato**, token aceito, evento persistido e conciliado com GET do provedor → fatura `pago` **uma única vez** somente em `RECEIVED`; `CONFIRMED` exige prudência.
@@ -192,4 +194,4 @@ Este documento é a **única fila operacional** do trabalho financeiro do PR #39
 - Critério de encerramento do trabalho de **cobranças:** COB-01…COB-08 todos concluídos.
 - Critério de encerramento do **sistema financeiro completo:** COB-01…COB-08 + SAQ-01…SAQ-04 concluídos. Futuro Pix Automático explicitamente excluído.
 
-**Próxima ação obrigatória:** **COB-03 — emitir e homologar a cobrança Sandbox da fatura legítima de `asaas-cob02`, outubro/2026, R$5,00**. COB-01 e COB-02 concluídas. Sem produção, saques ou Pix Automático.
+**Próxima ação obrigatória:** **COB-03 — verificar reconsulta autenticada da cobrança Sandbox já paga e consolidar os testes de repetição/falhas**. Ciclo nominal de `asaas-cob02`, outubro/2026, R$5,00, confirmado e baixado automaticamente por webhook. Não emitir outra cobrança. COB-01 e COB-02 concluídas; sem produção ou saques.
