@@ -236,14 +236,14 @@ $("qa-create-delivery").addEventListener("click",()=>withBusy($("qa-create-deliv
     endereco:"Rua Fictícia de Testes",numero:"0",bairro:"Homologação"},
   itens:[{id:product.id,quantidade:1}],observacoes:"COB-04: entrega fictícia, sem dinheiro ou mercadoria real"
  },false);
- if(out.versao_financeira!==2||out.taxa_total_centavos!==700||out.taxa_plataforma_centavos!==500||out.taxa_motoboy_centavos!==200)
-   throw Error("ATENÇÃO: resultado financeiro divergente. Consulte o pedido no STAGING; NÃO recrie automaticamente.");
  $("qa-order-id").value=out.pedido_id||"";
  $("qa-delivery-code").value=out.codigo_entrega||"";
  if(out.pedido_id){$("qa-create").disabled=true;$("qa-create-delivery").disabled=true;}
  qaLog({pedido_id:out.pedido_id,versao_financeira:out.versao_financeira,status:out.status,
   codigo_entrega:out.codigo_entrega,taxa_total_centavos:out.taxa_total_centavos,
   taxa_plataforma_centavos:out.taxa_plataforma_centavos,taxa_motoboy_centavos:out.taxa_motoboy_centavos});
+ if(out.versao_financeira!==2||out.taxa_total_centavos!==700||out.taxa_plataforma_centavos!==500||out.taxa_motoboy_centavos!==200)
+   throw Error("ATENÇÃO: pedido criado com valores divergentes; ID guardado acima. NÃO crie outro nem finalize antes de verificar o STAGING.");
  msg("Pedido V2 criado. Aceite e marque pronto como proprietário; depois atribua ao motoboy.");
 }));
 $("qa-assign").addEventListener("click",()=>withBusy($("qa-assign"),async()=>{
