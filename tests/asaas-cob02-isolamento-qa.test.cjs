@@ -76,6 +76,16 @@ test("COB-04: fechamento exige entrega física e pagamento confirmado para TODOS
  assert.doesNotMatch(guardSql,/\b(?:TRUNCATE|DROP TABLE)\b/i);
 });
 
+
+test("COB-04: cada ID referenciado por JavaScript QA existe no HTML",()=>{
+ const inline=qaHtml.match(/<script>\s*([\s\S]*?)<\/script>/)?.[1];
+ assert.ok(inline,"JS QA carregado");
+ const names=[...new Set([...inline.matchAll(/\$\("([^"]+)"\)/g)].map(m=>m[1]))];
+ assert.ok(names.length>=30,"cobertura de controles QA");
+ for(const id of names){
+  assert.ok(qaHtml.includes('id="'+id+'"'),"elemento DOM nao encontrado: "+id);
+ }
+});
 test("COB-04: valida o e-mail de motoboy e codigo antes da API, sem exigir UID manual",()=>{
  const vm=require("node:vm");
  const matchEmail=qaHtml.match(/if\(!([^\n]+?)\.test\(email\)\|\|!nome\)/);
