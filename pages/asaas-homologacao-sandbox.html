@@ -33,8 +33,9 @@ pre{white-space:pre-wrap;word-break:break-all;padding:14px;background:#f3f5f1;bo
 <form id="login-form">
 <label>E-mail de teste<input id="email" type="email" autocomplete="username" required></label>
 <label>Senha de teste<input id="password" type="password" autocomplete="current-password" required></label>
-<div class="actions"><button type="submit" id="login">Entrar no Sandbox</button><button class="secondary" id="logout" type="button" hidden>Sair</button></div>
+<div class="actions"><button type="submit" id="login">Entrar no Sandbox</button></div>
 </form>
+<div class="actions"><button class="secondary" id="logout" type="button" hidden>Sair da conta de testes</button></div>
 <p id="session" class="muted">Não autenticado.</p><p id="uid" class="muted" hidden></p>
 </section>
 <section id="qa-order" hidden>
@@ -132,7 +133,7 @@ $("login-form").addEventListener("submit",e=>{e.preventDefault();withBusy($("log
  msg("Login de testes realizado.");await refresh();
 });});
 $("logout").addEventListener("click",()=>withBusy($("logout"),async()=>{
- await client.auth.signOut();msg("Sessão encerrada.");await refresh();
+ const {error}=await client.auth.signOut();if(error)throw Error("Não foi possível sair da conta de testes.");msg("Sessão encerrada.");await refresh();
 }));
 $("consultar").addEventListener("click",()=>withBusy($("consultar"),async()=>{
  const out=await call("obter_fatura");show(out);msg("Fatura consultada no Supabase de testes.");
