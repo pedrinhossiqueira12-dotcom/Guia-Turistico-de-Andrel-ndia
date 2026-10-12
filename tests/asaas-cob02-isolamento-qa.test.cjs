@@ -9,7 +9,8 @@ test("QA offline sem MP permanece restrito por URL EXATA do projeto STAGING",()=
  assert.match(edge,/new Set\(\["asaas-homologacao", "asaas-cob02"\]\) : new Set<string>\(\)/);
  assert.match(edge,/!receiver && !QA_STAGING_COMMERCE_IDS\.has\(comercioId\)/);
  assert.match(edge,/if \(!catalog \|\| catalog\.bloqueado \|\| !published\)/);
- assert.match(edge,/if \(!OFFLINE_CHECKOUT_ENABLED\)/);
+ assert.match(edge,/const qaCheckout = comercio === "asaas-cob02" && QA_STAGING_COMMERCE_IDS\.has\(comercio\)/);
+ assert.match(edge,/if \(!OFFLINE_CHECKOUT_ENABLED && !qaCheckout\)/);
 });
 test("migração QA está fora das migrações produtivas e mantém loja publicada/desbloqueada",()=>{
  assert.match(sql,/STAGING ONLY/);
