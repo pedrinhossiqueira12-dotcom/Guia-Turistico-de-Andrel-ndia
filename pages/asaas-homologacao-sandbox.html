@@ -39,18 +39,18 @@ pre{white-space:pre-wrap;word-break:break-all;padding:14px;background:#f3f5f1;bo
 <p id="session" class="muted">Não autenticado.</p><p id="uid" class="muted" hidden></p>
 </section>
 <section id="qa-order" hidden>
-<h2>2. Criar venda offline de homologação</h2>
+<h2>2. Venda de retirada — teste anterior já concluído</h2><p class="muted"><strong>COB-04: não use os botões de criar ou confirmar retirada deste bloco.</strong> Para testar os 2% do motoboy, siga o bloco “Entrega V2”, começando pelo botão 7. Os botões 3 e 4 abaixo também são usados para aceitar e preparar o pedido de ENTREGA criado no botão 8.</p>
 <p class="muted">Somente <strong>asaas-cob02</strong> no Supabase STAGING. O produto de teste custa R$100. Este fluxo utiliza os endpoints reais de pedidos e fechamento, sem mercadoria nem dinheiro real. Nunca use dados pessoais reais.</p>
 <div class="actions">
 <button type="button" id="qa-terms">1 · Aceitar termos de comércio</button>
-<button type="button" id="qa-create">2 · Criar pedido em dinheiro (retirada)</button>
+<button type="button" id="qa-create" disabled title="Retirada já homologada; COB-04 usa o pedido de ENTREGA do botão 8">2 · Criar retirada (teste anterior)</button>
 <button type="button" id="qa-accept">3 · Aceitar pedido</button>
 <button type="button" id="qa-ready">4 · Marcar pronto</button>
 </div>
 <label>ID do pedido de teste<input id="qa-order-id" placeholder="Preenchido ao criar pedido; reutilizável se necessário"></label>
 <label>Código de 6 dígitos gerado pelo comprador<input id="qa-delivery-code" inputmode="numeric" maxlength="6" placeholder="Preenchido ao criar pedido"></label>
 <div class="actions">
-<button type="button" id="qa-finish">5 · Confirmar entrega com código</button>
+<button type="button" id="qa-finish" disabled title="COB-04: entrega deve ser confirmada pelo motoboy no botão 15">5 · Confirmar retirada (teste anterior)</button>
 <button type="button" id="qa-close">6 · Fechar competência da fatura</button>
 </div>
 <p id="qa-feedback" role="status" style="font-weight:600">Execute os botões em ordem. O resultado de cada operação aparecerá aqui.</p>
@@ -58,7 +58,7 @@ pre{white-space:pre-wrap;word-break:break-all;padding:14px;background:#f3f5f1;bo
 </section>
 
 <section id="qa-delivery" hidden>
-<h2>COB-04 · Entrega V2 com motoboy (somente STAGING)</h2>
+<h2>COB-04 · Entrega V2 com motoboy (somente STAGING)</h2><p class="muted"><strong>Próxima ação:</strong> botão 7 para autorizar a conta de motoboy existente, depois botão 8 para criar UM pedido de entrega. Não confirme o pedido de retirada que ficou “pronto”.</p>
 <p class="muted">Ensaio de pedido fictício com entrega em dinheiro e taxa de R$100: R$5 plataforma + R$2 motoboy. Não é um saque. Use a competência ainda não fechada (a fatura de novembro já está paga). É necessário alternar entre a conta proprietária e a conta motoboy do projeto de testes.</p>
 <label>E-mail do motoboy de testes já cadastrado<input id="qa-moto-email" type="email" autocomplete="off" placeholder="Conta de teste confirmada no Supabase"></label>
 <label>Nome de identificação do motoboy<input id="qa-moto-name" maxlength="120" autocomplete="off" placeholder="Motoboy de homologação"></label>
