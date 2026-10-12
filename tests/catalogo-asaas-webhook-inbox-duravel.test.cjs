@@ -227,3 +227,20 @@ test("endpoint cron-webhooks exige token dedicado e habilitacoes independentes",
  assert.deepEqual(JSON.parse(JSON.stringify(good.calls)),[["enabled","billing"],["reconcile",10]]);
  assert.doesNotMatch(source.replace(/\/\/[^\n]*/g,""),/\/transfers|\/payments|POST.*Pix|autorizar_saque/i);
 });
+
+test("COB-05: cron STAGING tem preflight Vault, URL exata e não duplica agendamento",()=>{
+ const cron=fs.readFileSync("supabase/staging-only/asaas_cob05_cron_worker_20261012.sql","utf8");
+ const extension=fs.readFileSync("supabase/staging-only/asaas_cob05_habilitar_pg_net_20261012.sql","utf8");
+ assert.match(cron,/SOMENTE STAGING jbttwihctuibchhcyqtl/);
+ assert.match(extension,/CREATE EXTENSION IF NOT EXISTS pg_net WITH SCHEMA extensions/);
+ assert.match(cron,/SELECT cron\.schedule\(/);
+ assert.match(cron,/guia-asaas-reconciliar-webhook/);
+ assert.match(cron,/\*\/2 \* \* \* \*/);
+ assert.match(cron,/IF EXISTS \(SELECT 1 FROM cron\.job/);
+ assert.match(cron,/guia_asaas_webhook_worker_token_v1/);
+ assert.match(cron,/guia_asaas_webhook_worker_url_v1/);
+ assert.match(cron,/length\(token\)>=48/);
+ assert.match(cron,/x-guia-asaas-worker-token/);
+ assert.match(cron,/jbttwihctuibchhcyqtl\.supabase\.co\/functions\/v1\/catalogo-asaas-financeiro\/cron-webhooks/);
+ assert.doesNotMatch(cron,/ASAAS_API_KEY|SUPABASE_SERVICE_ROLE_KEY|\/transfers|\/payments/);
+});
