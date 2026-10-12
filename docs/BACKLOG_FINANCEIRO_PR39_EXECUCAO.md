@@ -63,7 +63,9 @@ Este documento é a **única fila operacional** do trabalho financeiro do PR #39
 - **Aceite:** operador confirma configuração da chave/webhook existentes (sem segredos expostos) e uma consulta de diagnóstico/autenticação permitida funciona; se falhar, corrigir apenas o campo concreto que falhou.
 - **Encerrado; próximo item obrigatório é COB-02.** Não solicitar uma nova chave ou webhook como padrão.
 
-### [ ] COB-02 — Obter **uma nova fatura legítima e aberta** no STAGING
+### [x] COB-02 — Obter **uma nova fatura legítima e aberta** no STAGING
+
+- **CONCLUÍDA em 11/10/2026, 23:48 BRT — somente STAGING `jbttwihctuibchhcyqtl`.** Após configuração pelo operador da proteção do comprovante, o fluxo real da página QA criou exatamente um pedido de retirada em dinheiro em `asaas-cob02`; proprietário aceitou, marcou pronto, confirmou com código e fechou outubro/2026 pela Edge autenticada. Consulta SQL somente leitura confirmou pedido `entregue`, pagamento offline `aprovado`, código usado, uma comissão `faturada` de **500 centavos plataforma / 0 motoboy**, fechamento `88385cf5-f9ac-4d03-8d2e-412bbaad9fa0` `faturado`, **1 pedido / R$5,00**, vencimento **06/11/2026**, `pago_em=null` e **zero cobranças Asaas**. Nenhum lançamento financeiro manual, duplicação ou Pix real. Código/Edge de referência: commit `992956ad333e80e2a6d72f133a267c5ab0b0c624`, pedido offline STAGING v33; esta atualização documental não altera código. Próxima etapa obrigatória **COB-03**, emissão e conciliação no Asaas Sandbox. Os registros abaixo preservam o diagnóstico anterior e foram superados por esta evidência.
 
 - **Estado: EM TESTES — infraestrutura QA preparada no STAGING, mas NÃO CONCLUÍDA (11/10/2026).** Não existe fatura aberta, comissão aberta/faturada, produto disponível ou categoria na única loja `asaas-homologacao` do STAGING. O proprietário de testes tem autenticação confirmada, a loja está marcada `comercios_publicados.status='ativo'` e `catalogos.bloqueado=false`, porém **não há linha em `catalogo_recebedores`** para ela e **`catalogo_publicado` retorna ZERO linhas**. A função atual `catalogo_private.catalogo_esta_ativo` exige recebedor ativo com `conta_externa_id` não nulo, além de publicação e ausência de bloqueio. Nenhum aceite comercial foi registrado. O catálogo público ainda valida existência do comércio em `DATA/comercios.json`, onde `asaas-homologacao` também **não consta**. Assim, só cadastrar um produto NÃO basta para gerar pedidos legítimos.
 - **Subtarefa indispensável de COB-02:** definir caminho legítimo de homologação do comércio existente, respeitando autenticação, publicação, checkout e integração real; dar preferência a mecanismo de teste já implementado. **Não** improvisar `INSERT/UPDATE` que simule aprovação bancária, cadastro de recebedor ativo, comissão ou Pix. Se for necessária qualquer alteração de infraestrutura além das contas de testes, apresentar correção mínima e aguardar autorização do proprietário; não abrir nova frente ou duplicar projeto.
@@ -109,7 +111,7 @@ Este documento é a **única fila operacional** do trabalho financeiro do PR #39
 
 ### [ ] COB-03 — Homologar a **cobrança Pix mensal completa**, na versão atual
 
-- **Estado:** EM ESPERA DE COB-01 E COB-02; existem testes bancários históricos, porém não este percurso sobre a v44.
+- **Estado:** EM EXECUÇÃO — COB-01 e COB-02 concluídas; fatura QA de R$5,00 aberta e ainda sem cobrança. Próxima ação: consultar fatura e emitir uma única cobrança pelo fluxo autenticado no Asaas Sandbox; depois conferir webhook e conciliação.
 - Proprietário autenticado/termos aceitos → `criar_cobranca` → conferir ID, cliente, `externalReference`, valor, QR e 1 única cobrança → consultar novamente **sem repetir POST**.
 - Confirmar **no Asaas Sandbox já configurado** (painel ou botão QA autenticado, se optado) → verificar webhook recebido **de fato**, token aceito, evento persistido e conciliado com GET do provedor → fatura `pago` **uma única vez** somente em `RECEIVED`; `CONFIRMED` exige prudência.
 - Reentrega do webhook, timeouts, resposta inconclusiva, pedido repetido, estorno/cancelamento/contestação e provedor indisponível devem **impedir duplicidade e crédito indevido**. Apenas correção de bug comprovado, não nova arquitetura.
@@ -190,4 +192,4 @@ Este documento é a **única fila operacional** do trabalho financeiro do PR #39
 - Critério de encerramento do trabalho de **cobranças:** COB-01…COB-08 todos concluídos.
 - Critério de encerramento do **sistema financeiro completo:** COB-01…COB-08 + SAQ-01…SAQ-04 concluídos. Futuro Pix Automático explicitamente excluído.
 
-**Próxima ação obrigatória:** **COB-01 — CONFERIR** o webhook e a chave Asaas Sandbox que **já existem**; não solicitar criação de novos. Só avançar para COB-02 após evidência de que o Sandbox atual está corretamente ligado ao STAGING.
+**Próxima ação obrigatória:** **COB-03 — emitir e homologar a cobrança Sandbox da fatura legítima de `asaas-cob02`, outubro/2026, R$5,00**. COB-01 e COB-02 concluídas. Sem produção, saques ou Pix Automático.
