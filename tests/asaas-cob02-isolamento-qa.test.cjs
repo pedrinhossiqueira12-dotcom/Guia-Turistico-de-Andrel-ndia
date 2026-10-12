@@ -67,11 +67,11 @@ test("COB-04: botões de retirada antiga indisponíveis durante teste de entrega
 });
 test("COB-04: fechamento exige entrega física e pagamento confirmado para TODOS os componentes",()=>{
  const guardSql=fs.readFileSync("supabase/pending-migrations/20261012104000_cob04_fechamento_apenas_entregas_confirmadas.sql","utf8");
- const matches=guardSql.match(/p\\.codigo_entrega_usado_em IS NOT NULL/g)||[];
+ const matches=guardSql.match(/p\.codigo_entrega_usado_em IS NOT NULL/g)||[];
  assert.equal(matches.length,5,"soma, dois componentes e duas atualizações precisam aplicar guarda idêntica");
- assert.match(guardSql,/p\\.status='entregue'/);
- assert.match(guardSql,/p\\.status_pagamento='aprovado'/);
- assert.match(guardSql,/p\\.provedor='offline'/);
+ assert.match(guardSql,/p\.status='entregue'/);
+ assert.match(guardSql,/p\.status_pagamento='aprovado'/);
+ assert.match(guardSql,/p\.provedor='offline'/);
  assert.match(guardSql,/IF v_status='pago'/);
- assert.doesNotMatch(guardSql,/\\b(?:TRUNCATE|DROP TABLE)\\b/i);
+ assert.doesNotMatch(guardSql,/\b(?:TRUNCATE|DROP TABLE)\b/i);
 });
