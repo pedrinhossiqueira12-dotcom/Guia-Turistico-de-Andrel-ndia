@@ -47,3 +47,21 @@ test("COB-06 Free: runbook distingue exportação de restaurabilidade e exige c�
  assert.match(guide,/não copia as fotografias\/imagens/i);
  assert.match(guide,/Nenhum backup da base real foi criado por ChatGPT/i);
 });
+
+
+test("COB-06 Free: fail-closed antes de credenciais ou escrita em disco nao criptografado",()=>{
+ assert.match(script,/function Validar-Volume-Seguro\(\[string\]\$Caminho\)/);
+ assert.match(script,/Get-BitLockerVolume -MountPoint \$Unidade -ErrorAction Stop/);
+ assert.match(script,/ProtectionStatus -ne 'On'/);
+ assert.match(script,/VolumeStatus -ne 'FullyEncrypted'/);
+ assert.match(script,/EncryptionPercentage -ne 100/);
+ assert.match(script,/BACKUP_BLOQUEADO/);
+ assert.match(script,/DestinoSeguro/);
+ const start=script.indexOf("Validar-Volume-Seguro -Caminho $StoreRoot");
+ const prompt=script.indexOf("Read-Host 'Digite BACKUP-FREE-PRODUCAO");
+ const create=script.indexOf("New-Item -ItemType Directory");
+ const link=script.indexOf("Executar-CLI -Argumentos @('link'");
+ assert.ok(start>=0&&prompt>start&&create>start&&link>start,
+  "Teste de criptografia deve ocorrer antes de interagir com Supabase ou gravar");
+ assert.match(script,/Backup em caminho de rede\/UNC nao permitido/);
+});
