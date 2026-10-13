@@ -135,6 +135,10 @@ try {
     @{file='roles.sql';args=@('--role-only')},
     @{file='schema.sql';args=@()},
     @{file='data.sql';args=@('--use-copy','--data-only','-x','storage.buckets_vectors','-x','storage.vector_indexes')},
+    # Os dumps acima excluem auth/storage por padrao. Preservar DADOS gerenciados
+    # explicitamente para eventual recuperacao, SEM tentar restaurar automaticamente.
+    @{file='auth_data.sql';args=@('--use-copy','--data-only','--schema','auth')},
+    @{file='storage_metadata.sql';args=@('--use-copy','--data-only','--schema','storage','-x','storage.buckets_vectors','-x','storage.vector_indexes')},
     @{file='history_schema.sql';args=@('--schema','supabase_migrations')},
     @{file='history_data.sql';args=@('--use-copy','--data-only','--schema','supabase_migrations')}
   )
@@ -144,12 +148,22 @@ try {
     $args=@('db','dump','--linked','--file',$target)+$item.args
     Executar-CLI -Argumentos $args -Etapa $Phase
     Validar-Arquivo $target
+    if ($item.file -eq 'auth_data.sql' -and -not
+        (Select-String -LiteralPath $target -Pattern '^COPY[ ]+("?auth"?)[.]("?users"?)\b' -Quiet)) {
+      throw 'auth_data.sql nao contem COPY auth.users. Backup INCOMPLETO.'
+    }
+    if ($item.file -eq 'storage_metadata.sql' -and -not
+        (Select-String -LiteralPath $target -Pattern '^COPY[ ]+("?storage"?)[.]("?objects"?)\b' -Quiet)) {
+      throw 'storage_metadata.sql nao contem COPY storage.objects. Backup INCOMPLETO.'
+    }
   }
   $Manifest=@(
     'projeto='+$ProjectRef,
     'gerado_utc='+(Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ'),
     'tipo=exportacao_sql_logica_manual',
     'estado=exportado_nao_restaurado',
+    'limite=exportacoes sequenciais sem snapshot global entre os arquivos SQL',
+    'AVISO=auth/storage contem dados gerenciados; restauracao exige plano e validacao separada',
     'AVISO=SEM bytes de Storage, secrets e bundles de Edge; exige teste de restore'
   )
   foreach ($item in $Files) {
@@ -159,7 +173,7 @@ try {
     $Manifest+=('{0}|bytes={1}|sha256={2}' -f $item.file,$size,$hash)
   }
   $Manifest | Set-Content -LiteralPath (Join-Path $Output 'manifesto.txt') -Encoding UTF8
-  Write-Host 'EXPORTACAO_CONCLUIDA: cinco arquivos SQL criados e hash SHA256 conferido.'
+  Write-Host 'EXPORTACAO_CONCLUIDA: sete arquivos SQL criados e hash SHA256 conferido.'
   Write-Host 'Estado: apenas exportado, RESTAURACAO AINDA NAO VALIDADA.'
   Write-Host 'Guarde em midia criptografada offline/externa; nunca envie os arquivos ao GitHub ou chat.'
 } catch {
