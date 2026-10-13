@@ -45,6 +45,15 @@ function Validar-Volume-Seguro([string]$Caminho) {
   Write-Host "DESTINO_SEGURO: unidade $Unidade criptografada, 100%, protecao ativa."
 }
 
+function Validar-Credencial-Nativa {
+  # A Supabase CLI armazena token no gerenciador nativo do Windows. Se isso
+  # falhar, pode cair em arquivo claro no C: ($HOME\.supabase\access-token).
+  $TokenTexto=Join-Path $HOME '.supabase\access-token'
+  if (Test-Path -LiteralPath $TokenTexto -PathType Leaf) {
+    throw 'CREDENCIAIS_INSEGURAS: token da Supabase CLI armazenado em texto puro no perfil Windows (C:). Nao executar dump. Nunca mostrar ou enviar o conteudo deste arquivo.'
+  }
+}
+
 function Requer-Comando([string]$Nome) {
   if (-not (Get-Command $Nome -ErrorAction SilentlyContinue)) {
     throw "Dependencia ausente: $Nome. Instale a versao oficial antes de prosseguir."
@@ -81,6 +90,7 @@ if ($Modo -eq 'Verificar') {
 }
 
 Validar-Volume-Seguro -Caminho $StoreRoot
+Validar-Credencial-Nativa
 
 Write-Warning 'PRODUCAO: este comando LERA usuarios, dados financeiros e configuracoes.'
 Write-Warning 'Exige computador protegido e disco criptografado (BitLocker ou equivalente).'
@@ -122,6 +132,7 @@ try {
   }
   Write-Host 'Entre no Supabase com sua conta local, quando solicitado. Nao cole token no chat.'
   Executar-CLI -Argumentos @('login') -Etapa 'autenticacao local'
+  Validar-Credencial-Nativa
   Executar-CLI -Argumentos @('link','--project-ref',$ProjectRef) -Etapa 'vinculo local somente leitura'
   $LinkRefFile=Join-Path $Workspace 'supabase\.temp\project-ref'
   if (-not (Test-Path -LiteralPath $LinkRefFile -PathType Leaf)) {
