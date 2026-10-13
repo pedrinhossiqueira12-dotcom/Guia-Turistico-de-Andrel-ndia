@@ -18,7 +18,7 @@ test("COB-06: restauração não pode acionar crons produtivos ou presumir backu
  for(const s of [
   "pg_cron","pg_net","isolamento **antes** do primeiro job",
   "documentação oficial de backups","NÃO executar clone físico",
-  "proprietário confirmou **plano Supabase Free SEM backups automáticos**"
+  "O proprietário confirmou no Dashboard que o projeto está no Free e que não há backups automáticos disponibilizados"
  ])assert.ok(runbook.includes(s),s);
  assert.match(runbook,/sem alterar.*produção|Nenhuma alteração realizada no Supabase de produção/i);
 });
