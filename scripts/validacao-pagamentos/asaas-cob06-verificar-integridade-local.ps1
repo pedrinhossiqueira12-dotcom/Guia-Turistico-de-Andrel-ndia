@@ -35,11 +35,28 @@ if (-not (Test-Path -LiteralPath $ManifestoPath -PathType Leaf)) {
 }
 
 $Linhas = @(Get-Content -LiteralPath $ManifestoPath -Encoding UTF8)
-if (@($Linhas | Where-Object { $_ -ceq 'projeto=xdmbkflufsfqziixzpxc' }).Count -ne 1) {
-  throw 'MANIFESTO_INVALIDO: projeto inesperado.'
+if ($Linhas.Count -lt 2) { throw 'MANIFESTO_INVALIDO: arquivo muito curto.' }
+# Windows PowerShell 5.1 pode conservar o BOM U+FEFF como primeiro caractere.
+$Linhas[0] = ([string]$Linhas[0]).TrimStart([char]0xFEFF)
+
+# Versao antiga do exportador usava '@(' com '+' e virgulas: o PowerShell
+# concatenou os sete campos de metadados em uma unica linha em vez de sete.
+# Nunca corrigir/regravar o manifesto original: aceitar SOMENTE a sequencia
+# exata desses campos, seja concatenada (com/sem espacos), seja em linhas.
+$Metadados = @($Linhas | Where-Object { $_ -notmatch '^[^|]+\.sql\|' })
+if ($Metadados.Count -ne 1 -and $Metadados.Count -ne 7) {
+  throw 'MANIFESTO_INVALIDO: numero inesperado de linhas de metadados.'
 }
-if (@($Linhas | Where-Object { $_ -ceq 'estado=exportado_nao_restaurado' }).Count -ne 1) {
-  throw 'MANIFESTO_INVALIDO: estado nao confirmado.'
+$Cabecalho = ($Metadados -join ' ').Trim()
+$PadraoCabecalho = '^projeto=xdmbkflufsfqziixzpxc\s*' +
+  'gerado_utc=[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\s*' +
+  'tipo=exportacao_sql_logica_manual\s*' +
+  'estado=exportado_nao_restaurado\s*' +
+  'limite=exportacoes sequenciais sem snapshot global entre os arquivos SQL\s*' +
+  'AVISO=auth/storage contem dados gerenciados; restauracao exige plano e validacao separada\s*' +
+  'AVISO=SEM bytes de Storage, secrets e bundles de Edge; exige teste de restore$'
+if ($Cabecalho -cnotmatch $PadraoCabecalho) {
+  throw 'MANIFESTO_INVALIDO: projeto ou metadados nao conferem.'
 }
 
 # O manifesto possui exatamente sete linhas com nomes .sql, tamanhos e hashes.
