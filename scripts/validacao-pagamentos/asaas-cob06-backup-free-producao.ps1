@@ -168,15 +168,17 @@ try {
       throw 'storage_metadata.sql nao contem COPY storage.objects. Backup INCOMPLETO.'
     }
   }
-  $Manifest=@(
-    'projeto='+$ProjectRef,
-    'gerado_utc='+(Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ'),
-    'tipo=exportacao_sql_logica_manual',
-    'estado=exportado_nao_restaurado',
-    'limite=exportacoes sequenciais sem snapshot global entre os arquivos SQL',
-    'AVISO=auth/storage contem dados gerenciados; restauracao exige plano e validacao separada',
-    'AVISO=SEM bytes de Storage, secrets e bundles de Edge; exige teste de restore'
-  )
+  # PowerShell 5.1: NAO usar @('texto'+$var, 'texto'+$var, ...)
+  # pois a precedencia de operadores pode concatenar campos numa unica linha.
+  # Cada campo deve ser adicionado separadamente ao array.
+  $Manifest = @()
+  $Manifest += ('projeto={0}' -f $ProjectRef)
+  $Manifest += ('gerado_utc={0}' -f (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ'))
+  $Manifest += 'tipo=exportacao_sql_logica_manual'
+  $Manifest += 'estado=exportado_nao_restaurado'
+  $Manifest += 'limite=exportacoes sequenciais sem snapshot global entre os arquivos SQL'
+  $Manifest += 'AVISO=auth/storage contem dados gerenciados; restauracao exige plano e validacao separada'
+  $Manifest += 'AVISO=SEM bytes de Storage, secrets e bundles de Edge; exige teste de restore'
   foreach ($item in $Files) {
     $file=Join-Path $Output $item.file
     $hash=(Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash
