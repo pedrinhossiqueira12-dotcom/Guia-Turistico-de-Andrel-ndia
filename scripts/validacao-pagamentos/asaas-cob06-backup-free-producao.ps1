@@ -73,11 +73,11 @@ $Phase='inicializacao'
 Push-Location $Workspace
 try {
   if (-not (Test-Path -LiteralPath (Join-Path $Workspace 'supabase\config.toml'))) {
-    Executar-CLI @('init') 'supabase init local' 
+    Executar-CLI -Argumentos @('init') -Etapa 'supabase init local' 
   }
   Write-Host 'Entre no Supabase com sua conta local, quando solicitado. Nao cole token no chat.'
-  Executar-CLI @('login') 'autenticacao local'
-  Executar-CLI @('link','--project-ref',$ProjectRef) 'vinculo local somente leitura'
+  Executar-CLI -Argumentos @('login') -Etapa 'autenticacao local'
+  Executar-CLI -Argumentos @('link','--project-ref',$ProjectRef) -Etapa 'vinculo local somente leitura'
   $Files=@(
     @{file='roles.sql';args=@('--role-only')},
     @{file='schema.sql';args=@()},
@@ -89,7 +89,7 @@ try {
     $Phase=$item.file
     $target=Join-Path $Output $item.file
     $args=@('db','dump','--linked','--file',$target)+$item.args
-    Executar-CLI $args $Phase
+    Executar-CLI -Argumentos $args -Etapa $Phase
     Validar-Arquivo $target
   }
   $Manifest=@(
