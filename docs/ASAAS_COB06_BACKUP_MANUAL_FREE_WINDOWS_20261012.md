@@ -18,6 +18,17 @@ Não usar conexão na linha de comando nem enviar senha, token, SQL ou ZIP para 
 - Acesso do proprietário ao Supabase e **senha atual do Postgres** da produção (informada **apenas localmente**, em prompt privado, ao CLI se requisitada). Nunca redefinir a senha em produção apenas para este ensaio sem analisar impacto nos serviços.
 - Disco local criptografado (BitLocker ou equivalente), espaço suficiente e local de armazenamento de longo prazo **criptografado e separado** do computador. Sem isso, **não executar** modo Exportar/Executar.
 
+### Trava obrigatória de criptografia (confirmada no Windows do operador)
+
+Em 13/10/2026 o operador executou `manage-bde -status C:`. O volume C: retornou **0,0% criptografado**, `Totalmente Descriptografado`, `Proteção Desativada` e nenhum protetor de chave. Portanto, **não é permitido o backup no destino padrão C:**, mesmo tendo CLI 2.119.0 e Docker 29.8.2 funcionando (`PREFLIGHT_OK`).
+
+Para impedir erro humano, `-Modo Executar` agora consulta **`Get-BitLockerVolume`** na unidade de destino **antes de login, criação de pasta, link ou exportação** e recusa se o volume não estiver `FullyEncrypted`, `EncryptionPercentage=100` **e** `ProtectionStatus=On`, ou se o status não puder ser verificado. Diretórios UNC ou de rede também são recusados. O modo `-Modo Verificar` continua apenas verificando as ferramentas, sem solicitar ou ativar criptografia.
+
+Opção A: Habilitar a **Criptografia do dispositivo** em **Configurações > Privacidade e segurança > Criptografia do dispositivo**, se disponível em Windows Home/Pro; ou **Gerenciar BitLocker** nas edições Pro/Enterprise/Education. **Guardar a chave de recuperação em local independente antes de depender do disco; não enviar a chave ao chat nem guardar somente no mesmo computador.** Aguardar terminar a criptografia e verificar `manage-bde -status C:` e/ou `Get-BitLockerVolume -MountPoint C:`. Não habilitar criptografia remotamente por este script nem desativar TPM/Inicialização Segura sem avaliação técnica.
+
+Opção B: Caso o C: não possa ser criptografado, usar uma **unidade externa D:/E: realmente criptografada com BitLocker To Go**, 100% protegida, com espaço suficiente. Exemplo **após** conferir que E: está criptografado e desbloqueado: ` .\asaas-cob06-backup-free-producao.ps1 -Modo Executar -DestinoSeguro 'E:\' `. A verificação consulta automaticamente a **unidade escolhida**. Não usar pendrive comum, pasta em nuvem, ZIP sem criptografia ou volume VeraCrypt não verificável por esse script; essas alternativas exigem implementação e auditoria separadas.
+
+Referência Microsoft: https://support.microsoft.com/pt-br/windows/security/encryption/device-encryption-in-windows e https://learn.microsoft.com/pt-br/powershell/module/bitlocker/get-bitlockervolume. Caso a opção esteja ausente, confirmar edição do Windows por `Get-CimInstance Win32_OperatingSystem | Select-Object Caption` e recursos de segurança disponíveis, sem tentar forçar o BitLocker por comando.
 ### 1. Verificação sem conexão ao banco
 
 Abra o PowerShell na pasta que contém a versão atual do script:
@@ -35,7 +46,7 @@ O resultado `PREFLIGHT_OK` verifica só se `supabase` e `docker` estão disponí
 .\asaas-cob06-backup-free-producao.ps1 -Modo Executar
 ```
 
-O script exige que o operador digite exatamente `BACKUP-FREE-PRODUCAO`. Em seguida, realiza no diretório local isolado `supabase init`, `supabase login`, `supabase link --project-ref xdmbkflufsfqziixzpxc` e, depois, **somente** as seguintes exportações:
+O script exige que o operador digite exatamente `BACKUP-FREE-PRODUCAO`. Após confirmar BitLocker ativo na unidade de destino escolhida, realiza no diretório local isolado `supabase init`, `supabase login`, `supabase link --project-ref xdmbkflufsfqziixzpxc` e, depois, **somente** as seguintes exportações:
 
 | Arquivo | Origem | Limite |
 |---|---|---|
