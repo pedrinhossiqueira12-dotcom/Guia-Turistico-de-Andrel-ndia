@@ -87,3 +87,16 @@ test("COB-06 Free: TEMP/TMP usados pelo CLI apontam para D: e sao restaurados",(
  assert.match(script,/\$env:TMPDIR=\$OldTMPDIR/);
  assert.match(script,/NAO move automaticamente o disco interno do Docker Desktop/);
 });
+
+
+test("COB-06 Free: exporta auth.users e storage.objects explicitamente",()=>{
+ assert.match(script,/\@\{file='auth_data.sql';args=\@\('--use-copy','--data-only','--schema','auth'\)\}/);
+ assert.match(script,/\@\{file='storage_metadata.sql';args=\@\('--use-copy','--data-only','--schema','storage'/);
+ assert.match(script,/Select-String -LiteralPath \$target -Pattern '\^COPY/);
+ assert.match(script,/auth_data.sql nao contem COPY auth.users/);
+ assert.match(script,/storage_metadata.sql nao contem COPY storage.objects/);
+ assert.match(script,/sete arquivos SQL/);
+ assert.match(script,/exportacoes sequenciais sem snapshot global/);
+ assert.match(guide,/auth_data.sql/);
+ assert.match(guide,/storage_metadata.sql/);
+});
