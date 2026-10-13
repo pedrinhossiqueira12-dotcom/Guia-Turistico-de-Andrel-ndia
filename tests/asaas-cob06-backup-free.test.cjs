@@ -45,5 +45,5 @@ test("COB-06 Free: runbook distingue exportação de restaurabilidade e exige c�
   else assert.ok(guide.includes(s),s);
  }
  assert.match(guide,/não copia as fotografias\/imagens/i);
- assert.match(guide,/não foi criado por ChatGPT/i);
+ assert.match(guide,/Nenhum backup da base real foi criado por ChatGPT/i);
 });
