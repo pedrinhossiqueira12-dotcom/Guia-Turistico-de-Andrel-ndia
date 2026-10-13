@@ -1,0 +1,118 @@
+<#
+COB-06 — Backup MANUAL da base de producao no plano Free.
+Modo Verificar (padrao): NENHUMA conexao, NENHUM backup.
+Modo Executar: solicitacao explicita, dump somente-leitura com Supabase CLI.
+ATENCAO: arquivos SQL conteem dados pessoais e possiveis dados sensiveis.
+Nunca enviar a GitHub, chat, email ou pasta compartilhada sem criptografia.
+Isto NAO faz backup dos bytes de fotos no Storage, Edge, secrets ou PITR.
+Documentacao: https://supabase.com/docs/guides/platform/migrating-within-supabase/backup-restore
+#>
+param(
+  [ValidateSet('Verificar','Executar')]
+  [string]$Modo = 'Verificar'
+)
+$ErrorActionPreference='Stop'
+$ProjectRef='xdmbkflufsfqziixzpxc'
+$StoreRoot=Join-Path $HOME 'GuiaAndrelandiaBackupsPrivados'
+$Workspace=Join-Path $StoreRoot '_cli_workspace'
+
+function Requer-Comando([string]$Nome) {
+  if (-not (Get-Command $Nome -ErrorAction SilentlyContinue)) {
+    throw "Dependencia ausente: $Nome. Instale a versao oficial antes de prosseguir."
+  }
+}
+function Executar-CLI([string[]]$Argumentos,[string]$Etapa) {
+  & supabase @Argumentos
+  if ($LASTEXITCODE -ne 0) {
+    throw "Supabase CLI falhou em $Etapa. Nenhum restore foi realizado; nao usar arquivos parciais."
+  }
+}
+function Validar-Arquivo([string]$Caminho) {
+  if (-not (Test-Path -LiteralPath $Caminho -PathType Leaf)) {
+    throw "Arquivo de exportacao ausente. Backup INCOMPLETO."
+  }
+  $file=Get-Item -LiteralPath $Caminho
+  if ($file.Length -lt 64) { throw "Exportacao vazia/truncada. Backup INCOMPLETO." }
+}
+Requer-Comando 'supabase'
+Requer-Comando 'docker'
+& supabase --version
+if ($LASTEXITCODE -ne 0) { throw 'Supabase CLI nao executou.' }
+& docker info --format '{{.ServerVersion}}'
+if ($LASTEXITCODE -ne 0) { throw 'Docker Desktop precisa estar iniciado.' }
+
+if ($Modo -eq 'Verificar') {
+  Write-Host 'PREFLIGHT_OK: Supabase CLI e Docker Desktop estao disponiveis.'
+  Write-Host 'Nenhuma conexao ao banco ou alteracao foi feita.'
+  Write-Host 'Leia o runbook COB-06. Os dados serao salvos apenas em pasta privada local.'
+  return
+}
+
+Write-Warning 'PRODUCAO: este comando LERA usuarios, dados financeiros e configuracoes.'
+Write-Warning 'Exige computador protegido e disco criptografado (BitLocker ou equivalente).'
+Write-Warning 'Nao executar dentro de repositorio Git, pasta publica ou pasta sincronizada sem criptografia ponta-a-ponta.'
+Write-Warning 'O dump SQL NAO inclui arquivos fisicos do Storage, secrets, Edge nem restauracao testada.'
+$Confirmacao=Read-Host 'Digite BACKUP-FREE-PRODUCAO para autorizar SOMENTE exportacao'
+if ($Confirmacao -cne 'BACKUP-FREE-PRODUCAO') { throw 'Exportacao cancelada. Nenhuma operacao remota.' }
+
+$NomeBackup=(Get-Date).ToUniversalTime().ToString('yyyyMMddTHHmmssZ')+'-'+[guid]::NewGuid().ToString('N').Substring(0,8)
+$Output=Join-Path $StoreRoot $NomeBackup
+$gitDir=Join-Path $StoreRoot '.git'
+if (Test-Path -LiteralPath $gitDir) { throw 'Pasta de backup nao pode ser repositorio Git.' }
+# Impedir pasta de backup sob repositorio Git em qualquer diretorio ancestral.
+$Ancestor=Get-Item -LiteralPath (Split-Path -Parent $StoreRoot) -ErrorAction SilentlyContinue
+while ($null -ne $Ancestor) {
+  if (Test-Path -LiteralPath (Join-Path $Ancestor.FullName '.git')) {
+    throw 'Backup dentro de repositorio Git: altere o diretorio de destino.'
+  }
+  $Ancestor=$Ancestor.Parent
+}
+New-Item -ItemType Directory -Path $Output -Force | Out-Null
+New-Item -ItemType Directory -Path $Workspace -Force | Out-Null
+$Phase='inicializacao'
+Push-Location $Workspace
+try {
+  if (-not (Test-Path -LiteralPath (Join-Path $Workspace 'supabase\config.toml'))) {
+    Executar-CLI @('init') 'supabase init local' 
+  }
+  Write-Host 'Entre no Supabase com sua conta local, quando solicitado. Nao cole token no chat.'
+  Executar-CLI @('login') 'autenticacao local'
+  Executar-CLI @('link','--project-ref',$ProjectRef) 'vinculo local somente leitura'
+  $Files=@(
+    @{file='roles.sql';args=@('--role-only')},
+    @{file='schema.sql';args=@()},
+    @{file='data.sql';args=@('--use-copy','--data-only','-x','storage.buckets_vectors','-x','storage.vector_indexes')},
+    @{file='history_schema.sql';args=@('--schema','supabase_migrations')},
+    @{file='history_data.sql';args=@('--use-copy','--data-only','--schema','supabase_migrations')}
+  )
+  foreach ($item in $Files) {
+    $Phase=$item.file
+    $target=Join-Path $Output $item.file
+    $args=@('db','dump','--linked','--file',$target)+$item.args
+    Executar-CLI $args $Phase
+    Validar-Arquivo $target
+  }
+  $Manifest=@(
+    'projeto='+$ProjectRef,
+    'gerado_utc='+(Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ'),
+    'tipo=exportacao_sql_logica_manual',
+    'estado=exportado_nao_restaurado',
+    'AVISO=SEM bytes de Storage, secrets e bundles de Edge; exige teste de restore'
+  )
+  foreach ($item in $Files) {
+    $file=Join-Path $Output $item.file
+    $hash=(Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash
+    $size=(Get-Item -LiteralPath $file).Length
+    $Manifest+=('{0}|bytes={1}|sha256={2}' -f $item.file,$size,$hash)
+  }
+  $Manifest | Set-Content -LiteralPath (Join-Path $Output 'manifesto.txt') -Encoding UTF8
+  Write-Host 'EXPORTACAO_CONCLUIDA: cinco arquivos SQL criados e hash SHA256 conferido.'
+  Write-Host 'Estado: apenas exportado, RESTAURACAO AINDA NAO VALIDADA.'
+  Write-Host 'Guarde em midia criptografada offline/externa; nunca envie os arquivos ao GitHub ou chat.'
+} catch {
+  Write-Warning ("EXPORTACAO_INCOMPLETA na etapa: "+$Phase)
+  Write-Warning 'Arquivos parciais devem ser tratados como DADOS SENSIVEIS e nao como backup valido.'
+  throw
+} finally {
+  Pop-Location
+}
