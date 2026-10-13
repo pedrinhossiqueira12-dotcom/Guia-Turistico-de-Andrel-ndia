@@ -29,6 +29,28 @@ Opção A: Habilitar a **Criptografia do dispositivo** em **Configurações > Pr
 Opção B: Caso o C: não possa ser criptografado, usar uma **unidade externa D:/E: realmente criptografada com BitLocker To Go**, 100% protegida, com espaço suficiente. Exemplo **após** conferir que E: está criptografado e desbloqueado: ` .\asaas-cob06-backup-free-producao.ps1 -Modo Executar -DestinoSeguro 'E:\' `. A verificação consulta automaticamente a **unidade escolhida**. Não usar pendrive comum, pasta em nuvem, ZIP sem criptografia ou volume VeraCrypt não verificável por esse script; essas alternativas exigem implementação e auditoria separadas.
 
 Referência Microsoft: https://support.microsoft.com/pt-br/windows/security/encryption/device-encryption-in-windows e https://learn.microsoft.com/pt-br/powershell/module/bitlocker/get-bitlockervolume. Caso a opção esteja ausente, confirmar edição do Windows por `Get-CimInstance Win32_OperatingSystem | Select-Object Caption` e recursos de segurança disponíveis, sem tentar forçar o BitLocker por comando.
+### Unidade D: criptografada — verificar também os temporários do Docker
+
+Em 13/10/2026, o operador confirmou pelo `Get-BitLockerVolume -MountPoint D:`:
+`VolumeStatus=FullyEncrypted`, `EncryptionPercentage=100` e `ProtectionStatus=On`. **A unidade D: pode armazenar dumps**, desde que a chave de recuperação esteja guardada fora dela.
+
+**Importante:** o **Docker Desktop normalmente armazena sua máquina virtual Linux no C:** — segundo a [documentação oficial Docker WSL 2](https://docs.docker.com/desktop/features/wsl/), por padrão em `%LOCALAPPDATA%\Docker\wsl`. O processo `supabase db dump` usa um contêiner PostgreSQL; o fato de o arquivo SQL final estar em D: **não garante** que toda a execução e seus dados temporários não deixem vestígios no C: descriptografado.
+
+**Antes de qualquer exportação real:** abrir **Docker Desktop > Settings > Resources > Advanced > Disk image location** e verificar onde estão os dados. Caso a imagem do Docker permaneça em C:, mudar a localização **pelo próprio Docker Desktop** para uma pasta em D:, por exemplo `D:\DockerData`, e clicar em Apply. **Não mover arquivos .vhdx manualmente**: isso pode quebrar o Docker. Se a opção não estiver disponível ou a migração falhar, interromper o procedimento até uma alternativa segura ser analisada. Não presumir que esse ajuste proteja outros softwares ou tokens locais; a Supabase CLI também pode armazenar credenciais de login no perfil Windows (C:), que devem ser protegidas separadamente.
+
+O script foi atualizado para colocar a pasta de trabalho e `TEMP`, `TMP` e `TMPDIR` **do processo de backup** em D: protegido e restaurar esses ambientes ao terminar; **isso não move automaticamente a VM do Docker nem suas credenciais**.
+
+**Nova verificação segura sem rede e sem exportação, após baixar a versão mais recente do script:**
+
+```powershell
+cd "$HOME\Downloads"
+.\asaas-cob06-backup-free-producao.ps1 -Modo Verificar -DestinoSeguro 'D:\'
+```
+
+O comando `-Modo Verificar` valida ferramentas e o estado BitLocker do destino **sem conectar ao banco**. Exigir a mensagem `DESTINO_SEGURO: unidade D: criptografada, 100%, protecao ativa.`, mas não confundi-la com confirmação do armazenamento interno do Docker.
+
+**Não executar `-Modo Executar` antes de comprovar local de dados Docker protegido e o armazenamento independente da chave de recuperação.**
+
 ### 1. Verificação sem conexão ao banco
 
 Abra o PowerShell na pasta que contém a versão atual do script:
