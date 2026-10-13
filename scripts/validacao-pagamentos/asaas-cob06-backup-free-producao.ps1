@@ -9,12 +9,41 @@ Documentacao: https://supabase.com/docs/guides/platform/migrating-within-supabas
 #>
 param(
   [ValidateSet('Verificar','Executar')]
-  [string]$Modo = 'Verificar'
+  [string]$Modo = 'Verificar',
+  [string]$DestinoSeguro = ''
 )
 $ErrorActionPreference='Stop'
 $ProjectRef='xdmbkflufsfqziixzpxc'
-$StoreRoot=Join-Path $HOME 'GuiaAndrelandiaBackupsPrivados'
+$StoreRoot=if ([string]::IsNullOrWhiteSpace($DestinoSeguro)) {
+  Join-Path $HOME 'GuiaAndrelandiaBackupsPrivados'
+} else {
+  Join-Path $DestinoSeguro 'GuiaAndrelandiaBackupsPrivados'
+}
 $Workspace=Join-Path $StoreRoot '_cli_workspace'
+
+function Validar-Volume-Seguro([string]$Caminho) {
+  # FAIL CLOSED: nunca escrever o dump em disco sem criptografia ativa.
+  $CaminhoAbsoluto=[System.IO.Path]::GetFullPath($Caminho)
+  $Raiz=[System.IO.Path]::GetPathRoot($CaminhoAbsoluto)
+  if (-not $Raiz -or $Raiz.StartsWith('\\')) {
+    throw 'Backup em caminho de rede/UNC nao permitido: use unidade local criptografada.'
+  }
+  $Unidade=$Raiz.TrimEnd('\')
+  if (-not (Get-Command 'Get-BitLockerVolume' -ErrorAction SilentlyContinue)) {
+    throw 'Nao foi possivel auditar BitLocker. Nenhuma exportacao realizada; consulte o runbook.'
+  }
+  try {
+    $Volume=Get-BitLockerVolume -MountPoint $Unidade -ErrorAction Stop
+  } catch {
+    throw "Nao foi possivel conferir criptografia na unidade $Unidade. Backup bloqueado."
+  }
+  if (-not $Volume -or [string]$Volume.ProtectionStatus -ne 'On' -or
+      [string]$Volume.VolumeStatus -ne 'FullyEncrypted' -or
+      [int]$Volume.EncryptionPercentage -ne 100) {
+    throw "BACKUP_BLOQUEADO: unidade $Unidade sem BitLocker 100% ativo. Nao exportar SQL com dados pessoais."
+  }
+  Write-Host "DESTINO_SEGURO: unidade $Unidade criptografada, 100%, protecao ativa."
+}
 
 function Requer-Comando([string]$Nome) {
   if (-not (Get-Command $Nome -ErrorAction SilentlyContinue)) {
@@ -47,6 +76,8 @@ if ($Modo -eq 'Verificar') {
   Write-Host 'Leia o runbook COB-06. Os dados serao salvos apenas em pasta privada local.'
   return
 }
+
+Validar-Volume-Seguro -Caminho $StoreRoot
 
 Write-Warning 'PRODUCAO: este comando LERA usuarios, dados financeiros e configuracoes.'
 Write-Warning 'Exige computador protegido e disco criptografado (BitLocker ou equivalente).'
