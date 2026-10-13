@@ -71,6 +71,9 @@ if ($LASTEXITCODE -ne 0) { throw 'Supabase CLI nao executou.' }
 if ($LASTEXITCODE -ne 0) { throw 'Docker Desktop precisa estar iniciado.' }
 
 if ($Modo -eq 'Verificar') {
+  if (-not [string]::IsNullOrWhiteSpace($DestinoSeguro)) {
+    Validar-Volume-Seguro -Caminho $StoreRoot
+  }
   Write-Host 'PREFLIGHT_OK: Supabase CLI e Docker Desktop estao disponiveis.'
   Write-Host 'Nenhuma conexao ao banco ou alteracao foi feita.'
   Write-Host 'Leia o runbook COB-06. Os dados serao salvos apenas em pasta privada local.'
@@ -100,6 +103,17 @@ while ($null -ne $Ancestor) {
 }
 New-Item -ItemType Directory -Path $Output -Force | Out-Null
 New-Item -ItemType Directory -Path $Workspace -Force | Out-Null
+# Evitar temporarios do cliente PowerShell/CLI no C: quando destino e D: protegido.
+# ATENCAO: este ajuste NAO move automaticamente o disco interno do Docker Desktop
+# nem o repositorio de credenciais da Supabase CLI. Verificar ambos no Windows.
+$TempSeguro=Join-Path $Workspace '_temporarios'
+New-Item -ItemType Directory -Path $TempSeguro -Force | Out-Null
+$OldTEMP=$env:TEMP
+$OldTMP=$env:TMP
+$OldTMPDIR=$env:TMPDIR
+$env:TEMP=$TempSeguro
+$env:TMP=$TempSeguro
+$env:TMPDIR=$TempSeguro
 $Phase='inicializacao'
 Push-Location $Workspace
 try {
@@ -154,4 +168,7 @@ try {
   throw
 } finally {
   Pop-Location
+  $env:TEMP=$OldTEMP
+  $env:TMP=$OldTMP
+  $env:TMPDIR=$OldTMPDIR
 }
