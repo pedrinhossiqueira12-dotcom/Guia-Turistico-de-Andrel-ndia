@@ -78,6 +78,14 @@ try {
   Write-Host 'Entre no Supabase com sua conta local, quando solicitado. Nao cole token no chat.'
   Executar-CLI -Argumentos @('login') -Etapa 'autenticacao local'
   Executar-CLI -Argumentos @('link','--project-ref',$ProjectRef) -Etapa 'vinculo local somente leitura'
+  $LinkRefFile=Join-Path $Workspace 'supabase\.temp\project-ref'
+  if (-not (Test-Path -LiteralPath $LinkRefFile -PathType Leaf)) {
+    throw 'Vinculo de projeto nao comprovado pela CLI: abortar antes de exportar.'
+  }
+  $LinkedRef=(Get-Content -LiteralPath $LinkRefFile -Raw).Trim()
+  if ($LinkedRef -cne $ProjectRef) {
+    throw 'CLI vinculada a projeto inesperado. Nenhum dump executado.'
+  }
   $Files=@(
     @{file='roles.sql';args=@('--role-only')},
     @{file='schema.sql';args=@()},
