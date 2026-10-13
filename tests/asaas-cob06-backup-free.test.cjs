@@ -100,3 +100,16 @@ test("COB-06 Free: exporta auth.users e storage.objects explicitamente",()=>{
  assert.match(guide,/auth_data.sql/);
  assert.match(guide,/storage_metadata.sql/);
 });
+
+
+test("COB-06 Free: token supabase em texto puro no C: bloqueia dump",()=>{
+ assert.match(script,/function Validar-Credencial-Nativa/);
+ assert.match(script,/\.supabase\\access-token/);
+ assert.match(script,/CREDENCIAIS_INSEGURAS/);
+ const check1=script.indexOf("Validar-Credencial-Nativa\n\nWrite-Warning");
+ const confirm=script.indexOf("Read-Host 'Digite BACKUP-FREE-PRODUCAO");
+ const login=script.indexOf("Executar-CLI -Argumentos @('login')");
+ const check2=script.indexOf("Validar-Credencial-Nativa",login);
+ const dump=script.indexOf("$args=@('db','dump'",login);
+ assert.ok(check1>=0&&confirm>check1&&check2>login&&dump>check2);
+});
