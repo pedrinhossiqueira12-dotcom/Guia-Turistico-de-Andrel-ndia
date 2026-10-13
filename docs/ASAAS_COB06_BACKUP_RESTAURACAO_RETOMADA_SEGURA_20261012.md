@@ -1,6 +1,6 @@
 # COB-06 — backup, restauração e retorno seguro sem perda financeira
 
-**Atualização:** 12/10/2026. **Estado:** ensaio em banco descartável; proprietário confirmou **plano Supabase Free SEM backups automáticos**; **NENHUM backup manual real de produção executado, validado ou restaurado**. Uso somente após autorização específica futura. PR #39 permanece Draft.
+**Atualização:** 13/10/2026. **Estado:** usuário executou o primeiro **backup lógico SQL real de produção no plano Free**, exportando sete arquivos e manifesto SHA-256 para **D: protegido por BitLocker** (`20261013T212912Z-34019e86`); terminal retornou `EXPORTACAO_CONCLUIDA`. **Verificação independente dos hashes ainda não realizada pelo operador; backup não restaurado, não abrange bytes físicos do Storage, Edge Functions, segredos nem assegura consistência transacional entre dumps.** Restore em ambiente isolado permanece HOLD; PR #39 continua Draft. Nenhuma migração, alteração de banco, cobrança ou saque real autorizados.
 
 ## Inventário real consultado (somente leitura)
 
