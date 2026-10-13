@@ -65,3 +65,25 @@ test("COB-06 Free: fail-closed antes de credenciais ou escrita em disco nao crip
   "Teste de criptografia deve ocorrer antes de interagir com Supabase ou gravar");
  assert.match(script,/Backup em caminho de rede\/UNC nao permitido/);
 });
+
+
+test("COB-06 Free: -Modo Verificar -DestinoSeguro valida BitLocker sem conectar",()=>{
+ const start=script.indexOf("if ($Modo -eq 'Verificar')");
+ const end=script.indexOf("Validar-Volume-Seguro -Caminho $StoreRoot",start);
+ const ret=script.indexOf("  return",start);
+ assert.ok(start>=0&&end>start&&ret>end);
+ assert.match(script.slice(start,ret),/IsNullOrWhiteSpace\(\$DestinoSeguro\)/);
+});
+test("COB-06 Free: TEMP/TMP usados pelo CLI apontam para D: e sao restaurados",()=>{
+ const temp=script.indexOf("$TempSeguro=Join-Path $Workspace '_temporarios'");
+ const env=script.indexOf("$env:TEMP=$TempSeguro",temp);
+ const dump=script.indexOf("$args=@('db','dump'",temp);
+ assert.ok(temp>=0&&env>temp&&dump>env);
+ assert.match(script,/New-Item -ItemType Directory -Path \$TempSeguro -Force/);
+ assert.match(script,/\$env:TMP=\$TempSeguro/);
+ assert.match(script,/\$env:TMPDIR=\$TempSeguro/);
+ assert.match(script,/\$env:TEMP=\$OldTEMP/);
+ assert.match(script,/\$env:TMP=\$OldTMP/);
+ assert.match(script,/\$env:TMPDIR=\$OldTMPDIR/);
+ assert.match(script,/NAO move automaticamente o disco interno do Docker Desktop/);
+});
