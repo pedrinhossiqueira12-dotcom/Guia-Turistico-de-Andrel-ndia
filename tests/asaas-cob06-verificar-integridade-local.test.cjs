@@ -23,6 +23,10 @@ test("COB-06: verificacao de integridade nao conecta em bancos ou exibe dados SQ
     "Invoke-RestMethod","Get-Content -LiteralPath $Caminho","Remove-Item","Set-Content"]) {
     assert.ok(!script.includes(cmd),cmd);
   }
+  assert.match(script,/TrimStart\(\[char\]0xFEFF\)/);
+  assert.match(script,/\$Metadados\.Count -ne 1 -and \$Metadados\.Count -ne 7/);
+  assert.match(script,/\$Cabecalho -cnotmatch \$PadraoCabecalho/);
+  assert.match(script,/gerado_utc=\[0-9\]/);
   assert.match(script,/projeto=xdmbkflufsfqziixzpxc/);
   assert.match(script,/estado=exportado_nao_restaurado/);
   assert.match(script,/NAO comprova restaurabilidade/);
