@@ -10,6 +10,8 @@ Script de execução interativa para Windows:
 
 `scripts/validacao-pagamentos/asaas-cob06-backup-free-producao.ps1`
 
+**ATUALIZACAO OBRIGATORIA 13/10/2026:** apos concluir os preflights do D:, uma ultima revisao encontrou que o dump padrao da Supabase CLI **omite auth e storage**. A versao mais recente do script inclui explicitamente `auth_data.sql` e `storage_metadata.sql`, e valida a presenca de `COPY auth.users` e `COPY storage.objects`. **Baixe novamente a versao atualizada no GitHub antes de executar o backup real.** A copia anterior em Downloads executa cinco dumps e **NAO basta** para recuperacao dos usuarios/metadados.
+
 Não usar conexão na linha de comando nem enviar senha, token, SQL ou ZIP para ChatGPT, GitHub, e-mail, Drive ou pasta compartilhada sem criptografia. O script mantém os arquivos fora do repositório, sob `%USERPROFILE%\GuiaAndrelandiaBackupsPrivados`, porém **são dados legíveis em disco**: a máquina precisa de proteção, acesso restrito e disco criptografado.
 
 ### Pré-requisitos locais
@@ -64,8 +66,10 @@ O resultado `PREFLIGHT_OK` verifica só se `supabase` e `docker` estão disponí
 
 ### 2. Exportação MANUAL, somente após proteção dos dados e autorização no prompt
 
+**No Windows deste operador, C: não é criptografado. Sempre informar D: como destino!**
+
 ```powershell
-.\asaas-cob06-backup-free-producao.ps1 -Modo Executar
+.\asaas-cob06-backup-free-producao.ps1 -Modo Executar -DestinoSeguro 'D:\'
 ```
 
 O script exige que o operador digite exatamente `BACKUP-FREE-PRODUCAO`. Após confirmar BitLocker ativo na unidade de destino escolhida, realiza no diretório local isolado `supabase init`, `supabase login`, `supabase link --project-ref xdmbkflufsfqziixzpxc` e, depois, **somente** as seguintes exportações:
@@ -75,6 +79,8 @@ O script exige que o operador digite exatamente `BACKUP-FREE-PRODUCAO`. Após co
 | `roles.sql` | `supabase db dump --linked --role-only` | Papéis/grants compatíveis com exportação da CLI, não senhas |
 | `schema.sql` | `supabase db dump --linked` | Esquemas selecionados pela CLI, sem dados |
 | `data.sql` | `supabase db dump --linked --data-only --use-copy -x storage.buckets_vectors -x storage.vector_indexes` | Dados de tabelas expostos à rotina de dump; **não** arquivos binários de Storage |
+| `auth_data.sql` | `--schema auth --data-only --use-copy` | Dados gerenciados, incluindo `auth.users` (credenciais hash e dados de autenticação são extremamente sensíveis); a restauração requer procedimento compatível com o Supabase e testes específicos |
+| `storage_metadata.sql` | `--schema storage --data-only --use-copy` com exclusões de tabelas vetoriais | Metadados como `storage.objects` e buckets, **não** os bytes de fotos/arquivos armazenados no serviço de Storage |
 | `history_schema.sql` | `--schema supabase_migrations` | Estrutura do histórico de migrações |
 | `history_data.sql` | `--schema supabase_migrations --data-only --use-copy` | Versões aplicadas ao banco |
 | `manifesto.txt` | SHA-256, bytes, hora UTC e project ref | Não prova restauração nem recuperabilidade por si só |
@@ -103,3 +109,11 @@ Enquanto houver pouca movimentação, fazer exportação pelo menos semanalmente
 - **Bloqueado:** migrar/ativar Asaas real ou modificar/criar backup via SQL em produção antes da evidência e da autorização expressa de COB-07.
 
 Nenhum backup da base real foi criado por ChatGPT; o script não foi executado pelo assistente.
+
+## Revisão de cobertura de dados gerenciados (13/10/2026)
+
+Documentação oficial: https://supabase.com/docs/reference/cli/supabase-db-dump — o `supabase db dump` sem `--schema` exclui `auth` e `storage` por padrão. Com `--schema auth` e `--schema storage`, são gerados arquivos **separados somente com dados** desses esquemas, para fins de futura recuperação sob controle. O script exige a presença das instruções `COPY auth.users` e `COPY storage.objects`, para não declarar sucesso se a CLI silenciosamente os deixar de fora. Se essa checagem falhar, tratar como **exportação incompleta** e não prosseguir com a implantação. Os schemas gerenciados e suas personalizações (gatilhos e RLS criados pelo usuário) ainda requerem atenção no teste de restauração, conforme https://supabase.com/docs/guides/platform/migrating-within-supabase/backup-restore.
+
+**Limites:** (a) são sete dumps sequenciais, **não** uma captura transacional consistente entre arquivos; (b) nenhum dump inclui os bytes dos arquivos do Storage; (c) restauração de dados de autenticação e Storage em instância nova **não está testada e não deve ser realizada automaticamente**; (d) nenhuma cópia externa independente do computador foi confirmada ainda. `EXPORTACAO_CONCLUIDA` **não significa** backup integral restaurável. Tratar `auth_data.sql` como segredo altamente sensível; não enviar ao chat, repositório ou serviço não criptografado.
+
+A Supabase CLI prefere Windows Credential Manager para tokens; sem cofre nativo, pode criar `~/.supabase/access-token` em texto puro: https://supabase.com/docs/reference/cli/introduction. Antes de executar, confirmar que **nenhum token em texto puro** está presente no C: com `Test-Path "$HOME\.supabase\access-token"` (não abrir/copiar conteúdo); caso positivo, bloquear a exportação até revisar o armazenamento de credenciais. A opção `supabase login` deve usar o cofre nativo no Windows; nunca colar chave no chat.
