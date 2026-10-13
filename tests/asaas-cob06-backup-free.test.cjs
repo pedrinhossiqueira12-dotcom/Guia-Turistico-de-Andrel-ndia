@@ -113,3 +113,12 @@ test("COB-06 Free: token supabase em texto puro no C: bloqueia dump",()=>{
  const dump=script.indexOf("$args=@('db','dump'",login);
  assert.ok(check1>=0&&confirm>check1&&check2>login&&dump>check2);
 });
+
+
+test("COB-06 Free: manifesto usa uma linha por metadado",()=>{
+ assert.ok(script.includes("$Manifest = @()"));
+ assert.ok(script.includes("$Manifest += ('projeto={0}' -f $ProjectRef)"));
+ assert.ok(script.includes("$Manifest += 'estado=exportado_nao_restaurado'"));
+ assert.ok(script.includes("$Manifest += 'limite=exportacoes sequenciais sem snapshot global entre os arquivos SQL'"));
+ assert.ok(!script.includes("$Manifest=@("));
+});
