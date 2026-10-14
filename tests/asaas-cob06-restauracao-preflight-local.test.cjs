@@ -32,6 +32,10 @@ test("COB-06 restore preflight: sem rede, mutacoes remotas, containers ou exibic
  assert.match(code,/\$Leitor\.ReadLine\(\)/);
  assert.match(code,/REFERENCIAS_DDL/);
  assert.match(code,/RESTAURACAO_NAO_EXECUTADA/);
- assert.match(code,/1>\$null 2>\$null/);
+ assert.match(code,/function Testar-Docker-Local/);
+ assert.match(code,/& docker @Argumentos 2>&1 \| Out-Null/);
+ assert.match(code,/catch \{\s*return \$false\s*\}/);
+ assert.match(code,/\$DockerDisponivel = Testar-Docker-Local/);
+ assert.match(code,/\$ImagemDisponivel = Testar-Docker-Local/);
  assert.match(code,/--format|\{\{\.ServerVersion\}\}/);
 });
