@@ -82,9 +82,16 @@ if (Get-Command docker -ErrorAction SilentlyContinue) {
   }
 }
 
-Write-Host ('PREFLIGHT_LOCAL_OK: manifesto e 7 arquivos conferidos; {0:N1} MiB SQL.' -f ($TamanhoTotal / 1MB))
+Write-Host ('AUDITORIA_LOCAL_CONCLUIDA: manifesto e 7 arquivos conferidos; {0:N1} MiB SQL.' -f ($TamanhoTotal / 1MB))
 Write-Host ('DOCKER_LOCAL: {0}; IMAGEM_PG17_LOCAL: {1}' -f $DockerDisponivel,$ImagemDisponivel)
 Write-Host ('REFERENCIAS_DDL: Cron={0}; Rede={1}; Vault={2}; ShellOuProgram={3}' -f
   $Riscos.ReferenciaCron,$Riscos.ReferenciaRede,$Riscos.ReferenciaVault,$Riscos.ShellOuProgram)
+if ($Riscos.ShellOuProgram) {
+  Write-Host 'RESTAURACAO_BLOQUEADA: comando Shell/PROGRAM identificado; exige revisao de seguranca local.'
+} elseif ($Riscos.ReferenciaCron -or $Riscos.ReferenciaRede -or $Riscos.ReferenciaVault) {
+  Write-Host 'RESTAURACAO_PENDENTE_REVISAO: DDL contem referencias a jobs, rede ou Vault.'
+} else {
+  Write-Host 'RESTAURACAO_PENDENTE_REVISAO: scanner nao encontra referencias de risco no DDL; teste ainda nao autorizado.'
+}
 Write-Host 'RESTAURACAO_NAO_EXECUTADA: scanner le apenas DDL; nao comprova ausencia de efeitos em todos os dados.'
 Write-Host 'Nenhuma conexao ao Supabase, nenhum dump regravado e nenhum dado pessoal exibido.'
