@@ -71,14 +71,25 @@ foreach ($Nome in $Revisar) {
 }
 
 # Inspecao do binario local Docker. Nunca pull, run ou altera containers.
+# Windows PowerShell 5.1 pode converter stderr de binarios em NativeCommandError
+# quando $ErrorActionPreference=Stop, antes de podermos ler $LASTEXITCODE.
+# Capturar a falha e retornar False SEM abortar a auditoria DDL.
+function Testar-Docker-Local([string[]]$Argumentos) {
+  try {
+    & docker @Argumentos 2>&1 | Out-Null
+    return ($LASTEXITCODE -eq 0)
+  } catch {
+    return $false
+  }
+}
 $DockerDisponivel = $false
 $ImagemDisponivel = $false
 if (Get-Command docker -ErrorAction SilentlyContinue) {
-  & docker info --format '{{.ServerVersion}}' 1>$null 2>$null
-  $DockerDisponivel = ($LASTEXITCODE -eq 0)
+  $DockerDisponivel = Testar-Docker-Local -Argumentos @('info','--format','{{.ServerVersion}}')
   if ($DockerDisponivel) {
-    & docker image inspect 'public.ecr.aws/supabase/postgres:17.6.1.166' 1>$null 2>$null
-    $ImagemDisponivel = ($LASTEXITCODE -eq 0)
+    $ImagemDisponivel = Testar-Docker-Local -Argumentos @(
+      'image','inspect','public.ecr.aws/supabase/postgres:17.6.1.166'
+    )
   }
 }
 
