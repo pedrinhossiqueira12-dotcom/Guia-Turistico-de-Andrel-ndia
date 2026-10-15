@@ -838,6 +838,8 @@ jobs:
           psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
             -f supabase/production-candidate/06_cob06_observacao_bancaria_sem_baixa.sql
           psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
+            -f supabase/production-candidate/07_cob06_eventos_bancarios_inertes.sql
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
             -f supabase/tests/isolated/asaas-cob06-acumulo-preview-rollback.sql
           psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
             -f supabase/tests/isolated/asaas-cob06-acumulo-reserva-rollback.sql
@@ -847,6 +849,8 @@ jobs:
             "SELECT COUNT(*) FROM public.catalogo_asaas_acumulo_fontes" | grep -Fx 0
           psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -Atqc \
             "SELECT COUNT(*) FROM public.catalogo_asaas_acumulo_observacoes" | grep -Fx 0
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -Atqc \
+            "SELECT COUNT(*) FROM public.catalogo_asaas_acumulo_eventos" | grep -Fx 0
           echo "PASS: COB06 observacao GET simulada+referencia unica sem baixa nem dados residuais"
 
           # Verificar restauração do estado PRE-Asaas em outro DB local isolado.

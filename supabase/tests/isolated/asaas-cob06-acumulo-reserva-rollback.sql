@@ -24,6 +24,8 @@ DECLARE
  v_obs jsonb;
  v_obs_repetida jsonb;
  v_negativas_obs integer:=0;
+ v_evento jsonb;
+ v_evento_id bigint;
 BEGIN
  IF pg_catalog.current_database()<>'catalogo_cob06_ci'
  OR pg_catalog.inet_server_port()<>5432
@@ -361,6 +363,51 @@ BEGIN
     WHERE order_id='legacy-cob06-ci')<>'pago'
  THEN RAISE EXCEPTION 'COB06_OBSERVACAO: alterou estado/credito/historico'; END IF;
  RAISE NOTICE 'COB06_OBSERVACAO_GET_SIMULADO_IMUTAVEL_SEM_BAIXA_OK';
+
+ -- Candidato 07: historico de status inerte, sem simular autenticidade do GET.
+ IF pg_catalog.has_function_privilege('anon',
+    'public.catalogo_asaas_registrar_evento_acumulo_inerte(uuid,text,text,text)','EXECUTE')
+ OR pg_catalog.has_function_privilege('authenticated',
+    'public.catalogo_asaas_registrar_evento_acumulo_inerte(uuid,text,text,text)','EXECUTE')
+ OR NOT pg_catalog.has_function_privilege('service_role',
+    'public.catalogo_asaas_registrar_evento_acumulo_inerte(uuid,text,text,text)','EXECUTE')
+ OR pg_catalog.has_table_privilege('service_role',
+    'public.catalogo_asaas_acumulo_eventos','INSERT')
+ THEN RAISE EXCEPTION 'COB06_EVENTOS: privilegios incorretos'; END IF;
+ v_evento:=public.catalogo_asaas_registrar_evento_acumulo_inerte(
+   v_id,'pay_outro_123456','ci-cob06-evento-001','REFUNDED');
+ IF v_evento->>'motivo'<>'pagamento_nao_vinculado'
+ THEN RAISE EXCEPTION 'COB06_EVENTOS: pagamento alheio aceito'; END IF;
+ v_evento:=public.catalogo_asaas_registrar_evento_acumulo_inerte(
+   v_id,'pay_cob06_obs_123456','ci-cob06-evento-001','RECEIVED');
+ IF v_evento->>'ok'<>'true' OR v_evento->>'ja_observado'<>'false'
+ OR v_evento->>'pode_quitar'<>'false' OR v_evento->>'pode_estornar'<>'false'
+ OR v_evento->>'pode_liberar_motoboy'<>'false'
+ THEN RAISE EXCEPTION 'COB06_EVENTOS: gravacao nao inerte: %',v_evento; END IF;
+ v_evento_id:=(v_evento->>'evento_id')::bigint;
+ v_evento:=public.catalogo_asaas_registrar_evento_acumulo_inerte(
+   v_id,'pay_cob06_obs_123456','ci-cob06-evento-001','RECEIVED');
+ IF v_evento->>'ja_observado'<>'true'
+ OR (v_evento->>'evento_id')::bigint<>v_evento_id
+ THEN RAISE EXCEPTION 'COB06_EVENTOS: replay duplicado'; END IF;
+ v_evento:=public.catalogo_asaas_registrar_evento_acumulo_inerte(
+   v_id,'pay_cob06_obs_123456','ci-cob06-evento-001','REFUNDED');
+ IF v_evento->>'motivo'<>'replay_divergente'
+ THEN RAISE EXCEPTION 'COB06_EVENTOS: replay divergente aceito'; END IF;
+ v_evento:=public.catalogo_asaas_registrar_evento_acumulo_inerte(
+   v_id,'pay_cob06_obs_123456','ci-cob06-evento-002','REFUNDED');
+ IF v_evento->>'ok'<>'true'
+ OR (SELECT count(*) FROM public.catalogo_asaas_acumulo_eventos WHERE lote_id=v_id)<>2
+ THEN RAISE EXCEPTION 'COB06_EVENTOS: transicao nao preservada'; END IF;
+ BEGIN
+  UPDATE public.catalogo_asaas_acumulo_eventos SET estado='PENDING'
+  WHERE id=v_evento_id;
+  RAISE EXCEPTION 'COB06_EVENTOS: alteracao aceita';
+ EXCEPTION WHEN SQLSTATE '23514' THEN NULL;
+ END;
+ IF (SELECT status FROM public.catalogo_fechamentos_offline WHERE id=v_f1)<>'faturado'
+ THEN RAISE EXCEPTION 'COB06_EVENTOS: houve baixa indevida'; END IF;
+ RAISE NOTICE 'COB06_EVENTOS_APPEND_ONLY_HOLD_OK';
 
  IF v_negativas<>4
  OR (SELECT valor_centavos FROM public.catalogo_fatura_componentes_v2
