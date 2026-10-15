@@ -110,6 +110,7 @@ jobs:
       - name: Type-check Asaas financial Edge Function
         run: |
           deno check --node-modules-dir=auto supabase/functions/catalogo-asaas-financeiro/index.ts
+          deno check --node-modules-dir=auto supabase/functions/whatsapp-bot/index.ts
           deno check supabase/functions/_shared/catalogo-asaas-stepup-documental-ensaio.ts
           deno check supabase/functions/_shared/catalogo-asaas-mfa-orquestrador-prechallenge-inerte.ts
           deno check supabase/functions/_shared/catalogo-asaas-livro-owner-sql-inerte.ts
