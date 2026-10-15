@@ -115,6 +115,7 @@ jobs:
           deno check supabase/functions/_shared/catalogo-asaas-acumulo-get-sandbox-inerte.ts
           deno check supabase/functions/tests/catalogo-asaas-acumulo-get-verificado-inerte.test.ts
           deno check supabase/functions/tests/catalogo-asaas-acumulo-get-sandbox-inerte.test.ts
+          deno check --node-modules-dir=auto supabase/functions/tests/catalogo-asaas-acumulo-registro-http-inerte.test.ts
           deno check supabase/functions/_shared/catalogo-asaas-stepup-documental-ensaio.ts
           deno check supabase/functions/_shared/catalogo-asaas-mfa-orquestrador-prechallenge-inerte.ts
           deno check supabase/functions/_shared/catalogo-asaas-livro-owner-sql-inerte.ts
@@ -138,6 +139,8 @@ jobs:
 
       - name: Test COB06 Asaas Sandbox GET adapter without network
         run: deno test --no-check supabase/functions/tests/catalogo-asaas-acumulo-get-sandbox-inerte.test.ts
+      - name: Test COB06 administrative HTTP registration with provider and database mocks
+        run: deno test --no-check --node-modules-dir=auto --allow-env --allow-read=supabase/functions supabase/functions/tests/catalogo-asaas-acumulo-registro-http-inerte.test.ts
 
   edge-http-mock-tests:
     name: Real Edge HTTP handlers with fake provider and blocked network (Deno)
