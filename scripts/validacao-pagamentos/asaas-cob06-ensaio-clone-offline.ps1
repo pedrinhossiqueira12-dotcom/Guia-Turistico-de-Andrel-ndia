@@ -140,9 +140,12 @@ SELECT 'COB06_SQL_SEM_COMMIT' AS marco;
 ROLLBACK;
 SELECT 'COB06_ROLLBACK_OK' AS marco;
 '@
-# Teste funcional: inclui fixture descartavel no mesmo BEGIN/ROLLBACK das 9 fontes.
+# Teste funcional: fixture corrigida em commit imutavel independente.
+# As nove fontes SQL continuam fixadas em $ref; nenhuma migracao e substituida.
+# Inclui fixture descartavel no mesmo BEGIN/ROLLBACK das 9 fontes.
+$testeRef = '65e966716b8cf86d1cb455a9ea844b6af0a11e51'
 $testePath = 'supabase/tests/isolated/asaas-cob06-guardas-clone-restaurado-rollback.sql'
-$testeUrl = $base + '/' + $ref + '/' + $testePath
+$testeUrl = $base + '/' + $testeRef + '/' + $testePath
 $testeLocal = Join-Path $pasta 'guardas-funcionais.sql'
 Invoke-WebRequest -Uri $testeUrl -OutFile $testeLocal -UseBasicParsing -ErrorAction Stop
 $testeSql = [IO.File]::ReadAllText($testeLocal,[Text.Encoding]::UTF8)
