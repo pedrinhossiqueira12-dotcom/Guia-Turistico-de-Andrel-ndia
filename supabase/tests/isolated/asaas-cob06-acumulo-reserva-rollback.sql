@@ -27,6 +27,7 @@ DECLARE
  v_evento jsonb;
  v_evento_id bigint;
  v_apuracao jsonb;
+ v_projecao jsonb;
 BEGIN
  IF pg_catalog.current_database()<>'catalogo_cob06_ci'
  OR pg_catalog.inet_server_port()<>5432
@@ -365,6 +366,26 @@ BEGIN
  THEN RAISE EXCEPTION 'COB06_OBSERVACAO: alterou estado/credito/historico'; END IF;
  RAISE NOTICE 'COB06_OBSERVACAO_GET_SIMULADO_IMUTAVEL_SEM_BAIXA_OK';
 
+ -- O helper legado depende de cobranca individual paga, ausente neste lote.
+ -- Mudar apenas fechamento.status para pago nao liquidaria cada parcela.
+ IF catalogo_private.catalogo_v2_parcela_recebida(v_p1,'plataforma')
+ OR catalogo_private.catalogo_v2_parcela_recebida(v_p1,'logistica')
+ THEN RAISE EXCEPTION 'COB06_PROJECAO: helper legado reconheceu pagamento sem cobranca'; END IF;
+ v_projecao:=public.catalogo_asaas_projetar_baixa_acumulo_inerte(v_id);
+ IF v_projecao->>'ok'<>'true'
+ OR (v_projecao->>'valor_centavos')::integer<>500
+ OR (v_projecao->>'plataforma_centavos')::integer<>357
+ OR (v_projecao->>'logistica_centavos')::integer<>143
+ OR (v_projecao->>'quantidade_competencias')::integer<>2
+ OR (v_projecao->>'parcelas')::integer<>4
+ OR (v_projecao->>'parcelas_sem_credito_seguro')::integer<>4
+ OR v_projecao->>'projecao_contabil_consistente'<>'false'
+ OR v_projecao->>'helper_legado_incompativel_sem_cobranca_individual'<>'true'
+ OR v_projecao->>'pode_quitar'<>'false'
+ OR v_projecao->>'pode_liberar_motoboy'<>'false'
+ THEN RAISE EXCEPTION 'COB06_PROJECAO: alocacao por origem ou trava invalida: %',v_projecao; END IF;
+ RAISE NOTICE 'COB06_PROJECAO_R1_R4_MES_ORIGINAL_SEM_CREDITO_OK';
+
  -- A observacao inicial RECEIVED, sozinha, nao autoriza baixa: faltam eventos.
  v_apuracao:=public.catalogo_asaas_apurar_estados_acumulo_inerte(v_id);
  IF v_apuracao->>'candidato_a_conferencia_manual'<>'false'
@@ -423,6 +444,12 @@ BEGIN
  OR v_apuracao->>'exige_revisao'<>'true'
  OR v_apuracao->>'pode_quitar'<>'false'
  THEN RAISE EXCEPTION 'COB06_APURACAO: estorno nao bloqueou a conciliacao: %',v_apuracao; END IF;
+ v_projecao:=public.catalogo_asaas_projetar_baixa_acumulo_inerte(v_id);
+ IF v_projecao->>'exige_revisao'<>'true'
+ OR v_projecao->>'recebimento_observado_sem_prova_autonoma'<>'false'
+ OR v_projecao->>'pode_quitar'<>'false'
+ OR v_projecao->>'pode_estornar'<>'false'
+ THEN RAISE EXCEPTION 'COB06_PROJECAO: estorno não manteve HOLD: %',v_projecao; END IF;
 
  -- Mesmo um estado posterior RECEIVED nao ressuscita o lote estornado.
  v_evento:=public.catalogo_asaas_registrar_evento_acumulo_inerte(

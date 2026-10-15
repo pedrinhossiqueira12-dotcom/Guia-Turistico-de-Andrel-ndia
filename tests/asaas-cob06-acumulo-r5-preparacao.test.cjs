@@ -116,6 +116,25 @@ test("COB-06: referencia unica imutavel e sem POST bancario ate conciliacao comp
 
 const observaGetSql=read("supabase/production-candidate/06_cob06_observacao_bancaria_sem_baixa.sql");
 const apuracaoSql=read("supabase/production-candidate/08_cob06_apuracao_estados_sem_baixa.sql");
+const projecaoSql=read("supabase/production-candidate/09_cob06_projecao_baixa_multicompetencias_inerte.sql");
+
+test("COB-06: projecao dos componentes originais nao cria cobranca mensal ficticia",()=>{
+ assert.match(projecaoSql,/CREATE FUNCTION public\.catalogo_asaas_projetar_baixa_acumulo_inerte\(/);
+ assert.match(projecaoSql,/catalogo_asaas_apurar_estados_acumulo_inerte\(p_lote\)/);
+ assert.match(projecaoSql,/catalogo_asaas_acumulo_fontes af/);
+ assert.match(projecaoSql,/catalogo_fatura_componentes_v2 fc/);
+ assert.match(projecaoSql,/catalogo_remuneracoes_v2 r/);
+ assert.match(projecaoSql,/catalogo_lancamentos_financeiros_v2 l/);
+ assert.match(projecaoSql,/helper_legado_incompativel_sem_cobranca_individual',true/);
+ assert.match(projecaoSql,/'pode_quitar',false,'pode_estornar',false,'pode_liberar_motoboy',false/);
+ assert.match(projecaoSql,/REVOKE ALL ON FUNCTION public\.catalogo_asaas_projetar_baixa_acumulo_inerte\(uuid\)/);
+ assert.ok(workflow.includes("09_cob06_projecao_baixa_multicompetencias_inerte.sql"));
+ assert.match(reserva,/COB06_PROJECAO_R1_R4_MES_ORIGINAL_SEM_CREDITO_OK/);
+ assert.match(reserva,/catalogo_private\.catalogo_v2_parcela_recebida\(v_p1,'plataforma'\)/);
+ assert.ok(!edge.includes("catalogo_asaas_projetar_baixa_acumulo_inerte("));
+ const stripped=projecaoSql.replace(/--[^\n]*/g,"").replace(/'(?:[^']|'')*'/g,"''");
+ assert.doesNotMatch(stripped,/\b(?:UPDATE|DELETE|INSERT|TRUNCATE)\s+(?:INTO|FROM|public\.)/i);
+});
 
 test("COB-06: apuracao do diario financeiro nunca quita nem reativa apos estorno",()=>{
  assert.match(apuracaoSql,/CREATE FUNCTION public\.catalogo_asaas_apurar_estados_acumulo_inerte\(/);
