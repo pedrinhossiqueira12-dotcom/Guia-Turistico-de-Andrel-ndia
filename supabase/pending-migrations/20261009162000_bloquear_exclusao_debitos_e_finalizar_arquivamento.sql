@@ -194,7 +194,7 @@ BEGIN
 
  UPDATE public.comercios_publicados
  SET status='deletado',destaque=false,
-     deletado_em=pg_catalog.coalesce(deletado_em,pg_catalog.now()),
+     deletado_em=coalesce(deletado_em,pg_catalog.now()),
      atualizado_em=pg_catalog.now(),atualizado_por=p_admin
  WHERE local_id=p_comercio AND status<>'deletado';
  GET DIAGNOSTICS v_atualizados=ROW_COUNT;
