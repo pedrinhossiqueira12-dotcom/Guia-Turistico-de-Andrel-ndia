@@ -50,3 +50,13 @@ test("COB-06: auditoria exige garantias financeiras e preservacao da base",()=>{
  "RLS","38|3|128|29|ausente","COB06_PACOTE_SQL_CLONE_VALIDADO_COM_ROLLBACK"
  ])assert.ok(script.includes(s),s);
 });
+
+test("COB-06: PowerShell 5.1 preserva saida de psql e distingue NOTICE de erro",()=>{
+ assert.match(script,/Start-Process -FilePath \$dockerExe/);
+ assert.match(script,/-Wait -PassThru -RedirectStandardOutput \$saidaNormal -RedirectStandardError \$saidaAvisos/);
+ assert.match(script,/\$codigo = \$processo\.ExitCode/);
+ assert.match(script,/if\(\$codigo -ne 0\)/);
+ assert.match(script,/\$textoAvisos\.Contains\('COB06_GATES_OK'\)/);
+ assert.match(script,/\$textoNormal\.Contains\('COB06_ROLLBACK_OK'\)/);
+ assert.doesNotMatch(script,/\$saida = @\(docker exec [^\n]+ 2>&1\)/);
+});
