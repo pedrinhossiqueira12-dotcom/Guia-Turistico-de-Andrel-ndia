@@ -831,11 +831,13 @@ jobs:
             -f supabase/production-candidate/03_cob06_acumulo_intercompetencias_preparacao.sql
           psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
             -f supabase/tests/isolated/asaas-cob06-acumulo-preview-rollback.sql
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
+            -f supabase/tests/isolated/asaas-cob06-acumulo-reserva-rollback.sql
           psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -Atqc \
             "SELECT COUNT(*) FROM public.catalogo_asaas_acumulo_lotes" | grep -Fx 0
           psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -Atqc \
             "SELECT COUNT(*) FROM public.catalogo_asaas_acumulo_fontes" | grep -Fx 0
-          echo "PASS: COB06 acumulo ledger/previsualizacao inerte, sem pagamento nem dados residuais"
+          echo "PASS: COB06 acumulo reserva+ledger+preview sem Pix nem dados residuais"
 
           # Verificar restauração do estado PRE-Asaas em outro DB local isolado.
           createdb catalogo_cob06_restore_ci
