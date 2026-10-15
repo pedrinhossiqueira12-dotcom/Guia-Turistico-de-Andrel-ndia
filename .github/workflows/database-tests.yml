@@ -111,6 +111,8 @@ jobs:
         run: |
           deno check --node-modules-dir=auto supabase/functions/catalogo-asaas-financeiro/index.ts
           deno check --node-modules-dir=auto supabase/functions/whatsapp-bot/index.ts
+          deno check supabase/functions/_shared/catalogo-asaas-acumulo-get-verificado-inerte.ts
+          deno check supabase/functions/tests/catalogo-asaas-acumulo-get-verificado-inerte.test.ts
           deno check supabase/functions/_shared/catalogo-asaas-stepup-documental-ensaio.ts
           deno check supabase/functions/_shared/catalogo-asaas-mfa-orquestrador-prechallenge-inerte.ts
           deno check supabase/functions/_shared/catalogo-asaas-livro-owner-sql-inerte.ts
@@ -130,7 +132,7 @@ jobs:
       - name: Test STAGING MFA operator contract offline without network credentials
         run: deno test --no-check scripts/validacao-pagamentos/validar-gotrue-totp-staging-manual.test.ts
       - name: Test financial snapshots without database access
-        run: deno test --no-check --allow-read=supabase/functions supabase/functions/tests/catalogo-financeiro.test.ts supabase/functions/tests/catalogo-checkouts-contract.test.ts supabase/functions/tests/catalogo-seguranca-pagamentos.test.ts supabase/functions/tests/catalogo-webhook-identificacao.test.ts supabase/functions/tests/catalogo-fatura-provedor.test.ts supabase/functions/tests/catalogo-asaas-stepup-documental-ensaio.test.ts supabase/functions/tests/catalogo-asaas-gotrue-mfa-transporte-inerte.test.ts supabase/functions/tests/catalogo-asaas-jwt-sessao-assinada-ensaio.test.ts supabase/functions/tests/catalogo-asaas-gotrue-jwt-assinado-integracao-inerte.test.ts supabase/functions/tests/catalogo-asaas-mfa-orquestrador-prechallenge-inerte.test.ts supabase/functions/tests/catalogo-asaas-livro-owner-sql-inerte.test.ts supabase/functions/tests/catalogo-asaas-livro-ponte-nologin-inerte.test.ts supabase/functions/tests/catalogo-asaas-ponte-orquestrador-integracao-inerte.test.ts
+        run: deno test --no-check --allow-read=supabase/functions supabase/functions/tests/catalogo-asaas-acumulo-get-verificado-inerte.test.ts supabase/functions/tests/catalogo-financeiro.test.ts supabase/functions/tests/catalogo-checkouts-contract.test.ts supabase/functions/tests/catalogo-seguranca-pagamentos.test.ts supabase/functions/tests/catalogo-webhook-identificacao.test.ts supabase/functions/tests/catalogo-fatura-provedor.test.ts supabase/functions/tests/catalogo-asaas-stepup-documental-ensaio.test.ts supabase/functions/tests/catalogo-asaas-gotrue-mfa-transporte-inerte.test.ts supabase/functions/tests/catalogo-asaas-jwt-sessao-assinada-ensaio.test.ts supabase/functions/tests/catalogo-asaas-gotrue-jwt-assinado-integracao-inerte.test.ts supabase/functions/tests/catalogo-asaas-mfa-orquestrador-prechallenge-inerte.test.ts supabase/functions/tests/catalogo-asaas-livro-owner-sql-inerte.test.ts supabase/functions/tests/catalogo-asaas-livro-ponte-nologin-inerte.test.ts supabase/functions/tests/catalogo-asaas-ponte-orquestrador-integracao-inerte.test.ts
 
   edge-http-mock-tests:
     name: Real Edge HTTP handlers with fake provider and blocked network (Deno)
@@ -834,6 +836,8 @@ jobs:
           psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
             -f supabase/production-candidate/05_cob06_referencia_bancaria_inerte.sql
           psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
+            -f supabase/production-candidate/06_cob06_observacao_bancaria_sem_baixa.sql
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
             -f supabase/tests/isolated/asaas-cob06-acumulo-preview-rollback.sql
           psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
             -f supabase/tests/isolated/asaas-cob06-acumulo-reserva-rollback.sql
@@ -841,7 +845,9 @@ jobs:
             "SELECT COUNT(*) FROM public.catalogo_asaas_acumulo_lotes" | grep -Fx 0
           psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -Atqc \
             "SELECT COUNT(*) FROM public.catalogo_asaas_acumulo_fontes" | grep -Fx 0
-          echo "PASS: COB06 referencia unica+reserva+preview sem Pix nem dados residuais"
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -Atqc \
+            "SELECT COUNT(*) FROM public.catalogo_asaas_acumulo_observacoes" | grep -Fx 0
+          echo "PASS: COB06 observacao GET simulada+referencia unica sem baixa nem dados residuais"
 
           # Verificar restauração do estado PRE-Asaas em outro DB local isolado.
           createdb catalogo_cob06_restore_ci
