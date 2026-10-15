@@ -1,6 +1,6 @@
 # COB-06 — acumulação de comissões abaixo de R$ 5 (decisão aprovada)
 
-**Decisão do proprietário em 15/10/2026.** Escopo restrito à COB-06 da backlog financeira da PR #39. **Estado: regra aprovada; implementação, homologação e liberação pendentes.** Este documento não autoriza alteração em produção, emissão Pix, saque ou merge.
+**Decisão do proprietário em 15/10/2026.** Escopo restrito à COB-06 da backlog financeira da PR #39. **Estado: regra aprovada; estrutura privada e pré-validação em CI implementadas, mas reserva efetiva, emissão, conciliação intercompetências, homologação e liberação continuam pendentes.** Este documento não autoriza alteração em produção, emissão Pix, saque ou merge.
 
 ## Regra aprovada
 
@@ -9,6 +9,13 @@ Uma fatura mensal de comissões inferior a **500 centavos** não deve ser cobrad
 Exemplo: outubro com R$ 1 e novembro com R$ 4 geram cobrança total de R$ 5, mantendo a origem de R$ 1 e de R$ 4. Outro exemplo: R$ 2 + R$ 2 + R$ 1 em três competências gera uma cobrança total de R$ 5, não três cobranças.
 
 **Encerramento antecipado:** se o comércio solicitar encerramento ainda com menos de R$ 5, suspender novos pedidos, manter a dívida e encaminhar à regularização separada e comprovada; não arquivar definitivamente, inventar pagamento ou extinguir créditos do motoboy.
+
+## Avanço implementado na PR Draft (sem ativação)
+
+- **Ledger de agrupamento privado:** `supabase/production-candidate/03_cob06_acumulo_intercompetencias_preparacao.sql` (commit `9133a344`, ajuste SQL `dfb0806f`) cria `catalogo_asaas_acumulo_lotes` e `catalogo_asaas_acumulo_fontes`. `fechamento_id` é chave primária nas fontes (uma origem não pode pertencer a dois lotes), e `(comercio_id,competencia_corte)` é único nos lotes. As duas tabelas têm RLS e não concedem escrita nem à `service_role`: **nenhum agrupamento real é criado ou emitido por esta versão**.
+- **Pré-validação somente leitura:** `catalogo_asaas_previsualizar_acumulo(text,date)` é executável só pela `service_role`; consulta até uma competência, exclui faturas pagas, emitidas, com reserva bancária ou já agrupadas, e compara a soma de `catalogo_fatura_componentes_v2` com cada fechamento. Retorna `pronto_para_preparar=false` quando falta qualquer snapshot, além do resumo financeiro. Não cadastra clientes, cria reserva, chama o Asaas nem quita créditos.
+- **Prova automatizada inicial:** `supabase/tests/isolated/asaas-cob06-acumulo-preview-rollback.sql` roda no `catalogo_cob06_ci` da GitHub Actions, após o pacote original das nove fontes, testa cenário R$1+R$4 ainda sem snapshots e exige **negação**, unicidade de vínculos e ausência de resíduos após `ROLLBACK`. O teste estático Node `tests/asaas-cob06-acumulo-r5-preparacao.test.cjs` impede ligações prematuras com emissão de Pix. **Isto não é teste de cobrança real nem prova de agrupamento completo.**
+- **Isolamento do pacote original:** a décima fonte é um candidato **separado e inerte**, executado apenas após as nove fontes em PostgreSQL descartável na CI. Não foi anexada ao pacote de produção congelado nem ao runner manual do clone real.
 
 ## Contrato técnico que precisa ser implementado e testado
 
