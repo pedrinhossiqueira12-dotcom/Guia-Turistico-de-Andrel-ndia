@@ -121,6 +121,11 @@ BEGIN
  IF EXISTS(SELECT 1 FROM public.comercios_publicados
    WHERE local_id='cob06-sem-catalogo-ci') THEN
    RAISE EXCEPTION 'COB06: fixture ja existe'; END IF;
+ -- O baseline CI cria Auth minima sem admin; simular identidade de admin
+ -- apenas dentro deste ROLLBACK para satisfazer FK atualizado_por.
+ INSERT INTO auth.users(id)
+ VALUES('4b9a0233-6b72-4573-aebd-d596c5b15e1b'::uuid)
+ ON CONFLICT(id) DO NOTHING;
  INSERT INTO public.comercios_publicados(local_id,status,destaque)
  VALUES('cob06-sem-catalogo-ci','ativo',false);
  r:=public.catalogo_arquivar_sem_catalogo_admin(
