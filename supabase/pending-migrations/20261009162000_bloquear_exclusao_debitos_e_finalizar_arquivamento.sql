@@ -132,8 +132,14 @@ BEGIN
   OR (v_p->>'pedidos_em_andamento')::bigint>0
  THEN RETURN jsonb_build_object('ok',false,'mensagem','Há débitos ou pedidos em andamento. Arquivamento recusado.',
    'pendencias',v_p); END IF;
- UPDATE public.comercios_publicados SET status='arquivado'
- WHERE local_id=p_comercio AND status='ativo';
+ -- Compatibilidade com o CHECK historico da publicacao:
+ -- apenas ativo/pendente/rejeitado/deletado sao valores permitidos.
+ -- O estado de negocio 'arquivado' fica no tombstone financeiro e na RPC publica.
+ UPDATE public.comercios_publicados
+ SET status='deletado', destaque=false,
+     deletado_em=coalesce(deletado_em,now()),
+     atualizado_em=now(), atualizado_por=p_admin
+ WHERE local_id=p_comercio AND status<>'deletado';
  GET DIAGNOSTICS v_arquivados=ROW_COUNT;
  UPDATE public.catalogo_encerramentos_comercio SET situacao='arquivado',
   divida_apurada_centavos=0,atualizado_em=now() WHERE comercio_id=p_comercio;
