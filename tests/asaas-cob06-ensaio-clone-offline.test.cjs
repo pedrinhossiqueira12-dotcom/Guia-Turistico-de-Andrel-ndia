@@ -35,6 +35,8 @@ test("COB-06: candidato aplica tudo em uma transacao e SEM COMMIT efetivo",()=>{
  assert.match(script,/BEGIN;[\s\S]*SET LOCAL statement_timeout/);
  assert.match(script,/\$esperado = if\(\$i -lt 7\)\{1\}else\{0\}/);
  assert.match(script,/BEGIN\|COMMIT/);
+ assert.ok(script.includes("if ($i -eq 7 -and -not $txt.TrimEnd().EndsWith(';'))"));
+ assert.doesNotMatch(script,/r\?\(\$nl/);
  assert.match(script,/ROLLBACK;/);
  assert.match(script,/COB06_ROLLBACK_OK/);
  assert.match(script,/ON_ERROR_STOP=1/);
