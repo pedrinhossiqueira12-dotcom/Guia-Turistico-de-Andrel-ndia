@@ -5,6 +5,9 @@ DO $cob06_guardas_reais$
 DECLARE
  v_loja constant text := 'cob06-fixture-descartavel-20261015';
  v_dono uuid;
+ -- Identidade negativa independente dos usuarios existentes no clone.
+ -- O primeiro usuario Auth pode ser o proprio administrador.
+ v_nao_admin constant uuid := '00000000-0000-4000-8000-000000000099'::uuid;
  v_res jsonb;
  v_status text;
  v_situacao text;
@@ -152,9 +155,16 @@ BEGIN
  INSERT INTO public.comercios_publicados(local_id,status,destaque)
  VALUES ('cob06-sem-catalogo-fixture-20261015','ativo',false);
  v_res := public.catalogo_arquivar_sem_catalogo_admin(
-   'cob06-sem-catalogo-fixture-20261015',v_dono);
+   'cob06-sem-catalogo-fixture-20261015',v_nao_admin);
  IF (v_res->>'ok') IS DISTINCT FROM 'false'
+    OR (SELECT status FROM public.comercios_publicados
+        WHERE local_id='cob06-sem-catalogo-fixture-20261015') IS DISTINCT FROM 'ativo'
  THEN RAISE EXCEPTION 'COB06_FAIL: nao admin arquivou sem catalogo'; END IF;
+ IF pg_catalog.has_function_privilege('anon',
+       'public.catalogo_arquivar_sem_catalogo_admin(text,uuid)','EXECUTE')
+    OR pg_catalog.has_function_privilege('authenticated',
+       'public.catalogo_arquivar_sem_catalogo_admin(text,uuid)','EXECUTE')
+ THEN RAISE EXCEPTION 'COB06_FAIL: RPC admin exposta publicamente'; END IF;
  v_res := public.catalogo_arquivar_sem_catalogo_admin(
    'comercio-inexistente-cob06','4b9a0233-6b72-4573-aebd-d596c5b15e1b'::uuid);
  IF (v_res->>'ok') IS DISTINCT FROM 'false'
