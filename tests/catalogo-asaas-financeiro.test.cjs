@@ -291,7 +291,9 @@ test("encerramento auditado protege publicação, histórico e acesso à fatura"
  assert.match(sql,/BEFORE DELETE ON public\.catalogos/);
  assert.match(sql,/CREATE OR REPLACE FUNCTION public\.catalogo_finalizar_encerramento_financeiro/);
  assert.match(sql,/IF p_admin IS DISTINCT FROM/);
- assert.match(sql,/UPDATE public\.comercios_publicados SET status='arquivado'/);
+ assert.match(sql,/UPDATE public\.comercios_publicados\s+SET status='deletado', destaque=false/);
+ assert.match(sql,/SET situacao='arquivado'/);
+ assert.match(sql,/deletado_em=coalesce\(deletado_em,now\(\)\)/);
  assert.doesNotMatch(sql,/DELETE FROM public\.(?:catalogo_|comercios_publicados)/);
  assert.match(edge,/case "listar_encerramentos_admin":return await listarEncerramentosAdmin\(user\.id\)/);
  assert.match(edge,/case "finalizar_encerramento_admin":return await finalizarEncerramentoAdmin\(user\.id,body\)/);
