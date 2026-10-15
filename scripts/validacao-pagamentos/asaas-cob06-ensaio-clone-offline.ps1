@@ -4,7 +4,7 @@ $ErrorActionPreference = 'Stop'
 $nome = 'guia-postgres-offline-20261014'
 $volume = 'guia_pg_clone_offline_20261014'
 $imagem = 'public.ecr.aws/supabase/postgres:17.11.0.002'
-$ref = '8b07f9b756473b59c5aa5bbef944525706db50de'
+$ref = '7e73320d04489893d2e24d6dbc09c27af80c84b1'
 $base = 'https://raw.githubusercontent.com/pedrinhossiqueira12-dotcom/Guia-Turistico-de-Andrel-ndia'
 $pasta = 'D:\GuiaAndrelandiaRestauracaoLocal\cob06-ensaio-offline'
 $fontes = @(
@@ -140,6 +140,21 @@ SELECT 'COB06_SQL_SEM_COMMIT' AS marco;
 ROLLBACK;
 SELECT 'COB06_ROLLBACK_OK' AS marco;
 '@
+# Teste funcional: inclui fixture descartavel no mesmo BEGIN/ROLLBACK das 9 fontes.
+$testePath = 'supabase/tests/isolated/asaas-cob06-guardas-clone-restaurado-rollback.sql'
+$testeUrl = $base + '/' + $ref + '/' + $testePath
+$testeLocal = Join-Path $pasta 'guardas-funcionais.sql'
+Invoke-WebRequest -Uri $testeUrl -OutFile $testeLocal -UseBasicParsing -ErrorAction Stop
+$testeSql = [IO.File]::ReadAllText($testeLocal,[Text.Encoding]::UTF8)
+if($testeSql.Length -lt 6000 -or
+   -not $testeSql.Contains('COB06_GUARDAS_FUNCIONAIS_OK') -or
+   $testeSql -match '(?m)^[ \t]*(?:BEGIN|COMMIT|ROLLBACK);[ \t]*$'){
+ throw 'Teste funcional alterado ou nao isolado: abortado.'
+}
+$marco = "SELECT 'COB06_SQL_SEM_COMMIT' AS marco;"
+if(-not $auditoria.Contains($marco)) { throw 'Marcador SQL inesperado.' }
+$auditoria = $auditoria.Replace($marco,($testeSql + $nl + $marco))
+Write-Host 'Teste funcional descartavel 5 guardas + finalizacao incluido'
 $tudo = $abertura + $nl + ($partes -join $nl) + $nl + $auditoria
 $arquivo = Join-Path $pasta 'ensaio.sql'
 [IO.File]::WriteAllText($arquivo,$tudo,[Text.UTF8Encoding]::new($false))
@@ -181,6 +196,7 @@ if($codigo -ne 0){
  throw 'COB06_SQL_NAO_APROVADO: analisar erro antes de prosseguir.'
 }
 if(-not $textoAvisos.Contains('COB06_GATES_OK') -or
+   -not $textoAvisos.Contains('COB06_GUARDAS_FUNCIONAIS_OK') -or
    -not $textoNormal.Contains('COB06_ROLLBACK_OK')){
  throw 'Marcadores de auditoria/ROLLBACK ausentes: nao declarar sucesso.'
 }
@@ -190,5 +206,6 @@ if($LASTEXITCODE -ne 0 -or $depois.Count -ne 1 -or $depois[0].Trim() -ne $antes[
  throw ('Estado depois inesperado: ' + ($depois -join ' '))
 }
 Write-Host ('Estado final: ' + $depois[0])
+Write-Host 'COB06_GUARDAS_FUNCIONAIS_VALIDADAS_E_REVERTIDAS'
 Write-Host 'COB06_PACOTE_SQL_CLONE_VALIDADO_COM_ROLLBACK'
 Write-Host ('Logs locais: ' + $saidaNormal + ' | ' + $saidaAvisos)
