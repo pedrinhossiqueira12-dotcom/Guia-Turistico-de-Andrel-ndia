@@ -112,5 +112,37 @@ BEGIN
   END IF;
   RAISE NOTICE 'COB06 PASSOU: cinco bloqueios de rotas legadas, divida preservada e MP pago intacto';
 END $cob06$;
+-- Sem catalogo: exige admin, publicacao existente e zero historico.
+DO $sem_catalogo$
+DECLARE r jsonb;
+BEGIN
+ IF current_database()<>'catalogo_cob06_ci'
+ THEN RAISE EXCEPTION 'COB06: banco CI incorreto'; END IF;
+ IF EXISTS(SELECT 1 FROM public.comercios_publicados
+   WHERE local_id='cob06-sem-catalogo-ci') THEN
+   RAISE EXCEPTION 'COB06: fixture ja existe'; END IF;
+ INSERT INTO public.comercios_publicados(local_id,status,destaque)
+ VALUES('cob06-sem-catalogo-ci','ativo',false);
+ r:=public.catalogo_arquivar_sem_catalogo_admin(
+  'cob06-sem-catalogo-ci','00000000-0000-4000-8000-000000000099'::uuid);
+ IF r->>'ok'<>'false' THEN RAISE EXCEPTION 'COB06: usuario comum arquivou loja'; END IF;
+ r:=public.catalogo_arquivar_sem_catalogo_admin(
+  'comercio-de-exemplo','4b9a0233-6b72-4573-aebd-d596c5b15e1b'::uuid);
+ IF r->>'ok'<>'false' THEN RAISE EXCEPTION 'COB06: catalogo financeiro contornado'; END IF;
+ r:=public.catalogo_arquivar_sem_catalogo_admin(
+  'cob06-sem-catalogo-ci','4b9a0233-6b72-4573-aebd-d596c5b15e1b'::uuid);
+ IF r->>'ok'<>'true'
+    OR (SELECT status FROM public.comercios_publicados
+       WHERE local_id='cob06-sem-catalogo-ci') <> 'deletado'
+ THEN RAISE EXCEPTION 'COB06: admin sem catalogo nao arquivou'; END IF;
+ r:=public.catalogo_arquivar_sem_catalogo_admin(
+  'cob06-sem-catalogo-ci','4b9a0233-6b72-4573-aebd-d596c5b15e1b'::uuid);
+ IF r->>'ja_arquivado'<>'true' THEN RAISE EXCEPTION 'COB06: idempotencia falhou'; END IF;
+ IF has_function_privilege('anon','public.catalogo_arquivar_sem_catalogo_admin(text,uuid)','EXECUTE')
+ OR has_function_privilege('authenticated','public.catalogo_arquivar_sem_catalogo_admin(text,uuid)','EXECUTE')
+ THEN RAISE EXCEPTION 'COB06: RPC exposta a usuarios publicos'; END IF;
+ RAISE NOTICE 'COB06_SEM_CATALOGO_CI_OK';
+END;
+$sem_catalogo$;
 SELECT 'COB06: PROTECOES LEGADAS APROVADAS; fixture sera revertida' AS resultado;
 ROLLBACK;
