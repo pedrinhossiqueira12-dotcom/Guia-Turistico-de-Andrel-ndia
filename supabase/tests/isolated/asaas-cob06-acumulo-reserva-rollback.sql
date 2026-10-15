@@ -20,6 +20,10 @@ DECLARE
  v_repeticao jsonb;
  v_id_operacao uuid;
  v_negativas_ref integer:=0;
+ v_cliente_obs text;
+ v_obs jsonb;
+ v_obs_repetida jsonb;
+ v_negativas_obs integer:=0;
 BEGIN
  IF pg_catalog.current_database()<>'catalogo_cob06_ci'
  OR pg_catalog.inet_server_port()<>5432
@@ -280,6 +284,96 @@ BEGIN
      WHERE order_id='legacy-cob06-ci')<>'pago'
  THEN RAISE EXCEPTION 'COB06_REFERENCIA: retorno mudou fatura, Pix ou intencao'; END IF;
  RAISE NOTICE 'COB06_REFERENCIA_UNICA_IDEMPOTENTE_SEM_PIX_OK';
+
+ -- Candidato 06: resposta GET SIMULADA entregue somente a RPC restrita.
+ -- Isto testa o livro e NAO equivale a observacao bancaria real autenticada.
+ SELECT cliente_id INTO v_cliente_obs
+ FROM public.catalogo_asaas_clientes
+ WHERE comercio_id='comercio-de-exemplo';
+ IF v_cliente_obs IS NULL THEN
+   v_cliente_obs:='cus_cob06_observado_1234';
+   INSERT INTO public.catalogo_asaas_clientes(comercio_id,cliente_id)
+   VALUES('comercio-de-exemplo',v_cliente_obs);
+ END IF;
+ IF v_cliente_obs !~ '^cus_[A-Za-z0-9_-]{3,120}
+
+ IF v_negativas<>4
+ OR (SELECT valor_centavos FROM public.catalogo_fatura_componentes_v2
+       WHERE fechamento_id=v_f1 AND tipo='plataforma')<>71
+ OR (SELECT status FROM public.catalogo_fechamentos_offline WHERE id=v_f1)<>'faturado'
+ OR (SELECT status FROM public.catalogo_fatura_cobrancas
+       WHERE order_id='legacy-cob06-ci')<>'pago'
+ THEN RAISE EXCEPTION 'COB06_RESERVA: historico alterado ou bloqueios nao atuaram'; END IF;
+ RAISE NOTICE 'COB06_RESERVA_R1_R4_R2_R2_R1_TRANSACIONAL_SEM_PIX_OK';
+END;
+$teste$;
+ROLLBACK;
+
+ THEN RAISE EXCEPTION 'COB06_OBSERVACAO: cliente CI fora do contrato'; END IF;
+
+ IF pg_catalog.has_function_privilege('authenticated',
+     'public.catalogo_asaas_registrar_observacao_acumulo(uuid,text,text,text,bigint,text)','EXECUTE')
+  OR pg_catalog.has_function_privilege('anon',
+     'public.catalogo_asaas_registrar_observacao_acumulo(uuid,text,text,text,bigint,text)','EXECUTE')
+  OR NOT pg_catalog.has_function_privilege('service_role',
+     'public.catalogo_asaas_registrar_observacao_acumulo(uuid,text,text,text,bigint,text)','EXECUTE')
+  OR pg_catalog.has_table_privilege('service_role',
+     'public.catalogo_asaas_acumulo_observacoes','INSERT')
+ THEN RAISE EXCEPTION 'COB06_OBSERVACAO: privilegios inseguros'; END IF;
+
+ v_obs:=public.catalogo_asaas_registrar_observacao_acumulo(
+   v_id,'pay_cob06_obs_123456',v_cliente_obs,v_referencia->>'referencia',499,'RECEIVED');
+ IF v_obs->>'ok'<>'false' OR v_obs->>'motivo'<>'evidencia_invalida'
+ THEN RAISE EXCEPTION 'COB06_OBSERVACAO: total invalido aceito'; END IF;
+ v_obs:=public.catalogo_asaas_registrar_observacao_acumulo(
+   v_id,'pay_cob06_obs_123456',v_cliente_obs,
+   'guia-acumulo-outra',500,'RECEIVED');
+ IF v_obs->>'ok'<>'false' OR v_obs->>'motivo'<>'referencia_ou_valor_divergente'
+ THEN RAISE EXCEPTION 'COB06_OBSERVACAO: referencia divergente aceita'; END IF;
+ v_obs:=public.catalogo_asaas_registrar_observacao_acumulo(
+   v_id,'pay_cob06_obs_123456','cus_outro_456',
+   v_referencia->>'referencia',500,'RECEIVED');
+ IF v_obs->>'ok'<>'false' OR v_obs->>'motivo'<>'cliente_divergente'
+ THEN RAISE EXCEPTION 'COB06_OBSERVACAO: cliente divergente aceito'; END IF;
+
+ v_obs:=public.catalogo_asaas_registrar_observacao_acumulo(
+   v_id,'pay_cob06_obs_123456',v_cliente_obs,
+   v_referencia->>'referencia',500,'RECEIVED');
+ IF v_obs->>'ok'<>'true' OR v_obs->>'ja_observado'<>'false'
+ OR v_obs->>'pode_quitar'<>'false'
+ OR v_obs->>'pode_liberar_motoboy'<>'false'
+ THEN RAISE EXCEPTION 'COB06_OBSERVACAO: observacao nao inerte: %',v_obs; END IF;
+ v_obs_repetida:=public.catalogo_asaas_registrar_observacao_acumulo(
+   v_id,'pay_cob06_obs_123456',v_cliente_obs,
+   v_referencia->>'referencia',500,'RECEIVED');
+ IF v_obs_repetida->>'ok'<>'true' OR v_obs_repetida->>'ja_observado'<>'true'
+ OR (SELECT pg_catalog.count(*) FROM public.catalogo_asaas_acumulo_observacoes)<>1
+ THEN RAISE EXCEPTION 'COB06_OBSERVACAO: replay duplicou pagamento'; END IF;
+ v_obs:=public.catalogo_asaas_registrar_observacao_acumulo(
+   v_id,'pay_cob06_obs_123456',v_cliente_obs,
+   v_referencia->>'referencia',500,'REFUNDED');
+ IF v_obs->>'ok'<>'false' OR v_obs->>'motivo'<>'observacao_existente_divergente'
+ THEN RAISE EXCEPTION 'COB06_OBSERVACAO: mudou status antigo sem evento'; END IF;
+
+ BEGIN
+   UPDATE public.catalogo_asaas_acumulo_observacoes
+   SET payment_id='pay_cob06_obs_99999' WHERE lote_id=v_id;
+   RAISE EXCEPTION 'COB06_OBSERVACAO: sobrescrita permitida';
+ EXCEPTION WHEN SQLSTATE '23514' THEN v_negativas_obs:=v_negativas_obs+1;
+ END;
+ BEGIN
+   DELETE FROM public.catalogo_asaas_acumulo_observacoes WHERE lote_id=v_id;
+   RAISE EXCEPTION 'COB06_OBSERVACAO: exclusao permitida';
+ EXCEPTION WHEN SQLSTATE '23514' THEN v_negativas_obs:=v_negativas_obs+1;
+ END;
+ IF v_negativas_obs<>2
+ OR (SELECT payment_id FROM public.catalogo_asaas_acumulo_observacoes
+    WHERE lote_id=v_id)<>'pay_cob06_obs_123456'
+ OR (SELECT status FROM public.catalogo_fechamentos_offline WHERE id=v_f1)<>'faturado'
+ OR (SELECT status FROM public.catalogo_fatura_cobrancas
+    WHERE order_id='legacy-cob06-ci')<>'pago'
+ THEN RAISE EXCEPTION 'COB06_OBSERVACAO: alterou estado/credito/historico'; END IF;
+ RAISE NOTICE 'COB06_OBSERVACAO_GET_SIMULADO_IMUTAVEL_SEM_BAIXA_OK';
 
  IF v_negativas<>4
  OR (SELECT valor_centavos FROM public.catalogo_fatura_componentes_v2
