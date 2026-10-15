@@ -151,4 +151,13 @@ async function je(e){
     dados?.acao==="cadastro_web"?Ie(dados):
        t({sucesso:true,mensagem:"Requisicao recebida."});
 }
-Deno.serve(async e=>{try{return await je(e)}catch(a){return console.error("Erro n\xE3o tratado na Edge Function:",a),t({sucesso:!1,erro:a?.message||"Erro interno da Edge Function.",detalhe:String(a)},500)}});
+// COB-06: erros inesperados nunca retornam mensagens internas ao cliente.
+// Diagnostico permanece nos logs privados da Edge, sem vazar detalhes HTTP.
+async function cob06HandlerSeguro(req){
+  try { return await je(req); }
+  catch (erro) {
+    console.error("Erro nao tratado na Edge Function:",erro);
+    return t({sucesso:false,erro:"Erro interno da Edge Function."},500);
+  }
+}
+Deno.serve(cob06HandlerSeguro);
