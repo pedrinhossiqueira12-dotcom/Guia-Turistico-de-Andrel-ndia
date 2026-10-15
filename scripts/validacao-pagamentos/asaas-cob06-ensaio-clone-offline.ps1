@@ -185,4 +185,4 @@ if($LASTEXITCODE -ne 0 -or $depois.Count -ne 1 -or $depois[0].Trim() -ne $antes[
 }
 Write-Host ('Estado final: ' + $depois[0])
 Write-Host 'COB06_PACOTE_SQL_CLONE_VALIDADO_COM_ROLLBACK'
-Write-Host ('Log local: ' + $log)
+Write-Host ('Logs locais: ' + $saidaNormal + ' | ' + $saidaAvisos)
