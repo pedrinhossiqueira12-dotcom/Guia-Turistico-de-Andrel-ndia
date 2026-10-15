@@ -16,7 +16,7 @@ test("COB-06: ensaio local limitado ao clone offline conhecido, nunca PROD/STAGI
  assert.doesNotMatch(script,/ASAAS_API_KEY|GITHUB_TOKEN|SUPABASE_SERVICE_ROLE_KEY|SUPABASE_ACCESS_TOKEN/);
 });
 test("COB-06: SQL obedece commit fixo e fontes seletivas exclusivamente de cobranca",()=>{
- assert.ok(script.includes("8b07f9b756473b59c5aa5bbef944525706db50de"));
+ assert.ok(script.includes("7e73320d04489893d2e24d6dbc09c27af80c84b1"));
  assert.match(script,/raw\.githubusercontent\.com/);
  for(const filename of [
  "01_asaas_cobrancas_inbox_sem_saques.sql",
@@ -66,4 +66,24 @@ test("COB-06: escolhe somente o primeiro caminho docker.exe valido",()=>{
  assert.match(script,/\$dockerExe = \[string\]\$dockerCommands\[0\]\.Source/);
  assert.match(script,/Test-Path -LiteralPath \$dockerExe -PathType Leaf/);
  assert.doesNotMatch(script,/\$dockerExe = \(Get-Command docker -CommandType Application -ErrorAction Stop\)\.Source/);
+});
+
+test("COB-06: teste funcional ficticio inclui cinco guardas, quitacao e arquivamento no rollback",()=>{
+ const sql=fs.readFileSync("supabase/tests/isolated/asaas-cob06-guardas-clone-restaurado-rollback.sql","utf8");
+ assert.match(script,/guardas-clone-restaurado-rollback\.sql/);
+ assert.match(script,/\$auditoria = \$auditoria\.Replace\(\$marco,\(\$testeSql \+ \$nl \+ \$marco\)\)/);
+ assert.ok(script.includes("COB06_GUARDAS_FUNCIONAIS_OK"));
+ assert.ok(script.includes("COB06_GUARDAS_FUNCIONAIS_VALIDADAS_E_REVERTIDAS"));
+ for(const term of ["cob06-fixture-descartavel-20261015","catalogo_solicitar_encerramento_financeiro",
+  "catalogo_finalizar_encerramento_financeiro","catalogo_status_publicacao",
+  "catalogo_fechamentos_offline","COB06_GUARDAS_FUNCIONAIS_OK",
+  "SQLSTATE '23514'","'deletado'","'arquivado'","v_negativas<>5"])
+ assert.ok(sql.includes(term),term);
+ assert.doesNotMatch(sql,/(^|\n)\s*COMMIT\s*;/mi);
+ assert.doesNotMatch(sql,/pg_net|cron\.schedule|\/transfers|ASAAS_API_KEY|GITHUB_TOKEN/i);
+ const candidato=fs.readFileSync(
+  "supabase/pending-migrations/20261009162000_bloquear_exclusao_debitos_e_finalizar_arquivamento.sql","utf8");
+ assert.ok(candidato.includes("SET status='deletado', destaque=false"));
+ assert.ok(candidato.includes("SET situacao='arquivado'"));
+ assert.ok(!candidato.includes("SET status='arquivado'"));
 });
