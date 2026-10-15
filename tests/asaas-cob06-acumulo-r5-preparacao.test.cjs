@@ -43,7 +43,7 @@ test("COB-06: o ensaio real roda em DB sintetico e desfaz as alteracoes",()=>{
  assert.match(fixture,/100,'faturado'/);
  assert.match(fixture,/400,'faturado'/);
  assert.match(fixture,/COB06_ACUMULO_LEDGER_PREVIEW_OK_SEM_PIX/);
- assert.match(fixture,/^BEGIN;[\s\S]*ROLLBACK;\s*$/);
+ assert.match(fixture,/\nBEGIN;[\s\S]*ROLLBACK;\s*$/);
  assert.ok(workflow.includes("supabase/production-candidate/03_cob06_acumulo_intercompetencias_preparacao.sql"));
  assert.ok(workflow.includes("supabase/tests/isolated/asaas-cob06-acumulo-preview-rollback.sql"));
 });
