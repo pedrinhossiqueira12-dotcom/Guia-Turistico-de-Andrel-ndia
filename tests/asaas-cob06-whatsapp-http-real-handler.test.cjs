@@ -3,6 +3,7 @@ const {test}=require("node:test");
 const assert=require("node:assert/strict");
 const fs=require("node:fs");
 const vm=require("node:vm");
+const {webcrypto,createHmac}=require("node:crypto");
 const code=fs.readFileSync("supabase/functions/whatsapp-bot/index.ts","utf8");
 
 // Executa je(), o despachante HTTP REAL da Edge baixada, com Request/Response
@@ -22,6 +23,7 @@ const functions=[
  trecho("async function we(","async function he("),
  trecho("async function Oe(","async function Ce("),
  trecho("async function Ce(","function Ie("),
+ trecho("async function cob06VerificarAssinaturaWhatsapp(","async function je("),
  trecho("async function je(","Deno.serve(")
 ].join("\n");
 
@@ -70,7 +72,8 @@ function cenario(opts={}){
    throw Error("Unexpected RPC: "+name);
   }
  };
- const ctx={g:db,R:admin,T:{"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"authorization,content-type"},
+ const ctx={g:db,R:admin,crypto:webcrypto,TextEncoder,TextDecoder,
+ Deno:{env:{get:n=>n==="WHATSAPP_APP_SECRET"?(opts.appSecret||""):""}},T:{"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"authorization,content-type"},
  F:"token-de-verificacao-local",Request,Response,URL,console:{log(){},error(){}},
  u:v=>v==null?"":String(v).trim(),
  z:async()=>{calls.push("github:get");return {comercios:[{id:"loja-mock",nome:"Loja",status:jsonState,imagem:"foto",imagens:["foto"]}],sha:"mock-sha"}},
@@ -80,6 +83,7 @@ function cenario(opts={}){
  for(const n of ["me","fe","he","ge","_e","ve","Se","qe","re","be","Ee","ze","Ie","Te"]){
   ctx[n]=async()=>{throw Error("Unexpected handler "+n)};
  }
+ ctx.Te=async()=>{calls.push("whatsapp:accepted");return ctx.t({sucesso:true});};
  vm.createContext(ctx);
  vm.runInContext(functions+";globalThis.http=je;",ctx);
  function request(acao,token,method="POST"){
@@ -156,4 +160,44 @@ test("HTTP real: lida com metodo invalido, JSON malformado, OPTIONS",async()=>{
  const malformed=await c.raw(invalid);assert.equal(malformed.status,400);
  const options=new Request("https://edge.local/functions/v1/whatsapp-bot",{method:"OPTIONS"});
  assert.equal((await c.raw(options)).status,204);noWrites(c);
+});
+
+test("HTTP WhatsApp: sem segredo HMAC retorna 503, sem disparar processamento",async()=>{
+ const c=cenario();const body=JSON.stringify({object:"whatsapp_business_account",entry:[]});
+ const r=await c.raw(new Request("https://edge.local/functions/v1/whatsapp-bot",{
+  method:"POST",headers:{"Content-Type":"application/json"},body}));
+ assert.equal(r.status,503);assert.ok(!c.calls.includes("whatsapp:accepted"));noWrites(c);
+});
+test("HTTP WhatsApp: sem assinatura, formato invalido e assinatura incorreta sao 401",async()=>{
+ const c=cenario({appSecret:"segredo-local-de-teste"});
+ const body=JSON.stringify({object:"whatsapp_business_account",entry:[]});
+ for(const signature of ["","md5=abc","sha256="+"0".repeat(64)]){
+  const r=await c.raw(new Request("https://edge.local/functions/v1/whatsapp-bot",{
+   method:"POST",headers:{"Content-Type":"application/json",...(signature?{"X-Hub-Signature-256":signature}:{})},body}));
+  assert.equal(r.status,401);
+ }
+ assert.ok(!c.calls.includes("whatsapp:accepted"));noWrites(c);
+});
+test("HTTP WhatsApp: bytes assinados aceitos, alteração de um byte recusada",async()=>{
+ const secret="segredo-local-de-teste",c=cenario({appSecret:secret});
+ const body=JSON.stringify({object:"whatsapp_business_account",entry:[]});
+ const signature="sha256="+createHmac("sha256",secret).update(Buffer.from(body)).digest("hex");
+ const signed=await c.raw(new Request("https://edge.local/functions/v1/whatsapp-bot",{
+  method:"POST",headers:{"Content-Type":"application/json","X-Hub-Signature-256":signature},body}));
+ assert.equal(signed.status,200);assert.equal(c.calls.filter(x=>x==="whatsapp:accepted").length,1);
+ const changed=await c.raw(new Request("https://edge.local/functions/v1/whatsapp-bot",{
+  method:"POST",headers:{"Content-Type":"application/json","X-Hub-Signature-256":signature},
+  body:body.replace("entry", "Entry")}));
+ assert.equal(changed.status,401);
+ assert.equal(c.calls.filter(x=>x==="whatsapp:accepted").length,1);
+ noWrites(c);
+});
+test("HTTP WhatsApp: GET de verificacao exige token; payload nao eh registrado nos logs",async()=>{
+ const c=cenario();
+ const url="https://edge.local/functions/v1/whatsapp-bot?";
+ let r=await c.raw(new Request(url+"hub.mode=subscribe&hub.verify_token=errado&hub.challenge=123"));
+ assert.equal(r.status,403);
+ r=await c.raw(new Request(url+"hub.mode=subscribe&hub.verify_token=token-de-verificacao-local&hub.challenge=123"));
+ assert.equal(r.status,200);assert.equal(await r.text(),"123");
+ assert.ok(!code.includes('console.log("Webhook WhatsApp recebido:",JSON.stringify(e))'));
 });
