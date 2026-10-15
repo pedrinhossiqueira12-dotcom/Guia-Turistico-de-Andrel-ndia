@@ -16,6 +16,10 @@ DECLARE
  v_plataforma integer;
  v_logistica integer;
  v_lote_extra uuid;
+ v_referencia jsonb;
+ v_repeticao jsonb;
+ v_id_operacao uuid;
+ v_negativas_ref integer:=0;
 BEGIN
  IF pg_catalog.current_database()<>'catalogo_cob06_ci'
  OR pg_catalog.inet_server_port()<>5432
@@ -192,6 +196,90 @@ BEGIN
  IF v_outro->>'ok'<>'false' OR v_outro->>'motivo'<>'lote_inexistente'
  THEN RAISE EXCEPTION 'COB06_CONCILIACAO: lote inexistente aceito'; END IF;
  RAISE NOTICE 'COB06_CONCILIACAO_ORIGENS_INCOMPLETAS_BLOQUEADAS_SEM_CREDITO_OK';
+
+ -- Candidato 05: referencia bancaria APENAS no livro local.
+ IF pg_catalog.has_function_privilege('anon',
+    'public.catalogo_asaas_reservar_referencia_acumulo(uuid)','EXECUTE')
+    OR pg_catalog.has_function_privilege('authenticated',
+    'public.catalogo_asaas_reservar_referencia_acumulo(uuid)','EXECUTE')
+    OR pg_catalog.has_table_privilege('service_role',
+    'public.catalogo_asaas_acumulo_referencias','INSERT')
+ THEN RAISE EXCEPTION 'COB06_REFERENCIA: privilegios inseguros'; END IF;
+
+ -- Com origem incompleta, nao sequer criar a referencia financeira.
+ v_referencia:=public.catalogo_asaas_reservar_referencia_acumulo(v_id);
+ IF v_referencia->>'ok'<>'false'
+ OR v_referencia->>'motivo'<>'integridade_contabil_incompleta'
+ OR EXISTS(SELECT 1 FROM public.catalogo_asaas_acumulo_referencias)
+ THEN RAISE EXCEPTION 'COB06_REFERENCIA: lote incompleto reservou banco: %',v_referencia; END IF;
+
+ -- Somente no ROLLBACK: comprovacao sintética de entrega e comissoes originais.
+ UPDATE public.catalogo_pedidos
+ SET codigo_entrega_usado_em=pg_catalog.now()
+ WHERE id IN (v_p1,v_p2);
+
+ INSERT INTO public.catalogo_comissoes_offline(
+  pedido_id,comercio_id,competencia,subtotal_produtos_centavos,
+  taxa_percentual,valor_comissao_centavos,status,
+  taxa_plataforma_centavos,taxa_motoboy_centavos,valor_total_centavos,
+  versao_financeira,motoboy_id,financiamento_logistica_comprovado
+ ) VALUES
+  (v_p1,'comercio-de-exemplo','2040-03-01',1429,
+   5,100,'faturada',71,29,100,2,'00000000-0000-4000-8000-000000000099'::uuid,false),
+  (v_p2,'comercio-de-exemplo','2040-04-01',5714,
+   5,400,'faturada',286,114,400,2,'00000000-0000-4000-8000-000000000099'::uuid,false);
+
+ v_outro:=public.catalogo_asaas_conferir_conciliacao_acumulo(v_id);
+ IF v_outro->>'integridade_contabil_ok'<>'true'
+   OR (v_outro->>'valor_fontes_centavos')::bigint<>500
+ THEN RAISE EXCEPTION 'COB06_REFERENCIA: origens completas rejeitadas: %',v_outro; END IF;
+
+ v_referencia:=public.catalogo_asaas_reservar_referencia_acumulo(v_id);
+ IF v_referencia->>'ok'<>'true'
+ OR v_referencia->>'ja_reservada'<>'false'
+ OR v_referencia->>'referencia' IS DISTINCT FROM 'guia-acumulo-'||v_id::text
+ OR (v_referencia->>'valor_centavos')::bigint<>500
+ OR v_referencia->>'pode_emitir_pix'<>'false'
+ OR v_referencia->>'payment_id' IS NOT NULL
+ THEN RAISE EXCEPTION 'COB06_REFERENCIA: reserva imutavel incorreta: %',v_referencia; END IF;
+ v_id_operacao:=(v_referencia->>'operacao_id')::uuid;
+ v_repeticao:=public.catalogo_asaas_reservar_referencia_acumulo(v_id);
+ IF v_repeticao->>'ok'<>'true' OR v_repeticao->>'ja_reservada'<>'true'
+ OR (v_repeticao->>'operacao_id')::uuid IS DISTINCT FROM v_id_operacao
+ OR v_repeticao->>'referencia' IS DISTINCT FROM v_referencia->>'referencia'
+ OR (SELECT pg_catalog.count(*) FROM public.catalogo_asaas_acumulo_referencias)<>1
+ THEN RAISE EXCEPTION 'COB06_REFERENCIA: retry duplicou referencia: %',v_repeticao; END IF;
+
+ -- A outra competencia/lote da mesma loja tem reserva ainda em conferencia.
+ -- A trava em indice unico deve impedir a criacao paralela.
+ BEGIN
+  INSERT INTO public.catalogo_asaas_acumulo_referencias(
+    lote_id,comercio_id,referencia,valor_centavos)
+  VALUES(v_lote_extra,'comercio-de-exemplo',
+    'guia-acumulo-'||v_lote_extra::text,500);
+  RAISE EXCEPTION 'COB06_REFERENCIA: segunda intencao da loja permitida';
+ EXCEPTION WHEN unique_violation THEN v_negativas_ref:=v_negativas_ref+1;
+ END;
+ BEGIN
+  UPDATE public.catalogo_asaas_acumulo_referencias
+  SET referencia='outra-referencia' WHERE lote_id=v_id;
+  RAISE EXCEPTION 'COB06_REFERENCIA: ref alterada';
+ EXCEPTION WHEN SQLSTATE '23514' THEN v_negativas_ref:=v_negativas_ref+1;
+ END;
+ BEGIN
+  DELETE FROM public.catalogo_asaas_acumulo_referencias WHERE lote_id=v_id;
+  RAISE EXCEPTION 'COB06_REFERENCIA: ref apagada';
+ EXCEPTION WHEN SQLSTATE '23514' THEN v_negativas_ref:=v_negativas_ref+1;
+ END;
+
+ IF v_negativas_ref<>3
+ OR (SELECT payment_id FROM public.catalogo_asaas_acumulo_referencias
+     WHERE lote_id=v_id) IS NOT NULL
+ OR (SELECT status FROM public.catalogo_fechamentos_offline WHERE id=v_f1)<>'faturado'
+ OR (SELECT status FROM public.catalogo_fatura_cobrancas
+     WHERE order_id='legacy-cob06-ci')<>'pago'
+ THEN RAISE EXCEPTION 'COB06_REFERENCIA: retorno mudou fatura, Pix ou intencao'; END IF;
+ RAISE NOTICE 'COB06_REFERENCIA_UNICA_IDEMPOTENTE_SEM_PIX_OK';
 
  IF v_negativas<>4
  OR (SELECT valor_centavos FROM public.catalogo_fatura_componentes_v2
