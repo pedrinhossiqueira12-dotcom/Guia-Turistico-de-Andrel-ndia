@@ -36,6 +36,8 @@ function cenario(op={}){
        return {data:op.solicitacao||{ok:true,situacao:"aguardando_quitacao",divida_centavos:500,faturas_pendentes:1},error:null};
      if(nome==="catalogo_finalizar_encerramento_financeiro")
        return {data:op.finalizacao||{ok:false,mensagem:"Divida em aberto"},error:null};
+     if(nome==="catalogo_arquivar_sem_catalogo_admin")
+       return {data:op.recusaSemCatalogo||{ok:true,situacao:"arquivado",sem_catalogo:true},error:null};
      throw Error("RPC inesperada");
    }
  };
@@ -86,9 +88,8 @@ test("COB-06: GitHub fora do ar retorna pendencia sem rollback financeiro",async
  assert.equal(c.writes(),0);
 });
 
-test("COB-06: sem catalogo, sem RPC e status DB divergente negam finalizacao",async()=>{
+test("COB-06: RPC indisponivel e status DB divergente negam finalizacao",async()=>{
  for(const cfg of [
-   {semCatalogo:true},
    {falha:"catalogo_finalizar_encerramento_financeiro"},
    {finalizacao:{ok:true,situacao:"arquivado"},statusFinal:"ativo"}
  ]){
@@ -143,4 +144,20 @@ test("COB-06: dono nunca confunde despublicacao legada com encerramento financei
  const forbidden=await terceiro.Oe({user:terceiro.uid},{comercio_id:"loja-teste"});
  assert.equal(forbidden.status,403);semGithub(terceiro);
  assert.ok(!terceiro.chamadas.some(x=>x.includes("catalogo_encerramentos_comercio")));
+});
+
+test("COB-06: sem catalogo, somente administrador com RPC financeira pode ocultar",async()=>{
+ const c=cenario({semCatalogo:true});
+ const dono=await c.Oe({user:c.uid},{comercio_id:"loja-teste"});
+ assert.equal(dono.status,409);assert.equal(dono.body.arquivado,false);semGithub(c);
+ const admin=await c.we({admin:c.uid},{comercio_id:"loja-teste"});
+ assert.equal(admin.status,200);assert.equal(admin.body.arquivado,true);assert.equal(c.writes(),1);
+ assert.ok(c.chamadas.includes("rpc:catalogo_arquivar_sem_catalogo_admin"));
+ assert.ok(!c.chamadas.includes("rpc:catalogo_finalizar_encerramento_financeiro"));
+ const negado=cenario({semCatalogo:true,recusaSemCatalogo:{ok:false,mensagem:"Historico encontrado"}});
+ const r=await negado.we({admin:negado.uid},{comercio_id:"loja-teste"});
+ assert.equal(r.status,409);semGithub(negado);
+ const erro=cenario({semCatalogo:true,falha:"catalogo_arquivar_sem_catalogo_admin"});
+ assert.equal((await erro.we({admin:erro.uid},{comercio_id:"loja-teste"})).status,503);
+ semGithub(erro);
 });
