@@ -147,19 +147,36 @@ $arquivo = Join-Path $pasta 'ensaio.sql'
 Write-Host '=== EXECUTAR SOMENTE NO CLONE OFFLINE ==='
 docker cp $arquivo ('{0}:/tmp/guia_cob06_ensaio.sql' -f $nome) | Out-Null
 if($LASTEXITCODE -ne 0){throw 'Falha ao copiar SQL para contêiner offline.'}
-$saida = @(docker exec $nome psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 -f /tmp/guia_cob06_ensaio.sql 2>&1)
-$codigo = $LASTEXITCODE
-$log = Join-Path $pasta 'resultado-local.log'
-$saida | ForEach-Object { [string]$_ } | Set-Content -LiteralPath $log -Encoding UTF8
+# PowerShell 5.1 considera NOTICE do psql em stderr um NativeCommandError
+# quando ErrorActionPreference='Stop' e stderr e mesclado com stdout.
+# Iniciar Docker como processo e redirecionar streams a arquivos separados,
+# sem interpretar avisos como falhas nem perder o codigo de saida de psql.
+$saidaNormal = Join-Path $pasta 'resultado-stdout.log'
+$saidaAvisos = Join-Path $pasta 'resultado-stderr.log'
+$dockerExe = (Get-Command docker -CommandType Application -ErrorAction Stop).Source
+$processo = Start-Process -FilePath $dockerExe -ArgumentList @(
+ 'exec',$nome,'psql','-X','-U','postgres','-d','postgres',
+ '-v','ON_ERROR_STOP=1','-f','/tmp/guia_cob06_ensaio.sql'
+) -NoNewWindow -Wait -PassThru -RedirectStandardOutput $saidaNormal -RedirectStandardError $saidaAvisos
+$codigo = $processo.ExitCode
+$textoNormal = [IO.File]::ReadAllText($saidaNormal)
+$textoAvisos = [IO.File]::ReadAllText($saidaAvisos)
 Write-Host ('Codigo de saida SQL: ' + $codigo)
+Write-Host ('Avisos PostgreSQL (NOTICE): ' + ([regex]::Matches($textoAvisos,'(?m)\bNOTICE\b').Count))
 if($codigo -ne 0){
- Write-Host 'Transacao abortada sem COMMIT; log protegido no D:.'
- $saida | Select-Object -Last 6 | ForEach-Object { Write-Host ([string]$_) }
- throw 'Falha no pacote SQL: corrigir antes de continuar.'
+ Write-Host 'O PostgreSQL encerrou com erro. A transacao desconectada nao pode confirmar COMMIT.'
+ Write-Host 'Log local em D:; nao compartilhe linhas contendo dados privados.'
+ $linhas = [regex]::Matches($textoAvisos,'(?m)^.*(?:ERROR:|FATAL:|SQLSTATE).*$')
+ if($linhas.Count -gt 0) {
+  Write-Host ('Primeiro erro: ' + $linhas[0].Value.Substring(0,[Math]::Min(300,$linhas[0].Value.Length)))
+ } else {
+  Write-Host 'Erro sem mensagem resumida; analisar resultado-stderr.log localmente.'
+ }
+ throw 'COB06_SQL_NAO_APROVADO: analisar erro antes de prosseguir.'
 }
-$texto = ($saida | ForEach-Object { [string]$_ }) -join $nl
-if(-not $texto.Contains('COB06_GATES_OK') -or -not $texto.Contains('COB06_ROLLBACK_OK')){
- throw 'Marcadores de ROLLBACK nao encontrados: nao declarar sucesso.'
+if(-not $textoAvisos.Contains('COB06_GATES_OK') -or
+   -not $textoNormal.Contains('COB06_ROLLBACK_OK')){
+ throw 'Marcadores de auditoria/ROLLBACK ausentes: nao declarar sucesso.'
 }
 Write-Host '=== CONFERIR BANCO DEPOIS DO ROLLBACK ==='
 $depois = @(docker exec $nome psql -X -U postgres -d postgres -At -v ON_ERROR_STOP=1 -c $sqlEstado)
