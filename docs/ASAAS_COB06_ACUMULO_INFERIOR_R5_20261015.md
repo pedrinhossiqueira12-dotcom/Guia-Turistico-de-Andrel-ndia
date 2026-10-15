@@ -43,6 +43,16 @@ A RPC `catalogo_asaas_reservar_referencia_acumulo(uuid)` é exclusiva da `servic
 
 **Próximos gates:** desenhar e testar observação de ID de pagamento remoto a partir de GET verificado com referência, cliente, valor, estado e idempotência; webhook/reconciliação e liquidação/estorno de todos os componentes das competências; remuneração do motoboy elegível; prova E2E Sandbox/STAGING; recuperação de dados e autorização de produção. Não substituir o CHECK `payment_id IS NULL` nem liberar emissão antes desses gates.
 
+## Observação bancária verificada por GET — sem baixa e sem Pix
+
+O SQL candidato `supabase/production-candidate/06_cob06_observacao_bancaria_sem_baixa.sql` cria o livro privado, append-only, `catalogo_asaas_acumulo_observacoes`: um lote por payment ID e um payment ID por lote, com cliente, referência, valor exato e **status da primeira observação**. O RPC `catalogo_asaas_registrar_observacao_acumulo` é restrito à `service_role`, revalida o cliente cadastrado, total, referência imutável e integridade das fontes e recusa replay divergente. **O SQL sozinho não pode provar a autenticidade de argumentos apresentados como "GET": isso exige backend autenticado consultando o Asaas.** Nem a tabela nem a RPC alteram estados pagos, estornos, créditos ou saques.
+
+O módulo candidato não publicado `supabase/functions/_shared/catalogo-asaas-acumulo-get-verificado-inerte.ts` implementa essa verificação *no backend* antes da tentativa de registrar a observação: ID do pagamento, referência exata `guia-acumulo-<lote UUID>`, customer ID da loja, modalidade `PIX`, conversão de centavos sem arredondamento e status remoto reconhecido. Falha de GET, valor divergente, status desconhecido ou ACK SQL diferente de `pode_quitar=false` e `pode_liberar_motoboy=false` mantém HOLD. **O módulo ainda não é importado pela Edge pública nem há GET real executado pelo servidor**: os testes injetam respostas remotas simuladas, sem chamadas HTTP reais, para comprovar somente o contrato de segurança.
+
+Evidência CI [38783258331](https://github.com/pedrinhossiqueira12-dotcom/Guia-Turistico-de-Andrel-ndia/actions/runs/38783258331): PostgreSQL descartável passou com `COB06_OBSERVACAO_GET_SIMULADO_IMUTAVEL_SEM_BAIXA_OK` e `ROLLBACK`, rejeição de cliente/valor/referência divergentes, replay divergente e tentativa de UPDATE/DELETE; **832/832 testes Node PASS** e **115/115 testes Deno PASS** (cinco cenários GET novos). Nenhuma alteração de produção/STAGING nem de dados existentes.
+
+**Pendentes:** integração efetiva somente GET ao Asaas pelo backend sob permissão de auditoria, vinculação de estado remoto por eventos independentes, transição contábil paga/estornada/contestada de **todas** as competências e cada componente, financiamento do motoboy, histórico/dívida de encerramento, E2E Sandbox/STAGING, backup e corte autorizados. Não retirar os bloqueios atuais e não promover candidatos 03–06 ao pacote de produção.
+
 ## Contrato técnico que precisa ser implementado e testado
 
 1. Registrar vínculo durável e único entre fechamento(s) de origem e cobrança consolidada de destino, sem modificar os totais históricos originais; impedir que uma competência já emitida/paga/reservada seja acumulada novamente.
