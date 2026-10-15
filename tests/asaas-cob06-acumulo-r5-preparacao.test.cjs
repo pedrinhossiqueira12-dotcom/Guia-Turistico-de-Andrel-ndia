@@ -47,3 +47,23 @@ test("COB-06: o ensaio real roda em DB sintetico e desfaz as alteracoes",()=>{
  assert.ok(workflow.includes("supabase/production-candidate/03_cob06_acumulo_intercompetencias_preparacao.sql"));
  assert.ok(workflow.includes("supabase/tests/isolated/asaas-cob06-acumulo-preview-rollback.sql"));
 });
+
+const reserva=read("supabase/tests/isolated/asaas-cob06-acumulo-reserva-rollback.sql");
+
+test("COB-06: reserva R1+R4 e R2+R2+R1 bloqueia emissao e preserva origem",()=>{
+ assert.match(sql,/CREATE FUNCTION public\.catalogo_asaas_reservar_acumulo\(/);
+ assert.match(sql,/pg_catalog\.pg_advisory_xact_lock\(/);
+ assert.match(sql,/ORDER BY f\.competencia,f\.id FOR UPDATE/);
+ assert.match(sql,/CREATE TRIGGER catalogo_asaas_acumulo_sem_emissao_individual/);
+ assert.match(sql,/CREATE TRIGGER catalogo_asaas_acumulo_sem_cobranca_individual/);
+ assert.match(sql,/CREATE TRIGGER catalogo_asaas_acumulo_fechamento_imutavel/);
+ assert.match(sql,/CREATE TRIGGER catalogo_asaas_acumulo_componentes_imutaveis/);
+ assert.match(sql,/snapshot_inconsistente/);
+ assert.doesNotMatch(sql,/GRANT EXECUTE ON FUNCTION public\.catalogo_asaas_reservar_acumulo\(text,date\)\s+TO (?:anon|authenticated)/);
+ assert.match(reserva,/COB06_RESERVA_R1_R4_R2_R2_R1_TRANSACIONAL_SEM_PIX_OK/);
+ assert.match(reserva,/R2\+R2\+R1/);
+ assert.match(reserva,/\nBEGIN;[\s\S]*ROLLBACK;\s*$/);
+ assert.ok(workflow.includes("supabase/tests/isolated/asaas-cob06-acumulo-reserva-rollback.sql"));
+ assert.ok(!edge.includes("catalogo_asaas_reservar_acumulo("),
+  "Nao conectar reserva ao provedor sem conciliacao de pagamento e estorno");
+});
