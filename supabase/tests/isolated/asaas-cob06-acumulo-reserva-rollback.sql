@@ -167,6 +167,32 @@ BEGIN
         WHERE lote_id=v_id)<>2
  THEN RAISE EXCEPTION 'COB06_RESERVA: fonte duplicada entre lotes'; END IF;
 
+ -- A conferência de liquidação analisa parcelas por pedido e competência.
+ -- A fixture propositalmente não tem comissão confirmada nem código usado:
+ -- mesmo havendo R$5 reservados, a liquidação e o crédito são recusados.
+ v_outro:=public.catalogo_asaas_conferir_conciliacao_acumulo(v_id);
+ IF v_outro->>'ok'<>'true'
+    OR (v_outro->>'valor_fontes_centavos')::bigint<>500
+    OR (v_outro->>'quantidade_fontes')::bigint<>2
+    OR (v_outro->>'parcelas_invalidas')::bigint<>4
+    OR v_outro->>'integridade_contabil_ok'<>'false'
+    OR v_outro->>'pode_quitar'<>'false'
+    OR v_outro->>'pode_estornar'<>'false'
+    OR v_outro->>'pode_liberar_motoboy'<>'false'
+ THEN RAISE EXCEPTION 'COB06_CONCILIACAO: R1+R4 sem pedido valido autorizou liquidacao: %',v_outro; END IF;
+ v_outro:=public.catalogo_asaas_conferir_conciliacao_acumulo(v_lote_extra);
+ IF v_outro->>'ok'<>'true'
+    OR (v_outro->>'valor_fontes_centavos')::bigint<>500
+    OR (v_outro->>'quantidade_fontes')::bigint<>3
+    OR (v_outro->>'parcelas_invalidas')::bigint<>6
+    OR v_outro->>'integridade_contabil_ok'<>'false'
+    OR v_outro->>'pode_emitir_pix'<>'false'
+ THEN RAISE EXCEPTION 'COB06_CONCILIACAO: R2+R2+R1 com parcelas sem prova: %',v_outro; END IF;
+ v_outro:=public.catalogo_asaas_conferir_conciliacao_acumulo(pg_catalog.gen_random_uuid());
+ IF v_outro->>'ok'<>'false' OR v_outro->>'motivo'<>'lote_inexistente'
+ THEN RAISE EXCEPTION 'COB06_CONCILIACAO: lote inexistente aceito'; END IF;
+ RAISE NOTICE 'COB06_CONCILIACAO_ORIGENS_INCOMPLETAS_BLOQUEADAS_SEM_CREDITO_OK';
+
  IF v_negativas<>4
  OR (SELECT valor_centavos FROM public.catalogo_fatura_componentes_v2
        WHERE fechamento_id=v_f1 AND tipo='plataforma')<>71
