@@ -28,6 +28,9 @@ async function ae(e, a, administrador) {
     return t({sucesso:false,arquivado:false,erro:"Encerramento requer verificacao administrativa. Nenhum dado foi removido."},409);
   }
   if (!administrador) {
+    if (catalogo.data.proprietario_id !== a) {
+      return t({sucesso:false,erro:"Titularidade do catalogo divergente."},403);
+    }
     // Dono recebe confirmacao somente quando o tombstone financeiro existir.
     // Status legado 'deletado' isolado nao prova quitacao ou arquivamento.
     if (publicacao.data.status === "deletado") {
@@ -38,9 +41,6 @@ async function ae(e, a, administrador) {
         return t({sucesso:true,arquivado:true,ja_arquivado:true});
       return t({sucesso:false,arquivado:false,
         erro:"Comercio retirado da publicacao sem encerramento financeiro confirmado; revisao administrativa necessaria."},409);
-    }
-    if (catalogo.data.proprietario_id !== a) {
-      return t({sucesso:false,erro:"Titularidade do catalogo divergente."},403);
     }
     const pedido = await g.rpc("catalogo_solicitar_encerramento_financeiro",{
       p_comercio:id,p_usuario:a
