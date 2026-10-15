@@ -125,3 +125,21 @@ Documentação oficial: https://supabase.com/docs/reference/cli/supabase-db-dump
 **Limites:** (a) são sete dumps sequenciais, **não** uma captura transacional consistente entre arquivos; (b) nenhum dump inclui os bytes dos arquivos do Storage; (c) restauração de dados de autenticação e Storage em instância nova **não está testada e não deve ser realizada automaticamente**; (d) nenhuma cópia externa independente do computador foi confirmada ainda. `EXPORTACAO_CONCLUIDA` **não significa** backup integral restaurável. Tratar `auth_data.sql` como segredo altamente sensível; não enviar ao chat, repositório ou serviço não criptografado.
 
 A Supabase CLI prefere Windows Credential Manager para tokens; sem cofre nativo, pode criar `~/.supabase/access-token` em texto puro: https://supabase.com/docs/reference/cli/introduction. Antes de executar, confirmar que **nenhum token em texto puro** está presente no C: com `Test-Path "$HOME\.supabase\access-token"` (não abrir/copiar conteúdo); caso positivo, bloquear a exportação até revisar o armazenamento de credenciais. A opção `supabase login` deve usar o cofre nativo no Windows; nunca colar chave no chat.
+
+## Conferência da cópia externa independente (15/10/2026)
+
+O backup SQL original de 13/10 já teve sete hashes validados e foi restaurado em clone **somente local** para ensaios com rollback. Falta a segunda cópia cifrada fora do computador. O script `scripts/validacao-pagamentos/asaas-cob06-verificar-copia-externa-readonly.ps1` verifica uma cópia **já feita pelo proprietário**, sem copiar ou escrever nada.
+
+1. Conectar um disco/pendrive externo USB ou SD próprio, habilitar BitLocker To Go e **guardar a chave de recuperação fora da unidade e em local independente**. Verificar que consta `FullyEncrypted`, `ProtectionStatus=On` e 100% criptografado. Não escolher o disco interno D: nem um volume virtual dele.
+2. Copiar **pelo Explorador de Arquivos do Windows** a pasta original `D:\GuiaAndrelandiaBackupsPrivados\20261013T212912Z-34019e86` inteira para o dispositivo externo já cifrado. Preservar nomes e `manifesto.txt`; não mover, sobrescrever ou excluir a origem.
+3. Executar localmente no PowerShell (substituir `E:` somente pela letra real do dispositivo):
+
+   ```powershell
+   $verificador = 'D:\GuiaAndrelandiaRestauracaoLocal\asaas-cob06-verificar-copia-externa-readonly.ps1'
+   & $verificador -PastaExterna 'E:\GuiaAndrelandiaBackupsPrivados\20261013T212912Z-34019e86'
+   ```
+
+4. O aceite é a saída exata `COB06_COPIA_EXTERNA_INTEGRA`: o script verifica unidade física distinta por `Get-Partition`/`Get-Disk`, barramento USB/SD, BitLocker ativo, ausência de junction/symlink, manifesto e SHA-256 dos sete arquivos SQL na origem e no destino. Qualquer erro deixa o gate **HOLD**.
+5. Desconectar e guardar a unidade externa em lugar físico diferente. **Não compartilhar** os arquivos, hashes, SQL, manifesto, nome/serial do disco ou chave de recuperação. Informar apenas se a verificação passou.
+
+**Limitação explícita:** o verificador ainda não foi executado no computador do proprietário e não comprova cópia externa existente. Os oito arquivos comparados não incluem bytes de Storage, bundles Edge, Secrets, configurações do serviço, nem provam restaurabilidade integral. Esses requisitos continuam separados e bloqueadores da COB-06.
