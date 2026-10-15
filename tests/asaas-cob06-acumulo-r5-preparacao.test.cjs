@@ -67,3 +67,26 @@ test("COB-06: reserva R1+R4 e R2+R2+R1 bloqueia emissao e preserva origem",()=>{
  assert.ok(!edge.includes("catalogo_asaas_reservar_acumulo("),
   "Nao conectar reserva ao provedor sem conciliacao de pagamento e estorno");
 });
+
+const preflightConciliacao=read("supabase/production-candidate/04_cob06_conciliacao_preflight_inerte.sql");
+
+test("COB-06: conciliador de lote e somente leitura e nao libera dinheiro sem banco",()=>{
+ assert.match(preflightConciliacao,/CREATE FUNCTION public\.catalogo_asaas_conferir_conciliacao_acumulo\(/);
+ assert.match(preflightConciliacao,/catalogo_fatura_componentes_v2/);
+ assert.match(preflightConciliacao,/catalogo_comissoes_offline/);
+ assert.match(preflightConciliacao,/catalogo_pedidos/);
+ assert.match(preflightConciliacao,/codigo_entrega_usado_em IS NULL/);
+ assert.match(preflightConciliacao,/snapshots_divergentes/);
+ assert.match(preflightConciliacao,/parcelas_invalidas/);
+ assert.match(preflightConciliacao,/integridade_contabil_ok/);
+ assert.match(preflightConciliacao,/'pode_quitar',false/);
+ assert.match(preflightConciliacao,/'pode_estornar',false/);
+ assert.match(preflightConciliacao,/'pode_liberar_motoboy',false/);
+ assert.match(preflightConciliacao,/REVOKE ALL ON FUNCTION public\.catalogo_asaas_conferir_conciliacao_acumulo\(uuid\)/);
+ assert.match(preflightConciliacao,/TO service_role;/);
+ const clean=preflightConciliacao.replace(/--[^\n]*/g,"").replace(/'(?:[^']|'')*'/g,"''");
+ assert.doesNotMatch(clean,/\b(?:UPDATE|DELETE|INSERT|TRUNCATE)\s+(?:INTO|FROM|public\.)/i);
+ assert.ok(workflow.includes("04_cob06_conciliacao_preflight_inerte.sql"));
+ assert.ok(reserva.includes("COB06_CONCILIACAO_ORIGENS_INCOMPLETAS_BLOQUEADAS_SEM_CREDITO_OK"));
+ assert.ok(!edge.includes("catalogo_asaas_conferir_conciliacao_acumulo("));
+});
