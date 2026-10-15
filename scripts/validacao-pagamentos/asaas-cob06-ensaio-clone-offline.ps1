@@ -66,106 +66,10 @@ for($i=0; $i -lt $fontes.Count; $i++) {
  if($b -ne $esperado -or $e -ne $esperado) {
   throw ('Limites transacionais inesperados: ' + $fontes[$i])
  }
- $txt = [regex]::Replace($txt,'(?m)^[ \t]*(BEGIN|COMMIT);[ \t]*\r?($nl + '-- FONTE ' + ($i+1) + ': ' + $fontes[$i] + $nl + $txt + $nl)
- Write-Host ('Fonte ' + ($i+1) + '/9 verificada')
-}
-
-Write-Host '=== MONTAR TRANSACAO UNICA ==='
-$abertura = @'
-\set ON_ERROR_STOP on
-BEGIN;
-SET LOCAL statement_timeout = '180s';
-SET LOCAL lock_timeout = '5s';
-SELECT 'COB06_INICIO' AS marco;
-'@
-$auditoria = @'
-DO $cob06$
-DECLARE tab text; trg text; nome text;
-BEGIN
- FOREACH tab IN ARRAY ARRAY[
-  'catalogo_asaas_clientes','catalogo_asaas_emissoes',
-  'catalogo_asaas_webhook_eventos','catalogo_cobranca_preferencias',
-  'catalogo_aceites_operacionais','catalogo_encerramentos_comercio'
- ] LOOP
-  IF to_regclass('public.' || tab) IS NULL THEN
-   RAISE EXCEPTION 'COB06 tabela ausente: %',tab;
-  END IF;
-  IF NOT EXISTS (
-   SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
-   WHERE n.nspname='public' AND c.relname=tab AND c.relrowsecurity
-  ) THEN RAISE EXCEPTION 'COB06 sem RLS: %',tab; END IF;
- END LOOP;
- FOREACH trg IN ARRAY ARRAY[
-  'catalogo_historico_guard_delete','catalogo_encerramento_sem_reabertura',
-  'catalogo_publicacao_sem_divida_guard','catalogo_encerramento_sem_republicacao'
- ] LOOP
-  IF NOT EXISTS (
-   SELECT 1 FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid
-    JOIN pg_namespace n ON n.oid=c.relnamespace
-   WHERE n.nspname='public' AND t.tgname=trg
-    AND NOT t.tgisinternal AND t.tgenabled IN ('O','A')
-  ) THEN RAISE EXCEPTION 'COB06 trigger ausente: %',trg; END IF;
- END LOOP;
- FOREACH nome IN ARRAY ARRAY[
-  'catalogo_asaas_registrar_fatura','catalogo_asaas_webhook_receber',
-  'catalogo_asaas_webhook_claim','catalogo_asaas_webhook_finalizar',
-  'catalogo_solicitar_encerramento_financeiro',
-  'catalogo_finalizar_encerramento_financeiro'
- ] LOOP
-  IF NOT EXISTS (
-   SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
-   WHERE n.nspname='public' AND p.proname=nome
-    AND NOT has_function_privilege('anon',p.oid,'EXECUTE')
-    AND NOT has_function_privilege('authenticated',p.oid,'EXECUTE')
-  ) THEN RAISE EXCEPTION 'COB06 RPC ausente/exposta: %',nome; END IF;
- END LOOP;
- IF to_regclass('public.catalogo_asaas_saques') IS NOT NULL OR EXISTS(
-   SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
-   WHERE n.nspname='public'
-    AND p.proname IN ('catalogo_asaas_reservar_saque','catalogo_asaas_atualizar_saque')
- ) THEN RAISE EXCEPTION 'COB06 encontrou recursos de saque'; END IF;
- IF (SELECT count(*) FROM supabase_migrations.schema_migrations) <> 29 THEN
-  RAISE EXCEPTION 'COB06 historico de migrations alterado';
- END IF;
- RAISE NOTICE 'COB06_GATES_OK';
-END $cob06$;
-SELECT 'COB06_SQL_SEM_COMMIT' AS marco;
-ROLLBACK;
-SELECT 'COB06_ROLLBACK_OK' AS marco;
-'@
-$tudo = $abertura + $nl + ($partes -join $nl) + $nl + $auditoria
-$arquivo = Join-Path $pasta 'ensaio.sql'
-[IO.File]::WriteAllText($arquivo,$tudo,[Text.UTF8Encoding]::new($false))
-
-Write-Host '=== EXECUTAR SOMENTE NO CLONE OFFLINE ==='
-docker cp $arquivo ('{0}:/tmp/guia_cob06_ensaio.sql' -f $nome) | Out-Null
-if($LASTEXITCODE -ne 0){throw 'Falha ao copiar SQL para contêiner offline.'}
-$saida = @(docker exec $nome psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 -f /tmp/guia_cob06_ensaio.sql 2>&1)
-$codigo = $LASTEXITCODE
-$log = Join-Path $pasta 'resultado-local.log'
-$saida | ForEach-Object { [string]$_ } | Set-Content -LiteralPath $log -Encoding UTF8
-Write-Host ('Codigo de saida SQL: ' + $codigo)
-if($codigo -ne 0){
- Write-Host 'Transacao abortada sem COMMIT; log protegido no D:.'
- $saida | Select-Object -Last 6 | ForEach-Object { Write-Host ([string]$_) }
- throw 'Falha no pacote SQL: corrigir antes de continuar.'
-}
-$texto = ($saida | ForEach-Object { [string]$_ }) -join $nl
-if(-not $texto.Contains('COB06_GATES_OK') -or -not $texto.Contains('COB06_ROLLBACK_OK')){
- throw 'Marcadores de ROLLBACK nao encontrados: nao declarar sucesso.'
-}
-Write-Host '=== CONFERIR BANCO DEPOIS DO ROLLBACK ==='
-$depois = @(docker exec $nome psql -X -U postgres -d postgres -At -v ON_ERROR_STOP=1 -c $sqlEstado)
-if($LASTEXITCODE -ne 0 -or $depois.Count -ne 1 -or $depois[0].Trim() -ne $antes[0].Trim()){
- throw ('Estado depois inesperado: ' + ($depois -join ' '))
-}
-Write-Host ('Estado final: ' + $depois[0])
-Write-Host 'COB06_PACOTE_SQL_CLONE_VALIDADO_COM_ROLLBACK'
-Write-Host ('Log local: ' + $log)
-,
+ $txt = [regex]::Replace($txt,'(?m)^[ \t]*(BEGIN|COMMIT);[ \t]*\r?$',
   '-- COB06 marcador de transacao removido para ROLLBACK unico')
- # Arquivo 8 (fechamento) termina em $function$ sem ';' porque e usado isolado.
- # Concatenar com o SQL 9 sem delimitador invalida o CREATE FUNCTION.
+ # Fonte 8 termina com um bloco de funcao sem ponto e virgula externo.
+ # Acrescentar delimitador antes do SQL 9 ao combinar os arquivos.
  if ($i -eq 7 -and -not $txt.TrimEnd().EndsWith(';')) {
   $txt = $txt + $nl + ';' + $nl
  }
