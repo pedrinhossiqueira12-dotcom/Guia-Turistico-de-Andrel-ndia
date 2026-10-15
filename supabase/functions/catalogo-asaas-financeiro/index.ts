@@ -2,6 +2,8 @@
 // DESLIGADO por padrão. Chaves somente em Supabase Secrets, nunca no navegador.
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import { decryptCourierPix } from "../_shared/catalogo-entregas-crypto-v2.ts";
+import { conferirPagamentoAcumuloPorGet } from "../_shared/catalogo-asaas-acumulo-get-verificado-inerte.ts";
+import { consultarPagamentoAcumuloSandboxGet } from "../_shared/catalogo-asaas-acumulo-get-sandbox-inerte.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const BUNDLE = Deno.env.get("SUPABASE_SECRET_KEYS") || "";
@@ -20,6 +22,8 @@ const ENCRYPTION_KEY = Deno.env.get("CATALOGO_DATA_ENCRYPTION_KEY") || Deno.env.
 const BILLING_ON = Deno.env.get("ASAAS_BILLING_ENABLED") === "true";
 // Trava independente: uma chave produtiva e a flag geral NAO ligam cobranças reais.
 const PRODUCTION_BILLING_APPROVED = Deno.env.get("ASAAS_PRODUCTION_BILLING_APPROVED") === "true";
+// Somente auditoria GET no Sandbox; independente das flags de emissão e saque.
+const COB06_GET_ADMIN_READONLY_ON = Deno.env.get("ASAAS_COB06_GET_ADMIN_READONLY_ENABLED") === "true";
 const PAYOUTS_ON = Deno.env.get("ASAAS_PAYOUTS_ENABLED") === "true";
 const ENVIRONMENT = Deno.env.get("ASAAS_ENVIRONMENT") === "production" ? "production" : "sandbox";
 const API_BASE = ENVIRONMENT === "production" ? "https://api.asaas.com/v3" : "https://api-sandbox.asaas.com/v3";
@@ -70,6 +74,51 @@ async function rpc(name:string,args:Record<string,unknown>){
  if(error){console.error("Asaas RPC",name,error.code);throw new Failure("Falha na operação financeira. Tente consultar novamente.",503);}
  check(data?.ok!==false,data?.mensagem||"Operação recusada.");
  return data;
+}
+// COB-06: prova remota somente leitura de um lote JA observado.
+// Nenhum identificador bancario, cliente, referencia ou valor vem do navegador.
+// Candidatos 03-07 ainda nao estao instalados em STAGING/PROD: manter a flag OFF.
+async function conferirAcumuloSandboxAdmin(uid:string,body:Record<string,unknown>){
+ if(uid!==ADMIN_USER_ID)throw new Failure("Acesso restrito à administração.",403);
+ if(ENVIRONMENT!=="sandbox"||!COB06_GET_ADMIN_READONLY_ON)
+  throw new Failure("Conferência COB-06 ainda não habilitada.",503);
+ if(!ASAAS_TOKEN)throw new Failure("Consulta Sandbox sem credencial.",503);
+ const lote=value(body.lote_id,70);
+ if(!/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(lote))
+  throw new Failure("Lote inválido.",400);
+ const [referencia,observacao]=await Promise.all([
+  db.from("catalogo_asaas_acumulo_referencias")
+   .select("lote_id,comercio_id,referencia,valor_centavos,payment_id,pode_emitir_pix")
+   .eq("lote_id",lote).maybeSingle(),
+  db.from("catalogo_asaas_acumulo_observacoes")
+   .select("lote_id,payment_id,customer_id,referencia,valor_centavos,pode_quitar,pode_liberar_motoboy")
+   .eq("lote_id",lote).maybeSingle(),
+ ]);
+ if(referencia.error||observacao.error||!referencia.data||!observacao.data)
+  throw new Failure("Livro COB-06 indisponível ou lote sem prova anterior.",503);
+ const ref=referencia.data, obs=observacao.data;
+ if(ref.lote_id!==lote||obs.lote_id!==lote||ref.referencia!==obs.referencia||
+  ref.valor_centavos!==obs.valor_centavos||ref.payment_id!==null||
+  ref.pode_emitir_pix!==false||obs.pode_quitar!==false||
+  obs.pode_liberar_motoboy!==false)
+  throw new Failure("Vínculo financeiro inconsistente. HOLD.",409);
+ const cliente=await db.from("catalogo_asaas_clientes")
+  .select("cliente_id").eq("comercio_id",ref.comercio_id).maybeSingle();
+ if(cliente.error||!cliente.data||cliente.data.cliente_id!==obs.customer_id)
+  throw new Failure("Cliente bancário não corresponde ao comércio. HOLD.",409);
+ const conferencia=await rpc("catalogo_asaas_conferir_conciliacao_acumulo",{p_lote:lote});
+ if(conferencia.integridade_contabil_ok!==true||
+  Number(conferencia.valor_fontes_centavos)!==Number(ref.valor_centavos))
+  throw new Failure("Origens de cobrança não conferidas. HOLD.",409);
+ const validada=await conferirPagamentoAcumuloPorGet({
+  loteId:lote,referencia:ref.referencia,clienteId:obs.customer_id,
+  valorCentavos:Number(ref.valor_centavos),
+ },obs.payment_id,(id)=>consultarPagamentoAcumuloSandboxGet(id,ASAAS_TOKEN));
+ // GET confiavel nao e prova de estado final nem autoriza transicao contábil.
+ return respond({success:true,lote_id:lote,payment_id:validada.p_payment,
+  status_bancario_observado:validada.p_status,integridade_contabil_ok:true,
+  pode_emitir_pix:false,pode_quitar:false,pode_estornar:false,
+  pode_liberar_motoboy:false,hold_obrigatorio:true});
 }
 // GET paginado traz ate 100 transferencias por requisicao. Nao confiar no
 // Content-Length: validar tambem os bytes efetivamente recebidos. Apenas
@@ -1928,6 +1977,7 @@ Deno.serve(async (request:Request)=>{
    case "listar_encerramentos_admin":return await listarEncerramentosAdmin(user.id);
    case "finalizar_encerramento_admin":return await finalizarEncerramentoAdmin(user.id,body);
    case "diagnosticar_faturas_sandbox_admin":return await diagnosticarFaturasSandboxAdmin(user.id);
+   case "conferir_acumulo_sandbox_admin":return await conferirAcumuloSandboxAdmin(user.id,body);
    case "confirmar_fatura_sandbox_admin":return await confirmarFaturaSandboxAdmin(user.id,body);
    case "diagnosticar_webhooks_asaas_admin":return await diagnosticarWebhooksAsaasAdmin(user.id);
    case "reprocessar_webhooks_asaas_admin":return await reprocessarWebhooksAsaasAdmin(user.id);
