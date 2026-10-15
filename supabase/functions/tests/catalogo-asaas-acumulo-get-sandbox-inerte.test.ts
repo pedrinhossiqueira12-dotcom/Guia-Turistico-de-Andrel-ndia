@@ -19,7 +19,7 @@ Deno.test("COB06 GET Sandbox usa somente endpoint fixo, GET e token do servidor"
     requests++;
     assert(url === "https://api-sandbox.asaas.com/v3/payments/" + id, "URL fixa");
     assert(init?.method === "GET" && init.redirect === "error", "GET sem redirect");
-    assert((init.headers as Record<string,string>).access_token === "segredo-ci", "token servidor");
+    assert((init?.headers as Record<string,string> | undefined)?.access_token === "segredo-ci", "token servidor");
     return new Response(JSON.stringify(remoto), { status: 200,
       headers: { "content-type": "application/json" } });
   }) as typeof fetch;
