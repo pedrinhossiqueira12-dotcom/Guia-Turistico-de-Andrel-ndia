@@ -33,6 +33,16 @@ O candidato **`supabase/production-candidate/04_cob06_conciliacao_preflight_iner
 
 **Prova CI (15/10/2026):** run [38779330385](https://github.com/pedrinhossiqueira12-dotcom/Guia-Turistico-de-Andrel-ndia/actions/runs/38779330385), job PostgreSQL **PASS**, incluindo `COB06_CONCILIACAO_ORIGENS_INCOMPLETAS_BLOQUEADAS_SEM_CREDITO_OK` dentro de `ROLLBACK` para os lotes R$1+R$4 e R$2+R$2+R$1; teste Node também aprovado (**830/830**). Esse teste prova a **recusa segura de origens incompletas**, não a conclusão de uma quitação real. A CI global do run pode ainda depender de jobs de infraestrutura.
 
+## Referência bancária única — reserva interna sem pagamento
+
+O candidato isolado `supabase/production-candidate/05_cob06_referencia_bancaria_inerte.sql` cria `catalogo_asaas_acumulo_referencias`: **uma referência determinística por lote** (`guia-acumulo-<uuid>`), UUID de operação estável, valor exato do lote e índice único para impedir outra intenção pendente do mesmo comércio. Usa **RLS**, SELECT exclusivamente para `service_role` e trigger que recusa qualquer UPDATE ou DELETE. `payment_id` é obrigatoriamente **NULL** e `pode_emitir_pix` obrigatoriamente **FALSE**, inclusive com acesso SQL: não existe integração com /payments.
+
+A RPC `catalogo_asaas_reservar_referencia_acumulo(uuid)` é exclusiva da `service_role`. Trava lote e comércio, exige preflight contábil positivo do candidato 04 e recusa fontes incompletas; chamadas repetidas retornam exatamente a operação/referência já registrada. **Nem mesmo uma intenção bem formada pode emitir Pix ou marcar fatura como paga.** Após falha de comunicação futura, o procedimento seguro será reconciliar a referência por consulta bancária verificada (GET) antes de cogitar nova emissão; nenhuma nova tentativa POST automática existe.
+
+**Evidência CI:** job PostgreSQL [38781300590](https://github.com/pedrinhossiqueira12-dotcom/Guia-Turistico-de-Andrel-ndia/actions/runs/38781300590) aprovado, com marcador `COB06_REFERENCIA_UNICA_IDEMPOTENTE_SEM_PIX_OK`, lote R$1+R$4 com componentes sintéticos válidos, recusa do lote incompleto, tentativa concorrente da mesma loja, recusa de mutação da referência, preservação da cobrança Mercado Pago paga e `ROLLBACK`. O job Node também passou. O teste é **exclusivamente local/sintético**, não há identificador de pagamento real nem cliente Asaas associado ao lote.
+
+**Próximos gates:** desenhar e testar observação de ID de pagamento remoto a partir de GET verificado com referência, cliente, valor, estado e idempotência; webhook/reconciliação e liquidação/estorno de todos os componentes das competências; remuneração do motoboy elegível; prova E2E Sandbox/STAGING; recuperação de dados e autorização de produção. Não substituir o CHECK `payment_id IS NULL` nem liberar emissão antes desses gates.
+
 ## Contrato técnico que precisa ser implementado e testado
 
 1. Registrar vínculo durável e único entre fechamento(s) de origem e cobrança consolidada de destino, sem modificar os totais históricos originais; impedir que uma competência já emitida/paga/reservada seja acumulada novamente.
