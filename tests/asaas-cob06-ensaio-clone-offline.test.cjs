@@ -60,3 +60,10 @@ test("COB-06: PowerShell 5.1 preserva saida de psql e distingue NOTICE de erro",
  assert.match(script,/\$textoNormal\.Contains\('COB06_ROLLBACK_OK'\)/);
  assert.doesNotMatch(script,/\$saida = @\(docker exec [^\n]+ 2>&1\)/);
 });
+
+test("COB-06: escolhe somente o primeiro caminho docker.exe valido",()=>{
+ assert.match(script,/\$dockerCommands = @\(Get-Command docker\.exe -CommandType Application -ErrorAction Stop\)/);
+ assert.match(script,/\$dockerExe = \[string\]\$dockerCommands\[0\]\.Source/);
+ assert.match(script,/Test-Path -LiteralPath \$dockerExe -PathType Leaf/);
+ assert.doesNotMatch(script,/\$dockerExe = \(Get-Command docker -CommandType Application -ErrorAction Stop\)\.Source/);
+});
