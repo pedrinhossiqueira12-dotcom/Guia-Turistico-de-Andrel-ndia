@@ -29,6 +29,21 @@ CREATE UNIQUE INDEX catalogo_asaas_acumulo_referencia_loja_pendente
  ON public.catalogo_asaas_acumulo_referencias(comercio_id)
  WHERE estado IN ('reservado','observado','revisao');
 
+-- Depois de reservada, a referencia nao pode ser trocada, apagada
+-- nem alterada via qualquer caminho SQL legado ou retry.
+CREATE FUNCTION catalogo_private.catalogo_asaas_acumulo_referencia_imutavel()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $imutavel$
+BEGIN
+ RAISE EXCEPTION 'Referencia financeira acumulada imutavel: revisar manualmente'
+   USING ERRCODE='23514';
+END;
+$imutavel$;
+REVOKE ALL ON FUNCTION catalogo_private.catalogo_asaas_acumulo_referencia_imutavel()
+ FROM PUBLIC,anon,authenticated,service_role;
+CREATE TRIGGER catalogo_asaas_acumulo_referencia_nao_alterar
+ BEFORE UPDATE OR DELETE ON public.catalogo_asaas_acumulo_referencias
+ FOR EACH ROW EXECUTE FUNCTION catalogo_private.catalogo_asaas_acumulo_referencia_imutavel();
+
 ALTER TABLE public.catalogo_asaas_acumulo_referencias ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.catalogo_asaas_acumulo_referencias
  FROM PUBLIC,anon,authenticated,service_role;
