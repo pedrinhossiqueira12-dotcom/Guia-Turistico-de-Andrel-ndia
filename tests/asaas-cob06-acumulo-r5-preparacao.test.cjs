@@ -113,3 +113,29 @@ test("COB-06: referencia unica imutavel e sem POST bancario ate conciliacao comp
  assert.ok(!edge.includes("catalogo_asaas_reservar_referencia_acumulo("));
  assert.doesNotMatch(referenciaBancaria,/\b(?:POST \/payments|\/payments\s*['"])/);
 });
+
+const observaGetSql=read("supabase/production-candidate/06_cob06_observacao_bancaria_sem_baixa.sql");
+const validaGetTs=read("supabase/functions/_shared/catalogo-asaas-acumulo-get-verificado-inerte.ts");
+const ensaioGet=read("supabase/functions/tests/catalogo-asaas-acumulo-get-verificado-inerte.test.ts");
+test("COB-06: associacao por GET testada sem mutacao financeira nem rede",()=>{
+ assert.match(observaGetSql,/CREATE TABLE public\.catalogo_asaas_acumulo_observacoes/);
+ assert.match(observaGetSql,/lote_id uuid PRIMARY KEY/);
+ assert.match(observaGetSql,/payment_id text NOT NULL UNIQUE/);
+ assert.match(observaGetSql,/CREATE TRIGGER catalogo_asaas_acumulo_observacao_nao_alterar/);
+ assert.match(observaGetSql,/public\.catalogo_asaas_clientes/);
+ assert.match(observaGetSql,/public\.catalogo_asaas_conferir_conciliacao_acumulo/);
+ assert.match(observaGetSql,/pode_quitar boolean NOT NULL DEFAULT false CHECK\(pode_quitar=false\)/);
+ assert.match(observaGetSql,/pode_liberar_motoboy boolean NOT NULL DEFAULT false CHECK\(pode_liberar_motoboy=false\)/);
+ assert.match(observaGetSql,/GRANT EXECUTE ON FUNCTION public\.catalogo_asaas_registrar_observacao_acumulo\(/);
+ assert.match(observaGetSql,/TO service_role;/);
+ assert.match(validaGetTs,/conferirPagamentoAcumuloPorGet/);
+ assert.match(validaGetTs,/remoto\.externalReference === esperado\.referencia/);
+ assert.match(validaGetTs,/remoto\.customer === esperado\.clienteId/);
+ assert.match(validaGetTs,/remoto\.billingType === "PIX"/);
+ assert.match(validaGetTs,/centsExatos\(remoto\.value\) === esperado\.valorCentavos/);
+ assert.match(ensaioGet,/GET_INDISPONIVEL/);
+ assert.match(reserva,/COB06_OBSERVACAO_GET_SIMULADO_IMUTAVEL_SEM_BAIXA_OK/);
+ assert.ok(workflow.includes("06_cob06_observacao_bancaria_sem_baixa.sql"));
+ assert.ok(!edge.includes("catalogo_asaas_registrar_observacao_acumulo("));
+ assert.ok(!edge.includes("catalogo-asaas-acumulo-get-verificado-inerte.ts"));
+});
