@@ -22,10 +22,12 @@ async function ae(e, a, administrador) {
   const catalogo = await g.from("catalogos")
     .select("comercio_id,proprietario_id").eq("comercio_id",id).maybeSingle();
   if (catalogo.error) return t({sucesso:false,erro:"Falha ao verificar catalogo financeiro."},503);
-  // Sem catalogo nao ha contrato de arquivamento seguro validado para esta rota.
-  // Nao recorrer ao UPDATE legado; um fluxo especifico exigira revisao separada.
-  if (!catalogo.data) {
-    return t({sucesso:false,arquivado:false,erro:"Encerramento requer verificacao administrativa. Nenhum dado foi removido."},409);
+  // Proprietario sem catalogo: revisao por administrador autenticado.
+  // O admin somente usa a RPC transacional e fail-closed especifica,
+  // nunca UPDATE direto legado.
+  if (!catalogo.data && !administrador) {
+    return t({sucesso:false,arquivado:false,
+      erro:"Comercio sem catalogo financeiro: solicite revisao administrativa para exclusao segura."},409);
   }
   if (!administrador) {
     if (catalogo.data.proprietario_id !== a) {
@@ -53,11 +55,14 @@ async function ae(e, a, administrador) {
       pedidos_em_andamento:pedido.data.pedidos_em_andamento,
       mensagem:pedido.data.mensagem || "Encerramento registrado. Arquivamento depende de confirmacao administrativa."});
   }
-  const fim = await g.rpc("catalogo_finalizar_encerramento_financeiro",{
+  const semCatalogo = !catalogo.data;
+  const fim = await g.rpc(semCatalogo?
+    "catalogo_arquivar_sem_catalogo_admin":"catalogo_finalizar_encerramento_financeiro",{
     p_comercio:id,p_admin:a
   });
-  if (fim.error) return t({sucesso:false,arquivado:false,erro:"Nao foi possivel validar a finalizacao financeira."},503);
-  if (fim.data?.ok !== true || fim.data?.situacao !== "arquivado") {
+  if (fim.error) return t({sucesso:false,arquivado:false,erro:"Nao foi possivel validar o arquivamento no banco."},503);
+  if (fim.data?.ok !== true || fim.data?.situacao !== "arquivado" ||
+      (semCatalogo && fim.data?.sem_catalogo !== true)) {
     return t({sucesso:false,arquivado:false,erro:fim.data?.mensagem || "Finalizacao nao autorizada."},409);
   }
   // A decisao financeira ja foi confirmada no banco. O GitHub e uma vitrine
