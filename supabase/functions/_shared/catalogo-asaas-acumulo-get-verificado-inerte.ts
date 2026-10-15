@@ -56,7 +56,14 @@ export async function conferirPagamentoAcumuloPorGet(
 
   // Apenas GET por ID; quem integrar deve passar o adaptador autenticado Asaas
   // e recuperar a identidade do cliente no banco, nunca de dados do navegador.
-  const remoto = objeto(await consultarPorId(paymentId));
+  let resultado: unknown;
+  try {
+    resultado = await consultarPorId(paymentId);
+  } catch {
+    // Nao devolver corpo remoto, token ou detalhes da falha ao cliente.
+    throw new Error("COB06_HOLD_GET_INDISPONIVEL");
+  }
+  const remoto = objeto(resultado);
   exige(remoto.id === paymentId, "ID_DIVERGENTE");
   exige(remoto.externalReference === esperado.referencia, "REFERENCIA_DIVERGENTE");
   exige(remoto.customer === esperado.clienteId, "CLIENTE_DIVERGENTE");
