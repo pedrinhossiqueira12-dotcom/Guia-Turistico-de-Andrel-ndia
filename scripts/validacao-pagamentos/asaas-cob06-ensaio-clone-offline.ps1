@@ -153,7 +153,13 @@ if($LASTEXITCODE -ne 0){throw 'Falha ao copiar SQL para contêiner offline.'}
 # sem interpretar avisos como falhas nem perder o codigo de saida de psql.
 $saidaNormal = Join-Path $pasta 'resultado-stdout.log'
 $saidaAvisos = Join-Path $pasta 'resultado-stderr.log'
-$dockerExe = (Get-Command docker -CommandType Application -ErrorAction Stop).Source
+# Get-Command pode localizar varias instalacoes; Start-Process exige um unico caminho.
+$dockerCommands = @(Get-Command docker.exe -CommandType Application -ErrorAction Stop)
+if ($dockerCommands.Count -lt 1) { throw 'Docker CLI nao encontrado no PATH.' }
+$dockerExe = [string]$dockerCommands[0].Source
+if (-not (Test-Path -LiteralPath $dockerExe -PathType Leaf)) {
+ throw 'Executavel Docker nao encontrado no caminho selecionado.'
+}
 $processo = Start-Process -FilePath $dockerExe -ArgumentList @(
  'exec',$nome,'psql','-X','-U','postgres','-d','postgres',
  '-v','ON_ERROR_STOP=1','-f','/tmp/guia_cob06_ensaio.sql'
