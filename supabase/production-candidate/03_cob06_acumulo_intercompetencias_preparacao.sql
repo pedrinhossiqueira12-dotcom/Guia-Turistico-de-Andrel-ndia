@@ -110,7 +110,174 @@ REVOKE ALL ON FUNCTION public.catalogo_asaas_previsualizar_acumulo(text,date)
 GRANT EXECUTE ON FUNCTION public.catalogo_asaas_previsualizar_acumulo(text,date)
  TO service_role;
 
--- A proxima etapa devera instituir a reserva transacional da composicao,
--- bloqueio contra emissao direta concorrente e conciliacao de pagamentos/
--- estornos em todas as competencias. Ate la, este SQL NAO pode operar Pix.
+-- A reserva do agrupamento e somente de LIVRO, nunca bancária.
+-- Serializa a mesma loja, bloqueia os fechamentos, verifica snapshots
+-- e testa ausencia de qualquer emissão/reserva já existente.
+CREATE FUNCTION public.catalogo_asaas_reservar_acumulo(
+ p_comercio text,p_competencia_corte date
+) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $reservar$
+DECLARE
+ v_lote public.catalogo_asaas_acumulo_lotes%ROWTYPE;
+ v_f public.catalogo_fechamentos_offline%ROWTYPE;
+ v_ids uuid[] := ARRAY[]::uuid[];
+ v_valores integer[] := ARRAY[]::integer[];
+ v_competencias date[] := ARRAY[]::date[];
+ v_comp_count bigint;
+ v_comp_total bigint;
+ v_count integer := 0;
+ v_menores integer := 0;
+ v_total bigint := 0;
+ v_i integer;
+BEGIN
+ IF p_comercio IS NULL OR pg_catalog.length(pg_catalog.btrim(p_comercio))=0
+    OR pg_catalog.length(p_comercio)>180
+    OR p_competencia_corte IS NULL
+    OR pg_catalog.date_part('day',p_competencia_corte)<>1
+ THEN RETURN pg_catalog.jsonb_build_object('ok',false,'motivo','argumentos_invalidos'); END IF;
+
+ PERFORM pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended('catalogo-fatura:'||p_comercio,0));
+ PERFORM 1 FROM public.catalogos WHERE comercio_id=p_comercio FOR UPDATE;
+ IF NOT FOUND
+ THEN RETURN pg_catalog.jsonb_build_object('ok',false,'motivo','comercio_inexistente'); END IF;
+
+ SELECT * INTO v_lote
+ FROM public.catalogo_asaas_acumulo_lotes
+ WHERE comercio_id=p_comercio AND competencia_corte=p_competencia_corte
+ FOR UPDATE;
+ IF FOUND THEN
+   RETURN pg_catalog.jsonb_build_object('ok',true,
+      'ja_reservado',true,'lote_id',v_lote.id,'total_centavos',v_lote.total_centavos,
+      'estado',v_lote.estado,'pix_emitido',false);
+ END IF;
+
+ FOR v_f IN
+   SELECT f.* FROM public.catalogo_fechamentos_offline f
+   WHERE f.comercio_id=p_comercio AND f.competencia<=p_competencia_corte
+     AND f.status IN ('faturado','vencido','bloqueado')
+     AND f.total_comissao_centavos>0
+   ORDER BY f.competencia,f.id FOR UPDATE
+ LOOP
+   -- Com cobrança ou reserva prévia, essa origem NÃO é reaproveitada.
+   IF EXISTS(SELECT 1 FROM public.catalogo_fatura_cobrancas c
+             WHERE c.fechamento_id=v_f.id)
+      OR EXISTS(SELECT 1 FROM public.catalogo_asaas_emissoes e
+                WHERE e.fechamento_id=v_f.id)
+      OR EXISTS(SELECT 1 FROM public.catalogo_asaas_acumulo_fontes a
+                WHERE a.fechamento_id=v_f.id)
+   THEN CONTINUE; END IF;
+
+   SELECT pg_catalog.count(*),coalesce(pg_catalog.sum(fc.valor_centavos),0)
+   INTO v_comp_count,v_comp_total FROM public.catalogo_fatura_componentes_v2 fc
+   WHERE fc.fechamento_id=v_f.id;
+
+   -- Sem snapshot completo nao reservar dinheiro de origem indeterminada.
+   IF v_comp_count=0 OR v_comp_total IS DISTINCT FROM v_f.total_comissao_centavos
+   THEN RETURN pg_catalog.jsonb_build_object('ok',false,
+      'motivo','snapshot_inconsistente','competencia',v_f.competencia); END IF;
+
+   v_ids:=pg_catalog.array_append(v_ids,v_f.id);
+   v_valores:=pg_catalog.array_append(v_valores,v_f.total_comissao_centavos);
+   v_competencias:=pg_catalog.array_append(v_competencias,v_f.competencia);
+   v_count:=v_count+1;
+   IF v_f.total_comissao_centavos<500 THEN v_menores:=v_menores+1; END IF;
+   v_total:=v_total+v_f.total_comissao_centavos;
+   IF v_count>120 OR v_total>2147483647
+   THEN RETURN pg_catalog.jsonb_build_object('ok',false,'motivo','limite_de_lote'); END IF;
+ END LOOP;
+
+ IF v_total<500 OR v_count<2 OR v_menores=0
+ THEN RETURN pg_catalog.jsonb_build_object('ok',false,
+    'motivo','minimo_ou_fontes_insuficientes',
+    'total_centavos',v_total,'quantidade_faturas',v_count); END IF;
+
+ INSERT INTO public.catalogo_asaas_acumulo_lotes
+   (comercio_id,competencia_corte,total_centavos)
+ VALUES(p_comercio,p_competencia_corte,v_total)
+ RETURNING * INTO v_lote;
+
+ FOR v_i IN 1..v_count LOOP
+   INSERT INTO public.catalogo_asaas_acumulo_fontes
+     (fechamento_id,lote_id,competencia,valor_centavos)
+   VALUES(v_ids[v_i],v_lote.id,v_competencias[v_i],v_valores[v_i]);
+ END LOOP;
+
+ RETURN pg_catalog.jsonb_build_object('ok',true,'ja_reservado',false,
+   'lote_id',v_lote.id,'total_centavos',v_lote.total_centavos,
+   'quantidade_faturas',v_count,'estado','preparado',
+   'pix_emitido',false);
+END;
+$reservar$;
+REVOKE ALL ON FUNCTION public.catalogo_asaas_reservar_acumulo(text,date)
+ FROM PUBLIC,anon,authenticated,service_role;
+GRANT EXECUTE ON FUNCTION public.catalogo_asaas_reservar_acumulo(text,date)
+ TO service_role;
+
+-- Não permitir que o fluxo antigo de uma única competência emita cobrança
+-- quando essa origem já foi reservada por um lote: vale para INSERT direto
+-- e para o journal existente de emissões, sem reescrever a Edge atual.
+CREATE FUNCTION catalogo_private.catalogo_asaas_acumulo_guard_emissao()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $guard$
+BEGIN
+ PERFORM 1 FROM public.catalogo_fechamentos_offline
+ WHERE id=NEW.fechamento_id FOR UPDATE;
+ IF EXISTS(SELECT 1 FROM public.catalogo_asaas_acumulo_fontes a
+           WHERE a.fechamento_id=NEW.fechamento_id)
+ THEN RAISE EXCEPTION 'Fonte reservada em agrupamento: emissao individual negada'
+   USING ERRCODE='23514'; END IF;
+ RETURN NEW;
+END;
+$guard$;
+REVOKE ALL ON FUNCTION catalogo_private.catalogo_asaas_acumulo_guard_emissao()
+ FROM PUBLIC,anon,authenticated,service_role;
+CREATE TRIGGER catalogo_asaas_acumulo_sem_emissao_individual
+ BEFORE INSERT ON public.catalogo_asaas_emissoes
+ FOR EACH ROW EXECUTE FUNCTION catalogo_private.catalogo_asaas_acumulo_guard_emissao();
+CREATE TRIGGER catalogo_asaas_acumulo_sem_cobranca_individual
+ BEFORE INSERT ON public.catalogo_fatura_cobrancas
+ FOR EACH ROW EXECUTE FUNCTION catalogo_private.catalogo_asaas_acumulo_guard_emissao();
+
+-- Evitar que o fechamento ou seus componentes sejam alterados depois
+-- de reservado; o conciliador multi-competência precisará ser auditado
+-- antes de receber direito de mudar qualquer estado financeiro.
+CREATE FUNCTION catalogo_private.catalogo_asaas_acumulo_guard_fechamento()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $guard$
+BEGIN
+ IF (NEW.total_comissao_centavos IS DISTINCT FROM OLD.total_comissao_centavos
+     OR NEW.competencia IS DISTINCT FROM OLD.competencia
+     OR NEW.comercio_id IS DISTINCT FROM OLD.comercio_id)
+   AND EXISTS(SELECT 1 FROM public.catalogo_asaas_acumulo_fontes a
+              WHERE a.fechamento_id=OLD.id)
+ THEN RAISE EXCEPTION 'Fechamento reservado: alteracao de valores negada'
+  USING ERRCODE='23514'; END IF;
+ RETURN NEW;
+END;
+$guard$;
+REVOKE ALL ON FUNCTION catalogo_private.catalogo_asaas_acumulo_guard_fechamento()
+ FROM PUBLIC,anon,authenticated,service_role;
+CREATE TRIGGER catalogo_asaas_acumulo_fechamento_imutavel
+ BEFORE UPDATE ON public.catalogo_fechamentos_offline
+ FOR EACH ROW EXECUTE FUNCTION catalogo_private.catalogo_asaas_acumulo_guard_fechamento();
+
+CREATE FUNCTION catalogo_private.catalogo_asaas_acumulo_guard_componentes()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $guard$
+BEGIN
+ IF EXISTS(SELECT 1 FROM public.catalogo_asaas_acumulo_fontes a
+            WHERE a.fechamento_id=OLD.fechamento_id)
+    OR (TG_OP<>'DELETE' AND EXISTS(
+       SELECT 1 FROM public.catalogo_asaas_acumulo_fontes a
+       WHERE a.fechamento_id=NEW.fechamento_id))
+ THEN RAISE EXCEPTION 'Componentes de fechamento reservado nao podem mudar'
+  USING ERRCODE='23514'; END IF;
+ RETURN CASE WHEN TG_OP='DELETE' THEN OLD ELSE NEW END;
+END;
+$guard$;
+REVOKE ALL ON FUNCTION catalogo_private.catalogo_asaas_acumulo_guard_componentes()
+ FROM PUBLIC,anon,authenticated,service_role;
+CREATE TRIGGER catalogo_asaas_acumulo_componentes_imutaveis
+ BEFORE INSERT OR UPDATE OR DELETE ON public.catalogo_fatura_componentes_v2
+ FOR EACH ROW EXECUTE FUNCTION catalogo_private.catalogo_asaas_acumulo_guard_componentes();
+
+-- Ponto final desta entrega: reserva local do livro, sem ligações com API
+-- Asaas, webhook, settlement, dinheiro ou credito de motoboy.
 COMMIT;
