@@ -144,5 +144,40 @@ BEGIN
      WHERE gateway='mercadopago' AND status='pago') <> v_mp_antes
  THEN RAISE EXCEPTION 'COB06_FAIL: historico Mercado Pago alterado'; END IF;
 
+ -- Sem catalogo: o administrador pode arquivar somente com comprovacao
+ -- de ausencia de catalogo, dividas, pedidos e qualquer historico financeiro.
+ IF EXISTS (SELECT 1 FROM public.comercios_publicados
+            WHERE local_id='cob06-sem-catalogo-fixture-20261015')
+ THEN RAISE EXCEPTION 'COB06_FAIL: fixture sem catalogo ja existe'; END IF;
+ INSERT INTO public.comercios_publicados(local_id,status,destaque)
+ VALUES ('cob06-sem-catalogo-fixture-20261015','ativo',false);
+ v_res := public.catalogo_arquivar_sem_catalogo_admin(
+   'cob06-sem-catalogo-fixture-20261015',v_dono);
+ IF (v_res->>'ok') IS DISTINCT FROM 'false'
+ THEN RAISE EXCEPTION 'COB06_FAIL: nao admin arquivou sem catalogo'; END IF;
+ v_res := public.catalogo_arquivar_sem_catalogo_admin(
+   'comercio-inexistente-cob06','4b9a0233-6b72-4573-aebd-d596c5b15e1b'::uuid);
+ IF (v_res->>'ok') IS DISTINCT FROM 'false'
+ THEN RAISE EXCEPTION 'COB06_FAIL: publicacao inexistente foi arquivada'; END IF;
+ v_res := public.catalogo_arquivar_sem_catalogo_admin(
+   v_loja,'4b9a0233-6b72-4573-aebd-d596c5b15e1b'::uuid);
+ IF (v_res->>'ok') IS DISTINCT FROM 'false'
+ THEN RAISE EXCEPTION 'COB06_FAIL: admin contornou catalogo existente'; END IF;
+ v_res := public.catalogo_arquivar_sem_catalogo_admin(
+   'cob06-sem-catalogo-fixture-20261015',
+   '4b9a0233-6b72-4573-aebd-d596c5b15e1b'::uuid);
+ IF (v_res->>'ok') IS DISTINCT FROM 'true'
+ OR (v_res->>'sem_catalogo') IS DISTINCT FROM 'true'
+ OR (SELECT status FROM public.comercios_publicados
+     WHERE local_id='cob06-sem-catalogo-fixture-20261015') IS DISTINCT FROM 'deletado'
+ THEN RAISE EXCEPTION 'COB06_FAIL: arquivamento seguro sem catalogo falhou: %',v_res; END IF;
+ v_res := public.catalogo_arquivar_sem_catalogo_admin(
+   'cob06-sem-catalogo-fixture-20261015',
+   '4b9a0233-6b72-4573-aebd-d596c5b15e1b'::uuid);
+ IF (v_res->>'ok') IS DISTINCT FROM 'true'
+ OR (v_res->>'ja_arquivado') IS DISTINCT FROM 'true'
+ THEN RAISE EXCEPTION 'COB06_FAIL: idempotencia sem catalogo falhou'; END IF;
+ RAISE NOTICE 'COB06_SEM_CATALOGO_ADMIN_OK: admin restrito, sem divida/historico, idempotente';
+
  RAISE NOTICE 'COB06_GUARDAS_FUNCIONAIS_OK: cinco recusas, divida, quitacao sintetica, arquivo e RPC';
 END $cob06_guardas_reais$;
