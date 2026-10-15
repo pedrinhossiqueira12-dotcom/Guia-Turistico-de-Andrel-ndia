@@ -43,7 +43,7 @@ function cenario(op={}){
    Y:async()=>({cadastro:{local_id:"loja-teste",usuario_id:uid},erro:null}),
    E:async r=>r.user?{id:r.user}:null,y:async r=>r.admin?{id:r.admin}:null,
    t:(body,status=200)=>({body,status}),
-   z:async()=>{chamadas.push("github:get");return {comercios:vitrine,sha:"sha-mock"}},
+   z:async()=>{chamadas.push("github:get");return {comercios:JSON.parse(JSON.stringify(vitrine)),sha:"sha-mock"}},
    b:async(_file,conteudo)=>{chamadas.push("github:put");if(op.falhaGithub)throw Error("GitHub indisponivel");writes++;vitrine.splice(0,1,...JSON.parse(conteudo))},
    S:"DATA/comercios.json",console};
  vm.createContext(contexto);
@@ -124,6 +124,7 @@ test("COB-06: falha GitHub apos finalizacao com status deletado admite nova tent
  assert.equal(falha.status,503);
  assert.equal(falha.body.pendente_sincronizacao,true);
  assert.equal(c.writes(),0);
+ assert.equal(c.vitrine[0].status,"ativo","PUT falhado nao persiste mutacao local na vitrine simulada");
  op.falhaGithub=false;
  const sucesso=await c.we({admin:c.uid},{comercio_id:"loja-teste"});
  assert.equal(sucesso.status,200);assert.equal(sucesso.body.sucesso,true);
