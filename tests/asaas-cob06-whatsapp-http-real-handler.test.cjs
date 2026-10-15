@@ -88,7 +88,7 @@ function cenario(opts={}){
  }
  ctx.Te=async()=>{calls.push("whatsapp:accepted");return ctx.t({sucesso:true});};
  vm.createContext(ctx);
- vm.runInContext(functions+";globalThis.http=je;",ctx);
+ vm.runInContext(functions+";globalThis.http=je;globalThis.safeHttp=cob06HandlerSeguro;",ctx);
  function request(acao,token,method="POST"){
   return new Request("https://edge.local/functions/v1/whatsapp-bot",{
    method,headers:{"Content-Type":"application/json",...(token?{Authorization:"Bearer "+token}:{})},
@@ -99,7 +99,7 @@ function cenario(opts={}){
   const response=await ctx.http(request(acao,token,method));
   return {status:response.status,data:await response.json()};
  }
- return {call,request,raw:ctx.http,calls,owner,admin,
+ return {call,request,raw:ctx.http,safe:ctx.safeHttp,calls,owner,admin,
   get putCount(){return putCount},get jsonState(){return jsonState},
   setGithubFailure(v){opts.githubFailure=v}};
 }
@@ -208,4 +208,21 @@ test("HTTP WhatsApp: GET de verificacao exige token; payload nao eh registrado n
  r=await c.raw(new Request(url+"hub.mode=subscribe&hub.verify_token=token-de-verificacao-local&hub.challenge=123"));
  assert.equal(r.status,200);assert.equal(await r.text(),"123");
  assert.ok(!code.includes('console.log("Webhook WhatsApp recebido:",JSON.stringify(e))'));
+});
+
+test("HTTP real: excecao inesperada nao revela detalhes internos ao solicitante",async()=>{
+  const c=cenario();
+  const req=new Request("https://edge.local/functions/v1/whatsapp-bot",{
+    method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({acao:"cadastro_web",dado_privado:"NAO_EXIBIR"})
+  });
+  const r=await c.safe(req);
+  assert.equal(r.status,500);
+  const body=await r.json();
+  assert.equal(body.sucesso,false);
+  assert.equal(body.erro,"Erro interno da Edge Function.");
+  assert.deepEqual(Object.keys(body).sort(),["erro","sucesso"]);
+  assert.ok(!JSON.stringify(body).includes("Unexpected handler"));
+  assert.ok(!JSON.stringify(body).includes("NAO_EXIBIR"));
+  noWrites(c);
 });
