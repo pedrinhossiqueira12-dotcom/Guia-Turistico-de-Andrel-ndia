@@ -29,8 +29,8 @@ BEGIN
   entrega_status,metadata
  ) VALUES(
   'comercio-de-exemplo','ci-cob06-acumulo-100','offline',pg_catalog.gen_random_uuid(),
-  'entregue','aprovado','entrega','dinheiro',1600,
-  0,1600,80,1500,'Pedido sintetico','00000000000',2,20,100,
+  'entregue','aprovado','entrega','dinheiro',1429,
+  0,1429,71,1329,'Pedido sintetico','00000000000',2,29,100,
   'entregue','{"cob06":"acumulo-R1"}'::jsonb)
  RETURNING id INTO v_p1;
  INSERT INTO public.catalogo_pedidos(
@@ -42,8 +42,8 @@ BEGIN
   entrega_status,metadata
  ) VALUES(
   'comercio-de-exemplo','ci-cob06-acumulo-400','offline',pg_catalog.gen_random_uuid(),
-  'entregue','aprovado','entrega','dinheiro',6400,
-  0,6400,320,6000,'Pedido sintetico','00000000000',2,80,400,
+  'entregue','aprovado','entrega','dinheiro',5714,
+  0,5714,286,5314,'Pedido sintetico','00000000000',2,114,400,
   'entregue','{"cob06":"acumulo-R4"}'::jsonb)
  RETURNING id INTO v_p2;
 
@@ -58,8 +58,8 @@ BEGIN
 
  INSERT INTO public.catalogo_fatura_componentes_v2(
   fechamento_id,pedido_id,tipo,valor_centavos)
- VALUES(v_f1,v_p1,'plataforma',80),(v_f1,v_p1,'logistica',20),
-       (v_f2,v_p2,'plataforma',320),(v_f2,v_p2,'logistica',80);
+ VALUES(v_f1,v_p1,'plataforma',71),(v_f1,v_p1,'logistica',29),
+       (v_f2,v_p2,'plataforma',286),(v_f2,v_p2,'logistica',114);
 
  v_r:=public.catalogo_asaas_reservar_acumulo(
   'comercio-de-exemplo','2040-03-01');
@@ -112,7 +112,7 @@ BEGIN
  END;
  IF v_negativas<>4
  OR (SELECT valor_centavos FROM public.catalogo_fatura_componentes_v2
-       WHERE fechamento_id=v_f1 AND tipo='plataforma')<>80
+       WHERE fechamento_id=v_f1 AND tipo='plataforma')<>71
  OR (SELECT status FROM public.catalogo_fechamentos_offline WHERE id=v_f1)<>'faturado'
  OR (SELECT status FROM public.catalogo_fatura_cobrancas
        WHERE order_id='legacy-cob06-ci')<>'pago'
