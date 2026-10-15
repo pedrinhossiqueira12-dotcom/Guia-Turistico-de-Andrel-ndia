@@ -25,6 +25,14 @@ Triggers candidatos bloqueiam INSERT de cobrança/emissão individual em fontes 
 
 A GitHub Actions aplica primeiro o pacote congelado de nove SQL em `catalogo_cob06_ci`, depois somente neste banco descartável aplica o SQL candidato 03 e executa os ensaios dentro de `BEGIN/ROLLBACK`. Os cenários sintéticos são **R$1+R$4** e **R$2+R$2+R$1**, além de fonte duplicada, reserva repetida, exclusão/alteração de snapshot, emissão individual proibida e histórico Mercado Pago pago intacto. A primeira CI corrigida passou no cenário R$1+R$4 (run `38777198026`, job de SQL PASS); aprovação dos cenários ampliados depende do run mais recente. **Isto não substitui restauração de backup de produção nem prova de pagamento.**
 
+## Preflight contábil intercompetências, sem baixa bancária
+
+O candidato **`supabase/production-candidate/04_cob06_conciliacao_preflight_inerte.sql`** (commit `86c31d8`) implementa `catalogo_asaas_conferir_conciliacao_acumulo(uuid)`, RPC **somente leitura** e executável apenas por `service_role`. Confere cada origem do lote contra sua fatura, competência, comércio, status, soma das parcelas e quantidade de pedidos, comparando cada parcela com a comissão e o pedido de entrega física confirmado. Se faltarem comissão, snapshot, confirmação de entrega ou qualquer valor, retorna `integridade_contabil_ok=false` e contabiliza as parcelas inválidas. Nunca aceita origem com cobrança ou emissão bancária individual já registrada.
+
+**Mesmo quando a contabilidade confere, esta versão sempre devolve `pode_emitir_pix=false`, `pode_quitar=false`, `pode_estornar=false` e `pode_liberar_motoboy=false`.** A comprovação bancária Asaas vinculada ao lote ainda não foi projetada/validada como fonte confiável. Não há função de mutação do estado financeiro, POST Pix, webhook de lote ou alterações em repasses.
+
+**Prova CI (15/10/2026):** run [38779330385](https://github.com/pedrinhossiqueira12-dotcom/Guia-Turistico-de-Andrel-ndia/actions/runs/38779330385), job PostgreSQL **PASS**, incluindo `COB06_CONCILIACAO_ORIGENS_INCOMPLETAS_BLOQUEADAS_SEM_CREDITO_OK` dentro de `ROLLBACK` para os lotes R$1+R$4 e R$2+R$2+R$1; teste Node também aprovado (**830/830**). Esse teste prova a **recusa segura de origens incompletas**, não a conclusão de uma quitação real. A CI global do run pode ainda depender de jobs de infraestrutura.
+
 ## Contrato técnico que precisa ser implementado e testado
 
 1. Registrar vínculo durável e único entre fechamento(s) de origem e cobrança consolidada de destino, sem modificar os totais históricos originais; impedir que uma competência já emitida/paga/reservada seja acumulada novamente.
