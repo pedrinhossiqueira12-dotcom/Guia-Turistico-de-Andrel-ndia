@@ -473,8 +473,10 @@ BEGIN
    EXCEPTION WHEN SQLSTATE '23514' THEN NULL;
    END;
 
-   PERFORM public.catalogo_asaas_registrar_evento_acumulo_inerte(
+   v_evento:=public.catalogo_asaas_registrar_evento_acumulo_inerte(
      v_id,'pay_cob06_obs_123456','ci-cob06-ponte-refund','REFUNDED');
+   IF v_evento->>'ok'<>'true' OR v_evento->>'ja_observado'<>'false'
+   THEN RAISE EXCEPTION 'COB06_PONTE: diario recusou estorno pos-quitacao: %',v_evento; END IF;
    -- Mesmo ANTES de atualizar estado local, um evento de estorno cancela
    -- a prova de financiamento no helper, sem repetir repasse.
    IF catalogo_private.catalogo_v2_parcela_recebida(v_p1,'plataforma')

@@ -128,11 +128,16 @@ test("COB-06: helper suporta lote unico somente com recibo isolado, sem RPC exte
  assert.match(ponteSql,/CREATE OR REPLACE FUNCTION catalogo_private\.catalogo_v2_parcela_recebida/);
  assert.match(ponteSql,/JOIN public\.catalogo_fatura_cobrancas b/);
  assert.match(ponteSql,/JOIN public\.catalogo_asaas_acumulo_quitacoes_isoladas q/);
+ assert.match(ponteSql,/CREATE OR REPLACE FUNCTION public\.catalogo_asaas_registrar_evento_acumulo_inerte\(/);
+ assert.match(ponteSql,/public\.catalogo_asaas_conferir_conciliacao_acumulo\(p_lote\)/);
+ assert.match(ponteSql,/f\.status NOT IN \('pago','vencido','bloqueado'\)/);
+ assert.match(ponteSql,/v_quitacao\.payment_id IS DISTINCT FROM p_payment/);
  assert.match(ponteSql,/rev\.estado IN \('REFUNDED','PARTIALLY_REFUNDED','REFUND_IN_PROGRESS'/);
  assert.match(ponteSql,/REVOKE ALL ON FUNCTION catalogo_private\.catalogo_v2_parcela_recebida\(uuid,text\)/);
  assert.ok(workflow.includes("10_cob06_ponte_quitacao_multicompetencia_isolada.sql"));
  assert.match(reserva,/COB06_PONTE_QUITACAO_4_PARCELAS_ESTORNO_ROLLBACK_OK/);
  assert.match(reserva,/COB06_PONTE_ROLLBACK_ESPERADO/);
+ assert.match(reserva,/diario recusou estorno pos-quitacao/);
  assert.ok(!edge.includes("catalogo_asaas_acumulo_quitacoes_isoladas"));
  assert.doesNotMatch(ponteSql,/CREATE (?:OR REPLACE )?FUNCTION public\.catalogo_asaas_(?:quitar|confirmar|liquidar)_/);
 });

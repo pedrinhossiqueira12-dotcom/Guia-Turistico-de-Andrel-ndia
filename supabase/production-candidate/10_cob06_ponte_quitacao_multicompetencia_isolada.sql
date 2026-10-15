@@ -139,6 +139,95 @@ $recebida$;
 REVOKE ALL ON FUNCTION catalogo_private.catalogo_v2_parcela_recebida(uuid,text)
  FROM PUBLIC,anon,authenticated,service_role;
 
+-- Depois de uma quitacao sintetica, o preflight 04 rejeita faturas 'pago'
+-- (corretamente para uma NOVA emissao). O diario 07, porem, nao pode impedir
+-- a gravacao de um ESTORNO posterior. Aqui distinguimos essas duas fases.
+CREATE OR REPLACE FUNCTION public.catalogo_asaas_registrar_evento_acumulo_inerte(
+ p_lote uuid,p_payment text,p_evento text,p_estado text
+) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $evento$
+DECLARE
+ v_obs public.catalogo_asaas_acumulo_observacoes%ROWTYPE;
+ v_exist public.catalogo_asaas_acumulo_eventos%ROWTYPE;
+ v_quitacao public.catalogo_asaas_acumulo_quitacoes_isoladas%ROWTYPE;
+ v_preflight jsonb;
+ v_count bigint;
+ v_total bigint;
+ v_inconsistentes bigint;
+BEGIN
+ IF p_lote IS NULL OR p_payment IS NULL OR p_evento IS NULL
+ OR pg_catalog.length(p_evento) NOT BETWEEN 8 AND 160
+ OR p_estado IS NULL OR p_estado NOT IN (
+  'PENDING','OVERDUE','CONFIRMED','RECEIVED','REFUNDED',
+  'PARTIALLY_REFUNDED','REFUND_IN_PROGRESS','CHARGEBACK_REQUESTED','DELETED')
+ THEN RETURN pg_catalog.jsonb_build_object('ok',false,'motivo','argumentos_invalidos'); END IF;
+ SELECT * INTO v_obs FROM public.catalogo_asaas_acumulo_observacoes
+ WHERE lote_id=p_lote FOR UPDATE;
+ IF NOT FOUND OR v_obs.payment_id IS DISTINCT FROM p_payment
+ THEN RETURN pg_catalog.jsonb_build_object('ok',false,'motivo','pagamento_nao_vinculado'); END IF;
+
+ v_preflight:=public.catalogo_asaas_conferir_conciliacao_acumulo(p_lote);
+ IF v_preflight->>'integridade_contabil_ok' IS DISTINCT FROM 'true' THEN
+   -- A excecao e restrita a um lote que ja tem comprovante sintetico
+   -- imutavel e fontes com saldos/competencias intactos.
+   SELECT * INTO v_quitacao FROM public.catalogo_asaas_acumulo_quitacoes_isoladas
+   WHERE lote_id=p_lote FOR UPDATE;
+   IF NOT FOUND OR v_quitacao.payment_id IS DISTINCT FROM p_payment
+   OR v_quitacao.valor_centavos IS DISTINCT FROM v_obs.valor_centavos
+   THEN RETURN pg_catalog.jsonb_build_object('ok',false,'motivo','origens_nao_conferidas'); END IF;
+
+   SELECT pg_catalog.count(*),coalesce(pg_catalog.sum(src.valor_centavos),0),
+          pg_catalog.count(*) FILTER(WHERE src.invalida)
+   INTO v_count,v_total,v_inconsistentes
+   FROM (
+     SELECT af.valor_centavos,
+       (f.id IS NULL OR f.competencia IS DISTINCT FROM af.competencia
+        OR f.total_comissao_centavos IS DISTINCT FROM af.valor_centavos
+        OR f.status NOT IN ('pago','vencido','bloqueado')
+        OR f.comercio_id IS DISTINCT FROM lote.comercio_id
+        OR (f.status='pago' AND f.referencia_pagamento IS DISTINCT FROM ref.referencia)
+        OR coalesce(comp.qtd,0)=0 OR comp.total IS DISTINCT FROM af.valor_centavos
+        OR EXISTS(SELECT 1 FROM public.catalogo_fatura_cobrancas b
+                  WHERE b.fechamento_id=af.fechamento_id)
+       ) AS invalida
+     FROM public.catalogo_asaas_acumulo_fontes af
+     JOIN public.catalogo_asaas_acumulo_lotes lote ON lote.id=af.lote_id
+     JOIN public.catalogo_asaas_acumulo_referencias ref ON ref.lote_id=lote.id
+     LEFT JOIN public.catalogo_fechamentos_offline f ON f.id=af.fechamento_id
+     LEFT JOIN LATERAL (
+       SELECT pg_catalog.count(*) AS qtd,
+         coalesce(pg_catalog.sum(fc.valor_centavos),0) AS total
+       FROM public.catalogo_fatura_componentes_v2 fc
+       WHERE fc.fechamento_id=af.fechamento_id
+     ) comp ON TRUE
+     WHERE af.lote_id=p_lote
+   ) src;
+   IF v_count<2 OR v_total IS DISTINCT FROM v_quitacao.valor_centavos
+     OR v_inconsistentes<>0
+   THEN RETURN pg_catalog.jsonb_build_object('ok',false,'motivo','origens_nao_conferidas'); END IF;
+ END IF;
+
+ SELECT * INTO v_exist FROM public.catalogo_asaas_acumulo_eventos
+ WHERE lote_id=p_lote AND evento_externo=p_evento FOR UPDATE;
+ IF FOUND THEN
+   IF v_exist.payment_id IS DISTINCT FROM p_payment
+    OR v_exist.estado IS DISTINCT FROM p_estado
+   THEN RETURN pg_catalog.jsonb_build_object('ok',false,'motivo','replay_divergente'); END IF;
+   RETURN pg_catalog.jsonb_build_object('ok',true,'ja_observado',true,
+    'evento_id',v_exist.id,'pode_quitar',false,'pode_estornar',false,
+    'pode_liberar_motoboy',false);
+ END IF;
+ INSERT INTO public.catalogo_asaas_acumulo_eventos(lote_id,payment_id,evento_externo,estado)
+ VALUES(p_lote,p_payment,p_evento,p_estado) RETURNING * INTO v_exist;
+ RETURN pg_catalog.jsonb_build_object('ok',true,'ja_observado',false,
+  'evento_id',v_exist.id,'pode_quitar',false,'pode_estornar',false,
+  'pode_liberar_motoboy',false);
+END;
+$evento$;
+REVOKE ALL ON FUNCTION public.catalogo_asaas_registrar_evento_acumulo_inerte(uuid,text,text,text)
+ FROM PUBLIC,anon,authenticated,service_role;
+GRANT EXECUTE ON FUNCTION public.catalogo_asaas_registrar_evento_acumulo_inerte(uuid,text,text,text)
+ TO service_role;
+
 -- NUNCA chamar INSERT neste candidato fora da fixture BEGIN/ROLLBACK.
 -- Nao existe RPC publica de quitacao, estorno, criacao Pix ou saque.
 COMMIT;
