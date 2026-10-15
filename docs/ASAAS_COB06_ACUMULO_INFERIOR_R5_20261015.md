@@ -1,6 +1,6 @@
 # COB-06 — acumulação de comissões abaixo de R$ 5 (decisão aprovada)
 
-**Decisão do proprietário em 15/10/2026.** Escopo restrito à COB-06 da backlog financeira da PR #39. **Estado: regra aprovada; estrutura privada e pré-validação em CI implementadas, mas reserva efetiva, emissão, conciliação intercompetências, homologação e liberação continuam pendentes.** Este documento não autoriza alteração em produção, emissão Pix, saque ou merge.
+**Decisão do proprietário em 15/10/2026.** Escopo restrito à COB-06 da backlog financeira da PR #39. **Estado: regra aprovada; reserva contábil transacional no candidato SQL e pré-validação testadas em PostgreSQL descartável. Emissão Pix, conciliação intercompetências de pagamento/estorno, homologação e liberação continuam pendentes.** Este documento não autoriza alteração em produção, emissão Pix, saque ou merge.
 
 ## Regra aprovada
 
@@ -16,6 +16,14 @@ Exemplo: outubro com R$ 1 e novembro com R$ 4 geram cobrança total de R$ 5, man
 - **Pré-validação somente leitura:** `catalogo_asaas_previsualizar_acumulo(text,date)` é executável só pela `service_role`; consulta até uma competência, exclui faturas pagas, emitidas, com reserva bancária ou já agrupadas, e compara a soma de `catalogo_fatura_componentes_v2` com cada fechamento. Retorna `pronto_para_preparar=false` quando falta qualquer snapshot, além do resumo financeiro. Não cadastra clientes, cria reserva, chama o Asaas nem quita créditos.
 - **Prova automatizada inicial:** `supabase/tests/isolated/asaas-cob06-acumulo-preview-rollback.sql` roda no `catalogo_cob06_ci` da GitHub Actions, após o pacote original das nove fontes, testa cenário R$1+R$4 ainda sem snapshots e exige **negação**, unicidade de vínculos e ausência de resíduos após `ROLLBACK`. O teste estático Node `tests/asaas-cob06-acumulo-r5-preparacao.test.cjs` impede ligações prematuras com emissão de Pix. **Isto não é teste de cobrança real nem prova de agrupamento completo.**
 - **Isolamento do pacote original:** a décima fonte é um candidato **separado e inerte**, executado apenas após as nove fontes em PostgreSQL descartável na CI. Não foi anexada ao pacote de produção congelado nem ao runner manual do clone real.
+
+## Reserva do livro implementada (sem integração bancária)
+
+A rotina `catalogo_asaas_reservar_acumulo(text,date)` foi acrescentada apenas ao candidato `03_cob06_acumulo_intercompetencias_preparacao.sql`: usa trava consultiva da mesma loja, `SELECT ... FOR UPDATE` sobre competências elegíveis, compara soma de componentes e fechamento e registra lote e fontes numa única transação. Se ainda não atingir R$5, faltar snapshot ou houver reserva/cobrança anterior, não emite Pix nem inventa quitação. O mesmo corte reaproveita o lote já reservado; uma fonte é única entre lotes.
+
+Triggers candidatos bloqueiam INSERT de cobrança/emissão individual em fontes agrupadas e alterações posteriores de valores/competência do fechamento ou seus componentes. A função é `service_role` exclusiva e a Edge **ainda não a chama**. Nenhum `/payments` foi enviado, nenhum crédito de motoboy foi liberado e não existe função que transforme esses lotes em cobrança bancária.
+
+A GitHub Actions aplica primeiro o pacote congelado de nove SQL em `catalogo_cob06_ci`, depois somente neste banco descartável aplica o SQL candidato 03 e executa os ensaios dentro de `BEGIN/ROLLBACK`. Os cenários sintéticos são **R$1+R$4** e **R$2+R$2+R$1**, além de fonte duplicada, reserva repetida, exclusão/alteração de snapshot, emissão individual proibida e histórico Mercado Pago pago intacto. A primeira CI corrigida passou no cenário R$1+R$4 (run `38777198026`, job de SQL PASS); aprovação dos cenários ampliados depende do run mais recente. **Isto não substitui restauração de backup de produção nem prova de pagamento.**
 
 ## Contrato técnico que precisa ser implementado e testado
 
