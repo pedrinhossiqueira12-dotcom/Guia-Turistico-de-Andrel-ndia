@@ -26,6 +26,7 @@ DECLARE
  v_negativas_obs integer:=0;
  v_evento jsonb;
  v_evento_id bigint;
+ v_apuracao jsonb;
 BEGIN
  IF pg_catalog.current_database()<>'catalogo_cob06_ci'
  OR pg_catalog.inet_server_port()<>5432
@@ -364,6 +365,13 @@ BEGIN
  THEN RAISE EXCEPTION 'COB06_OBSERVACAO: alterou estado/credito/historico'; END IF;
  RAISE NOTICE 'COB06_OBSERVACAO_GET_SIMULADO_IMUTAVEL_SEM_BAIXA_OK';
 
+ -- A observacao inicial RECEIVED, sozinha, nao autoriza baixa: faltam eventos.
+ v_apuracao:=public.catalogo_asaas_apurar_estados_acumulo_inerte(v_id);
+ IF v_apuracao->>'candidato_a_conferencia_manual'<>'false'
+ OR v_apuracao->>'pode_quitar'<>'false'
+ OR v_apuracao->>'classificacao'<>'aguardando_recebimento_verificado'
+ THEN RAISE EXCEPTION 'COB06_APURACAO: primeira observacao liquidou sozinha: %',v_apuracao; END IF;
+
  -- Candidato 07: historico de status inerte, sem simular autenticidade do GET.
  IF pg_catalog.has_function_privilege('anon',
     'public.catalogo_asaas_registrar_evento_acumulo_inerte(uuid,text,text,text)','EXECUTE')
@@ -390,6 +398,16 @@ BEGIN
  IF v_evento->>'ja_observado'<>'true'
  OR (v_evento->>'evento_id')::bigint<>v_evento_id
  THEN RAISE EXCEPTION 'COB06_EVENTOS: replay duplicado'; END IF;
+ v_apuracao:=public.catalogo_asaas_apurar_estados_acumulo_inerte(v_id);
+ IF v_apuracao->>'integridade_contabil_ok'<>'true'
+ OR v_apuracao->>'identidade_local_ok'<>'true'
+ OR v_apuracao->>'candidato_a_conferencia_manual'<>'true'
+ OR v_apuracao->>'exige_revisao'<>'false'
+ OR v_apuracao->>'pode_quitar'<>'false'
+ OR v_apuracao->>'pode_liberar_motoboy'<>'false'
+ OR (v_apuracao->>'eventos_observados')::int<>1
+ OR pg_catalog.jsonb_array_length(v_apuracao->'origens')<>2
+ THEN RAISE EXCEPTION 'COB06_APURACAO: conferência de R$1+R$4 incorreta: %',v_apuracao; END IF;
  v_evento:=public.catalogo_asaas_registrar_evento_acumulo_inerte(
    v_id,'pay_cob06_obs_123456','ci-cob06-evento-001','REFUNDED');
  IF v_evento->>'motivo'<>'replay_divergente'
@@ -399,6 +417,25 @@ BEGIN
  IF v_evento->>'ok'<>'true'
  OR (SELECT count(*) FROM public.catalogo_asaas_acumulo_eventos WHERE lote_id=v_id)<>2
  THEN RAISE EXCEPTION 'COB06_EVENTOS: transicao nao preservada'; END IF;
+ v_apuracao:=public.catalogo_asaas_apurar_estados_acumulo_inerte(v_id);
+ IF v_apuracao->>'classificacao'<>'reversao_ou_disputa_irreversivel_sem_analise'
+ OR v_apuracao->>'candidato_a_conferencia_manual'<>'false'
+ OR v_apuracao->>'exige_revisao'<>'true'
+ OR v_apuracao->>'pode_quitar'<>'false'
+ THEN RAISE EXCEPTION 'COB06_APURACAO: estorno nao bloqueou a conciliacao: %',v_apuracao; END IF;
+
+ -- Mesmo um estado posterior RECEIVED nao ressuscita o lote estornado.
+ v_evento:=public.catalogo_asaas_registrar_evento_acumulo_inerte(
+   v_id,'pay_cob06_obs_123456','ci-cob06-evento-003','RECEIVED');
+ v_apuracao:=public.catalogo_asaas_apurar_estados_acumulo_inerte(v_id);
+ IF v_evento->>'ok'<>'true'
+ OR v_apuracao->>'ultimo_estado'<>'RECEIVED'
+ OR (v_apuracao->>'eventos_de_reversao')::int<>1
+ OR v_apuracao->>'candidato_a_conferencia_manual'<>'false'
+ OR v_apuracao->>'exige_revisao'<>'true'
+ OR v_apuracao->>'pode_quitar'<>'false'
+ THEN RAISE EXCEPTION 'COB06_APURACAO: reativacao indevida apos estorno: %',v_apuracao; END IF;
+ RAISE NOTICE 'COB06_APURACAO_EVENTOS_ESTORNO_SEM_REATIVAR_SEM_BAIXA_OK';
  BEGIN
   UPDATE public.catalogo_asaas_acumulo_eventos SET estado='PENDING'
   WHERE id=v_evento_id;

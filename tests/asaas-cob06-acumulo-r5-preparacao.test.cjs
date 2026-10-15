@@ -115,6 +115,24 @@ test("COB-06: referencia unica imutavel e sem POST bancario ate conciliacao comp
 });
 
 const observaGetSql=read("supabase/production-candidate/06_cob06_observacao_bancaria_sem_baixa.sql");
+const apuracaoSql=read("supabase/production-candidate/08_cob06_apuracao_estados_sem_baixa.sql");
+
+test("COB-06: apuracao do diario financeiro nunca quita nem reativa apos estorno",()=>{
+ assert.match(apuracaoSql,/CREATE FUNCTION public\.catalogo_asaas_apurar_estados_acumulo_inerte\(/);
+ assert.match(apuracaoSql,/catalogo_asaas_conferir_conciliacao_acumulo\(p_lote\)/);
+ assert.match(apuracaoSql,/REFUNDED','PARTIALLY_REFUNDED','REFUND_IN_PROGRESS'/);
+ assert.match(apuracaoSql,/CHARGEBACK_REQUESTED','DELETED'/);
+ assert.match(apuracaoSql,/v_reversoes=0 AND NOT v_revisao/);
+ assert.match(apuracaoSql,/'prova_bancaria_autonoma',false/);
+ assert.match(apuracaoSql,/'pode_quitar',false,'pode_estornar',false/);
+ assert.match(apuracaoSql,/'pode_liberar_motoboy',false/);
+ assert.match(apuracaoSql,/REVOKE ALL ON FUNCTION public\.catalogo_asaas_apurar_estados_acumulo_inerte\(uuid\)/);
+ assert.ok(workflow.includes("08_cob06_apuracao_estados_sem_baixa.sql"));
+ assert.match(reserva,/COB06_APURACAO_EVENTOS_ESTORNO_SEM_REATIVAR_SEM_BAIXA_OK/);
+ assert.ok(!edge.includes("catalogo_asaas_apurar_estados_acumulo_inerte("));
+ const stripped=apuracaoSql.replace(/--[^\n]*/g,"").replace(/'(?:[^']|'')*'/g,"''");
+ assert.doesNotMatch(stripped,/\b(?:UPDATE|DELETE|INSERT|TRUNCATE)\s+(?:INTO|FROM|public\.)/i);
+});
 const validaGetTs=read("supabase/functions/_shared/catalogo-asaas-acumulo-get-verificado-inerte.ts");
 const ensaioGet=read("supabase/functions/tests/catalogo-asaas-acumulo-get-verificado-inerte.test.ts");
 test("COB-06: associacao por GET testada sem mutacao financeira nem rede",()=>{
