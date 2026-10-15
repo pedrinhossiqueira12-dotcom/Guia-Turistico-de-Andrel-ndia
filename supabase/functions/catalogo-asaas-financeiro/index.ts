@@ -24,6 +24,7 @@ const BILLING_ON = Deno.env.get("ASAAS_BILLING_ENABLED") === "true";
 const PRODUCTION_BILLING_APPROVED = Deno.env.get("ASAAS_PRODUCTION_BILLING_APPROVED") === "true";
 // Somente auditoria GET no Sandbox; independente das flags de emissão e saque.
 const COB06_GET_ADMIN_READONLY_ON = Deno.env.get("ASAAS_COB06_GET_ADMIN_READONLY_ENABLED") === "true";
+const COB06_OBSERVACAO_ADMIN_ON = Deno.env.get("ASAAS_COB06_OBSERVACAO_ADMIN_ENABLED") === "true";
 const PAYOUTS_ON = Deno.env.get("ASAAS_PAYOUTS_ENABLED") === "true";
 const ENVIRONMENT = Deno.env.get("ASAAS_ENVIRONMENT") === "production" ? "production" : "sandbox";
 const API_BASE = ENVIRONMENT === "production" ? "https://api.asaas.com/v3" : "https://api-sandbox.asaas.com/v3";
@@ -78,10 +79,12 @@ async function rpc(name:string,args:Record<string,unknown>){
 // COB-06: prova remota somente leitura de um lote JA observado.
 // Nenhum identificador bancario, cliente, referencia ou valor vem do navegador.
 // Candidatos 03-07 ainda nao estao instalados em STAGING/PROD: manter a flag OFF.
-async function conferirAcumuloSandboxAdmin(uid:string,body:Record<string,unknown>){
+async function conferirAcumuloSandboxAdmin(uid:string,body:Record<string,unknown>,registrar=false){
  if(uid!==ADMIN_USER_ID)throw new Failure("Acesso restrito à administração.",403);
  if(ENVIRONMENT!=="sandbox"||!COB06_GET_ADMIN_READONLY_ON)
   throw new Failure("Conferência COB-06 ainda não habilitada.",503);
+ if(registrar&&!COB06_OBSERVACAO_ADMIN_ON)
+  throw new Failure("Registro de observações COB-06 desabilitado.",503);
  if(!ASAAS_TOKEN)throw new Failure("Consulta Sandbox sem credencial.",503);
  const lote=value(body.lote_id,70);
  if(!/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(lote))
@@ -114,11 +117,27 @@ async function conferirAcumuloSandboxAdmin(uid:string,body:Record<string,unknown
   loteId:lote,referencia:ref.referencia,clienteId:obs.customer_id,
   valorCentavos:Number(ref.valor_centavos),
  },obs.payment_id,(id)=>consultarPagamentoAcumuloSandboxGet(id,ASAAS_TOKEN));
+ let registro:Record<string,unknown>|null=null;
+ if(registrar){
+  // Identidade deterministica da observacao GET por pagamento e status:
+  // reconsultar sem mudanca nao multiplica eventos. Nao equivale a ID de webhook.
+  const material=new TextEncoder().encode(validada.p_payment+"|"+validada.p_status);
+  const digest=new Uint8Array(await crypto.subtle.digest("SHA-256",material));
+  const chave="get-"+Array.from(digest,b=>b.toString(16).padStart(2,"0")).join("");
+  const evento=await rpc("catalogo_asaas_registrar_evento_acumulo_inerte",{
+   p_lote:lote,p_payment:validada.p_payment,p_evento:chave,p_estado:validada.p_status,
+  });
+  if(evento.ok!==true||typeof evento.evento_id!=="number"||
+   evento.pode_quitar!==false||evento.pode_estornar!==false||
+   evento.pode_liberar_motoboy!==false)
+   throw new Failure("Registro bancário não confirmou HOLD. Auditoria inconclusiva.",503);
+  registro={evento_id:evento.evento_id,ja_observado:evento.ja_observado===true};
+ }
  // GET confiavel nao e prova de estado final nem autoriza transicao contábil.
  return respond({success:true,lote_id:lote,payment_id:validada.p_payment,
   status_bancario_observado:validada.p_status,integridade_contabil_ok:true,
   pode_emitir_pix:false,pode_quitar:false,pode_estornar:false,
-  pode_liberar_motoboy:false,hold_obrigatorio:true});
+  pode_liberar_motoboy:false,hold_obrigatorio:true,registro});
 }
 // GET paginado traz ate 100 transferencias por requisicao. Nao confiar no
 // Content-Length: validar tambem os bytes efetivamente recebidos. Apenas
@@ -1978,6 +1997,7 @@ Deno.serve(async (request:Request)=>{
    case "finalizar_encerramento_admin":return await finalizarEncerramentoAdmin(user.id,body);
    case "diagnosticar_faturas_sandbox_admin":return await diagnosticarFaturasSandboxAdmin(user.id);
    case "conferir_acumulo_sandbox_admin":return await conferirAcumuloSandboxAdmin(user.id,body);
+   case "registrar_estado_acumulo_sandbox_admin":return await conferirAcumuloSandboxAdmin(user.id,body,true);
    case "confirmar_fatura_sandbox_admin":return await confirmarFaturaSandboxAdmin(user.id,body);
    case "diagnosticar_webhooks_asaas_admin":return await diagnosticarWebhooksAsaasAdmin(user.id);
    case "reprocessar_webhooks_asaas_admin":return await reprocessarWebhooksAsaasAdmin(user.id);

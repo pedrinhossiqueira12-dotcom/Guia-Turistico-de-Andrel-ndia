@@ -139,7 +139,7 @@ test("COB-06: associacao por GET testada sem mutacao financeira nem rede",()=>{
  assert.ok(!edge.includes("catalogo_asaas_registrar_observacao_acumulo("));
  assert.match(edge,/import \{ conferirPagamentoAcumuloPorGet \} from "\.\.\/_shared\/catalogo-asaas-acumulo-get-verificado-inerte\.ts"/);
  assert.match(edge,/const COB06_GET_ADMIN_READONLY_ON = Deno\.env\.get\("ASAAS_COB06_GET_ADMIN_READONLY_ENABLED"\) === "true"/);
- assert.match(edge,/async function conferirAcumuloSandboxAdmin\(uid:string,body:Record<string,unknown>\)/);
+ assert.match(edge,/async function conferirAcumuloSandboxAdmin\(uid:string,body:Record<string,unknown>,registrar=false\)/);
  assert.match(edge,/uid!==ADMIN_USER_ID/);
  assert.match(edge,/ENVIRONMENT!=="sandbox"\|\|!COB06_GET_ADMIN_READONLY_ON/);
  assert.match(edge,/db\.from\("catalogo_asaas_acumulo_observacoes"\)/);
@@ -147,4 +147,11 @@ test("COB-06: associacao por GET testada sem mutacao financeira nem rede",()=>{
  assert.match(edge,/consultarPagamentoAcumuloSandboxGet\(id,ASAAS_TOKEN\)/);
  assert.match(edge,/hold_obrigatorio:true/);
  assert.ok(!edge.includes('db.rpc("catalogo_asaas_registrar_observacao_acumulo"'));
+ assert.match(edge,/COB06_OBSERVACAO_ADMIN_ON = Deno\.env\.get\("ASAAS_COB06_OBSERVACAO_ADMIN_ENABLED"\) === "true"/);
+ assert.match(edge,/if\(registrar&&!COB06_OBSERVACAO_ADMIN_ON\)/);
+ assert.match(edge,/const validada=await conferirPagamentoAcumuloPorGet/);
+ assert.match(edge,/crypto\.subtle\.digest\("SHA-256",material\)/);
+ assert.match(edge,/if\(registrar\)\{[\s\S]*?catalogo_asaas_registrar_evento_acumulo_inerte/);
+ assert.match(edge,/evento\.pode_quitar!==false\|\|evento\.pode_estornar!==false/);
+ assert.match(edge,/case "registrar_estado_acumulo_sandbox_admin"/);
 });
