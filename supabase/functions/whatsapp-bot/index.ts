@@ -16,9 +16,9 @@ async function ae(e, a, administrador) {
     .select("local_id,status").eq("local_id",id).maybeSingle();
   if (publicacao.error) return t({sucesso:false,erro:"Falha ao consultar publicacao."},503);
   if (!publicacao.data) return t({sucesso:false,erro:"Comercio nao encontrado."},404);
-  if (publicacao.data.status === "deletado") {
-    return t({sucesso:true,arquivado:true,ja_arquivado:true});
-  }
+  // Nao retornar sucesso antecipadamente para status=deletado.
+  // A RPC financeira pode ter sido confirmada enquanto o PUT GitHub falhou:
+  // o administrador precisa poder tentar novamente a sincronizacao da vitrine.
   const catalogo = await g.from("catalogos")
     .select("comercio_id,proprietario_id").eq("comercio_id",id).maybeSingle();
   if (catalogo.error) return t({sucesso:false,erro:"Falha ao verificar catalogo financeiro."},503);
@@ -28,6 +28,17 @@ async function ae(e, a, administrador) {
     return t({sucesso:false,arquivado:false,erro:"Encerramento requer verificacao administrativa. Nenhum dado foi removido."},409);
   }
   if (!administrador) {
+    // Dono recebe confirmacao somente quando o tombstone financeiro existir.
+    // Status legado 'deletado' isolado nao prova quitacao ou arquivamento.
+    if (publicacao.data.status === "deletado") {
+      const encerrado = await g.from("catalogo_encerramentos_comercio")
+        .select("situacao").eq("comercio_id",id).maybeSingle();
+      if (encerrado.error) return t({sucesso:false,erro:"Falha ao verificar o encerramento financeiro."},503);
+      if (encerrado.data?.situacao === "arquivado")
+        return t({sucesso:true,arquivado:true,ja_arquivado:true});
+      return t({sucesso:false,arquivado:false,
+        erro:"Comercio retirado da publicacao sem encerramento financeiro confirmado; revisao administrativa necessaria."},409);
+    }
     if (catalogo.data.proprietario_id !== a) {
       return t({sucesso:false,erro:"Titularidade do catalogo divergente."},403);
     }
