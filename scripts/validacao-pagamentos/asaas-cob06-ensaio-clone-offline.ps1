@@ -4,7 +4,7 @@ $ErrorActionPreference = 'Stop'
 $nome = 'guia-postgres-offline-20261014'
 $volume = 'guia_pg_clone_offline_20261014'
 $imagem = 'public.ecr.aws/supabase/postgres:17.11.0.002'
-$ref = '7e73320d04489893d2e24d6dbc09c27af80c84b1'
+$ref = '6dd9b6259cf21ad5e6bbd46f6b50cae372dab3c8'
 $base = 'https://raw.githubusercontent.com/pedrinhossiqueira12-dotcom/Guia-Turistico-de-Andrel-ndia'
 $pasta = 'D:\GuiaAndrelandiaRestauracaoLocal\cob06-ensaio-offline'
 $fontes = @(
@@ -197,6 +197,7 @@ if($codigo -ne 0){
 }
 if(-not $textoAvisos.Contains('COB06_GATES_OK') -or
    -not $textoAvisos.Contains('COB06_GUARDAS_FUNCIONAIS_OK') -or
+   -not $textoAvisos.Contains('COB06_SEM_CATALOGO_ADMIN_OK') -or
    -not $textoNormal.Contains('COB06_ROLLBACK_OK')){
  throw 'Marcadores de auditoria/ROLLBACK ausentes: nao declarar sucesso.'
 }
@@ -207,5 +208,6 @@ if($LASTEXITCODE -ne 0 -or $depois.Count -ne 1 -or $depois[0].Trim() -ne $antes[
 }
 Write-Host ('Estado final: ' + $depois[0])
 Write-Host 'COB06_GUARDAS_FUNCIONAIS_VALIDADAS_E_REVERTIDAS'
+Write-Host 'COB06_SEM_CATALOGO_ADMIN_VALIDADO_E_REVERTIDO'
 Write-Host 'COB06_PACOTE_SQL_CLONE_VALIDADO_COM_ROLLBACK'
 Write-Host ('Logs locais: ' + $saidaNormal + ' | ' + $saidaAvisos)
