@@ -295,20 +295,7 @@ BEGIN
    INSERT INTO public.catalogo_asaas_clientes(comercio_id,cliente_id)
    VALUES('comercio-de-exemplo',v_cliente_obs);
  END IF;
- IF v_cliente_obs !~ '^cus_[A-Za-z0-9_-]{3,120}
-
- IF v_negativas<>4
- OR (SELECT valor_centavos FROM public.catalogo_fatura_componentes_v2
-       WHERE fechamento_id=v_f1 AND tipo='plataforma')<>71
- OR (SELECT status FROM public.catalogo_fechamentos_offline WHERE id=v_f1)<>'faturado'
- OR (SELECT status FROM public.catalogo_fatura_cobrancas
-       WHERE order_id='legacy-cob06-ci')<>'pago'
- THEN RAISE EXCEPTION 'COB06_RESERVA: historico alterado ou bloqueios nao atuaram'; END IF;
- RAISE NOTICE 'COB06_RESERVA_R1_R4_R2_R2_R1_TRANSACIONAL_SEM_PIX_OK';
-END;
-$teste$;
-ROLLBACK;
-
+ IF v_cliente_obs !~ '^cus_[A-Za-z0-9_-]{3,120}$'
  THEN RAISE EXCEPTION 'COB06_OBSERVACAO: cliente CI fora do contrato'; END IF;
 
  IF pg_catalog.has_function_privilege('authenticated',
