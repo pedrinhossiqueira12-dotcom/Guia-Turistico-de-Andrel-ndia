@@ -153,7 +153,7 @@ Deno.test("COB06 HTTP: preflight inconsistente e RPC liberando quitação falham
     "preflight falho chegou ao provedor");
   reiniciar(); falhaRegistro = true;
   const inconsistente = await chamar("registrar_estado_acumulo_sandbox_admin");
-  assert(inconsistente.http === 503 && getsAsaas === 1 && escritas === 1,
+  assert(inconsistente.http === 503 && Number(getsAsaas) === 1 && Number(escritas) === 1,
     "RPC com quitação habilitada foi aceita");
 });
 // Cada arquivo de teste roda em worker isolado; nenhuma chamada de rede real ocorreu.
