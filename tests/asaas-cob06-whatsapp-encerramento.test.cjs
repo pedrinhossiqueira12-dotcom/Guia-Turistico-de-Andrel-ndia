@@ -22,7 +22,8 @@ function cenario(op={}){
      const q={select(c){cols=c;return q},eq(){return q},async maybeSingle(){
        chamadas.push("read:"+tab+":"+cols);
        if(op.falha===tab)return {data:null,error:{message:"erro DB"}};
-       if(tab==="comercios_publicados")return {data:{local_id:"loja-teste",status:cols==="status"?(op.statusFinal||"arquivado"):"ativo"},error:null};
+       if(tab==="comercios_publicados")return {data:{local_id:"loja-teste",status:cols==="status"?(op.statusFinal||"deletado"):(op.statusInicial||"ativo")},error:null};
+       if(tab==="catalogo_encerramentos_comercio")return {data:op.tombstone===null?null:{situacao:op.tombstone||"arquivado"},error:null};
        if(tab==="catalogos")return {data:op.semCatalogo?null:{comercio_id:"loja-teste",proprietario_id:op.donoErrado?"outro":uid},error:null};
        throw Error("tabela inesperada "+tab);
      }};
@@ -113,4 +114,32 @@ test("COB-06: quatro acoes legadas mantidas; exclusao nao modifica Storage",()=>
  assert.ok(trecho.includes("catalogo_finalizar_encerramento_financeiro"));
  assert.ok(!trecho.includes("storage_cleanup_queue"));
  assert.ok(!trecho.includes('update({status:"deletado"'));
+});
+
+test("COB-06: falha GitHub apos finalizacao com status deletado admite nova tentativa segura",async()=>{
+ const op={statusInicial:"deletado",statusFinal:"deletado",
+   finalizacao:{ok:true,situacao:"arquivado",ja_arquivado:true},falhaGithub:true};
+ const c=cenario(op);
+ const falha=await c.we({admin:c.uid},{comercio_id:"loja-teste"});
+ assert.equal(falha.status,503);
+ assert.equal(falha.body.pendente_sincronizacao,true);
+ assert.equal(c.writes(),0);
+ op.falhaGithub=false;
+ const sucesso=await c.we({admin:c.uid},{comercio_id:"loja-teste"});
+ assert.equal(sucesso.status,200);assert.equal(sucesso.body.sucesso,true);
+ assert.equal(c.writes(),1);assert.equal(c.vitrine[0].status,"deletado");
+ assert.equal(c.chamadas.filter(x=>x==="rpc:catalogo_finalizar_encerramento_financeiro").length,2);
+});
+
+test("COB-06: dono nunca confunde despublicacao legada com encerramento financeiro",async()=>{
+ const anormal=cenario({statusInicial:"deletado",tombstone:null});
+ const r=await anormal.Oe({user:anormal.uid},{comercio_id:"loja-teste"});
+ assert.equal(r.status,409);assert.equal(r.body.sucesso,false);semGithub(anormal);
+ const quitado=cenario({statusInicial:"deletado",tombstone:"arquivado"});
+ const ok=await quitado.Oe({user:quitado.uid},{comercio_id:"loja-teste"});
+ assert.equal(ok.status,200);assert.equal(ok.body.ja_arquivado,true);semGithub(quitado);
+ const terceiro=cenario({statusInicial:"deletado",donoErrado:true});
+ const forbidden=await terceiro.Oe({user:terceiro.uid},{comercio_id:"loja-teste"});
+ assert.equal(forbidden.status,403);semGithub(terceiro);
+ assert.ok(!terceiro.chamadas.some(x=>x.includes("catalogo_encerramentos_comercio")));
 });
