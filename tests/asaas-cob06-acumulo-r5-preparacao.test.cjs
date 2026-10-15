@@ -117,6 +117,25 @@ test("COB-06: referencia unica imutavel e sem POST bancario ate conciliacao comp
 const observaGetSql=read("supabase/production-candidate/06_cob06_observacao_bancaria_sem_baixa.sql");
 const apuracaoSql=read("supabase/production-candidate/08_cob06_apuracao_estados_sem_baixa.sql");
 const projecaoSql=read("supabase/production-candidate/09_cob06_projecao_baixa_multicompetencias_inerte.sql");
+const ponteSql=read("supabase/production-candidate/10_cob06_ponte_quitacao_multicompetencia_isolada.sql");
+
+test("COB-06: helper suporta lote unico somente com recibo isolado, sem RPC externa",()=>{
+ assert.match(ponteSql,/CREATE TABLE public\.catalogo_asaas_acumulo_quitacoes_isoladas/);
+ assert.match(ponteSql,/evento_recebimento_id bigint NOT NULL UNIQUE/);
+ assert.match(ponteSql,/REVOKE ALL ON public\.catalogo_asaas_acumulo_quitacoes_isoladas/);
+ assert.match(ponteSql,/GRANT SELECT ON public\.catalogo_asaas_acumulo_quitacoes_isoladas TO service_role/);
+ assert.doesNotMatch(ponteSql,/GRANT (?:INSERT|UPDATE|DELETE|ALL) ON public\.catalogo_asaas_acumulo_quitacoes/);
+ assert.match(ponteSql,/CREATE OR REPLACE FUNCTION catalogo_private\.catalogo_v2_parcela_recebida/);
+ assert.match(ponteSql,/JOIN public\.catalogo_fatura_cobrancas b/);
+ assert.match(ponteSql,/JOIN public\.catalogo_asaas_acumulo_quitacoes_isoladas q/);
+ assert.match(ponteSql,/rev\.estado IN \('REFUNDED','PARTIALLY_REFUNDED','REFUND_IN_PROGRESS'/);
+ assert.match(ponteSql,/REVOKE ALL ON FUNCTION catalogo_private\.catalogo_v2_parcela_recebida\(uuid,text\)/);
+ assert.ok(workflow.includes("10_cob06_ponte_quitacao_multicompetencia_isolada.sql"));
+ assert.match(reserva,/COB06_PONTE_QUITACAO_4_PARCELAS_ESTORNO_ROLLBACK_OK/);
+ assert.match(reserva,/COB06_PONTE_ROLLBACK_ESPERADO/);
+ assert.ok(!edge.includes("catalogo_asaas_acumulo_quitacoes_isoladas"));
+ assert.doesNotMatch(ponteSql,/CREATE (?:OR REPLACE )?FUNCTION public\.catalogo_asaas_(?:quitar|confirmar|liquidar)_/);
+});
 
 test("COB-06: projecao dos componentes originais nao cria cobranca mensal ficticia",()=>{
  assert.match(projecaoSql,/CREATE FUNCTION public\.catalogo_asaas_projetar_baixa_acumulo_inerte\(/);

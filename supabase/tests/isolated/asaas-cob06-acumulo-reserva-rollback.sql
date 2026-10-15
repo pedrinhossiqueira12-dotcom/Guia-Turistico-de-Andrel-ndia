@@ -28,6 +28,7 @@ DECLARE
  v_evento_id bigint;
  v_apuracao jsonb;
  v_projecao jsonb;
+ v_ponte_rollback boolean:=false;
 BEGIN
  IF pg_catalog.current_database()<>'catalogo_cob06_ci'
  OR pg_catalog.inet_server_port()<>5432
@@ -429,6 +430,80 @@ BEGIN
  OR (v_apuracao->>'eventos_observados')::int<>1
  OR pg_catalog.jsonb_array_length(v_apuracao->'origens')<>2
  THEN RAISE EXCEPTION 'COB06_APURACAO: conferência de R$1+R$4 incorreta: %',v_apuracao; END IF;
+
+ -- Candidato 10: transacao SUBISOLADA, exclusivamente no banco efemero.
+ -- Simula a futura prova Asaas usando owner postgres e reverte totalmente.
+ -- Nao e webhook autentico; service_role NAO tem INSERT nessa tabela.
+ IF pg_catalog.has_table_privilege('service_role',
+  'public.catalogo_asaas_acumulo_quitacoes_isoladas','INSERT')
+ OR pg_catalog.has_table_privilege('anon',
+  'public.catalogo_asaas_acumulo_quitacoes_isoladas','INSERT')
+ OR pg_catalog.has_table_privilege('authenticated',
+  'public.catalogo_asaas_acumulo_quitacoes_isoladas','UPDATE')
+ THEN RAISE EXCEPTION 'COB06_PONTE: tabela de quitacao exposta'; END IF;
+
+ BEGIN
+   INSERT INTO public.catalogo_asaas_acumulo_quitacoes_isoladas(
+     lote_id,payment_id,evento_recebimento_id,valor_centavos)
+   VALUES(v_id,'pay_cob06_obs_123456',v_evento_id,500);
+   IF catalogo_private.catalogo_v2_parcela_recebida(v_p1,'plataforma')
+   THEN RAISE EXCEPTION 'COB06_PONTE: quitacao isolada liberou sem status de origem'; END IF;
+
+   -- Nao inserir nenhuma linha em catalogo_fatura_cobrancas.
+   UPDATE public.catalogo_fechamentos_offline
+     SET status='pago',pago_em=pg_catalog.now(),
+       referencia_pagamento=v_referencia->>'referencia'
+   WHERE id IN (v_f1,v_f2);
+   UPDATE public.catalogo_comissoes_offline
+     SET status='paga',pago_em=pg_catalog.now(),
+       referencia_pagamento=v_referencia->>'referencia'
+   WHERE pedido_id IN (v_p1,v_p2);
+   IF NOT catalogo_private.catalogo_v2_parcela_recebida(v_p1,'plataforma')
+   OR NOT catalogo_private.catalogo_v2_parcela_recebida(v_p1,'logistica')
+   OR NOT catalogo_private.catalogo_v2_parcela_recebida(v_p2,'plataforma')
+   OR NOT catalogo_private.catalogo_v2_parcela_recebida(v_p2,'logistica')
+   OR (SELECT pg_catalog.count(*) FROM public.catalogo_fatura_cobrancas
+       WHERE fechamento_id IN (v_f1,v_f2))<>0
+   THEN RAISE EXCEPTION 'COB06_PONTE: quatro parcelas nao reconheceram lote unico'; END IF;
+
+   BEGIN
+     UPDATE public.catalogo_asaas_acumulo_quitacoes_isoladas
+       SET estado='estornado' WHERE lote_id=v_id;
+     RAISE EXCEPTION 'COB06_PONTE: estorno sem evento aceito';
+   EXCEPTION WHEN SQLSTATE '23514' THEN NULL;
+   END;
+
+   PERFORM public.catalogo_asaas_registrar_evento_acumulo_inerte(
+     v_id,'pay_cob06_obs_123456','ci-cob06-ponte-refund','REFUNDED');
+   -- Mesmo ANTES de atualizar estado local, um evento de estorno cancela
+   -- a prova de financiamento no helper, sem repetir repasse.
+   IF catalogo_private.catalogo_v2_parcela_recebida(v_p1,'plataforma')
+     OR catalogo_private.catalogo_v2_parcela_recebida(v_p2,'logistica')
+   THEN RAISE EXCEPTION 'COB06_PONTE: evento de estorno nao suspendeu credito'; END IF;
+   UPDATE public.catalogo_asaas_acumulo_quitacoes_isoladas
+     SET estado='estornado' WHERE lote_id=v_id;
+   BEGIN
+     UPDATE public.catalogo_asaas_acumulo_quitacoes_isoladas
+       SET estado='pago' WHERE lote_id=v_id;
+     RAISE EXCEPTION 'COB06_PONTE: reativacao da quitacao estornada aceita';
+   EXCEPTION WHEN SQLSTATE '23514' THEN NULL;
+   END;
+
+   RAISE EXCEPTION 'COB06_PONTE_ROLLBACK_ESPERADO';
+ EXCEPTION WHEN raise_exception THEN
+   IF SQLERRM IS DISTINCT FROM 'COB06_PONTE_ROLLBACK_ESPERADO' THEN RAISE; END IF;
+   v_ponte_rollback:=true;
+ END;
+ IF NOT v_ponte_rollback
+ OR EXISTS(SELECT 1 FROM public.catalogo_asaas_acumulo_quitacoes_isoladas)
+ OR EXISTS(SELECT 1 FROM public.catalogo_asaas_acumulo_eventos
+           WHERE evento_externo='ci-cob06-ponte-refund')
+ OR (SELECT status FROM public.catalogo_fechamentos_offline WHERE id=v_f1)<>'faturado'
+ OR (SELECT status FROM public.catalogo_comissoes_offline WHERE pedido_id=v_p1)<>'faturada'
+ OR catalogo_private.catalogo_v2_parcela_recebida(v_p1,'plataforma')
+ THEN RAISE EXCEPTION 'COB06_PONTE: subtransacao deixou credito ou evento residual'; END IF;
+ RAISE NOTICE 'COB06_PONTE_QUITACAO_4_PARCELAS_ESTORNO_ROLLBACK_OK';
+
  v_evento:=public.catalogo_asaas_registrar_evento_acumulo_inerte(
    v_id,'pay_cob06_obs_123456','ci-cob06-evento-001','REFUNDED');
  IF v_evento->>'motivo'<>'replay_divergente'
