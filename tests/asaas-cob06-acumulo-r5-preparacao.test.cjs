@@ -90,3 +90,26 @@ test("COB-06: conciliador de lote e somente leitura e nao libera dinheiro sem ba
  assert.ok(reserva.includes("COB06_CONCILIACAO_ORIGENS_INCOMPLETAS_BLOQUEADAS_SEM_CREDITO_OK"));
  assert.ok(!edge.includes("catalogo_asaas_conferir_conciliacao_acumulo("));
 });
+
+const referenciaBancaria=read("supabase/production-candidate/05_cob06_referencia_bancaria_inerte.sql");
+
+test("COB-06: referencia unica imutavel e sem POST bancario ate conciliacao completa",()=>{
+ assert.match(referenciaBancaria,/CREATE TABLE public\.catalogo_asaas_acumulo_referencias/);
+ assert.match(referenciaBancaria,/lote_id uuid PRIMARY KEY/);
+ assert.match(referenciaBancaria,/referencia text NOT NULL UNIQUE/);
+ assert.match(referenciaBancaria,/operacao_id uuid NOT NULL UNIQUE/);
+ assert.match(referenciaBancaria,/payment_id text UNIQUE/);
+ assert.match(referenciaBancaria,/CHECK\(payment_id IS NULL\)/);
+ assert.match(referenciaBancaria,/CHECK \(pode_emitir_pix=false\)/);
+ assert.match(referenciaBancaria,/CREATE UNIQUE INDEX catalogo_asaas_acumulo_referencia_loja_pendente/);
+ assert.match(referenciaBancaria,/CREATE TRIGGER catalogo_asaas_acumulo_referencia_nao_alterar/);
+ assert.match(referenciaBancaria,/CREATE FUNCTION public\.catalogo_asaas_reservar_referencia_acumulo\(/);
+ assert.match(referenciaBancaria,/pg_catalog\.pg_advisory_xact_lock/);
+ assert.match(referenciaBancaria,/integridade_contabil_ok/);
+ assert.match(referenciaBancaria,/GRANT SELECT ON public\.catalogo_asaas_acumulo_referencias TO service_role/);
+ assert.match(referenciaBancaria,/GRANT EXECUTE ON FUNCTION public\.catalogo_asaas_reservar_referencia_acumulo\(uuid\)/);
+ assert.ok(workflow.includes("05_cob06_referencia_bancaria_inerte.sql"));
+ assert.ok(reserva.includes("COB06_REFERENCIA_UNICA_IDEMPOTENTE_SEM_PIX_OK"));
+ assert.ok(!edge.includes("catalogo_asaas_reservar_referencia_acumulo("));
+ assert.doesNotMatch(referenciaBancaria,/\b(?:POST \/payments|\/payments\s*['"])/);
+});
