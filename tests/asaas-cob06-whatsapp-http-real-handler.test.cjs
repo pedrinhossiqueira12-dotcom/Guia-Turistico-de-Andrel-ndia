@@ -69,6 +69,9 @@ function cenario(opts={}){
    if(name==="catalogo_finalizar_encerramento_financeiro")
     return {data:opts.debtClear||opts.alreadyArchived?{ok:true,situacao:"arquivado",ja_arquivado:!!opts.alreadyArchived}:
       {ok:false,mensagem:"Ha debitos ou pedidos pendentes"},error:null};
+   if(name==="catalogo_arquivar_sem_catalogo_admin")
+    return {data:opts.noCatalogRefused?{ok:false,mensagem:"Historico financeiro encontrado"}:
+      {ok:true,situacao:"arquivado",sem_catalogo:true},error:null};
    throw Error("Unexpected RPC: "+name);
   }
  };
@@ -129,12 +132,17 @@ test("HTTP real: admin exige JWT validado e ID fixo, divida bloqueia PUT",async(
  const adminResult=await c.call("marcar_comercio_deletado","admin-jwt");
  assert.equal(adminResult.status,409);noWrites(c);
 });
-test("HTTP real: sem catalogo falha fechado para admin e dono",async()=>{
+test("HTTP real: sem catalogo dono solicita revisao e admin usa RPC com historico limpo",async()=>{
  const c=cenario({noCatalog:true});
- for(const [a,t] of [["excluir_meu_comercio","owner-jwt"],["excluir_comercio","admin-jwt"]]){
-  const r=await c.call(a,t);assert.equal(r.status,409);assert.equal(r.data.arquivado,false);
- }
- noWrites(c);
+ const dono=await c.call("excluir_meu_comercio","owner-jwt");
+ assert.equal(dono.status,409);assert.equal(dono.data.arquivado,false);noWrites(c);
+ const admin=await c.call("excluir_comercio","admin-jwt");
+ assert.equal(admin.status,200);assert.equal(admin.data.arquivado,true);
+ assert.equal(c.putCount,1);
+ assert.ok(c.calls.includes("db.rpc:catalogo_arquivar_sem_catalogo_admin"));
+ const recusado=cenario({noCatalog:true,noCatalogRefused:true});
+ const r=await recusado.call("excluir_comercio","admin-jwt");
+ assert.equal(r.status,409);noWrites(recusado);
 });
 test("HTTP real: finalizacao valida arquivamento antes do GitHub e retenta falha",async()=>{
  const c=cenario({debtClear:true,alreadyArchived:true,githubFailure:true});
