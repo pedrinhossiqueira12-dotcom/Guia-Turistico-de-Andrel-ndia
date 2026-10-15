@@ -16,7 +16,7 @@ test("COB-06: ensaio local limitado ao clone offline conhecido, nunca PROD/STAGI
  assert.doesNotMatch(script,/ASAAS_API_KEY|GITHUB_TOKEN|SUPABASE_SERVICE_ROLE_KEY|SUPABASE_ACCESS_TOKEN/);
 });
 test("COB-06: SQL obedece commit fixo e fontes seletivas exclusivamente de cobranca",()=>{
- assert.ok(script.includes("7e73320d04489893d2e24d6dbc09c27af80c84b1"));
+ assert.ok(script.includes("6dd9b6259cf21ad5e6bbd46f6b50cae372dab3c8"));
  assert.match(script,/raw\.githubusercontent\.com/);
  for(const filename of [
  "01_asaas_cobrancas_inbox_sem_saques.sql",
@@ -86,4 +86,23 @@ test("COB-06: teste funcional ficticio inclui cinco guardas, quitacao e arquivam
  assert.ok(candidato.includes("SET status='deletado', destaque=false"));
  assert.ok(candidato.includes("SET situacao='arquivado'"));
  assert.ok(!candidato.includes("SET status='arquivado'"));
+});
+
+test("COB-06: arquivamento sem catalogo sob autorizacao administrativa e rollback",()=>{
+ const sql=fs.readFileSync("supabase/tests/isolated/asaas-cob06-guardas-clone-restaurado-rollback.sql","utf8");
+ const candidata=fs.readFileSync(
+  "supabase/pending-migrations/20261009162000_bloquear_exclusao_debitos_e_finalizar_arquivamento.sql","utf8");
+ for(const term of ["catalogo_arquivar_sem_catalogo_admin","COB06_SEM_CATALOGO_ADMIN_OK"]){
+  assert.ok(sql.includes(term),term);
+ }
+ assert.ok(script.includes("COB06_SEM_CATALOGO_ADMIN_OK"));
+ assert.ok(script.includes("COB06_SEM_CATALOGO_ADMIN_VALIDADO_E_REVERTIDO"));
+ assert.ok(candidata.includes("CREATE OR REPLACE FUNCTION public.catalogo_arquivar_sem_catalogo_admin("));
+ assert.ok(candidata.includes("SECURITY DEFINER SET search_path='' AS $sem_catalogo$"));
+ assert.ok(candidata.includes("REVOKE ALL ON FUNCTION public.catalogo_arquivar_sem_catalogo_admin(text,uuid)"));
+ assert.ok(candidata.includes("GRANT EXECUTE ON FUNCTION public.catalogo_arquivar_sem_catalogo_admin(text,uuid)"));
+ for(const t of ["catalogo_pedidos","catalogo_comissoes_offline","catalogo_fechamentos_offline",
+  "catalogo_fatura_cobrancas","catalogo_asaas_clientes","catalogo_assinaturas","catalogo_encerramentos_comercio"]){
+  assert.ok(candidata.includes("FROM public."+t+" WHERE comercio_id=p_comercio"),t);
+ }
 });
