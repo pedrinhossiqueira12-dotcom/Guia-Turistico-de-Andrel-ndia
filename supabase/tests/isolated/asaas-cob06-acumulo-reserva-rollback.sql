@@ -7,6 +7,15 @@ DECLARE
  v_f1 uuid; v_f2 uuid;
  v_r jsonb; v_outro jsonb; v_id uuid;
  v_negativas integer:=0;
+ v_i integer;
+ v_mais_pedido uuid;
+ v_mais_fatura uuid;
+ v_mais_comp date;
+ v_valor integer;
+ v_subtotal integer;
+ v_plataforma integer;
+ v_logistica integer;
+ v_lote_extra uuid;
 BEGIN
  IF pg_catalog.current_database()<>'catalogo_cob06_ci'
  OR pg_catalog.inet_server_port()<>5432
@@ -110,6 +119,54 @@ BEGIN
   RAISE EXCEPTION 'COB06_RESERVA: componentes alterados';
  EXCEPTION WHEN SQLSTATE '23514' THEN v_negativas:=v_negativas+1;
  END;
+ -- Segundo cenário aprovado: três competências R$2 + R$2 + R$1,
+ -- sem reutilizar as fontes de R$1+R$4 já reservadas.
+ FOR v_i IN 1..3 LOOP
+   v_mais_comp:=pg_catalog.make_date(2040,4+v_i,1);
+   v_valor:=CASE WHEN v_i<=2 THEN 200 ELSE 100 END;
+   v_subtotal:=CASE WHEN v_i<=2 THEN 2857 ELSE 1429 END;
+   v_plataforma:=CASE WHEN v_i<=2 THEN 143 ELSE 71 END;
+   v_logistica:=CASE WHEN v_i<=2 THEN 57 ELSE 29 END;
+   INSERT INTO public.catalogo_pedidos(
+     comercio_id,referencia_externa,provedor,idempotency_key,status,
+     status_pagamento,modalidade,forma_pagamento,subtotal_produtos_centavos,
+     entrega_centavos,total_centavos,taxa_plataforma_centavos,
+     repasse_bruto_comercio_centavos,cliente_nome,cliente_telefone,
+     versao_financeira,taxa_motoboy_centavos,taxa_total_centavos,
+     entrega_status,metadata
+   ) VALUES(
+     'comercio-de-exemplo','ci-cob06-acumulo-extra-'||v_i,'offline',
+     pg_catalog.gen_random_uuid(),'entregue','aprovado','entrega','dinheiro',
+     v_subtotal,0,v_subtotal,v_plataforma,v_subtotal-v_valor,
+     'Pedido sintetico','00000000000',2,v_logistica,v_valor,
+     'entregue','{"cob06":"acumulo-tres-meses"}'::jsonb)
+   RETURNING id INTO v_mais_pedido;
+   INSERT INTO public.catalogo_fechamentos_offline(
+     comercio_id,competencia,total_pedidos,total_comissao_centavos,status)
+   VALUES('comercio-de-exemplo',v_mais_comp,1,v_valor,'faturado')
+   RETURNING id INTO v_mais_fatura;
+   INSERT INTO public.catalogo_fatura_componentes_v2(
+     fechamento_id,pedido_id,tipo,valor_centavos)
+   VALUES(v_mais_fatura,v_mais_pedido,'plataforma',v_plataforma),
+         (v_mais_fatura,v_mais_pedido,'logistica',v_logistica);
+ END LOOP;
+ v_outro:=public.catalogo_asaas_reservar_acumulo(
+   'comercio-de-exemplo','2040-07-01');
+ IF v_outro->>'ok'<>'true' OR v_outro->>'ja_reservado'<>'false'
+ OR (v_outro->>'total_centavos')::bigint<>500
+ OR (v_outro->>'quantidade_faturas')::integer<>3
+ OR v_outro->>'pix_emitido'<>'false'
+ THEN RAISE EXCEPTION 'COB06_RESERVA: R2+R2+R1 falhou: %',v_outro; END IF;
+ v_lote_extra:=(v_outro->>'lote_id')::uuid;
+ IF v_lote_extra IS NOT DISTINCT FROM v_id
+    OR (SELECT pg_catalog.count(*) FROM public.catalogo_asaas_acumulo_fontes
+        WHERE lote_id=v_lote_extra)<>3
+    OR (SELECT pg_catalog.sum(valor_centavos) FROM public.catalogo_asaas_acumulo_fontes
+        WHERE lote_id=v_lote_extra)<>500
+    OR (SELECT pg_catalog.count(*) FROM public.catalogo_asaas_acumulo_fontes
+        WHERE lote_id=v_id)<>2
+ THEN RAISE EXCEPTION 'COB06_RESERVA: fonte duplicada entre lotes'; END IF;
+
  IF v_negativas<>4
  OR (SELECT valor_centavos FROM public.catalogo_fatura_componentes_v2
        WHERE fechamento_id=v_f1 AND tipo='plataforma')<>71
@@ -117,7 +174,7 @@ BEGIN
  OR (SELECT status FROM public.catalogo_fatura_cobrancas
        WHERE order_id='legacy-cob06-ci')<>'pago'
  THEN RAISE EXCEPTION 'COB06_RESERVA: historico alterado ou bloqueios nao atuaram'; END IF;
- RAISE NOTICE 'COB06_RESERVA_R1_R4_TRANSACIONAL_SEM_PIX_OK';
+ RAISE NOTICE 'COB06_RESERVA_R1_R4_R2_R2_R1_TRANSACIONAL_SEM_PIX_OK';
 END;
 $teste$;
 ROLLBACK;
