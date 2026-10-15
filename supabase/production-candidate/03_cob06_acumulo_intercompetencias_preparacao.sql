@@ -14,7 +14,7 @@ CREATE TABLE public.catalogo_asaas_acumulo_lotes (
  criado_em timestamptz NOT NULL DEFAULT pg_catalog.now(),
  UNIQUE (comercio_id, competencia_corte),
  CONSTRAINT catalogo_acumulo_competencia_primeiro_dia
-   CHECK (pg_catalog.extract(day FROM competencia_corte)=1)
+   CHECK (pg_catalog.date_part('day', competencia_corte)=1)
 );
 
 -- Uma fatura de origem nunca pode pertencer a dois lotes diferentes.
@@ -54,7 +54,7 @@ BEGIN
  IF p_comercio IS NULL OR pg_catalog.length(p_comercio)=0
     OR pg_catalog.length(p_comercio)>180
     OR p_competencia_corte IS NULL
-    OR pg_catalog.extract(day FROM p_competencia_corte)<>1 THEN
+    OR pg_catalog.date_part('day', p_competencia_corte)<>1 THEN
    RETURN pg_catalog.jsonb_build_object('ok',false,'motivo','argumentos_invalidos');
  END IF;
  IF NOT EXISTS (SELECT 1 FROM public.catalogos
