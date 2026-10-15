@@ -261,15 +261,26 @@ CREATE TRIGGER catalogo_asaas_acumulo_fechamento_imutavel
 
 CREATE FUNCTION catalogo_private.catalogo_asaas_acumulo_guard_componentes()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $guard$
+DECLARE v_origem uuid; v_destino uuid;
 BEGIN
+ IF TG_OP='INSERT' THEN
+   v_destino:=NEW.fechamento_id;
+ ELSIF TG_OP='DELETE' THEN
+   v_origem:=OLD.fechamento_id;
+ ELSE
+   v_origem:=OLD.fechamento_id;
+   v_destino:=NEW.fechamento_id;
+ END IF;
+ -- Coordenar com a reserva, inclusive UPDATE/DELETE de snapshots já lidos.
+ PERFORM 1 FROM public.catalogo_fechamentos_offline
+ WHERE id=v_origem OR id=v_destino
+ ORDER BY id FOR UPDATE;
  IF EXISTS(SELECT 1 FROM public.catalogo_asaas_acumulo_fontes a
-            WHERE a.fechamento_id=OLD.fechamento_id)
-    OR (TG_OP<>'DELETE' AND EXISTS(
-       SELECT 1 FROM public.catalogo_asaas_acumulo_fontes a
-       WHERE a.fechamento_id=NEW.fechamento_id))
+           WHERE a.fechamento_id=v_origem OR a.fechamento_id=v_destino)
  THEN RAISE EXCEPTION 'Componentes de fechamento reservado nao podem mudar'
   USING ERRCODE='23514'; END IF;
- RETURN CASE WHEN TG_OP='DELETE' THEN OLD ELSE NEW END;
+ IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+ RETURN NEW;
 END;
 $guard$;
 REVOKE ALL ON FUNCTION catalogo_private.catalogo_asaas_acumulo_guard_componentes()
