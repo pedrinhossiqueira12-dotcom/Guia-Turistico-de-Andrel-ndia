@@ -43,12 +43,13 @@ BEGIN
    IF NEW.estado='estornado' AND NOT EXISTS (
        SELECT 1 FROM public.catalogo_asaas_acumulo_eventos e
         WHERE e.lote_id=OLD.lote_id AND e.payment_id=OLD.payment_id
-         AND e.estado IN ('REFUNDED','PARTIALLY_REFUNDED','REFUND_IN_PROGRESS','DELETED')
+         AND e.estado='REFUNDED'
      ) THEN RAISE EXCEPTION 'Estorno nao observado' USING ERRCODE='23514'; END IF;
    IF NEW.estado='contestado' AND NOT EXISTS (
        SELECT 1 FROM public.catalogo_asaas_acumulo_eventos e
         WHERE e.lote_id=OLD.lote_id AND e.payment_id=OLD.payment_id
-         AND e.estado='CHARGEBACK_REQUESTED'
+         AND e.estado IN ('PARTIALLY_REFUNDED','REFUND_IN_PROGRESS',
+                          'CHARGEBACK_REQUESTED','DELETED')
      ) THEN RAISE EXCEPTION 'Contestacao nao observada' USING ERRCODE='23514'; END IF;
    RETURN NEW;
  END IF;

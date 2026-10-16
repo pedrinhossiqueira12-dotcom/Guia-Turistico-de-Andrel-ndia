@@ -32,6 +32,11 @@ DECLARE
  v_atomico_rollback boolean:=false;
  v_atomico jsonb;
  v_rem1 uuid; v_rem2 uuid;
+ v_reverso jsonb;
+ v_evento_reverso_id bigint;
+ v_referencia_paga text;
+ v_pago_em_antes timestamptz;
+ v_disputa_rollback boolean:=false;
 BEGIN
  IF pg_catalog.current_database()<>'catalogo_cob06_ci'
  OR pg_catalog.inet_server_port()<>5432
@@ -628,6 +633,167 @@ BEGIN
    OR v_atomico->>'motivo'<>'lote_nao_aberto'
    OR (SELECT count(*) FROM public.catalogo_asaas_acumulo_quitacoes_isoladas)<>1
   THEN RAISE EXCEPTION 'COB06_ATOMICO: replay duplicou recibo'; END IF;
+
+  -- Candidato 12: revogacao/suspensao atomica depois de um estorno.
+  IF pg_catalog.has_function_privilege('service_role',
+     'catalogo_private.catalogo_asaas_suspender_lote_atomico_ci(uuid,bigint)','EXECUTE')
+    OR pg_catalog.has_function_privilege('authenticated',
+     'catalogo_private.catalogo_asaas_suspender_lote_atomico_ci(uuid,bigint)','EXECUTE')
+    OR pg_catalog.has_function_privilege('anon',
+     'catalogo_private.catalogo_asaas_suspender_lote_atomico_ci(uuid,bigint)','EXECUTE')
+  THEN RAISE EXCEPTION 'COB06_SUSPENSAO: RPC exposta'; END IF;
+  v_reverso:=catalogo_private.catalogo_asaas_suspender_lote_atomico_ci(v_id,v_evento_id);
+  IF v_reverso->>'motivo'<>'evento_adverso_nao_vinculado'
+    OR (SELECT count(*) FROM public.catalogo_lancamentos_financeiros_v2
+        WHERE pedido_id IN(v_p1,v_p2) AND status='disponivel')<>4
+  THEN RAISE EXCEPTION 'COB06_SUSPENSAO: evento RECEIVED suspendeu dinheiro'; END IF;
+
+  v_referencia_paga:=(SELECT referencia_pagamento FROM public.catalogo_fechamentos_offline
+                      WHERE id=v_f1);
+  v_pago_em_antes:=(SELECT pago_em FROM public.catalogo_fechamentos_offline WHERE id=v_f1);
+  -- Uma contestacao nao e estorno definitivo; ainda assim, tem de reter tudo.
+  BEGIN
+   v_evento:=public.catalogo_asaas_registrar_evento_acumulo_inerte(
+     v_id,'pay_cob06_obs_123456','ci-cob06-chargeback-atomo-001','CHARGEBACK_REQUESTED');
+   IF v_evento->>'ok'<>'true' THEN
+    RAISE EXCEPTION 'COB06_SUSPENSAO: contestacao nao registrada: %',v_evento; END IF;
+   v_evento_reverso_id:=(v_evento->>'evento_id')::bigint;
+   v_reverso:=catalogo_private.catalogo_asaas_suspender_lote_atomico_ci(
+     v_id,v_evento_reverso_id);
+   IF v_reverso->>'ok'<>'true' OR v_reverso->>'estado'<>'contestado'
+      OR (SELECT estado FROM public.catalogo_asaas_acumulo_quitacoes_isoladas
+          WHERE lote_id=v_id)<>'contestado'
+      OR (SELECT estado FROM public.catalogo_asaas_acumulo_lotes WHERE id=v_id)<>'contestado'
+      OR (SELECT count(*) FROM public.catalogo_fechamentos_offline
+          WHERE id IN(v_f1,v_f2) AND status='bloqueado')<>2
+      OR (SELECT count(*) FROM public.catalogo_comissoes_offline
+          WHERE pedido_id IN(v_p1,v_p2) AND status='contestada')<>2
+      OR (SELECT count(*) FROM public.catalogo_lancamentos_financeiros_v2
+          WHERE pedido_id IN(v_p1,v_p2) AND status='retido')<>4
+      OR (SELECT count(*) FROM public.catalogo_remuneracoes_v2
+          WHERE pedido_id IN(v_p1,v_p2) AND status='retido'
+            AND financiamento_comprovado=false)<>2
+   THEN RAISE EXCEPTION 'COB06_SUSPENSAO: disputa nao reteve tudo: %',v_reverso; END IF;
+   RAISE EXCEPTION 'COB06_DISPUTA_ROLLBACK_ESPERADO';
+  EXCEPTION WHEN raise_exception THEN
+   IF SQLERRM IS DISTINCT FROM 'COB06_DISPUTA_ROLLBACK_ESPERADO' THEN RAISE; END IF;
+   v_disputa_rollback:=true;
+  END;
+  IF NOT v_disputa_rollback
+   OR (SELECT estado FROM public.catalogo_asaas_acumulo_quitacoes_isoladas
+       WHERE lote_id=v_id)<>'pago'
+   OR (SELECT count(*) FROM public.catalogo_fechamentos_offline
+       WHERE id IN(v_f1,v_f2) AND status='pago')<>2
+   OR (SELECT count(*) FROM public.catalogo_lancamentos_financeiros_v2
+       WHERE pedido_id IN(v_p1,v_p2) AND status='disponivel')<>4
+   OR EXISTS(SELECT 1 FROM public.catalogo_asaas_acumulo_eventos
+             WHERE evento_externo='ci-cob06-chargeback-atomo-001')
+  THEN RAISE EXCEPTION 'COB06_SUSPENSAO: teste de disputa deixou residuo'; END IF;
+
+  -- Reembolso parcial/em andamento tambem suspende e pede revisao,
+  -- sem classificar como estorno total definitivo.
+  BEGIN
+   v_evento:=public.catalogo_asaas_registrar_evento_acumulo_inerte(
+     v_id,'pay_cob06_obs_123456','ci-cob06-parcial-atomo-001','PARTIALLY_REFUNDED');
+   IF v_evento->>'ok'<>'true' THEN
+    RAISE EXCEPTION 'COB06_SUSPENSAO: parcial nao registrado: %',v_evento; END IF;
+   v_reverso:=catalogo_private.catalogo_asaas_suspender_lote_atomico_ci(
+     v_id,(v_evento->>'evento_id')::bigint);
+   IF v_reverso->>'ok'<>'true' OR v_reverso->>'estado'<>'contestado'
+      OR EXISTS(SELECT 1 FROM public.catalogo_lancamentos_financeiros_v2
+                WHERE pedido_id IN(v_p1,v_p2) AND status='disponivel')
+   THEN RAISE EXCEPTION 'COB06_SUSPENSAO: reembolso parcial liberou saldo'; END IF;
+   RAISE EXCEPTION 'COB06_PARCIAL_ROLLBACK_ESPERADO';
+  EXCEPTION WHEN raise_exception THEN
+   IF SQLERRM IS DISTINCT FROM 'COB06_PARCIAL_ROLLBACK_ESPERADO' THEN RAISE; END IF;
+  END;
+  IF (SELECT estado FROM public.catalogo_asaas_acumulo_quitacoes_isoladas
+      WHERE lote_id=v_id)<>'pago'
+    OR EXISTS(SELECT 1 FROM public.catalogo_asaas_acumulo_eventos
+              WHERE evento_externo='ci-cob06-parcial-atomo-001')
+  THEN RAISE EXCEPTION 'COB06_SUSPENSAO: parcial deixou residuos'; END IF;
+
+  -- O estorno e registrado como evento INERTE; so a funcao isolada
+  -- converte depois o credito ja disponivel em saldo retido.
+  v_evento:=public.catalogo_asaas_registrar_evento_acumulo_inerte(
+    v_id,'pay_cob06_obs_123456','ci-cob06-refund-atomo-001','REFUNDED');
+  IF v_evento->>'ok'<>'true'
+  THEN RAISE EXCEPTION 'COB06_SUSPENSAO: refund nao registrado: %',v_evento; END IF;
+  v_evento_reverso_id:=(v_evento->>'evento_id')::bigint;
+  IF (SELECT count(*) FROM public.catalogo_lancamentos_financeiros_v2
+      WHERE pedido_id IN(v_p1,v_p2) AND status='disponivel')<>4
+  THEN RAISE EXCEPTION 'COB06_SUSPENSAO: fixture nao reproduziu saldo exposto'; END IF;
+
+  -- Forcar falha na ultima etapa: rollback deve restaurar recibo, lote,
+  -- faturas, comissoes e saldo numa unica transacao.
+  EXECUTE $ddl$CREATE FUNCTION pg_temp.cob06_falha_suspensao_ci()
+    RETURNS trigger LANGUAGE plpgsql AS $trigger$
+    BEGIN
+      IF NEW.status='contestada' THEN
+        RAISE EXCEPTION 'COB06_FALHA_SUSPENSAO_INJETADA';
+      END IF;
+      RETURN NEW;
+    END; $trigger$ $ddl$;
+  CREATE TRIGGER cob06_falha_suspensao_ci
+    BEFORE UPDATE OF status ON public.catalogo_comissoes_offline
+    FOR EACH ROW EXECUTE FUNCTION pg_temp.cob06_falha_suspensao_ci();
+  BEGIN
+    PERFORM catalogo_private.catalogo_asaas_suspender_lote_atomico_ci(
+      v_id,v_evento_reverso_id);
+    RAISE EXCEPTION 'COB06_SUSPENSAO: deveria ter falhado';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM IS DISTINCT FROM 'COB06_FALHA_SUSPENSAO_INJETADA' THEN RAISE; END IF;
+  END;
+  DROP TRIGGER cob06_falha_suspensao_ci ON public.catalogo_comissoes_offline;
+  IF (SELECT estado FROM public.catalogo_asaas_acumulo_quitacoes_isoladas
+      WHERE lote_id=v_id)<>'pago'
+   OR (SELECT estado FROM public.catalogo_asaas_acumulo_lotes WHERE id=v_id)<>'pago'
+   OR (SELECT count(*) FROM public.catalogo_fechamentos_offline
+       WHERE id IN(v_f1,v_f2) AND status='pago')<>2
+   OR (SELECT count(*) FROM public.catalogo_comissoes_offline
+       WHERE pedido_id IN(v_p1,v_p2) AND status='paga')<>2
+   OR (SELECT count(*) FROM public.catalogo_lancamentos_financeiros_v2
+       WHERE pedido_id IN(v_p1,v_p2) AND status='disponivel')<>4
+  THEN RAISE EXCEPTION 'COB06_SUSPENSAO: falha deixou estado parcial'; END IF;
+
+  v_reverso:=catalogo_private.catalogo_asaas_suspender_lote_atomico_ci(
+    v_id,v_evento_reverso_id);
+  IF v_reverso->>'ok'<>'true' OR v_reverso->>'estado'<>'estornado'
+   OR v_reverso->>'evento'<>'REFUNDED'
+   OR v_reverso->>'transferencias_compensadas'<>'false'
+   OR v_reverso->>'prova_bancaria_real'<>'false'
+   OR (SELECT estado FROM public.catalogo_asaas_acumulo_quitacoes_isoladas
+       WHERE lote_id=v_id)<>'estornado'
+   OR (SELECT estado FROM public.catalogo_asaas_acumulo_lotes WHERE id=v_id)<>'estornado'
+   OR (SELECT count(*) FROM public.catalogo_fechamentos_offline
+       WHERE id IN(v_f1,v_f2) AND status='bloqueado')<>2
+   OR (SELECT count(*) FROM public.catalogo_comissoes_offline
+       WHERE pedido_id IN(v_p1,v_p2) AND status='contestada')<>2
+   OR (SELECT count(*) FROM public.catalogo_lancamentos_financeiros_v2
+       WHERE pedido_id IN(v_p1,v_p2) AND status='retido')<>4
+   OR (SELECT count(*) FROM public.catalogo_remuneracoes_v2
+       WHERE pedido_id IN(v_p1,v_p2) AND status='retido'
+         AND financiamento_comprovado=false)<>2
+   OR (SELECT referencia_pagamento FROM public.catalogo_fechamentos_offline
+       WHERE id=v_f1) IS DISTINCT FROM v_referencia_paga
+   OR (SELECT pago_em FROM public.catalogo_fechamentos_offline
+       WHERE id=v_f1) IS DISTINCT FROM v_pago_em_antes
+   OR (SELECT count(*) FROM public.catalogo_fatura_cobrancas
+       WHERE fechamento_id IN(v_f1,v_f2))<>0
+  THEN RAISE EXCEPTION 'COB06_SUSPENSAO: estorno incompleto: %',v_reverso; END IF;
+  v_reverso:=catalogo_private.catalogo_asaas_suspender_lote_atomico_ci(
+    v_id,v_evento_reverso_id);
+  IF v_reverso->>'ok'<>'false'
+   OR v_reverso->>'motivo'<>'quitacao_nao_ativa'
+  THEN RAISE EXCEPTION 'COB06_SUSPENSAO: replay reabriu recibo: %',v_reverso; END IF;
+  v_evento:=public.catalogo_asaas_registrar_evento_acumulo_inerte(
+    v_id,'pay_cob06_obs_123456','ci-cob06-received-apos-refund-001','RECEIVED');
+  IF v_evento->>'ok'<>'true'
+    OR EXISTS(SELECT 1 FROM public.catalogo_lancamentos_financeiros_v2
+              WHERE pedido_id IN(v_p1,v_p2) AND status='disponivel')
+    OR catalogo_private.catalogo_v2_financiado(v_p1)
+  THEN RAISE EXCEPTION 'COB06_SUSPENSAO: evento tardio reativou saque'; END IF;
+  RAISE NOTICE 'COB06_REVERSAO_ATOMICA_CI_ROLLBACK_OK';
   RAISE EXCEPTION 'COB06_ATOMICO_ROLLBACK_ESPERADO';
  EXCEPTION WHEN raise_exception THEN
   IF SQLERRM IS DISTINCT FROM 'COB06_ATOMICO_ROLLBACK_ESPERADO' THEN RAISE; END IF;
