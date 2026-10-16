@@ -893,6 +893,21 @@ jobs:
             -f supabase/tests/isolated/asaas-cob06-acumulo-preview-rollback.sql
           psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
             -f supabase/tests/isolated/asaas-cob06-acumulo-reserva-rollback.sql
+          # Candidato 14 altera APENAS as funcoes do clone descartavel.
+          # Instalacao fora da CI deve falhar sem qualquer DDL persistida.
+          if psql -d catalogo_ci -v ON_ERROR_STOP=1 \
+            -f supabase/production-candidate/14_cob06_competencia_congelada_somente_ci.sql \
+            > /tmp/cob06-competencia-outside-ci.log 2>&1; then
+            echo "ERROR: COB06 competencia instalada fora do banco efemero" >&2
+            exit 1
+          fi
+          grep -F 'COB06_CI_ONLY: instalacao de competencia' /tmp/cob06-competencia-outside-ci.log
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
+            -f supabase/production-candidate/14_cob06_competencia_congelada_somente_ci.sql
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
+            -f supabase/tests/isolated/asaas-cob06-competencia-congelada-rollback.sql
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -Atqc \
+            "SELECT count(*) FROM public.catalogo_comissoes_offline WHERE pedido_id IN ('00000000-0000-4000-8000-00000000c601','00000000-0000-4000-8000-00000000c602','00000000-0000-4000-8000-00000000c603','00000000-0000-4000-8000-00000000c604')" | grep -Fx 0
           psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -Atqc \
             "SELECT COUNT(*) FROM public.catalogo_asaas_acumulo_lotes" | grep -Fx 0
           psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -Atqc \
