@@ -12,7 +12,7 @@ header{background:#091d1c;color:white;padding:28px;border-radius:16px}
 h1{font-size:1.65rem;margin:8px 0}h2{font-size:1.15rem;margin:0 0 12px}
 header p{color:#dbe7e1;line-height:1.6}section{background:white;padding:24px;margin-top:16px;border:1px solid #dde1dc;border-radius:16px}
 label{display:block;margin-top:12px;font-size:.95rem;font-weight:600}
-input{display:block;width:100%;margin-top:6px;padding:12px;border:1px solid #bfc8c1;border-radius:9px;font:inherit}
+input,select{display:block;width:100%;margin-top:6px;padding:12px;border:1px solid #bfc8c1;border-radius:9px;font:inherit}
 button{padding:12px 17px;background:#194138;color:white;border:0;border-radius:10px;font:inherit;font-weight:600;cursor:pointer}
 button:disabled{opacity:.5;cursor:wait}.secondary{background:#eff4ef;color:#194138}
 .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
@@ -59,10 +59,13 @@ pre{white-space:pre-wrap;word-break:break-all;padding:14px;background:#f3f5f1;bo
 
 <section id="qa-delivery" hidden>
 <h2>COB-04 · Entrega V2 com motoboy (somente STAGING)</h2><p class="muted"><strong>Próxima ação:</strong> botão 7 para autorizar a conta de motoboy existente, depois botão 8 para criar UM pedido de entrega. Não confirme o pedido de retirada que ficou “pronto”.</p>
-<p class="muted">Ensaio de pedido fictício com entrega em dinheiro e taxa de R$100: R$5 plataforma + R$2 motoboy. Não é um saque. Use a competência ainda não fechada (a fatura de novembro já está paga). É necessário alternar entre a conta proprietária e a conta motoboy do projeto de testes.</p>
+<p class="muted">COB-04 (já homologado): produto R$100 gera R$7 de comissão. COB-06 (preparo): produto QA R$40 gera R$2,80 (R$2 plataforma + R$0,80 motoboy). A cobrança abaixo de R$5 deve permanecer BLOQUEADA, sem Pix ou quitação fictícia. Todos os pedidos são somente de homologação.</p>
 <label>E-mail do motoboy de testes já cadastrado<input id="qa-moto-email" type="email" autocomplete="off" placeholder="Informe o e-mail da conta de motoboy do Sandbox"></label><p class="muted">O ID do motoboy é localizado pela API quando você autoriza. Não precisa consultar ou digitar esse ID.</p>
 <label>Nome de identificação do motoboy<input id="qa-moto-name" maxlength="120" autocomplete="off" value="Motoboy de homologação" placeholder="Motoboy de homologação"></label>
 <label>ID do motoboy autorizado (automático)<input id="qa-moto-id" readonly aria-readonly="true" placeholder="Será preenchido pelo botão 7; não precisa digitar"></label>
+<label>Produto QA a usar na entrega<select id="qa-product"><option value="">Clique em carregar produtos antes do pedido</option></select></label>
+<div class="actions"><button type="button" id="qa-products-load" class="secondary">Carregar produtos da loja de testes</button></div>
+<p class="muted">Escolha R$40 para testar o bloqueio de cobrança abaixo de R$5. Este seletor não altera preço, cadastro ou valores no servidor. Não emita Pix após o teste de valor baixo.</p>
 <div class="actions">
 <button type="button" id="qa-authorize">7 · Proprietário: autorizar motoboy</button>
 <button type="button" id="qa-create-delivery">8 · Criar pedido de entrega em dinheiro</button>
@@ -83,7 +86,7 @@ pre{white-space:pre-wrap;word-break:break-all;padding:14px;background:#f3f5f1;bo
 <section id="billing" hidden>
 <h2>3. Consultar fatura de homologação</h2>
 <p>O comércio <strong>asaas-cob02</strong> está vinculado à conta existente de homologação. Primeiro conclua o pedido do Sandbox e feche a competência.</p>
-<label>Competência da fatura<input id="competencia" type="month" value="2026-12"></label><p class="muted">Para COB-04, dezembro/2026 é a próxima competência livre desta loja QA. Outubro e novembro já foram pagos; não reabra nem reemita essas competências.</p>
+<label>Competência da fatura<input id="competencia" type="month" value="2027-02"></label><p class="muted">Em 16/10/2026 a última competência paga da loja QA era janeiro/2027; confira a competência do novo pedido antes de fechar. Não reabra meses pagos. Se o total for menor que R$5, apenas consulte: NÃO clique em emitir Pix.</p>
 <div class="actions"><button id="consultar" type="button">Consultar fatura</button><button class="secondary" id="conciliar" type="button">Verificar pagamento no Asaas</button></div>
 <h2 style="margin-top:25px">4. Emitir Pix fictício da fatura</h2>
 <p class="muted">Execute somente depois de habilitar <code>ASAAS_BILLING_ENABLED=true</code> no Supabase de testes. A emissão é recuperável e não deve ser feita novamente para a mesma competência se existir cobrança anterior.</p>
@@ -197,6 +200,9 @@ $("conciliar").addEventListener("click",()=>withBusy($("conciliar"),async()=>{
  const out=await call("consultar_cobranca");show(out);msg(out.mensagem||"Conciliação concluída.");
 }));
 $("emitir").addEventListener("click",()=>withBusy($("emitir"),async()=>{
+ const displayed=JSON.parse($("result").textContent||"{}");
+ if(String(displayed?.fatura?.competencia||"").slice(0,7)!==$("competencia").value)throw Error("Consulte primeiro a fatura da competência selecionada antes de emitir qualquer Pix.");
+ if(displayed?.fatura?.total_comissao_centavos<500)throw Error("Fatura inferior a R$5: emissão proibida. COB-06 permanece HOLD.");
  if(!window.confirm("Confirmar emissão/recuperação de cobrança SOMENTE no Asaas Sandbox?"))return;
  const out=await call("criar_cobranca",{nome_pagador:$("nome").value.trim(),documento:$("documento").value.trim()});
  show(out);$("documento").value="";msg(out.mensagem||"Cobrança de teste criada ou recuperada.");
@@ -222,6 +228,21 @@ async function deliveryApi(acao,body={}){
  if(out.ok===false)throw Error(out.mensagem||"A operação de entregas foi recusada pelo servidor.");
  return out;
 }
+// Consulta SOMENTE os produtos da loja QA; não cria pedido nem muda cadastro.
+$("qa-products-load").addEventListener("click",()=>withBusy($("qa-products-load"),async()=>{
+ const {data:products,error}=await client.from("catalogo_produtos")
+   .select("id,nome,preco").eq("comercio_id",STORE).eq("disponivel",true)
+   .is("deletado_em",null).order("preco",{ascending:true}).limit(30);
+ if(error||!Array.isArray(products)||!products.length)
+   throw Error("Nenhum produto ativo da loja QA disponível. Nenhum pedido criado.");
+ const options=[new Option("Escolha um produto QA","")];
+ for(const product of products){
+  if(!/^[a-f0-9-]{36}$/i.test(product.id)||!Number.isFinite(Number(product.preco)))continue;
+  options.push(new Option(product.nome+" — R$ "+Number(product.preco).toFixed(2),product.id));
+ }
+ $("qa-product").replaceChildren(...options);
+ msg("Produtos carregados apenas para escolha. Nenhum pedido criado.");
+}));
 $("qa-authorize").addEventListener("click",()=>withBusy($("qa-authorize"),async()=>{
  const email=$("qa-moto-email").value.trim().toLowerCase(),nome=$("qa-moto-name").value.trim();
  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||!nome)throw Error("Informe e-mail confirmado e nome do motoboy de testes.");
@@ -245,25 +266,36 @@ $("qa-create-delivery").addEventListener("click",()=>withBusy($("qa-create-deliv
  if(!autorizado || !/^[a-f0-9-]{36}$/i.test(autorizado.usuario_id||""))
   throw Error("Nenhum motoboy autorizado com este e-mail nesta loja QA. Use primeiro o botão 7 com a conta proprietária e confirme a autorização. O pedido NÃO foi criado.");
  $("qa-moto-id").value=autorizado.usuario_id;
+ const selectedId=$("qa-product").value;
+ if(!/^[a-f0-9-]{36}$/i.test(selectedId))throw Error("Carregue os produtos e selecione UM produto QA antes de criar pedido.");
  const {data:product,error}=await client.from("catalogo_produtos")
-   .select("id,nome,preco").eq("comercio_id",STORE).eq("disponivel",true).is("deletado_em",null).limit(1).maybeSingle();
- if(error||!product)throw Error("Produto fictício de homologação indisponível.");
- if(!window.confirm("Criar UM pedido fictício de ENTREGA em DINHEIRO somente no STAGING?"))return false;
+   .select("id,nome,preco").eq("comercio_id",STORE).eq("id",selectedId)
+   .eq("disponivel",true).is("deletado_em",null).maybeSingle();
+ if(error||!product)throw Error("Produto QA selecionado não está mais disponível. Nenhum pedido criado.");
+ const cents=Math.round(Number(product.preco)*100);
+ if(!Number.isSafeInteger(cents)||cents<=0)throw Error("Valor inválido de produto QA.");
+ const expectedPlatform=Math.round(cents*0.05),expectedMotoboy=Math.round(cents*0.02);
+ const expectedTotal=expectedPlatform+expectedMotoboy;
+ if(!window.confirm("Criar UM pedido fictício de ENTREGA de R$"+Number(product.preco).toFixed(2)+" (taxa R$"+(expectedTotal/100).toFixed(2)+") somente no STAGING?"))return false;
  const out=await qaApi("catalogo-pedido-offline",{
   acao:"criar_pedido_offline",modalidade:"entrega",forma_pagamento:"dinheiro",entrega_centavos:0,
   cliente:{nome:"Comprador fictício QA",email:"comprador-qa@exemplo.test",telefone:"35000000000",
     endereco:"Rua Fictícia de Testes",numero:"0",bairro:"Homologação"},
-  itens:[{id:product.id,quantidade:1}],observacoes:"COB-04: entrega fictícia, sem dinheiro ou mercadoria real"
+  itens:[{id:product.id,quantidade:1}],observacoes:expectedTotal<500?"COB-06: valor baixo, sem Pix e sem mercadoria real":"COB-04: entrega fictícia, sem dinheiro ou mercadoria real"
  },false);
  $("qa-order-id").value=out.pedido_id||"";
  $("qa-delivery-code").value=out.codigo_entrega||"";
  if(out.pedido_id){$("qa-create").disabled=true;$("qa-create-delivery").disabled=true;}
- qaLog({pedido_id:out.pedido_id,versao_financeira:out.versao_financeira,status:out.status,
+ qaLog({pedido_id:out.pedido_id,produto:product.nome,versao_financeira:out.versao_financeira,status:out.status,
   codigo_entrega:out.codigo_entrega,taxa_total_centavos:out.taxa_total_centavos,
   taxa_plataforma_centavos:out.taxa_plataforma_centavos,taxa_motoboy_centavos:out.taxa_motoboy_centavos});
- if(out.versao_financeira!==2||out.taxa_total_centavos!==700||out.taxa_plataforma_centavos!==500||out.taxa_motoboy_centavos!==200)
+ if(product.nome==="Pedido teste Asaas - R$100"&&
+  (out.taxa_total_centavos!==700||out.taxa_plataforma_centavos!==500||out.taxa_motoboy_centavos!==200))
+   throw Error("ATENÇÃO: houve regressão na precificação COB-04 de R$100. NÃO crie outro pedido.");
+ if(out.versao_financeira!==2||out.taxa_total_centavos!==expectedTotal||
+    out.taxa_plataforma_centavos!==expectedPlatform||out.taxa_motoboy_centavos!==expectedMotoboy)
    throw Error("ATENÇÃO: pedido criado com valores divergentes; ID guardado acima. NÃO crie outro nem finalize antes de verificar o STAGING.");
- msg("Pedido V2 criado. Aceite e marque pronto como proprietário; depois atribua ao motoboy.");
+ msg(expectedTotal<500?"Pedido V2 de baixa comissão criado. Conclua a entrega, feche a competência correta e apenas CONSULTE a fatura (NÃO emita Pix).":"Pedido V2 criado. Aceite e marque pronto como proprietário; depois atribua ao motoboy.");
 }));
 $("qa-assign").addEventListener("click",()=>withBusy($("qa-assign"),async()=>{
  const id=$("qa-moto-id").value.trim();
