@@ -14,6 +14,10 @@ let usuario = ADMIN;
 let status = "PENDING";
 let falhaPreflight = false;
 let falhaRegistro = false;
+let falhaRegistroPorOrigem = false;
+let quitacaoPosterior = false;
+let quitacaoIncorreta = false;
+let estadoQuitacao = "pago";
 let getsBanco = 0;
 let getsAsaas = 0;
 let escritas = 0;
@@ -26,6 +30,8 @@ const responder = (data: unknown, code = 200) => new Response(JSON.stringify(dat
 function assert(ok: unknown, msg: string): asserts ok { if (!ok) throw Error(msg); }
 function reiniciar() {
   usuario = ADMIN; status = "PENDING"; falhaPreflight = false; falhaRegistro = false;
+  falhaRegistroPorOrigem = false; quitacaoPosterior = false; quitacaoIncorreta = false;
+  estadoQuitacao = "pago";
   getsBanco = 0; getsAsaas = 0; escritas = 0;
   chaveAnterior = ""; eventoAnterior = 0; proximoEvento = 20;
 }
@@ -57,6 +63,18 @@ globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise
       referencia: REF, valor_centavos: 500, pode_quitar: false,
       pode_liberar_motoboy: false });
   }
+  if (url.pathname.startsWith("/rest/v1/catalogo_asaas_acumulo_quitacoes_isoladas") && method === "GET") {
+    getsBanco++;
+    return responder(quitacaoPosterior
+      ? { lote_id: LOTE, payment_id: quitacaoIncorreta ? "pay_outro_comprovante" : PAYMENT,
+        valor_centavos: 500, estado: estadoQuitacao }
+      : null);
+  }
+  if (url.pathname.startsWith("/rest/v1/catalogo_asaas_acumulo_lotes") && method === "GET") {
+    getsBanco++;
+    return responder({ id: LOTE, comercio_id: "comercio-ci",
+      total_centavos: 500, estado: estadoQuitacao });
+  }
   if (url.pathname.startsWith("/rest/v1/catalogo_asaas_clientes") && method === "GET") {
     getsBanco++;
     return responder({ cliente_id: CUSTOMER });
@@ -73,6 +91,9 @@ globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise
     const chave = args.p_evento;
     assert(typeof chave === "string" && /^get-[0-9a-f]{64}$/.test(chave),
       "chave idempotente invalida");
+    if (falhaRegistroPorOrigem)
+      return responder({ ok: false, motivo: "origens_nao_conferidas",
+        pode_quitar: false, pode_estornar: false, pode_liberar_motoboy: false });
     if (falhaRegistro) return responder({ ok: true, evento_id: 44,
       pode_quitar: true, pode_estornar: false, pode_liberar_motoboy: false });
     const repetido = chaveAnterior === chave;
@@ -156,5 +177,68 @@ Deno.test("COB06 HTTP: preflight inconsistente e RPC liberando quitação falham
   assert(inconsistente.http === 503 && Number(getsAsaas) === 1 && Number(escritas) === 1,
     "RPC com quitação habilitada foi aceita");
 });
+Deno.test("COB06 HTTP: estorno APOS quitacao usa recibo vinculado e nunca libera dinheiro", async () => {
+  reiniciar();
+  falhaPreflight = true;
+  quitacaoPosterior = true;
+  status = "REFUNDED";
+  const primeiro = await chamar("registrar_estado_acumulo_sandbox_admin");
+  const registrado = primeiro.body.registro as Record<string,unknown>;
+  assert(primeiro.http === 200 && primeiro.body.success === true &&
+    primeiro.body.integridade_contabil_ok === false &&
+    primeiro.body.recibo_local_pos_quitacao === true &&
+    registrado?.ja_observado === false && registrado?.evento_id === 20,
+    "estorno posterior nao foi observado sem falsa aprovacao de preflight");
+  assert(getsAsaas === 1 && escritas === 1 && getsBanco === 6,
+    "nao conferiu recibo e GET antes do evento");
+  const repetido = await chamar("registrar_estado_acumulo_sandbox_admin");
+  assert(repetido.http === 200 &&
+    (repetido.body.registro as Record<string,unknown>)?.ja_observado === true &&
+    (repetido.body.registro as Record<string,unknown>)?.evento_id === 20,
+    "repeticao de estorno duplicou evento");
+  for (const resposta of [primeiro,repetido]) {
+    assert(resposta.body.hold_obrigatorio === true &&
+      resposta.body.pode_emitir_pix === false &&
+      resposta.body.pode_quitar === false &&
+      resposta.body.pode_estornar === false &&
+      resposta.body.pode_liberar_motoboy === false,
+      "estorno posterior abriu rota de dinheiro");
+  }
+  estadoQuitacao = "estornado";
+  status = "RECEIVED";
+  const tardio = await chamar("conferir_acumulo_sandbox_admin");
+  assert(tardio.http === 200 && tardio.body.hold_obrigatorio === true &&
+    tardio.body.integridade_contabil_ok === false &&
+    tardio.body.recibo_local_pos_quitacao === true &&
+    tardio.body.registro === null && escritas === 2,
+    "RECEIVED tardio reativou saldo ou gerou escrita no modo leitura");
+});
+Deno.test("COB06 HTTP: recibo falso ou ausencia de recibo nao atravessa preflight", async () => {
+  reiniciar();
+  falhaPreflight = true;
+  const semRecibo = await chamar("registrar_estado_acumulo_sandbox_admin");
+  assert(semRecibo.http === 409 && getsAsaas === 0 && escritas === 0,
+    "preflight falho sem recibo chegou ao banco Asaas");
+  reiniciar();
+  falhaPreflight = true; quitacaoPosterior = true; quitacaoIncorreta = true;
+  const trocado = await chamar("registrar_estado_acumulo_sandbox_admin");
+  assert(trocado.http === 409 && getsAsaas === 0 && escritas === 0,
+    "recibo vinculado a outro pagamento foi aceito");
+  reiniciar();
+  falhaPreflight = true; quitacaoPosterior = true; estadoQuitacao = "preparado";
+  const naoPago = await chamar("registrar_estado_acumulo_sandbox_admin");
+  assert(naoPago.http === 409 && getsAsaas === 0 && escritas === 0,
+    "lote ainda aberto burlou preflight via recibo");
+});
+Deno.test("COB06 HTTP: apos quitacao, diario SQL recusa origem alterada sem baixa", async () => {
+  reiniciar();
+  falhaPreflight = true; quitacaoPosterior = true;
+  falhaRegistroPorOrigem = true; status = "REFUNDED";
+  const falhou = await chamar("registrar_estado_acumulo_sandbox_admin");
+  assert(falhou.http >= 400 && falhou.body.success !== true &&
+    getsAsaas === 1 && escritas === 1,
+    "origem inconsistente foi aceita no diario posquitacao");
+});
+
 // Cada arquivo de teste roda em worker isolado; nenhuma chamada de rede real ocorreu.
 void originalFetch;

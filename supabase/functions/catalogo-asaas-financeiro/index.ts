@@ -110,9 +110,35 @@ async function conferirAcumuloSandboxAdmin(uid:string,body:Record<string,unknown
  if(cliente.error||!cliente.data||cliente.data.cliente_id!==obs.customer_id)
   throw new Failure("Cliente bancário não corresponde ao comércio. HOLD.",409);
  const conferencia=await rpc("catalogo_asaas_conferir_conciliacao_acumulo",{p_lote:lote});
- if(conferencia.integridade_contabil_ok!==true||
-  Number(conferencia.valor_fontes_centavos)!==Number(ref.valor_centavos))
-  throw new Failure("Origens de cobrança não conferidas. HOLD.",409);
+ const preflightInicialOk=conferencia.integridade_contabil_ok===true&&
+  Number(conferencia.valor_fontes_centavos)===Number(ref.valor_centavos);
+ let reciboLocalPosQuitacao=false;
+ if(!preflightInicialOk){
+  // Apos quitação, o preflight de NOVA emissao falha corretamente. Ainda
+  // precisamos observar REFUNDED/CHARGEBACK sem ressuscitar o recebimento.
+  // Apenas o recibo isolado existente, vinculado ao mesmo lote/pagamento,
+  // permite prosseguir ao GET; a RPC do diario revalida todas as fontes
+  // com travas ANTES de aceitar qualquer evento posterior.
+  const [quitacao,loteAtual]=await Promise.all([
+   db.from("catalogo_asaas_acumulo_quitacoes_isoladas")
+    .select("lote_id,payment_id,valor_centavos,estado")
+    .eq("lote_id",lote).maybeSingle(),
+   db.from("catalogo_asaas_acumulo_lotes")
+    .select("id,comercio_id,total_centavos,estado")
+    .eq("id",lote).maybeSingle(),
+  ]);
+  const q=quitacao.data, atual=loteAtual.data;
+  if(quitacao.error||loteAtual.error||!q||!atual||
+   q.lote_id!==lote||atual.id!==lote||
+   q.payment_id!==obs.payment_id||
+   q.valor_centavos!==obs.valor_centavos||
+   atual.total_centavos!==obs.valor_centavos||
+   atual.comercio_id!==ref.comercio_id||
+   !["pago","estornado","contestado"].includes(String(q.estado))||
+   q.estado!==atual.estado)
+   throw new Failure("Origens de cobrança não conferidas. HOLD.",409);
+  reciboLocalPosQuitacao=true;
+ }
  const validada=await conferirPagamentoAcumuloPorGet({
   loteId:lote,referencia:ref.referencia,clienteId:obs.customer_id,
   valorCentavos:Number(ref.valor_centavos),
@@ -135,7 +161,9 @@ async function conferirAcumuloSandboxAdmin(uid:string,body:Record<string,unknown
  }
  // GET confiavel nao e prova de estado final nem autoriza transicao contábil.
  return respond({success:true,lote_id:lote,payment_id:validada.p_payment,
-  status_bancario_observado:validada.p_status,integridade_contabil_ok:true,
+  status_bancario_observado:validada.p_status,
+  integridade_contabil_ok:preflightInicialOk,
+  recibo_local_pos_quitacao:reciboLocalPosQuitacao,
   pode_emitir_pix:false,pode_quitar:false,pode_estornar:false,
   pode_liberar_motoboy:false,hold_obrigatorio:true,registro});
 }
