@@ -110,6 +110,7 @@ jobs:
       - name: Type-check Asaas financial Edge Function
         run: |
           deno check --node-modules-dir=auto supabase/functions/catalogo-asaas-financeiro/index.ts
+          deno check --node-modules-dir=auto supabase/functions/catalogo-cob06-qa/index.ts
           deno check --node-modules-dir=auto supabase/functions/catalogo-asaas-cob06-auditoria/index.ts
           deno check --node-modules-dir=auto supabase/functions/tests/catalogo-asaas-cob06-auditoria-http-inerte.test.ts
           deno check --node-modules-dir=auto supabase/functions/tests/catalogo-asaas-cob06-auditoria-http-sandbox-mock.test.ts
