@@ -837,6 +837,10 @@ jobs:
           # COB-06 acumulo R$5: candidato adicional INERTE, NAO incluido
           # no pacote produtivo congelado das nove fontes acima.
           # Teste exclusivo deste banco descartavel; fixture com ROLLBACK.
+          # Capturar a função que reconhece dinheiro ANTES dos candidatos 03-07.
+          # A fase de observação NÃO pode alterá-la.
+          parcela_recebida_antes=$(psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -Atqc             "SELECT md5(pg_get_functiondef('catalogo_private.catalogo_v2_parcela_recebida(uuid,text)'::regprocedure))")
+          test -n "$parcela_recebida_antes"
           psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
             -f supabase/production-candidate/03_cob06_acumulo_intercompetencias_preparacao.sql
           psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
@@ -847,6 +851,12 @@ jobs:
             -f supabase/production-candidate/06_cob06_observacao_bancaria_sem_baixa.sql
           psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
             -f supabase/production-candidate/07_cob06_eventos_bancarios_inertes.sql
+          parcela_recebida_depois=$(psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -Atqc             "SELECT md5(pg_get_functiondef('catalogo_private.catalogo_v2_parcela_recebida(uuid,text)'::regprocedure))")
+          test "$parcela_recebida_antes" = "$parcela_recebida_depois"
+          # Gate reutilizavel de observação, sem acesso a dados pessoais.
+          # Nove contagens 0 e três barreiras de baixa/estorno ausentes.
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -At -F '|'             -f scripts/validacao-pagamentos/asaas-cob06-acumulo-homologacao-readonly.sql             | grep -Fx '0|0|0|0|0|0|0|0|0|t|t|t'
+          echo "PASS: COB06 SQL 03-07 observacao inerte, sem alterar elegibilidade financeira"
           psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
             -f supabase/production-candidate/08_cob06_apuracao_estados_sem_baixa.sql
           psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
