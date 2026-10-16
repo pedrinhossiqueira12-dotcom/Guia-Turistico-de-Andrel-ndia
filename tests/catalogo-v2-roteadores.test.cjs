@@ -93,6 +93,7 @@ test('administração financeira não pode ser chamada por comércio ou entregad
   }
 });
 
+const COB06_QA_REVISOR='d896cc0c-31e4-4ef7-8fa4-13d15f02dd2a';
 const COB06_QA_PEDIDO='a4ca7c4e-465f-4342-ae18-5c7eea1dec15';
 const COB06_QA_OCORRENCIA='eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
 const COB06_QA_MOTIVO='Ensaio ficticio sem retirada e sem recebimento de dinheiro.';
@@ -106,10 +107,11 @@ const COB06_QA_CORPO={
   decisao:'cancelamento_legitimo',motivo:COB06_QA_MOTIVO,
   sem_recebimento_confirmado:true,sem_entrega_confirmada:true,
 };
-test('COB06: encerramento QA fica inerte sem flag, no PROD e fora do JWT admin',async()=>{
+test('COB06: encerramento QA fica inerte sem flag, no PROD e fora do JWT revisor STAGING',async()=>{
   for(const conf of [
-    {actor:ADMIN,env:{}},
-    {actor:ADMIN,env:{...COB06_QA_ENV,SUPABASE_URL:'https://xdmbkflufsfqziixzpxc.supabase.co'}},
+    {actor:COB06_QA_REVISOR,env:{}},
+    {actor:COB06_QA_REVISOR,env:{...COB06_QA_ENV,SUPABASE_URL:'https://xdmbkflufsfqziixzpxc.supabase.co'}},
+    {actor:ADMIN,env:COB06_QA_ENV},
     {actor:OWNER,env:COB06_QA_ENV},
     {actor:RIDER,env:COB06_QA_ENV},
   ]){
@@ -120,7 +122,7 @@ test('COB06: encerramento QA fica inerte sem flag, no PROD e fora do JWT admin',
   }
 });
 test('COB06: escopo e prova de não recebimento são obrigatórios antes da RPC',async()=>{
-  const conf={actor:ADMIN,env:COB06_QA_ENV};
+  const conf={actor:COB06_QA_REVISOR,env:COB06_QA_ENV};
   for(const change of [
     {pedido_id:ORDER},{comercio_id:'loja-a'},{pedido_id:'abc'},
     {ocorrencia_id:'abc'},{decisao:'manter'},
@@ -135,19 +137,27 @@ test('COB06: escopo e prova de não recebimento são obrigatórios antes da RPC'
   }
 });
 test('COB06: apenas a identidade real do JWT e os dados revisados chegam à RPC',async()=>{
-  const e=endpoint(delivery,{actor:ADMIN,env:COB06_QA_ENV,result:{ok:true,status:'cancelado',comissao_status:'cancelada'}});
+  const e=endpoint(delivery,{actor:COB06_QA_REVISOR,env:COB06_QA_ENV,result:{ok:true,status:'cancelado',comissao_status:'cancelada'}});
   const r=await e.handler(request({...COB06_QA_CORPO,operador_id:OWNER,p_operador_id:RIDER,valor_centavos:99999,transferencia_confirmada:true}));
   assert.equal(r.status,200);const body=await r.json();assert.equal(body.success,true);assert.equal(body.status,'cancelado');
   assert.equal(e.calls.length,1);assert.equal(e.calls[0].name,'catalogo_cob06_cancelar_retirada_qa_v2');
   assert.deepEqual(JSON.parse(JSON.stringify(e.calls[0].args)),{
-    p_operador_id:ADMIN,p_ocorrencia_id:COB06_QA_OCORRENCIA,p_decisao:'cancelamento_legitimo',
+    p_operador_id:COB06_QA_REVISOR,p_ocorrencia_id:COB06_QA_OCORRENCIA,p_decisao:'cancelamento_legitimo',
     p_motivo:COB06_QA_MOTIVO,p_ficticio_sem_recebimento:true,
   });assert.equal(e.writes.length,0);
-  const failed=endpoint(delivery,{actor:ADMIN,env:COB06_QA_ENV,
+  const failed=endpoint(delivery,{actor:COB06_QA_REVISOR,env:COB06_QA_ENV,
     result:{ok:false,http_status:409,mensagem:'Pedido vinculado a fatura paga.'}});
   const response=await failed.handler(request(COB06_QA_CORPO));
   assert.equal(response.status,409);assert.equal((await response.json()).success,false);
   assert.equal(failed.calls.length,1);
+});
+
+test('COB06: revisor do STAGING nao recebe autorizacao para repasse ou a fila geral',async()=>{
+  const e=endpoint(delivery,{actor:COB06_QA_REVISOR,env:COB06_QA_ENV});
+  for(const acao of ['operacao_admin','resolver_ocorrencia','registrar_repasse']) {
+    assert.equal((await e.handler(request({acao}))).status,403);
+  }
+  assert.equal(e.calls.length,0);
 });
 
 test('registro de repasse exige declaração, identificação e prova; não transfere dinheiro',async()=>{
