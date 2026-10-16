@@ -1,3 +1,4 @@
+import { conciliarAntesDePixAcumuloCandidatoSomenteCi } from "../_shared/catalogo-asaas-acumulo-pre-post-somente-ci.ts";
 import { postarPixAcumuloSandboxCandidatoSomenteCi } from "../_shared/catalogo-asaas-acumulo-post-sandbox-candidato.ts";
 import { consultarPagamentoAcumuloSandboxGet,
   encontrarIdPagamentoAcumuloSandboxPorReferencia } from "../_shared/catalogo-asaas-acumulo-get-sandbox-inerte.ts";
@@ -212,4 +213,135 @@ Deno.test("COB06 POST candidato: divergencia no GET impede aceitar resposta do P
   await hold(() => postarPixAcumuloSandboxCandidatoSomenteCi(
     esperado, "2099-01-06", "segredo-ficticio-ci", mock), "VALOR_DIVERGENTE");
   assert(posts === 1 && gets === 1, "GET divergente sem outra emissao");
+});
+
+
+// Coordenacao do pre-POST: banco e Asaas 100% ficticios, SEM rede real.
+const gateCi = {
+  ok: true, nova_tentativa: true, candidato_post_unico_ci: true,
+  lote_id: lote, referencia: esperado.referencia,
+  cliente_id: esperado.clienteId, valor_centavos: 500,
+  operacao_id: "77777777-7777-4777-8777-777777777777",
+  reconciliar_por_get: true, prova_get_externa: false,
+  autorizacao_externa: false, pode_emitir_pix: false,
+  pode_quitar: false, pode_liberar_motoboy: false,
+};
+function listagemFicticia(modo: "vazia" | "unica" | "duplicada" | "malformada") {
+  const data = modo === "vazia" ? [] : [{ id }];
+  if (modo === "duplicada") data.push({ id: "pay_outro_987654" });
+  if (modo === "malformada") return { data, hasMore: false };
+  return { object: "list", data, hasMore: false,
+    totalCount: data.length, offset: 0 };
+}
+function asaasSomenteGet(modo: "vazia" | "unica" | "duplicada" | "malformada" |
+  "falha" | "divergente", rastreio: string[]) {
+  return (async (raw: string | URL | Request, init?: RequestInit) => {
+    const url = new URL(String(raw));
+    rastreio.push((init?.method || "") + " " + url.pathname);
+    assert(init?.method === "GET" && init.redirect === "error" &&
+      url.origin === "https://api-sandbox.asaas.com" &&
+      (init.headers as Record<string, string>).access_token === "segredo-ci",
+      "pre-POST somente GET autenticado na API sandbox");
+    if (modo === "falha") throw Error("timeout bancario ambiguo");
+    if (url.pathname === "/v3/payments") {
+      return new Response(JSON.stringify(listagemFicticia(
+        modo === "divergente" ? "unica" : modo)), {
+        status: 200, headers: { "content-type": "application/json" },
+      });
+    }
+    assert(url.pathname === "/v3/payments/" + id, "GET por ID esperado");
+    return new Response(JSON.stringify(modo === "divergente"
+      ? { ...remoto, value: 6 } : remoto), {
+        status: 200, headers: { "content-type": "application/json" },
+      });
+  }) as typeof fetch;
+}
+
+Deno.test("COB06 pre-POST: cobranca ja existe, GET confere e nunca reserva ou faz POST", async () => {
+  const rede: string[] = [];
+  let claims = 0;
+  const r = await conciliarAntesDePixAcumuloCandidatoSomenteCi(
+    esperado, "segredo-ci", async () => { claims++; return gateCi; },
+    asaasSomenteGet("unica", rede));
+  assert(r.estado === "cobranca_existente_verificada" &&
+    r.paymentId === id && r.statusBancario === "PENDING" &&
+    r.holdObrigatorio === true && r.podeEmitirPix === false &&
+    r.podeQuitar === false && r.podeLiberarMotoboy === false &&
+    claims === 0 && rede.join(",") ===
+    "GET /v3/payments,GET /v3/payments/" + id,
+    "pagamento existente nunca gera claim nem nova cobranca");
+});
+
+Deno.test("COB06 pre-POST: GET vazio permite somente claim CI, nunca POST nem credito", async () => {
+  const rede: string[] = [];
+  let claims = 0;
+  const r = await conciliarAntesDePixAcumuloCandidatoSomenteCi(
+    esperado, "segredo-ci", async (idLote) => {
+      claims++;
+      assert(idLote === lote, "claim apenas do lote do servidor");
+      return gateCi;
+    }, asaasSomenteGet("vazia", rede));
+  assert(r.estado === "tentativa_ci_reservada" && r.paymentId === null &&
+    r.holdObrigatorio === true && r.podeEmitirPix === false &&
+    r.podeQuitar === false && r.podeLiberarMotoboy === false &&
+    claims === 1 && rede.join(",") === "GET /v3/payments",
+    "gate CI nao libera emissao externa");
+});
+
+Deno.test("COB06 pre-POST: GET vazio com tentativa anterior exige reconciliacao manual", async () => {
+  const rede: string[] = [];
+  let claims = 0;
+  const r = await conciliarAntesDePixAcumuloCandidatoSomenteCi(
+    esperado, "segredo-ci", async () => {
+      claims++;
+      return { ok: false, motivo: "tentativa_ja_iniciada",
+        nova_tentativa: false, reconciliar_por_get: true,
+        pode_emitir_pix: false };
+    }, asaasSomenteGet("vazia", rede));
+  assert(r.estado === "tentativa_anterior_reconciliar_manualmente" &&
+    claims === 1 && rede.length === 1 &&
+    r.podeEmitirPix === false && r.holdObrigatorio === true,
+    "replay nunca permite nova cobranca");
+});
+
+Deno.test("COB06 pre-POST: rede fora, duplicidade, lista invalida ou valor divergente nao chamam gate", async () => {
+  for (const modo of ["falha", "duplicada", "malformada", "divergente"] as const) {
+    const rede: string[] = [];
+    let claims = 0;
+    await hold(() => conciliarAntesDePixAcumuloCandidatoSomenteCi(
+      esperado, "segredo-ci", async () => {
+        claims++; return gateCi;
+      }, asaasSomenteGet(modo, rede)),
+      modo === "divergente" ? "VALOR_DIVERGENTE" : "GET_INCONCLUSIVO");
+    assert(claims === 0 && rede.every(x => x.startsWith("GET ")),
+      "falha bancaria nao pode gerar tentativa " + modo);
+  }
+});
+
+Deno.test("COB06 pre-POST: claim divergente ou inesperadamente positivo fica em HOLD", async () => {
+  for (const variante of [
+    { ...gateCi, valor_centavos: 501 },
+    { ...gateCi, autorizacao_externa: true },
+    { ...gateCi, pode_emitir_pix: true },
+    { ...gateCi, referencia: "guia-acumulo-invalido" },
+    { ...gateCi, ok: false },
+  ]) {
+    const rede: string[] = [];
+    let claims = 0;
+    await hold(() => conciliarAntesDePixAcumuloCandidatoSomenteCi(
+      esperado, "segredo-ci", async () => {
+        claims++; return variante;
+      }, asaasSomenteGet("vazia", rede)), "GATE_INVALIDO");
+    assert(claims === 1 && rede.join(",") === "GET /v3/payments",
+      "claim adulterado nao pode emitir Pix");
+  }
+});
+
+Deno.test("COB06 pre-POST: valores invalidos nao consultam provedor ou banco", async () => {
+  let chamadas = 0;
+  const mock = (async () => { chamadas++; throw Error("rede indevida"); }) as typeof fetch;
+  await hold(() => conciliarAntesDePixAcumuloCandidatoSomenteCi(
+    { ...esperado, valorCentavos: 499 }, "segredo-ci",
+    async () => { chamadas++; return gateCi; }, mock), "VALOR_INVALIDO");
+  assert(chamadas === 0, "bloqueio antes da rede");
 });
