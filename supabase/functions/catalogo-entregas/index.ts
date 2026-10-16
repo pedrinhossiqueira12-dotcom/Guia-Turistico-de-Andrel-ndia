@@ -7,6 +7,12 @@ const BUNDLE = Deno.env.get("SUPABASE_SECRET_KEYS") ?? "";
 const LEGACY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const DATA_KEY = Deno.env.get("CATALOGO_DATA_ENCRYPTION_KEY") || Deno.env.get("MP_OAUTH_ENCRYPTION_KEY") || "";
 const ADMIN_USER_ID = "4b9a0233-6b72-4573-aebd-d596c5b15e1b";
+const COB06_QA_CANCEL_ENABLED = Deno.env.get("COB06_QA_CANCELAMENTO_HABILITADO") === "true";
+// NUNCA habilitar fora do projeto STAGING. Somente este pedido ficticio.
+// O SQL ainda exige revisao administrativa e todos os guardas financeiros.
+const COB06_QA_STAGING_URL = "https://jbttwihctuibchhcyqtl.supabase.co";
+const COB06_QA_PEDIDO_ID = "a4ca7c4e-465f-4342-ae18-5c7eea1dec15";
+const COB06_QA_COMERCIO_ID = "asaas-cob02";
 const HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info",
@@ -164,6 +170,28 @@ async function run(userId: string, body: Record<string, unknown>) {
       p_motivo: reason || null, p_categoria: text(body.categoria, 60) || null,
       p_chave_pix: encryptedPix,
     })) });
+  }
+
+  if (action === "cancelar_retirada_ficticia_qa") {
+    // O botao nao existe no produto; a operacao fica impossivel por padrao.
+    // JWT validado na entrada + whitelist de projeto, pedido e comercio.
+    if (userId !== ADMIN_USER_ID) throw new HttpError("Somente a administração pode revisar este teste.", 403);
+    if (!COB06_QA_CANCEL_ENABLED || SUPABASE_URL !== COB06_QA_STAGING_URL)
+      throw new HttpError("Cancelamento de homologação desabilitado.", 403);
+    const pedidoId = uuid(body.pedido_id);
+    if (pedidoId !== COB06_QA_PEDIDO_ID || commerce(body.comercio_id) !== COB06_QA_COMERCIO_ID)
+      throw new HttpError("O pedido não pertence ao ensaio autorizado.", 403);
+    const ocorrenciaId = uuid(body.ocorrencia_id);
+    const motivo = text(body.motivo, 500);
+    if (body.decisao !== "cancelamento_legitimo" || body.sem_recebimento_confirmado !== true
+      || body.sem_entrega_confirmada !== true || motivo.length < 15)
+      throw new HttpError("Confirme a natureza fictícia, a ausência de entrega/recebimento e descreva o motivo.", 400);
+    const operation = await rpc("catalogo_cob06_cancelar_retirada_qa_v2", {
+      p_operador_id: userId, p_ocorrencia_id: ocorrenciaId,
+      p_decisao: "cancelamento_legitimo", p_motivo: motivo,
+      p_ficticio_sem_recebimento: true,
+    });
+    return json({ success: true, ...operation, admin: true });
   }
 
   const adminActions: Record<string, string> = {
