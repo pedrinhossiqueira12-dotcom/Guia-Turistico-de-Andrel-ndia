@@ -69,10 +69,13 @@ BEGIN
     )::date;
 
     -- Uma fatura emitida/congelada nunca recebe uma nova comissao.
-    -- Serializa contra fechamento e reserva de acumulo no mesmo comercio.
-    PERFORM pg_catalog.pg_advisory_xact_lock(
+    -- Tenta o lock sem esperar: caller ja pode ter bloqueado o pedido.
+    -- Conflito aborta a transacao toda (SQLSTATE 55P03); retry seguro.
+    IF NOT pg_catalog.pg_try_advisory_xact_lock(
       pg_catalog.hashtextextended('catalogo-fatura:'||v_pedido.comercio_id,0)
-    );
+    ) THEN
+      RAISE EXCEPTION 'COB06_CI_ONLY: competencia em fechamento; tente novamente' USING ERRCODE='55P03';
+    END IF;
     WHILE EXISTS(
       SELECT 1
         FROM public.catalogo_fechamentos_offline f
@@ -223,7 +226,8 @@ $function$;
 
 -- V2 offline aceito antes do fechamento, mas entregue DEPOIS: carrega
 -- a comissao e a reserva de logistica para uma competencia ainda nao faturada.
--- No banco real, o conflito com o fechamento precisa ser revisado antes de uso.
+-- Fail-fast sem deadlock quando fechamento segura o lock do comercio.
+-- No banco real, traduzir 55P03 em aviso de retry na aplicacao.
 CREATE OR REPLACE FUNCTION catalogo_private.catalogo_cob06_realocar_entrega_congelada_ci()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $route$
 DECLARE
@@ -236,8 +240,10 @@ BEGIN
     OR NEW.status_pagamento<>'aprovado' OR NEW.codigo_entrega_usado_em IS NULL
  THEN RETURN NEW; END IF;
 
- PERFORM pg_catalog.pg_advisory_xact_lock(
-   pg_catalog.hashtextextended('catalogo-fatura:'||NEW.comercio_id,0));
+ IF NOT pg_catalog.pg_try_advisory_xact_lock(
+   pg_catalog.hashtextextended('catalogo-fatura:'||NEW.comercio_id,0)) THEN
+   RAISE EXCEPTION 'COB06_CI_ONLY: competencia em fechamento; tente novamente' USING ERRCODE='55P03';
+ END IF;
  SELECT * INTO v_c FROM public.catalogo_comissoes_offline
  WHERE pedido_id=NEW.id FOR UPDATE;
  IF NOT FOUND THEN
