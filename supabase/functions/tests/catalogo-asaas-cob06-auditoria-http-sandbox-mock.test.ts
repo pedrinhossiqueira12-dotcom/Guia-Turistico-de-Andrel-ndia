@@ -176,7 +176,7 @@ Deno.test("COB06 Edge simulada: sessao ausente, intruso e lote adulterado nao ac
   reset();
   identidade = INTRUSO;
   const intruso = await chamar(acao);
-  assert(intruso.http === 403 && chamadasAuth === 1 &&
+  assert(intruso.http === 403 && Number(chamadasAuth) === 1 &&
     consultasLocal === 0 && consultasListagem === 0, "USUARIO_NAO_ADMIN");
   reset();
   const loteInvalido = await chamar(acao, { lote: "nao-e-uuid" });
