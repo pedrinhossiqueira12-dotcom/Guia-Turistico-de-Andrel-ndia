@@ -210,7 +210,7 @@ Deno.test("COB06 HTTP: estorno APOS quitacao usa recibo vinculado e nunca libera
   assert(tardio.http === 200 && tardio.body.hold_obrigatorio === true &&
     tardio.body.integridade_contabil_ok === false &&
     tardio.body.recibo_local_pos_quitacao === true &&
-    tardio.body.registro === null && escritas === 2,
+    tardio.body.registro === null && Number(escritas) === 2,
     "RECEIVED tardio reativou saldo ou gerou escrita no modo leitura");
 });
 Deno.test("COB06 HTTP: recibo falso ou ausencia de recibo nao atravessa preflight", async () => {

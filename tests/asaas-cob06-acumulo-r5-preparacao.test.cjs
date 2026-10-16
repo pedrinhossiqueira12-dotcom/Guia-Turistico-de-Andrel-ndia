@@ -144,7 +144,8 @@ test("COB-06: helper suporta lote unico somente com recibo isolado, sem RPC exte
  assert.match(reserva,/COB06_PONTE_QUITACAO_4_PARCELAS_ESTORNO_ROLLBACK_OK/);
  assert.match(reserva,/COB06_PONTE_ROLLBACK_ESPERADO/);
  assert.match(reserva,/diario recusou estorno pos-quitacao/);
- assert.ok(!edge.includes("catalogo_asaas_acumulo_quitacoes_isoladas"));
+ assert.match(edge,/db\.from\("catalogo_asaas_acumulo_quitacoes_isoladas"\)\s*\.select\("lote_id,payment_id,valor_centavos,estado"\)/);
+ assert.doesNotMatch(edge,/\.from\("catalogo_asaas_acumulo_quitacoes_isoladas"\)[\s\S]{0,140}\.(?:insert|update|upsert|delete)\(/);
  assert.doesNotMatch(ponteSql,/CREATE (?:OR REPLACE )?FUNCTION public\.catalogo_asaas_(?:quitar|confirmar|liquidar)_/);
 });
 
