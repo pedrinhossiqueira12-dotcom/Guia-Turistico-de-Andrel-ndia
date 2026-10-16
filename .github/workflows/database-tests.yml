@@ -921,6 +921,23 @@ jobs:
             -f supabase/production-candidate/15_cob06_cancelamento_retirada_ficticia_somente_ci.sql
           psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
             -f supabase/tests/isolated/asaas-cob06-cancelamento-retirada-ficticia-rollback.sql
+          # Candidata 16: RPC publicavel apenas por revisao manual, permitida
+          # em CI somente no clone; nao instalar no Supabase por workflow.
+          if psql -d catalogo_ci -v ON_ERROR_STOP=1 \
+            -f supabase/production-candidate/16_cob06_cancelamento_retirada_qa_staging_pendente.sql \
+            > /tmp/cob06-qa-publica-outside-ci.log 2>&1; then
+            echo "ERROR: COB06 QA RPC instalada fora do alvo permitido" >&2
+            exit 1
+          fi
+          grep -F 'COB06_QA_ONLY: banco de dados nao autorizado' /tmp/cob06-qa-publica-outside-ci.log
+          psql -d catalogo_ci -v ON_ERROR_STOP=1 -Atqc \
+            "SELECT to_regprocedure('public.catalogo_cob06_cancelar_retirada_qa_v2(uuid,uuid,text,text,boolean)') IS NULL" | grep -Fx t
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
+            -f supabase/production-candidate/16_cob06_cancelamento_retirada_qa_staging_pendente.sql
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
+            -f supabase/tests/isolated/asaas-cob06-cancelamento-retirada-qa-publica-rollback.sql
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -Atqc \
+            "SELECT count(*) FROM public.catalogo_pedidos WHERE id='00000000-0000-4000-8000-00000000c607'" | grep -Fx 0
           psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -Atqc \
             "SELECT count(*) FROM public.catalogo_pedidos WHERE id='00000000-0000-4000-8000-00000000c606'" | grep -Fx 0
           psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -Atqc \
