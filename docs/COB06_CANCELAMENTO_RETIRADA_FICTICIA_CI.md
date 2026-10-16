@@ -22,6 +22,14 @@ Efeito **somente na fixture CI** quando elegível: pedido `cancelado`, comissão
 
 Os testes negativos cobrem usuário não autorizado, ausência de confirmação, decisão incorreta, código ainda válido, pagamento aprovado, componente numa fatura paga, reserva logística e pagamento registrado.
 
+## Identidade real de revisao no STAGING (16/10/2026)
+
+O convite para `pedrinhossiqueira12@gmail.com` foi aceito. A consulta **somente leitura** em `auth.users` no projeto STAGING `jbttwihctuibchhcyqtl` confirmou `id=d896cc0c-31e4-4ef7-8fa4-13d15f02dd2a`, `email_confirmed_at` preenchido e inicio de sessao registrado. A pagina `localhost:3000` nao abriu porque o redirecionamento do template Auth aponta para servidor local inexistente; isso **nao desfez** a confirmacao. Nao reemitir convite nem colar links/OTP em relatorios.
+
+O candidato 16 e a rota `cancelar_retirada_ficticia_qa` passam a reconhecer **somente esse UID em STAGING**, e somente com projeto exato, flag explicita, pedido ficticio unico e revisao fundamentada. O UUID administrativo historico permanece inalterado para as demais operacoes, inclusive repasses. No clone CI, o candidato 16 continua exigindo o operador sintetico historico em uma transacao revertida. Em banco `postgres`, a instalacao da funcao exige **tambem** a existencia desse usuario Auth confirmado com e-mail exato, reduzindo o risco de instalacao em outro projeto.
+
+**Estado:** arquivos preparados na PR Draft, sem implantacao, sem flag habilitada, sem ocorrencia administrativa resolvida e sem alteracoes no pedido/faturas STAGING. Antes do deploy, conferir diferenca entre Edge implantada e branch: nao substituir a Edge inteira se houver funcionalidades ainda nao revisadas. Para confirmar autoria real, a Edge valida o JWT e encaminha exclusivamente o UID obtido via `auth.getUser(token)` à RPC `service_role`.
+
 ## Impedimentos de publicação
 
 1. O arquivo 15 é deliberadamente não instalável em STAGING/PROD; a função não está integrada à Edge e a lacuna no fluxo `resolver_ocorrencia` real continua aberta.
