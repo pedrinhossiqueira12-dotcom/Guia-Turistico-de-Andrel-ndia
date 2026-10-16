@@ -160,28 +160,28 @@ Deno.test("COB06 Edge simulada: identidade admin, GET bancario duplo e observaca
     r.body.pode_emitir_pix === false && r.body.pode_quitar === false &&
     r.body.pode_estornar === false && r.body.pode_liberar_motoboy === false,
     "OPERACAO_NAO_MANTEVE_HOLD");
-  assert(chamadasAuth === 1 && consultasListagem === 1 &&
-    consultasDetalhe === 1 && gravacoesObservacao === 1,
+  assert(Number(chamadasAuth) === 1 && Number(consultasListagem) === 1 &&
+    Number(consultasDetalhe) === 1 && Number(gravacoesObservacao) === 1,
     "CHAMADAS_INESPERADAS");
   const repetido = await chamar(acao);
-  assert(repetido.http === 409 && consultasListagem === 1 &&
-    consultasDetalhe === 1 && gravacoesObservacao === 1,
+  assert(repetido.http === 409 && Number(consultasListagem) === 1 &&
+    Number(consultasDetalhe) === 1 && Number(gravacoesObservacao) === 1,
     "REPLAY_REPETIU_BANCO_OU_GRAVACAO");
 });
 Deno.test("COB06 Edge simulada: sessao ausente, intruso e lote adulterado nao acionam GET", async () => {
   reset();
   const semSessao = await chamar(acao, { bearer: "" });
-  assert(semSessao.http === 401 && chamadasAuth === 0 &&
-    consultasLocal === 0 && consultasListagem === 0, "SEM_SESSAO");
+  assert(semSessao.http === 401 && Number(chamadasAuth) === 0 &&
+    Number(consultasLocal) === 0 && Number(consultasListagem) === 0, "SEM_SESSAO");
   reset();
   identidade = INTRUSO;
   const intruso = await chamar(acao);
   assert(intruso.http === 403 && Number(chamadasAuth) === 1 &&
-    consultasLocal === 0 && consultasListagem === 0, "USUARIO_NAO_ADMIN");
+    Number(consultasLocal) === 0 && Number(consultasListagem) === 0, "USUARIO_NAO_ADMIN");
   reset();
   const loteInvalido = await chamar(acao, { lote: "nao-e-uuid" });
-  assert(loteInvalido.http === 400 && chamadasAuth === 1 &&
-    consultasLocal === 0 && consultasListagem === 0, "LOTE_ALTERADO");
+  assert(loteInvalido.http === 400 && Number(chamadasAuth) === 1 &&
+    Number(consultasLocal) === 0 && Number(consultasListagem) === 0, "LOTE_ALTERADO");
 });
 Deno.test("COB06 Edge simulada: preflight de origem ou referencia falha antes do banco", async () => {
   for (const falha of ["origem", "referencia"]) {
@@ -190,8 +190,8 @@ Deno.test("COB06 Edge simulada: preflight de origem ou referencia falha antes do
     else referenciaValida = false;
     const r = await chamar(acao);
     assert(r.http === 409 && r.body.success === false &&
-      consultasListagem === 0 && consultasDetalhe === 0 &&
-      gravacoesObservacao === 0, "PRECHECK_" + falha);
+      Number(consultasListagem) === 0 && Number(consultasDetalhe) === 0 &&
+      Number(gravacoesObservacao) === 0, "PRECHECK_" + falha);
   }
 });
 Deno.test("COB06 Edge simulada: nenhuma identidade, valor ou status remoto divergente registra", async () => {
@@ -202,8 +202,8 @@ Deno.test("COB06 Edge simulada: nenhuma identidade, valor ou status remoto diver
     const r = await chamar(acao);
     assert(r.http === 503 && r.body.success === false &&
       r.body.hold_obrigatorio === true && r.body.pode_quitar === false &&
-      consultasListagem === 1 && consultasDetalhe === 1 &&
-      gravacoesObservacao === 0, "GET_DIVERGENTE_" + diferenca);
+      Number(consultasListagem) === 1 && Number(consultasDetalhe) === 1 &&
+      Number(gravacoesObservacao) === 0, "GET_DIVERGENTE_" + diferenca);
   }
 });
 Deno.test("COB06 Edge simulada: listagem duplicada, vazia ou paginada nao faz GET de ID", async () => {
@@ -212,8 +212,8 @@ Deno.test("COB06 Edge simulada: listagem duplicada, vazia ou paginada nao faz GE
     listagem = modo;
     const r = await chamar(acao);
     assert(r.http === 503 && r.body.success === false &&
-      consultasListagem === 1 && consultasDetalhe === 0 &&
-      gravacoesObservacao === 0, "LISTAGEM_" + modo);
+      Number(consultasListagem) === 1 && Number(consultasDetalhe) === 0 &&
+      Number(gravacoesObservacao) === 0, "LISTAGEM_" + modo);
   }
 });
 Deno.test("COB06 Edge simulada: status recebido ainda nao permite quitação ou motoboy", async () => {
@@ -222,7 +222,7 @@ Deno.test("COB06 Edge simulada: status recebido ainda nao permite quitação ou 
   const r = await chamar(acao);
   assert(r.http === 200 && r.body.status_bancario_observado === "RECEIVED" &&
     r.body.pode_quitar === false && r.body.pode_estornar === false &&
-    r.body.pode_liberar_motoboy === false && gravacoesObservacao === 1,
+    r.body.pode_liberar_motoboy === false && Number(gravacoesObservacao) === 1,
     "RECEIVED_NAO_PODE_LIQUIDAR");
 });
 Deno.test("COB06 Edge simulada: RPC que tenta habilitar quitação causa HOLD", async () => {
@@ -231,7 +231,7 @@ Deno.test("COB06 Edge simulada: RPC que tenta habilitar quitação causa HOLD", 
   const r = await chamar(acao);
   assert(r.http === 503 && r.body.hold_obrigatorio === true &&
     r.body.pode_quitar === false && r.body.pode_liberar_motoboy === false &&
-    gravacoesObservacao === 1, "ACK_BANCO_INSEGURO");
+    Number(gravacoesObservacao) === 1, "ACK_BANCO_INSEGURO");
 });
 Deno.test("COB06 Edge simulada: mesmo com flags TRUE nenhuma acao de Pix ou saque existe", async () => {
   reset();
@@ -242,7 +242,7 @@ Deno.test("COB06 Edge simulada: mesmo com flags TRUE nenhuma acao de Pix ou saqu
       r.body.pode_emitir_pix === false && r.body.pode_quitar === false,
       "ACAO_FATURAMENTO_" + proibida);
   }
-  assert(chamadasAuth === 0 && consultasLocal === 0 &&
-    consultasListagem === 0 && gravacoesObservacao === 0,
+  assert(Number(chamadasAuth) === 0 && Number(consultasLocal) === 0 &&
+    Number(consultasListagem) === 0 && Number(gravacoesObservacao) === 0,
     "ACAO_PROIBIDA_ACIONOU_REDE");
 });
