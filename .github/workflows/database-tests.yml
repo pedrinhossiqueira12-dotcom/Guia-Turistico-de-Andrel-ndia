@@ -879,8 +879,8 @@ jobs:
           psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
             -f supabase/production-candidate/12_cob06_suspensao_atomica_somente_ci.sql
           # Tentativa de instalar em outro banco DEVE falhar antes de criar tabelas.
-          if psql -d catalogo_ci -v ON_ERROR_STOP=1 \\
-            -f supabase/production-candidate/13_cob06_gate_tentativa_emissao_somente_ci.sql \\
+          if psql -d catalogo_ci -v ON_ERROR_STOP=1 \
+            -f supabase/production-candidate/13_cob06_gate_tentativa_emissao_somente_ci.sql \
             > /tmp/cob06-gate-outside-ci.log 2>&1; then
             echo "ERROR: COB06 gate instalado fora do banco efemero" >&2
             exit 1
