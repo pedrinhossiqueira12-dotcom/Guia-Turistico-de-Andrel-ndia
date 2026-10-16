@@ -29,6 +29,9 @@ DECLARE
  v_apuracao jsonb;
  v_projecao jsonb;
  v_ponte_rollback boolean:=false;
+ v_atomico_rollback boolean:=false;
+ v_atomico jsonb;
+ v_rem1 uuid; v_rem2 uuid;
 BEGIN
  IF pg_catalog.current_database()<>'catalogo_cob06_ci'
  OR pg_catalog.inet_server_port()<>5432
@@ -522,6 +525,122 @@ BEGIN
  OR catalogo_private.catalogo_v2_parcela_recebida(v_p1,'plataforma')
  THEN RAISE EXCEPTION 'COB06_PONTE: subtransacao deixou credito ou evento residual'; END IF;
  RAISE NOTICE 'COB06_PONTE_QUITACAO_4_PARCELAS_ESTORNO_ROLLBACK_OK';
+
+ -- Candidato 11: transacao atomica SEM acesso de roles API ou provedor.
+ IF pg_catalog.has_function_privilege('service_role',
+    'catalogo_private.catalogo_asaas_quitar_lote_atomico_ci(uuid,bigint)','EXECUTE')
+ OR pg_catalog.has_function_privilege('authenticated',
+    'catalogo_private.catalogo_asaas_quitar_lote_atomico_ci(uuid,bigint)','EXECUTE')
+ OR pg_catalog.has_function_privilege('anon',
+    'catalogo_private.catalogo_asaas_quitar_lote_atomico_ci(uuid,bigint)','EXECUTE')
+ THEN RAISE EXCEPTION 'COB06_ATOMICO: RPC exposta'; END IF;
+ BEGIN
+  -- Um GET sintético e um evento RECEIVED jamais bastam sem livros retidos.
+  v_atomico:=catalogo_private.catalogo_asaas_quitar_lote_atomico_ci(v_id,v_evento_id);
+  IF v_atomico->>'motivo'<>'preflight_ou_livro_de_creditos_incompleto'
+    OR EXISTS(SELECT 1 FROM public.catalogo_asaas_acumulo_quitacoes_isoladas)
+  THEN RAISE EXCEPTION 'COB06_ATOMICO: baixou sem credito elegivel: %',v_atomico; END IF;
+
+  INSERT INTO auth.users(id) VALUES
+    ('00000000-0000-4000-8000-000000000099'::uuid)
+  ON CONFLICT(id) DO NOTHING;
+  INSERT INTO public.catalogo_remuneracoes_v2(
+    pedido_id,comercio_id,motoboy_id,valor_centavos,status,financiamento_comprovado)
+  VALUES(v_p1,'comercio-de-exemplo',
+    '00000000-0000-4000-8000-000000000099'::uuid,29,'retido',false)
+  RETURNING id INTO v_rem1;
+  INSERT INTO public.catalogo_remuneracoes_v2(
+    pedido_id,comercio_id,motoboy_id,valor_centavos,status,financiamento_comprovado)
+  VALUES(v_p2,'comercio-de-exemplo',
+    '00000000-0000-4000-8000-000000000099'::uuid,114,'retido',false)
+  RETURNING id INTO v_rem2;
+  INSERT INTO public.catalogo_lancamentos_financeiros_v2(
+    pedido_id,tipo,valor_centavos,status,chave_idempotencia)
+  VALUES(v_p1,'comissao_plataforma',71,'retido','ci-cob06-atomic-plataforma-1'),
+        (v_p2,'comissao_plataforma',286,'retido','ci-cob06-atomic-plataforma-2');
+  INSERT INTO public.catalogo_lancamentos_financeiros_v2(
+    pedido_id,remuneracao_id,beneficiario_id,tipo,
+    valor_centavos,status,chave_idempotencia)
+  VALUES(v_p1,v_rem1,'00000000-0000-4000-8000-000000000099'::uuid,
+         'remuneracao_motoboy',29,'retido','ci-cob06-atomic-entrega-1'),
+        (v_p2,v_rem2,'00000000-0000-4000-8000-000000000099'::uuid,
+         'remuneracao_motoboy',114,'retido','ci-cob06-atomic-entrega-2');
+
+  v_projecao:=public.catalogo_asaas_projetar_baixa_acumulo_inerte(v_id);
+  IF v_projecao->>'projecao_contabil_consistente'<>'true'
+  THEN RAISE EXCEPTION 'COB06_ATOMICO: projecao inicial: %',v_projecao; END IF;
+
+  v_atomico:=catalogo_private.catalogo_asaas_quitar_lote_atomico_ci(
+    v_id,v_evento_id+10000);
+  IF v_atomico->>'motivo'<>'comprovante_inconsistente'
+  THEN RAISE EXCEPTION 'COB06_ATOMICO: evento estranho aceito'; END IF;
+
+  -- Injetar falha DEPOIS do INSERT do recibo e UPDATE das faturas.
+  EXECUTE $ddl$CREATE FUNCTION pg_temp.cob06_rejeitar_paga_ci()
+    RETURNS trigger LANGUAGE plpgsql AS $trigger$
+    BEGIN
+      IF NEW.status='paga' THEN RAISE EXCEPTION 'COB06_FALHA_INJETADA'; END IF;
+      RETURN NEW;
+    END; $trigger$ $ddl$;
+  CREATE TRIGGER cob06_injetar_erro_ci
+    BEFORE UPDATE OF status ON public.catalogo_comissoes_offline
+    FOR EACH ROW EXECUTE FUNCTION pg_temp.cob06_rejeitar_paga_ci();
+  BEGIN
+    PERFORM catalogo_private.catalogo_asaas_quitar_lote_atomico_ci(v_id,v_evento_id);
+    RAISE EXCEPTION 'COB06_ATOMICO: deveria ter falhado';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM IS DISTINCT FROM 'COB06_FALHA_INJETADA' THEN RAISE; END IF;
+  END;
+  DROP TRIGGER cob06_injetar_erro_ci ON public.catalogo_comissoes_offline;
+  IF EXISTS(SELECT 1 FROM public.catalogo_asaas_acumulo_quitacoes_isoladas)
+   OR (SELECT status FROM public.catalogo_fechamentos_offline WHERE id=v_f1)<>'faturado'
+   OR (SELECT status FROM public.catalogo_fechamentos_offline WHERE id=v_f2)<>'faturado'
+   OR (SELECT status FROM public.catalogo_comissoes_offline WHERE pedido_id=v_p1)<>'faturada'
+   OR (SELECT count(*) FROM public.catalogo_lancamentos_financeiros_v2
+       WHERE pedido_id IN(v_p1,v_p2) AND status='disponivel')<>0
+  THEN RAISE EXCEPTION 'COB06_ATOMICO: falha deixou credito ou baixa parcial'; END IF;
+
+  -- Sucesso integral R$1+R$4, nenhum pagamento individual inventado.
+  v_atomico:=catalogo_private.catalogo_asaas_quitar_lote_atomico_ci(v_id,v_evento_id);
+  IF v_atomico->>'ok'<>'true'
+   OR (v_atomico->>'competencias')::int<>2
+   OR (v_atomico->>'pedidos')::int<>2
+   OR (v_atomico->>'valor_centavos')::int<>500
+   OR v_atomico->>'prova_bancaria_real'<>'false'
+   OR v_atomico->>'transferencias_autorizadas'<>'false'
+   OR (SELECT count(*) FROM public.catalogo_asaas_acumulo_quitacoes_isoladas)<>1
+   OR (SELECT count(*) FROM public.catalogo_fechamentos_offline
+       WHERE id IN(v_f1,v_f2) AND status='pago')<>2
+   OR (SELECT count(*) FROM public.catalogo_comissoes_offline
+       WHERE pedido_id IN(v_p1,v_p2) AND status='paga')<>2
+   OR (SELECT count(*) FROM public.catalogo_remuneracoes_v2
+       WHERE pedido_id IN(v_p1,v_p2) AND status='disponivel'
+         AND financiamento_comprovado=true)<>2
+   OR (SELECT count(*) FROM public.catalogo_lancamentos_financeiros_v2
+       WHERE pedido_id IN(v_p1,v_p2) AND status='disponivel')<>4
+   OR (SELECT count(*) FROM public.catalogo_fatura_cobrancas
+       WHERE fechamento_id IN(v_f1,v_f2))<>0
+  THEN RAISE EXCEPTION 'COB06_ATOMICO: baixa ou repasse incompleto: %',v_atomico; END IF;
+
+  -- Reenvio nao duplica credito nem da outro significado ao evento.
+  v_atomico:=catalogo_private.catalogo_asaas_quitar_lote_atomico_ci(v_id,v_evento_id);
+  IF v_atomico->>'ok'<>'false'
+   OR v_atomico->>'motivo'<>'lote_nao_aberto'
+   OR (SELECT count(*) FROM public.catalogo_asaas_acumulo_quitacoes_isoladas)<>1
+  THEN RAISE EXCEPTION 'COB06_ATOMICO: replay duplicou recibo'; END IF;
+  RAISE EXCEPTION 'COB06_ATOMICO_ROLLBACK_ESPERADO';
+ EXCEPTION WHEN raise_exception THEN
+  IF SQLERRM IS DISTINCT FROM 'COB06_ATOMICO_ROLLBACK_ESPERADO' THEN RAISE; END IF;
+  v_atomico_rollback:=true;
+ END;
+ IF NOT v_atomico_rollback
+  OR EXISTS(SELECT 1 FROM public.catalogo_asaas_acumulo_quitacoes_isoladas)
+  OR EXISTS(SELECT 1 FROM public.catalogo_remuneracoes_v2 WHERE pedido_id IN(v_p1,v_p2))
+  OR EXISTS(SELECT 1 FROM public.catalogo_lancamentos_financeiros_v2 WHERE pedido_id IN(v_p1,v_p2))
+  OR (SELECT status FROM public.catalogo_fechamentos_offline WHERE id=v_f1)<>'faturado'
+  OR (SELECT status FROM public.catalogo_comissoes_offline WHERE pedido_id=v_p1)<>'faturada'
+ THEN RAISE EXCEPTION 'COB06_ATOMICO: subtransacao deixou residuos'; END IF;
+ RAISE NOTICE 'COB06_BAIXA_ATOMICA_CI_ROLLBACK_OK';
 
  v_evento:=public.catalogo_asaas_registrar_evento_acumulo_inerte(
    v_id,'pay_cob06_obs_123456','ci-cob06-evento-001','REFUNDED');
