@@ -906,6 +906,25 @@ jobs:
             -f supabase/production-candidate/14_cob06_competencia_congelada_somente_ci.sql
           psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
             -f supabase/tests/isolated/asaas-cob06-competencia-congelada-rollback.sql
+          # Cancelamento ficticio auditado: guard fora do clone,
+          # bloqueios financeiros, fatura paga intocada e ROLLBACK.
+          if psql -d catalogo_ci -v ON_ERROR_STOP=1 \
+            -f supabase/production-candidate/15_cob06_cancelamento_retirada_ficticia_somente_ci.sql \
+            > /tmp/cob06-cancelamento-outside-ci.log 2>&1; then
+            echo "ERROR: COB06 cancelamento QA instalado fora do banco efemero" >&2
+            exit 1
+          fi
+          grep -F 'COB06_CI_ONLY: cancelamento QA proibido' /tmp/cob06-cancelamento-outside-ci.log
+          psql -d catalogo_ci -v ON_ERROR_STOP=1 -Atqc \
+            "SELECT to_regprocedure('catalogo_private.catalogo_cob06_cancelar_retirada_qa_ci(uuid,uuid,text,text,boolean)') IS NULL" | grep -Fx t
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
+            -f supabase/production-candidate/15_cob06_cancelamento_retirada_ficticia_somente_ci.sql
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
+            -f supabase/tests/isolated/asaas-cob06-cancelamento-retirada-ficticia-rollback.sql
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -Atqc \
+            "SELECT count(*) FROM public.catalogo_pedidos WHERE id='00000000-0000-4000-8000-00000000c606'" | grep -Fx 0
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -Atqc \
+            "SELECT count(*) FROM public.catalogo_ocorrencias_v2 WHERE id='00000000-0000-4000-8000-00000000c626'" | grep -Fx 0
           # Duas conexoes SQL REAIS: fechamento concorrente com entrega e aceite.
           # Banco extra descartavel e removido pelo script mesmo se der erro.
           bash scripts/validacao-pagamentos/asaas-cob06-competencia-concorrencia-ci.sh
