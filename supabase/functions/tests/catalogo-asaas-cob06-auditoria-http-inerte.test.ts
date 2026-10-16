@@ -4,7 +4,6 @@ const ORIGIN = "https://ci-cob06.invalid";
 type Handler = (req: Request) => Response | Promise<Response>;
 let handler: Handler | null = null;
 let tentativasDeRede = 0;
-const fetchAnterior = globalThis.fetch;
 globalThis.fetch = async () => {
   tentativasDeRede++;
   throw Error("COB06_TESTE_REDE_EXTERNAMENTE_PROIBIDA");
@@ -101,4 +100,3 @@ Deno.test("COB06 Edge isolada: entrada invalida e caminhos desconhecidos falham 
     "payload grande aceito");
   assert(tentativasDeRede === 0, "entradas invalidas tocaram a rede");
 });
-globalThis.fetch = fetchAnterior;
