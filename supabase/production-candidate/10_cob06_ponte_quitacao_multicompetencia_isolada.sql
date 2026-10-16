@@ -128,6 +128,47 @@ CREATE OR REPLACE FUNCTION catalogo_private.catalogo_v2_parcela_recebida(
     AND cp.valor_centavos=CASE WHEN p_tipo='logistica'
       THEN (SELECT p.taxa_motoboy_centavos FROM public.catalogo_pedidos p WHERE p.id=p_pedido)
       ELSE (SELECT p.taxa_plataforma_centavos FROM public.catalogo_pedidos p WHERE p.id=p_pedido) END
+    -- Uma quitacao unica financia o LOTE INTEIRO, nunca so um mes.
+    -- Mesmo que um fechamento ou comissao fique pendente durante a baixa,
+    -- nenhuma parcela de outra competencia se torna recebida prematuramente.
+    AND (SELECT pg_catalog.count(*) FROM public.catalogo_asaas_acumulo_fontes af_todas
+         WHERE af_todas.lote_id=lote.id)>=2
+    AND (SELECT pg_catalog.sum(af_todas.valor_centavos)
+         FROM public.catalogo_asaas_acumulo_fontes af_todas
+         WHERE af_todas.lote_id=lote.id)=q.valor_centavos
+    AND NOT EXISTS (
+      SELECT 1 FROM public.catalogo_asaas_acumulo_fontes af_todas
+      LEFT JOIN public.catalogo_fechamentos_offline f_todas
+        ON f_todas.id=af_todas.fechamento_id
+      WHERE af_todas.lote_id=lote.id
+        AND (f_todas.id IS NULL
+          OR f_todas.status IS DISTINCT FROM 'pago'
+          OR f_todas.comercio_id IS DISTINCT FROM lote.comercio_id
+          OR f_todas.competencia IS DISTINCT FROM af_todas.competencia
+          OR f_todas.total_comissao_centavos IS DISTINCT FROM af_todas.valor_centavos
+          OR f_todas.referencia_pagamento IS DISTINCT FROM ref.referencia
+          OR (SELECT coalesce(pg_catalog.sum(cp_total.valor_centavos),0)
+              FROM public.catalogo_fatura_componentes_v2 cp_total
+              WHERE cp_total.fechamento_id=af_todas.fechamento_id)
+              IS DISTINCT FROM af_todas.valor_centavos
+          OR EXISTS (
+              SELECT 1 FROM public.catalogo_fatura_cobrancas b_todas
+              WHERE b_todas.fechamento_id=af_todas.fechamento_id)
+        )
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM public.catalogo_asaas_acumulo_fontes af_todas
+      JOIN public.catalogo_fatura_componentes_v2 cp_todas
+        ON cp_todas.fechamento_id=af_todas.fechamento_id
+      LEFT JOIN public.catalogo_comissoes_offline c_todas
+        ON c_todas.pedido_id=cp_todas.pedido_id
+          AND c_todas.comercio_id=lote.comercio_id
+          AND c_todas.competencia=af_todas.competencia
+      WHERE af_todas.lote_id=lote.id
+        AND (c_todas.pedido_id IS NULL
+          OR c_todas.status IS DISTINCT FROM 'paga'
+          OR c_todas.referencia_pagamento IS DISTINCT FROM ref.referencia)
+    )
     AND NOT EXISTS (
       SELECT 1 FROM public.catalogo_asaas_acumulo_eventos rev
       WHERE rev.lote_id=lote.id AND rev.payment_id=q.payment_id

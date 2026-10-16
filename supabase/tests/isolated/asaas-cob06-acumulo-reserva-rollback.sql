@@ -450,14 +450,31 @@ BEGIN
    THEN RAISE EXCEPTION 'COB06_PONTE: quitacao isolada liberou sem status de origem'; END IF;
 
    -- Nao inserir nenhuma linha em catalogo_fatura_cobrancas.
+   -- Testar a janela intermediaria: um mes quitado nao financia o outro.
    UPDATE public.catalogo_fechamentos_offline
      SET status='pago',pago_em=pg_catalog.now(),
        referencia_pagamento=v_referencia->>'referencia'
-   WHERE id IN (v_f1,v_f2);
+   WHERE id=v_f1;
    UPDATE public.catalogo_comissoes_offline
      SET status='paga',pago_em=pg_catalog.now(),
        referencia_pagamento=v_referencia->>'referencia'
-   WHERE pedido_id IN (v_p1,v_p2);
+   WHERE pedido_id=v_p1;
+   IF catalogo_private.catalogo_v2_parcela_recebida(v_p1,'plataforma')
+     OR catalogo_private.catalogo_v2_parcela_recebida(v_p1,'logistica')
+   THEN RAISE EXCEPTION 'COB06_PONTE: liberou um mes com outra fatura pendente'; END IF;
+
+   -- Mesmo com as duas faturas pagas, uma comissao pendente trava o lote.
+   UPDATE public.catalogo_fechamentos_offline
+     SET status='pago',pago_em=pg_catalog.now(),
+       referencia_pagamento=v_referencia->>'referencia'
+   WHERE id=v_f2;
+   IF catalogo_private.catalogo_v2_parcela_recebida(v_p1,'plataforma')
+     OR catalogo_private.catalogo_v2_parcela_recebida(v_p2,'logistica')
+   THEN RAISE EXCEPTION 'COB06_PONTE: liberou antes da segunda comissao'; END IF;
+   UPDATE public.catalogo_comissoes_offline
+     SET status='paga',pago_em=pg_catalog.now(),
+       referencia_pagamento=v_referencia->>'referencia'
+   WHERE pedido_id=v_p2;
    IF NOT catalogo_private.catalogo_v2_parcela_recebida(v_p1,'plataforma')
    OR NOT catalogo_private.catalogo_v2_parcela_recebida(v_p1,'logistica')
    OR NOT catalogo_private.catalogo_v2_parcela_recebida(v_p2,'plataforma')

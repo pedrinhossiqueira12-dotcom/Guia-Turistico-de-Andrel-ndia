@@ -132,6 +132,12 @@ test("COB-06: helper suporta lote unico somente com recibo isolado, sem RPC exte
  assert.match(ponteSql,/public\.catalogo_asaas_conferir_conciliacao_acumulo\(p_lote\)/);
  assert.match(ponteSql,/f\.status NOT IN \('pago','vencido','bloqueado'\)/);
  assert.match(ponteSql,/v_quitacao\.payment_id IS DISTINCT FROM p_payment/);
+ assert.match(ponteSql,/Uma quitacao unica financia o LOTE INTEIRO/);
+ assert.match(ponteSql,/f_todas\.status IS DISTINCT FROM 'pago'/);
+ assert.match(ponteSql,/c_todas\.status IS DISTINCT FROM 'paga'/);
+ assert.match(ponteSql,/b_todas\.fechamento_id=af_todas\.fechamento_id/);
+ assert.match(reserva,/liberou um mes com outra fatura pendente/);
+ assert.match(reserva,/liberou antes da segunda comissao/);
  assert.match(ponteSql,/rev\.estado IN \('REFUNDED','PARTIALLY_REFUNDED','REFUND_IN_PROGRESS'/);
  assert.match(ponteSql,/REVOKE ALL ON FUNCTION catalogo_private\.catalogo_v2_parcela_recebida\(uuid,text\)/);
  assert.ok(workflow.includes("10_cob06_ponte_quitacao_multicompetencia_isolada.sql"));
