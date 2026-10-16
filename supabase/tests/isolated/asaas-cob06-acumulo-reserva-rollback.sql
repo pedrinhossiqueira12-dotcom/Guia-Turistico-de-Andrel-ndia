@@ -37,6 +37,7 @@ DECLARE
  v_referencia_paga text;
  v_pago_em_antes timestamptz;
  v_disputa_rollback boolean:=false;
+ v_estado_disputa text;
  v_repasse_teste jsonb;
  v_repasse_id uuid;
  v_pago_em_repasse timestamptz;
@@ -791,6 +792,40 @@ BEGIN
    OR EXISTS(SELECT 1 FROM public.catalogo_asaas_acumulo_eventos
              WHERE evento_externo='ci-cob06-chargeback-atomo-001')
   THEN RAISE EXCEPTION 'COB06_SUSPENSAO: teste de disputa deixou residuo'; END IF;
+
+  -- Estados adicionais do ciclo de contestacao devem reter credito.
+  -- Cada estado e ensaiado e revertido em sua propria subtransacao.
+  FOREACH v_estado_disputa IN ARRAY ARRAY[
+    'CHARGEBACK_DISPUTE','AWAITING_CHARGEBACK_REVERSAL'
+  ] LOOP
+   BEGIN
+    v_evento:=public.catalogo_asaas_registrar_evento_acumulo_inerte(
+      v_id,'pay_cob06_obs_123456','ci-cob06-disputa-'||v_estado_disputa,
+      v_estado_disputa);
+    IF v_evento->>'ok'<>'true'
+    THEN RAISE EXCEPTION 'COB06_DISPUTA: estado nao registrado: %',v_estado_disputa; END IF;
+    v_apuracao:=public.catalogo_asaas_apurar_estados_acumulo_inerte(v_id);
+    IF v_apuracao->>'classificacao'<>'reversao_ou_disputa_irreversivel_sem_analise'
+      OR v_apuracao->>'candidato_a_conferencia_manual'<>'false'
+      OR catalogo_private.catalogo_v2_parcela_recebida(v_p1,'plataforma')
+    THEN RAISE EXCEPTION 'COB06_DISPUTA: diario reativou credito: %',v_apuracao; END IF;
+    v_reverso:=catalogo_private.catalogo_asaas_suspender_lote_atomico_ci(
+      v_id,(v_evento->>'evento_id')::bigint);
+    IF v_reverso->>'ok'<>'true' OR v_reverso->>'estado'<>'contestado'
+      OR EXISTS (SELECT 1 FROM public.catalogo_lancamentos_financeiros_v2
+                 WHERE pedido_id IN(v_p1,v_p2) AND status='disponivel')
+    THEN RAISE EXCEPTION 'COB06_DISPUTA: saldo liberado: %',v_reverso; END IF;
+    RAISE EXCEPTION 'COB06_ESTADO_DISPUTA_ROLLBACK_ESPERADO';
+   EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM IS DISTINCT FROM 'COB06_ESTADO_DISPUTA_ROLLBACK_ESPERADO' THEN RAISE; END IF;
+   END;
+   IF (SELECT estado FROM public.catalogo_asaas_acumulo_quitacoes_isoladas
+        WHERE lote_id=v_id)<>'pago'
+     OR EXISTS (SELECT 1 FROM public.catalogo_asaas_acumulo_eventos
+                WHERE evento_externo='ci-cob06-disputa-'||v_estado_disputa)
+   THEN RAISE EXCEPTION 'COB06_DISPUTA: teste deixou residuos: %',v_estado_disputa; END IF;
+  END LOOP;
+  RAISE NOTICE 'COB06_ESTADOS_DISPUTA_ADICIONAIS_HOLD_ROLLBACK_OK';
 
   -- Reembolso parcial/em andamento tambem suspende e pede revisao,
   -- sem classificar como estorno total definitivo.

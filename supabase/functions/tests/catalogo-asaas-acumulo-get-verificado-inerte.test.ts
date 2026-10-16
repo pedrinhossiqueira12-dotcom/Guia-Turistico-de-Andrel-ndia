@@ -43,7 +43,8 @@ Deno.test("COB06 GET: aceita somente ID cliente referencia valor e PIX identicos
 });
 
 Deno.test("COB06 GET: RECEIVED/CONFIRMED nunca autorizam baixa ou repasse", async () => {
-  for (const status of ["RECEIVED", "CONFIRMED", "REFUNDED", "CHARGEBACK_REQUESTED"]) {
+  for (const status of ["RECEIVED", "CONFIRMED", "REFUNDED", "CHARGEBACK_REQUESTED",
+    "CHARGEBACK_DISPUTE", "AWAITING_CHARGEBACK_REVERSAL"]) {
     const v = await conferirPagamentoAcumuloPorGet(
       expected, payment.id, async () => ({ ...payment, status }),
     );

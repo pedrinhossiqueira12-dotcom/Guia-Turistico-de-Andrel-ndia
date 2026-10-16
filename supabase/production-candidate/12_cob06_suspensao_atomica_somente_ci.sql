@@ -64,7 +64,8 @@ BEGIN
     OR v_lote.total_centavos IS DISTINCT FROM v_q.valor_centavos
     OR v_ev.estado NOT IN (
       'REFUNDED','PARTIALLY_REFUNDED','REFUND_IN_PROGRESS',
-      'CHARGEBACK_REQUESTED','DELETED')
+      'CHARGEBACK_REQUESTED','CHARGEBACK_DISPUTE',
+       'AWAITING_CHARGEBACK_REVERSAL','DELETED')
  THEN RETURN pg_catalog.jsonb_build_object('ok',false,'motivo','evento_adverso_nao_vinculado'); END IF;
  v_estado_alvo:=CASE WHEN v_ev.estado='REFUNDED' THEN 'estornado' ELSE 'contestado' END;
 

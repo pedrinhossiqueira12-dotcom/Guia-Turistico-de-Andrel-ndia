@@ -10,7 +10,8 @@ CREATE TABLE public.catalogo_asaas_acumulo_eventos (
  evento_externo text NOT NULL CHECK (length(evento_externo) BETWEEN 8 AND 160),
  estado text NOT NULL CHECK (estado IN (
   'PENDING','OVERDUE','CONFIRMED','RECEIVED','REFUNDED',
-  'PARTIALLY_REFUNDED','REFUND_IN_PROGRESS','CHARGEBACK_REQUESTED','DELETED')),
+  'PARTIALLY_REFUNDED','REFUND_IN_PROGRESS','CHARGEBACK_REQUESTED','CHARGEBACK_DISPUTE',
+   'AWAITING_CHARGEBACK_REVERSAL','DELETED')),
  observado_em timestamptz NOT NULL DEFAULT now(),
  pode_quitar boolean NOT NULL DEFAULT false CHECK (pode_quitar=false),
  pode_estornar boolean NOT NULL DEFAULT false CHECK (pode_estornar=false),
@@ -37,7 +38,8 @@ BEGIN
  OR length(p_evento) NOT BETWEEN 8 AND 160
  OR p_estado IS NULL OR p_estado NOT IN (
   'PENDING','OVERDUE','CONFIRMED','RECEIVED','REFUNDED',
-  'PARTIALLY_REFUNDED','REFUND_IN_PROGRESS','CHARGEBACK_REQUESTED','DELETED')
+  'PARTIALLY_REFUNDED','REFUND_IN_PROGRESS','CHARGEBACK_REQUESTED','CHARGEBACK_DISPUTE',
+   'AWAITING_CHARGEBACK_REVERSAL','DELETED')
  THEN RETURN pg_catalog.jsonb_build_object('ok',false,'motivo','argumentos_invalidos'); END IF;
  SELECT * INTO v_obs FROM public.catalogo_asaas_acumulo_observacoes
  WHERE lote_id=p_lote FOR UPDATE;

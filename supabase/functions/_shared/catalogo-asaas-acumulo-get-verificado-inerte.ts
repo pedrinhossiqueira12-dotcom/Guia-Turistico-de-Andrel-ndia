@@ -1,4 +1,4 @@
-// COB-06 / PR39: adaptador isolado (NAO importado pela Edge publica).
+// COB-06 / PR39: adaptador isolado (usado pela Edge administrativa apenas no Sandbox, flags OFF).
 // GET do provedor deve ser implementado somente no backend confiavel.
 // Este codigo NUNCA faz POST de Pix e NUNCA interpreta RECEIVED como quitação.
 export type ExpectativaAcumulo = {
@@ -20,7 +20,8 @@ type RegistrarObservacao = (params: ObservacaoRemota) => Promise<unknown>;
 const estados = new Set([
   "PENDING", "OVERDUE", "CONFIRMED", "RECEIVED",
   "REFUNDED", "PARTIALLY_REFUNDED", "REFUND_IN_PROGRESS",
-  "CHARGEBACK_REQUESTED", "DELETED",
+  "CHARGEBACK_REQUESTED", "CHARGEBACK_DISPUTE",
+  "AWAITING_CHARGEBACK_REVERSAL", "DELETED",
 ]);
 
 function exige(ok: boolean, motivo: string): asserts ok {

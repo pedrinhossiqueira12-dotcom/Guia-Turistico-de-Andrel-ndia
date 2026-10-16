@@ -49,7 +49,8 @@ BEGIN
        SELECT 1 FROM public.catalogo_asaas_acumulo_eventos e
         WHERE e.lote_id=OLD.lote_id AND e.payment_id=OLD.payment_id
          AND e.estado IN ('PARTIALLY_REFUNDED','REFUND_IN_PROGRESS',
-                          'CHARGEBACK_REQUESTED','DELETED')
+                          'CHARGEBACK_REQUESTED','CHARGEBACK_DISPUTE',
+   'AWAITING_CHARGEBACK_REVERSAL','DELETED')
      ) THEN RAISE EXCEPTION 'Contestacao nao observada' USING ERRCODE='23514'; END IF;
    RETURN NEW;
  END IF;
@@ -174,7 +175,8 @@ CREATE OR REPLACE FUNCTION catalogo_private.catalogo_v2_parcela_recebida(
       SELECT 1 FROM public.catalogo_asaas_acumulo_eventos rev
       WHERE rev.lote_id=lote.id AND rev.payment_id=q.payment_id
         AND rev.estado IN ('REFUNDED','PARTIALLY_REFUNDED','REFUND_IN_PROGRESS',
-          'CHARGEBACK_REQUESTED','DELETED')
+          'CHARGEBACK_REQUESTED','CHARGEBACK_DISPUTE',
+   'AWAITING_CHARGEBACK_REVERSAL','DELETED')
     )
  );
 $recebida$;
@@ -200,7 +202,8 @@ BEGIN
  OR pg_catalog.length(p_evento) NOT BETWEEN 8 AND 160
  OR p_estado IS NULL OR p_estado NOT IN (
   'PENDING','OVERDUE','CONFIRMED','RECEIVED','REFUNDED',
-  'PARTIALLY_REFUNDED','REFUND_IN_PROGRESS','CHARGEBACK_REQUESTED','DELETED')
+  'PARTIALLY_REFUNDED','REFUND_IN_PROGRESS','CHARGEBACK_REQUESTED','CHARGEBACK_DISPUTE',
+   'AWAITING_CHARGEBACK_REVERSAL','DELETED')
  THEN RETURN pg_catalog.jsonb_build_object('ok',false,'motivo','argumentos_invalidos'); END IF;
  SELECT * INTO v_obs FROM public.catalogo_asaas_acumulo_observacoes
  WHERE lote_id=p_lote FOR UPDATE;

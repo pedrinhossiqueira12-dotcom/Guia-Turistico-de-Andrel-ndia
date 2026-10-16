@@ -1,4 +1,4 @@
-// COB-06: adaptador GET bancario SOMENTE Sandbox; ainda nao importado pela Edge.
+// COB-06: GET bancario SOMENTE Sandbox, usado pela Edge administrativa com flags OFF.
 // Nao envia POST, nao aprova baixa, e nunca devolve token/corpo de erro remoto.
 const BASE = "https://api-sandbox.asaas.com/v3";
 const MAX_BYTES = 65536;

@@ -213,6 +213,28 @@ Deno.test("COB06 HTTP: estorno APOS quitacao usa recibo vinculado e nunca libera
     tardio.body.registro === null && Number(escritas) === 2,
     "RECEIVED tardio reativou saldo ou gerou escrita no modo leitura");
 });
+Deno.test("COB06 HTTP: estados intermediarios de disputa sao observados em HOLD", async () => {
+  for (const adverso of ["CHARGEBACK_DISPUTE", "AWAITING_CHARGEBACK_REVERSAL"]) {
+    reiniciar();
+    falhaPreflight = true;
+    quitacaoPosterior = true;
+    status = adverso;
+    const resposta = await chamar("registrar_estado_acumulo_sandbox_admin");
+    const registro = resposta.body.registro as Record<string,unknown>;
+    assert(resposta.http === 200 &&
+      resposta.body.status_bancario_observado === adverso &&
+      resposta.body.integridade_contabil_ok === false &&
+      resposta.body.recibo_local_pos_quitacao === true &&
+      resposta.body.pode_emitir_pix === false &&
+      resposta.body.pode_quitar === false &&
+      resposta.body.pode_estornar === false &&
+      resposta.body.pode_liberar_motoboy === false &&
+      resposta.body.hold_obrigatorio === true &&
+      registro?.evento_id === 20 &&
+      getsAsaas === 1 && escritas === 1,
+      "estado intermediario da disputa nao permaneceu em HOLD: " + adverso);
+  }
+});
 Deno.test("COB06 HTTP: recibo falso ou ausencia de recibo nao atravessa preflight", async () => {
   reiniciar();
   falhaPreflight = true;

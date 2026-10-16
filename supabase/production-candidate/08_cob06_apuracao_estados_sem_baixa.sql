@@ -54,7 +54,8 @@ BEGIN
         pg_catalog.count(*) FILTER (WHERE estado IN ('CONFIRMED','RECEIVED')),
         pg_catalog.count(*) FILTER (WHERE estado IN (
           'REFUNDED','PARTIALLY_REFUNDED','REFUND_IN_PROGRESS',
-          'CHARGEBACK_REQUESTED','DELETED'))
+          'CHARGEBACK_REQUESTED','CHARGEBACK_DISPUTE',
+           'AWAITING_CHARGEBACK_REVERSAL','DELETED'))
  INTO v_qtd,v_recebimentos,v_reversoes
  FROM public.catalogo_asaas_acumulo_eventos
  WHERE lote_id=p_lote AND payment_id=v_obs.payment_id;
