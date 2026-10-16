@@ -4,6 +4,8 @@ import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import { decryptCourierPix } from "../_shared/catalogo-entregas-crypto-v2.ts";
 import { conferirPagamentoAcumuloPorGet } from "../_shared/catalogo-asaas-acumulo-get-verificado-inerte.ts";
 import { consultarPagamentoAcumuloSandboxGet } from "../_shared/catalogo-asaas-acumulo-get-sandbox-inerte.ts";
+import { encontrarIdPagamentoAcumuloSandboxPorReferencia } from "../_shared/catalogo-asaas-acumulo-get-sandbox-inerte.ts";
+import { observarPagamentoAcumuloSomenteGet } from "../_shared/catalogo-asaas-acumulo-get-verificado-inerte.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const BUNDLE = Deno.env.get("SUPABASE_SECRET_KEYS") || "";
@@ -79,6 +81,59 @@ async function rpc(name:string,args:Record<string,unknown>){
 // COB-06: prova remota somente leitura de um lote JA observado.
 // Nenhum identificador bancario, cliente, referencia ou valor vem do navegador.
 // Candidatos 03-07 ainda nao estao instalados em STAGING/PROD: manter a flag OFF.
+// COB-06: primeira observacao bancária de lote já existente no Asaas.
+// Consulta por referencia interna e valida por GET individual: o navegador
+// NAO informa payment_id, cliente, valor ou referencia, nem aciona POST Pix.
+// Requer SQL candidato 03-06 e flags ADMIN desligadas por padrao.
+async function observarPrimeiroAcumuloSandboxAdmin(uid:string,body:Record<string,unknown>){
+ if(uid!==ADMIN_USER_ID)throw new Failure("Acesso restrito à administração.",403);
+ if(ENVIRONMENT!=="sandbox"||!COB06_GET_ADMIN_READONLY_ON||!COB06_OBSERVACAO_ADMIN_ON)
+  throw new Failure("Observação de acumulo COB-06 desabilitada.",503);
+ if(!ASAAS_TOKEN)throw new Failure("Consulta Sandbox sem credencial.",503);
+ const lote=value(body.lote_id,70);
+ if(!/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(lote))
+  throw new Failure("Lote inválido.",400);
+ const [referencia,anterior]=await Promise.all([
+  db.from("catalogo_asaas_acumulo_referencias")
+   .select("lote_id,comercio_id,referencia,valor_centavos,estado,payment_id,pode_emitir_pix")
+   .eq("lote_id",lote).maybeSingle(),
+  db.from("catalogo_asaas_acumulo_observacoes")
+   .select("lote_id,payment_id").eq("lote_id",lote).maybeSingle(),
+ ]);
+ if(referencia.error||anterior.error||!referencia.data)
+  throw new Failure("Reserva COB-06 indisponível. HOLD.",503);
+ if(anterior.data)throw new Failure("Pagamento já observado; use a conferência de estado.",409);
+ const ref=referencia.data,valorCentavos=Number(ref.valor_centavos);
+ if(ref.lote_id!==lote||ref.referencia!=="guia-acumulo-"+lote||
+    ref.estado!=="reservado"||ref.payment_id!==null||ref.pode_emitir_pix!==false||
+    !Number.isSafeInteger(valorCentavos)||valorCentavos<500||valorCentavos>2147483647)
+  throw new Failure("Reserva de acumulo inconsistente. HOLD.",409);
+ const cliente=await db.from("catalogo_asaas_clientes")
+  .select("cliente_id").eq("comercio_id",ref.comercio_id).maybeSingle();
+ if(cliente.error||!cliente.data)
+  throw new Failure("Cliente do comércio não encontrado. HOLD.",409);
+ const conferencia=await rpc("catalogo_asaas_conferir_conciliacao_acumulo",{p_lote:lote});
+ if(conferencia.integridade_contabil_ok!==true||
+    Number(conferencia.valor_fontes_centavos)!==valorCentavos)
+  throw new Failure("Origens financeiras não conferidas. HOLD.",409);
+ // GET filtrado nao e prova autonoma. Se houver mais de um resultado,
+ // paginação ou erro, falhar fechado. O GET por ID confere a identidade.
+ const paymentId=await encontrarIdPagamentoAcumuloSandboxPorReferencia(
+  ref.referencia,ASAAS_TOKEN);
+ const verificada=await observarPagamentoAcumuloSomenteGet({
+   loteId:lote,referencia:ref.referencia,
+   clienteId:cliente.data.cliente_id,valorCentavos,
+  },paymentId,(id)=>consultarPagamentoAcumuloSandboxGet(id,ASAAS_TOKEN),
+  (params)=>rpc("catalogo_asaas_registrar_observacao_acumulo",{...params}));
+ const ack=verificada.retorno as Record<string,unknown>;
+ if(ack.status_observado!==verificada.observacao.p_status)
+  throw new Failure("Observação bancária sem confirmação integral. HOLD.",503);
+ return respond({success:true,lote_id:lote,payment_id:verificada.observacao.p_payment,
+  status_bancario_observado:verificada.observacao.p_status,
+  registro:{ja_observado:ack.ja_observado===true},
+  pode_emitir_pix:false,pode_quitar:false,pode_estornar:false,
+  pode_liberar_motoboy:false,hold_obrigatorio:true});
+}
 async function conferirAcumuloSandboxAdmin(uid:string,body:Record<string,unknown>,registrar=false){
  if(uid!==ADMIN_USER_ID)throw new Failure("Acesso restrito à administração.",403);
  if(ENVIRONMENT!=="sandbox"||!COB06_GET_ADMIN_READONLY_ON)
@@ -2024,6 +2079,7 @@ Deno.serve(async (request:Request)=>{
    case "listar_encerramentos_admin":return await listarEncerramentosAdmin(user.id);
    case "finalizar_encerramento_admin":return await finalizarEncerramentoAdmin(user.id,body);
    case "diagnosticar_faturas_sandbox_admin":return await diagnosticarFaturasSandboxAdmin(user.id);
+   case "observar_primeiro_acumulo_sandbox_admin":return await observarPrimeiroAcumuloSandboxAdmin(user.id,body);
    case "conferir_acumulo_sandbox_admin":return await conferirAcumuloSandboxAdmin(user.id,body);
    case "registrar_estado_acumulo_sandbox_admin":return await conferirAcumuloSandboxAdmin(user.id,body,true);
    case "confirmar_fatura_sandbox_admin":return await confirmarFaturaSandboxAdmin(user.id,body);

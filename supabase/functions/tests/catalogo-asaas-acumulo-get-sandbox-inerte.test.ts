@@ -1,4 +1,5 @@
-import { consultarPagamentoAcumuloSandboxGet } from "../_shared/catalogo-asaas-acumulo-get-sandbox-inerte.ts";
+import { consultarPagamentoAcumuloSandboxGet,
+  encontrarIdPagamentoAcumuloSandboxPorReferencia } from "../_shared/catalogo-asaas-acumulo-get-sandbox-inerte.ts";
 import { conferirPagamentoAcumuloPorGet } from "../_shared/catalogo-asaas-acumulo-get-verificado-inerte.ts";
 
 const id = "pay_cob06_test123";
@@ -45,4 +46,66 @@ Deno.test("COB06 GET Sandbox rejeita erros, MIME, excesso e documento malformado
     await hold(() => consultarPagamentoAcumuloSandboxGet(id, "segredo-ci",
       (async () => response) as typeof fetch), codigo);
   }
+});
+
+Deno.test("COB06 lista Sandbox: referencia interna, GET sem POST e cardinalidade unica", async () => {
+  let consultas = 0;
+  const mock = (async (raw: string | URL | Request, init?: RequestInit) => {
+    consultas++;
+    const url = new URL(String(raw));
+    assert(url.origin === "https://api-sandbox.asaas.com" &&
+      url.pathname === "/v3/payments", "listagem no Sandbox fixo");
+    assert(url.searchParams.get("externalReference") === esperado.referencia &&
+      url.searchParams.get("limit") === "2" &&
+      url.searchParams.get("offset") === "0" &&
+      url.searchParams.size === 3, "filtro exato sem ID do navegador");
+    assert(init?.method === "GET" && init.redirect === "error" &&
+      (init?.headers as Record<string,string> | undefined)?.access_token === "segredo-ci",
+      "somente GET autenticado");
+    return new Response(JSON.stringify({
+      object: "list", hasMore: false, totalCount: 1, offset: 0,
+      data: [{ id }],
+    }), { status: 200, headers: { "content-type": "application/json" } });
+  }) as typeof fetch;
+  const descoberto = await encontrarIdPagamentoAcumuloSandboxPorReferencia(
+    esperado.referencia, "segredo-ci", mock);
+  assert(descoberto === id && consultas === 1, "encontrou unico pagamento");
+});
+
+Deno.test("COB06 lista Sandbox: pagina, duplicidade, vazio e metadados estranhos sao HOLD", async () => {
+  const respostas = [
+    [{ object: "list", hasMore: false, totalCount: 0, data: [] }, "PAGAMENTO_NAO_LOCALIZADO"],
+    [{ object: "list", hasMore: false, totalCount: 2,
+      data: [{ id }, { id: "pay_outro_123456" }] }, "REFERENCIA_NAO_UNICA"],
+    [{ object: "list", hasMore: true, totalCount: 2,
+      data: [{ id }] }, "REFERENCIA_NAO_UNICA"],
+    [{ object: "list", hasMore: false, totalCount: 2,
+      data: [{ id }] }, "REFERENCIA_NAO_UNICA"],
+    [{ object: "list", hasMore: false, totalCount: 1,
+      data: [{ id: "pay_!" }] }, "LISTAGEM_INVALIDA"],
+    [{ object: "list", data: [{ id }] }, "LISTAGEM_INVALIDA"],
+    [{ object: "payment", hasMore: false, data: [{ id }] }, "LISTAGEM_INVALIDA"],
+    [{ object: "list", hasMore: false, totalCount: 1, offset: 1,
+      data: [{ id }] }, "LISTAGEM_INVALIDA"],
+  ] as const;
+  for (const [data, reason] of respostas) {
+    await hold(() => encontrarIdPagamentoAcumuloSandboxPorReferencia(
+      esperado.referencia, "segredo-ci",
+      (async () => new Response(JSON.stringify(data), { status: 200,
+        headers: { "content-type": "application/json" } })) as typeof fetch,
+    ), reason);
+  }
+});
+
+Deno.test("COB06 lista Sandbox: entrada errada e falha de rede nunca registram pagamento", async () => {
+  let calls = 0;
+  const mock = (async () => { calls++; throw Error("sem rede"); }) as typeof fetch;
+  await hold(() => encontrarIdPagamentoAcumuloSandboxPorReferencia("guia-acumulo-errado",
+    "segredo-ci", mock), "REFERENCIA_INVALIDA");
+  await hold(() => encontrarIdPagamentoAcumuloSandboxPorReferencia(esperado.referencia,
+    "", mock), "CREDENCIAL_INDISPONIVEL");
+  assert(calls === 0, "entrada invalida nao sai para rede");
+  await hold(() => encontrarIdPagamentoAcumuloSandboxPorReferencia(esperado.referencia,
+    "segredo-ci", mock), "GET_INDISPONIVEL");
+  assert(calls === 1, "falha de rede nao tenta POST nem retry automatico");
 });

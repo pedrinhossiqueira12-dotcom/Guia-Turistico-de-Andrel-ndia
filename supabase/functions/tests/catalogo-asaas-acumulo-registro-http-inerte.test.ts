@@ -20,6 +20,12 @@ let quitacaoIncorreta = false;
 let estadoQuitacao = "pago";
 let getsBanco = 0;
 let getsAsaas = 0;
+let getsListaAsaas = 0;
+let temObservacao = true;
+let listaDuplicada = false;
+let listaVazia = false;
+let listaPaginada = false;
+let respostaRemotaOutraRef = false;
 let escritas = 0;
 let chaveAnterior = "";
 let eventoAnterior = 0;
@@ -32,7 +38,9 @@ function reiniciar() {
   usuario = ADMIN; status = "PENDING"; falhaPreflight = false; falhaRegistro = false;
   falhaRegistroPorOrigem = false; quitacaoPosterior = false; quitacaoIncorreta = false;
   estadoQuitacao = "pago";
-  getsBanco = 0; getsAsaas = 0; escritas = 0;
+  getsBanco = 0; getsAsaas = 0; getsListaAsaas = 0; escritas = 0;
+  temObservacao = true; listaDuplicada = false; listaVazia = false;
+  listaPaginada = false; respostaRemotaOutraRef = false;
   chaveAnterior = ""; eventoAnterior = 0; proximoEvento = 20;
 }
 const originalFetch = globalThis.fetch;
@@ -40,12 +48,27 @@ globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise
   const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
   const method = init?.method || "GET";
   if (url.origin === ASAAS) {
+    if (url.pathname === "/v3/payments") {
+      assert(method === "GET" &&
+        url.searchParams.get("externalReference") === REF &&
+        url.searchParams.get("limit") === "2" &&
+        url.searchParams.get("offset") === "0",
+        "listagem usou parametros errados");
+      assert((init?.headers as Record<string,string>)?.access_token === "ci-token-ficticio",
+        "listagem sem token de servidor");
+      getsListaAsaas++;
+      const data = listaVazia ? [] : [{ id: PAYMENT }];
+      if (listaDuplicada) data.push({ id: "pay_segundo_123456" });
+      return responder({ object: "list", hasMore: listaPaginada,
+        totalCount: data.length + (listaPaginada ? 1 : 0), offset: 0, data });
+    }
     assert(method === "GET" && url.pathname === "/v3/payments/" + PAYMENT,
       "GET bancario saiu do endpoint fixo");
     assert((init?.headers as Record<string,string>)?.access_token === "ci-token-ficticio",
       "GET sem token de servidor");
     getsAsaas++;
-    return responder({ id: PAYMENT, customer: CUSTOMER, externalReference: REF,
+    return responder({ id: PAYMENT, customer: CUSTOMER,
+      externalReference: respostaRemotaOutraRef ? "referencia-invalida" : REF,
       value: 5, billingType: "PIX", status });
   }
   assert(url.origin === ROOT, "rede externa bloqueada: " + url.host);
@@ -55,13 +78,13 @@ globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise
   if (url.pathname.startsWith("/rest/v1/catalogo_asaas_acumulo_referencias") && method === "GET") {
     getsBanco++;
     return responder({ lote_id: LOTE, comercio_id: "comercio-ci", referencia: REF,
-      valor_centavos: 500, payment_id: null, pode_emitir_pix: false });
+      valor_centavos: 500, estado: "reservado", payment_id: null, pode_emitir_pix: false });
   }
   if (url.pathname.startsWith("/rest/v1/catalogo_asaas_acumulo_observacoes") && method === "GET") {
     getsBanco++;
-    return responder({ lote_id: LOTE, payment_id: PAYMENT, customer_id: CUSTOMER,
+    return responder(temObservacao ? { lote_id: LOTE, payment_id: PAYMENT, customer_id: CUSTOMER,
       referencia: REF, valor_centavos: 500, pode_quitar: false,
-      pode_liberar_motoboy: false });
+      pode_liberar_motoboy: false } : null);
   }
   if (url.pathname.startsWith("/rest/v1/catalogo_asaas_acumulo_quitacoes_isoladas") && method === "GET") {
     getsBanco++;
@@ -82,6 +105,18 @@ globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise
   if (url.pathname === "/rest/v1/rpc/catalogo_asaas_conferir_conciliacao_acumulo" && method === "POST") {
     getsBanco++;
     return responder({ integridade_contabil_ok: !falhaPreflight, valor_fontes_centavos: 500 });
+  }
+  if (url.pathname === "/rest/v1/rpc/catalogo_asaas_registrar_observacao_acumulo" && method === "POST") {
+    escritas++;
+    const args = JSON.parse(String(init?.body)) as Record<string,unknown>;
+    assert(args.p_lote === LOTE && args.p_payment === PAYMENT &&
+      args.p_customer === CUSTOMER && args.p_referencia === REF &&
+      args.p_valor === 500 && args.p_status === status,
+      "primeira observacao nao corresponde ao GET verificado");
+    temObservacao = true;
+    return responder({ ok: true, lote_id: LOTE, payment_id: PAYMENT,
+      status_observado: status, ja_observado: false,
+      pode_quitar: false, pode_liberar_motoboy: false });
   }
   if (url.pathname === "/rest/v1/rpc/catalogo_asaas_registrar_evento_acumulo_inerte" && method === "POST") {
     escritas++;
@@ -128,6 +163,55 @@ async function chamar(acao: string, lote_id = LOTE) {
   }));
   return { http: response.status, body: await response.json() as Record<string,unknown> };
 }
+Deno.test("COB06 HTTP: primeira observacao encontra ID no Asaas sem entrada bancaria do navegador", async () => {
+  reiniciar();
+  temObservacao = false;
+  const resposta = await chamar("observar_primeiro_acumulo_sandbox_admin");
+  assert(resposta.http === 200 && resposta.body.success === true &&
+    resposta.body.payment_id === PAYMENT &&
+    resposta.body.status_bancario_observado === "PENDING" &&
+    resposta.body.hold_obrigatorio === true &&
+    resposta.body.pode_emitir_pix === false &&
+    resposta.body.pode_quitar === false &&
+    resposta.body.pode_estornar === false &&
+    resposta.body.pode_liberar_motoboy === false &&
+    (resposta.body.registro as Record<string,unknown>)?.ja_observado === false &&
+    getsListaAsaas === 1 && getsAsaas === 1 && escritas === 1,
+    "primeira observacao nao conferiu identidade ou liberou dinheiro");
+  const repetida = await chamar("observar_primeiro_acumulo_sandbox_admin");
+  assert(repetida.http === 409 && getsListaAsaas === 1 &&
+    getsAsaas === 1 && escritas === 1,
+    "nova tentativa duplicou GET ou observacao ja existente");
+});
+
+Deno.test("COB06 HTTP: dupla referencia ou pagina omitida bloqueia primeira observacao", async () => {
+  for (const tipo of ["duplicada", "paginada", "vazia", "outra-referencia"]) {
+    reiniciar();
+    temObservacao = false;
+    listaDuplicada = tipo === "duplicada";
+    listaPaginada = tipo === "paginada";
+    listaVazia = tipo === "vazia";
+    respostaRemotaOutraRef = tipo === "outra-referencia";
+    const resposta = await chamar("observar_primeiro_acumulo_sandbox_admin");
+    assert(resposta.http === 503 && resposta.body.success === false &&
+      getsListaAsaas === 1 && escritas === 0 &&
+      (tipo === "outra-referencia" ? getsAsaas === 1 : getsAsaas === 0),
+      "nao recusou primeira observacao suspeita: " + tipo);
+  }
+  reiniciar();
+  temObservacao = false; falhaPreflight = true;
+  const inconsistente = await chamar("observar_primeiro_acumulo_sandbox_admin");
+  assert(inconsistente.http === 409 &&
+    getsListaAsaas === 0 && getsAsaas === 0 && escritas === 0,
+    "preflight inconsistente realizou GET externo");
+  reiniciar();
+  usuario = OUTRO; temObservacao = false;
+  const naoAdmin = await chamar("observar_primeiro_acumulo_sandbox_admin");
+  assert(naoAdmin.http === 403 && getsBanco === 0 &&
+    getsListaAsaas === 0 && escritas === 0,
+    "nao-admin acessou prova bancaria");
+});
+
 Deno.test("COB06 HTTP: GET e registro idempotente preservam HOLD e nao emitem Pix", async () => {
   reiniciar();
   const primeira = await chamar("registrar_estado_acumulo_sandbox_admin");

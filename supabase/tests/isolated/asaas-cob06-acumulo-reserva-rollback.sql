@@ -340,6 +340,28 @@ BEGIN
  IF v_obs->>'ok'<>'false' OR v_obs->>'motivo'<>'cliente_divergente'
  THEN RAISE EXCEPTION 'COB06_OBSERVACAO: cliente divergente aceito'; END IF;
 
+ -- A primeira observacao tambem reconhece disputa sem habilitar baixa.
+ -- Cada estado e revertido em sua propria subtransacao.
+ FOREACH v_estado_disputa IN ARRAY ARRAY[
+   'CHARGEBACK_DISPUTE','AWAITING_CHARGEBACK_REVERSAL'
+ ] LOOP
+  BEGIN
+   v_obs:=public.catalogo_asaas_registrar_observacao_acumulo(
+     v_id,'pay_cob06_obs_123456',v_cliente_obs,
+     v_referencia->>'referencia',500,v_estado_disputa);
+   IF v_obs->>'ok'<>'true' OR v_obs->>'pode_quitar'<>'false'
+     OR v_obs->>'pode_liberar_motoboy'<>'false'
+   THEN RAISE EXCEPTION 'COB06_OBSERVACAO: estado adverso recusado: %',v_obs; END IF;
+   RAISE EXCEPTION 'COB06_PRIMEIRA_DISPUTA_ROLLBACK_ESPERADO';
+  EXCEPTION WHEN raise_exception THEN
+   IF SQLERRM IS DISTINCT FROM 'COB06_PRIMEIRA_DISPUTA_ROLLBACK_ESPERADO' THEN RAISE; END IF;
+  END;
+  IF EXISTS(SELECT 1 FROM public.catalogo_asaas_acumulo_observacoes WHERE lote_id=v_id)
+    OR catalogo_private.catalogo_v2_parcela_recebida(v_p1,'plataforma')
+  THEN RAISE EXCEPTION 'COB06_OBSERVACAO: teste de disputa deixou residuos'; END IF;
+ END LOOP;
+ RAISE NOTICE 'COB06_PRIMEIRA_DISPUTA_IMUTAVEL_HOLD_ROLLBACK_OK';
+
  v_obs:=public.catalogo_asaas_registrar_observacao_acumulo(
    v_id,'pay_cob06_obs_123456',v_cliente_obs,
    v_referencia->>'referencia',500,'RECEIVED');

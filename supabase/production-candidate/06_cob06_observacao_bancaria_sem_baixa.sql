@@ -14,7 +14,8 @@ CREATE TABLE public.catalogo_asaas_acumulo_observacoes (
  valor_centavos bigint NOT NULL CHECK(valor_centavos>=500 AND valor_centavos<=2147483647),
  status_primeira_observacao text NOT NULL
    CHECK(status_primeira_observacao IN ('PENDING','OVERDUE','CONFIRMED','RECEIVED',
-     'REFUNDED','PARTIALLY_REFUNDED','REFUND_IN_PROGRESS','CHARGEBACK_REQUESTED','DELETED')),
+     'REFUNDED','PARTIALLY_REFUNDED','REFUND_IN_PROGRESS','CHARGEBACK_REQUESTED',
+     'CHARGEBACK_DISPUTE','AWAITING_CHARGEBACK_REVERSAL','DELETED')),
  criado_em timestamptz NOT NULL DEFAULT pg_catalog.now(),
  pode_quitar boolean NOT NULL DEFAULT false CHECK(pode_quitar=false),
  pode_liberar_motoboy boolean NOT NULL DEFAULT false CHECK(pode_liberar_motoboy=false)
@@ -56,7 +57,8 @@ BEGIN
  OR p_valor IS NULL OR p_valor<500 OR p_valor>2147483647
  OR p_status IS NULL OR p_status NOT IN
     ('PENDING','OVERDUE','CONFIRMED','RECEIVED','REFUNDED',
-     'PARTIALLY_REFUNDED','REFUND_IN_PROGRESS','CHARGEBACK_REQUESTED','DELETED')
+     'PARTIALLY_REFUNDED','REFUND_IN_PROGRESS','CHARGEBACK_REQUESTED',
+     'CHARGEBACK_DISPUTE','AWAITING_CHARGEBACK_REVERSAL','DELETED')
  THEN
    RETURN pg_catalog.jsonb_build_object('ok',false,'motivo','evidencia_invalida');
  END IF;

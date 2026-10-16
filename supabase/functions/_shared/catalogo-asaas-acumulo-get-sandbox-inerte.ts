@@ -4,19 +4,20 @@ const BASE = "https://api-sandbox.asaas.com/v3";
 const MAX_BYTES = 65536;
 type FetchSeguro = typeof fetch;
 
-export async function consultarPagamentoAcumuloSandboxGet(
-  paymentId: string,
-  tokenServidor: string,
-  fetchSeguro: FetchSeguro = fetch,
-): Promise<unknown> {
-  if (!/^pay_[A-Za-z0-9_-]{5,120}$/.test(paymentId))
-    throw new Error("COB06_HOLD_PAGAMENTO_INVALIDO");
+function validarToken(tokenServidor: string) {
   if (typeof tokenServidor !== "string" || !tokenServidor.trim() ||
     tokenServidor.length > 2048 || /[\r\n]/.test(tokenServidor))
     throw new Error("COB06_HOLD_CREDENCIAL_INDISPONIVEL");
+}
+
+async function buscarJsonSandbox(
+  url: string,
+  tokenServidor: string,
+  fetchSeguro: FetchSeguro,
+): Promise<unknown> {
   let response: Response;
   try {
-    response = await fetchSeguro(`${BASE}/payments/${paymentId}`, {
+    response = await fetchSeguro(url, {
       method: "GET", redirect: "error", cache: "no-store",
       headers: { access_token: tokenServidor, Accept: "application/json",
         "User-Agent": "GuiaAndrelandia-COB06/1.0" },
@@ -31,7 +32,9 @@ export async function consultarPagamentoAcumuloSandboxGet(
   if (mime !== "application/json")
     throw new Error("COB06_HOLD_RESPOSTA_INVALIDA");
   const length = response.headers.get("content-length");
-  if (length !== null && (!/^\d+$/.test(length) || Number(length) > MAX_BYTES))
+  if (length !== null &&
+    (!/^\d+$/.test(length) || !Number.isSafeInteger(Number(length)) ||
+      Number(length) > MAX_BYTES))
     throw new Error("COB06_HOLD_RESPOSTA_INVALIDA");
   if (!response.body) throw new Error("COB06_HOLD_RESPOSTA_INVALIDA");
   const reader = response.body.getReader();
@@ -56,4 +59,54 @@ export async function consultarPagamentoAcumuloSandboxGet(
   for (const chunk of chunks) { buffer.set(chunk, offset); offset += chunk.length; }
   try { return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(buffer)); }
   catch { throw new Error("COB06_HOLD_RESPOSTA_INVALIDA"); }
+}
+
+export async function consultarPagamentoAcumuloSandboxGet(
+  paymentId: string,
+  tokenServidor: string,
+  fetchSeguro: FetchSeguro = fetch,
+): Promise<unknown> {
+  if (!/^pay_[A-Za-z0-9_-]{5,120}$/.test(paymentId))
+    throw new Error("COB06_HOLD_PAGAMENTO_INVALIDO");
+  validarToken(tokenServidor);
+  return buscarJsonSandbox(`${BASE}/payments/${paymentId}`, tokenServidor, fetchSeguro);
+}
+
+// Localiza exclusivamente uma cobranca JA EXISTENTE pelo identificador interno.
+// O limite 2 identifica duplicidade, e hasMore impede aceitar paginas incompletas.
+// O registro financeiro continua em HOLD ate GET completo por ID verificado.
+export async function encontrarIdPagamentoAcumuloSandboxPorReferencia(
+  referencia: string,
+  tokenServidor: string,
+  fetchSeguro: FetchSeguro = fetch,
+): Promise<string> {
+  if (!/^guia-acumulo-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(referencia))
+    throw new Error("COB06_HOLD_REFERENCIA_INVALIDA");
+  validarToken(tokenServidor);
+  const url = new URL(`${BASE}/payments`);
+  url.searchParams.set("externalReference", referencia);
+  url.searchParams.set("limit", "2");
+  url.searchParams.set("offset", "0");
+  const bruto = await buscarJsonSandbox(url.toString(), tokenServidor, fetchSeguro);
+  if (!bruto || typeof bruto !== "object" || Array.isArray(bruto))
+    throw new Error("COB06_HOLD_LISTAGEM_INVALIDA");
+  const lista = bruto as Record<string, unknown>;
+  if (lista.object !== "list" || !Array.isArray(lista.data) ||
+    typeof lista.hasMore !== "boolean" ||
+    (lista.totalCount !== undefined &&
+      (typeof lista.totalCount !== "number" ||
+        !Number.isSafeInteger(lista.totalCount) || lista.totalCount < 0)) ||
+    (lista.offset !== undefined && lista.offset !== 0))
+    throw new Error("COB06_HOLD_LISTAGEM_INVALIDA");
+  if (lista.data.length === 0 && lista.hasMore === false &&
+    (lista.totalCount === undefined || lista.totalCount === 0))
+    throw new Error("COB06_HOLD_PAGAMENTO_NAO_LOCALIZADO");
+  if (lista.hasMore || lista.data.length !== 1 ||
+    (lista.totalCount !== undefined && lista.totalCount !== 1))
+    throw new Error("COB06_HOLD_REFERENCIA_NAO_UNICA");
+  const item = lista.data[0] as Record<string, unknown> | null;
+  if (!item || typeof item !== "object" || Array.isArray(item) ||
+    typeof item.id !== "string" || !/^pay_[A-Za-z0-9_-]{5,120}$/.test(item.id))
+    throw new Error("COB06_HOLD_LISTAGEM_INVALIDA");
+  return item.id;
 }

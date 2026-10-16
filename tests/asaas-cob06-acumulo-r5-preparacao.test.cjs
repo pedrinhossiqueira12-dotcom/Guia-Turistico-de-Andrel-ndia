@@ -171,8 +171,7 @@ test("COB-06: apuracao do diario financeiro nunca quita nem reativa apos estorno
  assert.match(apuracaoSql,/CREATE FUNCTION public\.catalogo_asaas_apurar_estados_acumulo_inerte\(/);
  assert.match(apuracaoSql,/catalogo_asaas_conferir_conciliacao_acumulo\(p_lote\)/);
  assert.match(apuracaoSql,/REFUNDED','PARTIALLY_REFUNDED','REFUND_IN_PROGRESS'/);
- assert.match(apuracaoSql,/CHARGEBACK_REQUESTED','CHARGEBACK_DISPUTE'/);
- assert.match(apuracaoSql,/AWAITING_CHARGEBACK_REVERSAL','DELETED'/);
+ assert.match(apuracaoSql,/CHARGEBACK_REQUESTED','DELETED'/);
  assert.match(apuracaoSql,/v_reversoes=0 AND NOT v_revisao/);
  assert.match(apuracaoSql,/'prova_bancaria_autonoma',false/);
  assert.match(apuracaoSql,/'pode_quitar',false,'pode_estornar',false/);
@@ -205,7 +204,14 @@ test("COB-06: associacao por GET testada sem mutacao financeira nem rede",()=>{
  assert.match(ensaioGet,/GET_INDISPONIVEL/);
  assert.match(reserva,/COB06_OBSERVACAO_GET_SIMULADO_IMUTAVEL_SEM_BAIXA_OK/);
  assert.ok(workflow.includes("06_cob06_observacao_bancaria_sem_baixa.sql"));
- assert.ok(!edge.includes("catalogo_asaas_registrar_observacao_acumulo("));
+ assert.match(observaGetSql,/CHARGEBACK_DISPUTE/);
+ assert.match(observaGetSql,/AWAITING_CHARGEBACK_REVERSAL/);
+ assert.match(edge,/async function observarPrimeiroAcumuloSandboxAdmin/);
+ assert.match(edge,/encontrarIdPagamentoAcumuloSandboxPorReferencia/);
+ assert.match(edge,/observarPagamentoAcumuloSomenteGet/);
+ assert.match(edge,/rpc\("catalogo_asaas_registrar_observacao_acumulo"/);
+ assert.match(edge,/ENVIRONMENT!=="sandbox"\|\|!COB06_GET_ADMIN_READONLY_ON\|\|!COB06_OBSERVACAO_ADMIN_ON/);
+ assert.match(edge,/case "observar_primeiro_acumulo_sandbox_admin"/);
  assert.match(edge,/import \{ conferirPagamentoAcumuloPorGet \} from "\.\.\/_shared\/catalogo-asaas-acumulo-get-verificado-inerte\.ts"/);
  assert.match(edge,/const COB06_GET_ADMIN_READONLY_ON = Deno\.env\.get\("ASAAS_COB06_GET_ADMIN_READONLY_ENABLED"\) === "true"/);
  assert.match(edge,/async function conferirAcumuloSandboxAdmin\(uid:string,body:Record<string,unknown>,registrar=false\)/);
