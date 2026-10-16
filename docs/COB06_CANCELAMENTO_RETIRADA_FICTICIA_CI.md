@@ -31,3 +31,15 @@ Os testes negativos cobrem usuário não autorizado, ausência de confirmação,
 5. COB-06 emissão/acúmulo Asaas permanece HOLD. Não executar Pix, repasse, saque, reconciliação externa, deploy/merge ou dados PROD neste trabalho.
 
 A aprovação do usuário de que o pedido é fictício **autoriza preparar e testar a correção**, não constitui registro de recebimento financeiro nem executa alterações no STAGING.
+
+
+## Avanço: candidata STAGING-QA com flag desligada (ainda não implantada)
+
+- `supabase/production-candidate/16_cob06_cancelamento_retirada_qa_staging_pendente.sql` replica o motor transacional validado para RPC pública com EXECUTE exclusivo de `service_role`; nega `anon` e `authenticated`. No clone CI permite apenas a fixture UUID terminada em `c606`. No banco `postgres` exige o UUID exato do pedido STAGING `a4ca7c4e-465f-4342-ae18-5c7eea1dec15`, comércio `asaas-cob02`, versão 2, retirada, pagamento pendente e status pronto. Qualquer outro pedido é barrado. **Não foi instalada em Supabase remoto.**
+- `supabase/functions/catalogo-entregas/index.ts` adiciona ação interna `cancelar_retirada_ficticia_qa` somente para JWT do administrador, URL STAGING exata, comércio/pedido fixos, decisão legítima, motivo fundamentado e confirmação expressa de **nenhuma entrega e nenhum recebimento**. A variável `COB06_QA_CANCELAMENTO_HABILITADO` exige exatamente `true`; ausente ou em outro valor bloqueia a RPC. Nenhuma interface pública oferece a ação.
+- `tests/catalogo-v2-roteadores.test.cjs` cobre motoboy/comércio, PROD, flag ausente, UUID errado, identidade forjada e falta de atestado.
+- `supabase/tests/isolated/asaas-cob06-cancelamento-retirada-qa-publica-rollback.sql` cobre permissões, escopo do UUID, bloqueios financeiros, fatura preservada e rollback.
+
+A existência da candidata no PR **não** implica execução nem disponibilidade no STAGING. Sequência exigida: CI integral verde, revisão de SQL/Edge, preflight somente leitura de pedido/ocorrência/fatura, decisão específica sobre aplicação em STAGING, instalação controlada, habilitação temporária e explícita da flag para uma ação única autorizada, desabilitação da flag e conciliação final.
+
+A operação é exclusiva de uma retirada fictícia identificada. O fluxo geral `resolver_ocorrencia` continua exigindo projeto separado para pagamentos confirmados, motoboys e reembolsos.
