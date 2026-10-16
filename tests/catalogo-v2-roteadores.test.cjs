@@ -26,7 +26,8 @@ function endpoint(path,{ actor=RIDER, membership=true, assignment=true, result={
     }};
   const source=fs.readFileSync(path,'utf8').replace(/^import[^;]+;\s*/gm,'');
  const helper=stripTypeScriptTypes(fs.readFileSync('supabase/functions/_shared/catalogo-entregas-crypto-v2.ts','utf8')).replace(/^export\s+/gm,'');
-  vm.runInNewContext(helper+"\n"+stripTypeScriptTypes(source),{
+  const conflictHelper=stripTypeScriptTypes(fs.readFileSync('supabase/functions/_shared/catalogo-competencia-conflito.ts','utf8')).replace(/^export\s+/gm,'');
+  vm.runInNewContext(helper+"\n"+conflictHelper+"\n"+stripTypeScriptTypes(source),{
     createClient:()=>db,Deno:{env:{get:()=>''},serve:h=>{handler=h;}},Request,Response,TextEncoder,TextDecoder,atob,btoa,crypto:webcrypto,
     fetch:()=>{throw new Error('Transferência externa proibida no teste.');},console:{error(){},warn(){}}});
   return {handler,calls,writes};
