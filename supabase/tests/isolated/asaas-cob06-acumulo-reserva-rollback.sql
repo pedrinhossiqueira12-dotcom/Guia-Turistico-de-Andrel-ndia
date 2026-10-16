@@ -816,6 +816,39 @@ BEGIN
   v_referencia_paga:=(SELECT referencia_pagamento FROM public.catalogo_fechamentos_offline
                       WHERE id=v_f1);
   v_pago_em_antes:=(SELECT pago_em FROM public.catalogo_fechamentos_offline WHERE id=v_f1);
+  -- Regressao CI-only: a competencia de uma comissao foi adulterada
+  -- DEPOIS da baixa. Nunca contestar pedido fora do snapshot original.
+  BEGIN
+   v_evento:=public.catalogo_asaas_registrar_evento_acumulo_inerte(
+     v_id,'pay_cob06_obs_123456','ci-cob06-competencia-adulterada-001','REFUNDED');
+   IF v_evento->>'ok'<>'true' THEN
+    RAISE EXCEPTION 'COB06_SUSPENSAO: evento adulteracao nao registrado'; END IF;
+   UPDATE public.catalogo_comissoes_offline SET competencia='2040-05-01'
+   WHERE pedido_id=v_p1;
+   v_reverso:=catalogo_private.catalogo_asaas_suspender_lote_atomico_ci(
+     v_id,(v_evento->>'evento_id')::bigint);
+   IF v_reverso->>'motivo'<>'comissoes_quitadas_inconsistentes'
+     OR (SELECT estado FROM public.catalogo_asaas_acumulo_lotes
+         WHERE id=v_id)<>'pago'
+     OR (SELECT estado FROM public.catalogo_asaas_acumulo_quitacoes_isoladas
+         WHERE lote_id=v_id)<>'pago'
+     OR EXISTS(SELECT 1 FROM public.catalogo_comissoes_offline
+               WHERE pedido_id IN(v_p1,v_p2) AND status<>'paga')
+   THEN RAISE EXCEPTION 'COB06_SUSPENSAO: competencia adulterada passou: %',v_reverso; END IF;
+   RAISE EXCEPTION 'COB06_COMPETENCIA_SUSPENSAO_ROLLBACK_ESPERADO';
+  EXCEPTION WHEN raise_exception THEN
+   IF SQLERRM IS DISTINCT FROM 'COB06_COMPETENCIA_SUSPENSAO_ROLLBACK_ESPERADO'
+   THEN RAISE; END IF;
+  END;
+  IF (SELECT competencia FROM public.catalogo_comissoes_offline
+      WHERE pedido_id=v_p1) IS DISTINCT FROM '2040-03-01'::date
+     OR EXISTS(SELECT 1 FROM public.catalogo_asaas_acumulo_eventos
+               WHERE evento_externo='ci-cob06-competencia-adulterada-001')
+     OR (SELECT count(*) FROM public.catalogo_lancamentos_financeiros_v2
+         WHERE pedido_id IN(v_p1,v_p2) AND status='disponivel')<>4
+  THEN RAISE EXCEPTION 'COB06_SUSPENSAO: adulteracao deixou residuos'; END IF;
+  RAISE NOTICE 'COB06_SUSPENSAO_COMPETENCIA_FORA_SNAPSHOT_HOLD_OK';
+
   -- Uma contestacao nao e estorno definitivo; ainda assim, tem de reter tudo.
   BEGIN
    v_evento:=public.catalogo_asaas_registrar_evento_acumulo_inerte(
