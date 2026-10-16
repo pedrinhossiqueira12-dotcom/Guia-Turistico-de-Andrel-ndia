@@ -34,6 +34,26 @@ INSERT INTO public.catalogo_pedidos(
  repeat('4',64),repeat('d',64),'2040-01-31T12:00:00Z',
  'em_preparo','nao_atribuido','pendente','2024-01-15T12:00:00Z',NULL);
 
+
+-- Reproduz a QA real de retirada: R$ 100, taxa integral de R$ 7, sem motoboy.
+-- O codigo desta fixture ainda esta valido; no STAGING, o codigo expirado
+-- exige tratamento separado antes de qualquer confirmacao.
+INSERT INTO public.catalogo_pedidos(
+ id,comercio_id,referencia_externa,idempotency_key,provedor,modalidade,
+ forma_pagamento,subtotal_produtos_centavos,entrega_centavos,total_centavos,
+ taxa_plataforma_centavos,taxa_motoboy_centavos,taxa_total_centavos,
+ repasse_bruto_comercio_centavos,versao_financeira,cliente_nome,cliente_telefone,
+ status_token_hash,codigo_entrega_hash,codigo_entrega_expira_em,
+ status,entrega_status,status_pagamento,aceito_em,codigo_entrega_usado_em,
+ comissao_plataforma_registrada
+) VALUES (
+ '00000000-0000-4000-8000-00000000c605','comercio-de-exemplo','cob06-ci-retirada-7porcento',
+ '00000000-0000-4000-8000-00000000c615','offline','retirada','dinheiro',
+ 10000,0,10000,700,0,700,9300,2,'CI Retirada','00000000000',
+ repeat('5',64),repeat('e',64),'2040-01-31T12:00:00Z',
+ 'pronto','nao_atribuido','pendente','2024-01-16T12:00:00Z',NULL,true
+);
+
 -- Reproduz anomalia HISTORICA: comissao aberta em janeiro/2024, mas a
 -- cobranca Mercado Pago CI desse mes JA consta quitada no clone base.
 INSERT INTO public.catalogo_comissoes_offline(
@@ -44,6 +64,18 @@ INSERT INTO public.catalogo_comissoes_offline(
  '00000000-0000-4000-8000-00000000c604','comercio-de-exemplo','2024-01-01',
  4000,7.00,280,2,'entrega',200,80,280,'{"fixture":"orfa_historica"}'::jsonb
 );
+
+-- Segundo caso historico: 7% integral da plataforma em retirada, sem
+-- qualquer reserva de 2% ou remuneracao de motoboy.
+INSERT INTO public.catalogo_comissoes_offline(
+ pedido_id,comercio_id,competencia,subtotal_produtos_centavos,taxa_percentual,
+ valor_comissao_centavos,versao_financeira,modalidade,
+ taxa_plataforma_centavos,taxa_motoboy_centavos,valor_total_centavos,metadata
+) VALUES (
+ '00000000-0000-4000-8000-00000000c605','comercio-de-exemplo','2024-01-01',
+ 10000,7.00,700,2,'retirada',700,0,700,'{"fixture":"orfa_retirada_integral_7pct"}'::jsonb
+);
+
 INSERT INTO public.catalogo_logistica_offline_v2(
  pedido_id,comercio_id,competencia,valor_centavos
 ) VALUES (
@@ -57,6 +89,7 @@ DECLARE
  v_preview jsonb;
  v_snapshot text;
  v_atual text;
+ v_retirada jsonb;
 BEGIN
  IF catalogo_private.catalogo_v2_registrar_plataforma('00000000-0000-4000-8000-00000000c601','aceite') IS DISTINCT FROM true
  OR catalogo_private.catalogo_v2_registrar_plataforma('00000000-0000-4000-8000-00000000c603','aceite') IS DISTINCT FROM true
@@ -119,6 +152,35 @@ BEGIN
     OR (SELECT count(*) FROM public.catalogo_fatura_cobrancas WHERE order_id='legacy-cob06-ci' AND status='pago')<>1
  THEN RAISE EXCEPTION 'COB06_CI: pedido antigo alterou/ficou na fatura quitada'; END IF;
 
+
+ -- Repete o caso exato do STAGING (retirada presencial, 7%, sem motoboy),
+ -- mas com codigo de teste valido e somente no clone descartavel.
+ v_retirada:=public.catalogo_confirmar_entrega_autenticada(
+   '4b9a0233-6b72-4573-aebd-d596c5b15e1b'::uuid,'comercio-de-exemplo',
+   '00000000-0000-4000-8000-00000000c605',repeat('e',64),NULL
+ );
+ IF (v_retirada->>'ok')::boolean IS DISTINCT FROM true
+    OR (SELECT status FROM public.catalogo_pedidos
+        WHERE id='00000000-0000-4000-8000-00000000c605')<>'entregue'
+    OR (SELECT competencia FROM public.catalogo_comissoes_offline
+        WHERE pedido_id='00000000-0000-4000-8000-00000000c605')<>'2024-02-01'
+    OR EXISTS(SELECT 1 FROM public.catalogo_logistica_offline_v2
+              WHERE pedido_id='00000000-0000-4000-8000-00000000c605')
+    OR EXISTS(SELECT 1 FROM public.catalogo_remuneracoes_v2
+              WHERE pedido_id='00000000-0000-4000-8000-00000000c605')
+    OR (SELECT count(*) FROM public.catalogo_fatura_componentes_v2
+        WHERE pedido_id='00000000-0000-4000-8000-00000000c605')<>0
+    OR (SELECT count(*) FROM public.catalogo_fatura_cobrancas
+        WHERE order_id='legacy-cob06-ci' AND status='pago')<>1
+ THEN RAISE EXCEPTION 'COB06_CI: retirada de 7 pct mexeu na fatura paga: %',v_retirada; END IF;
+ IF catalogo_private.catalogo_v2_registrar_plataforma(
+    '00000000-0000-4000-8000-00000000c605','replay') IS DISTINCT FROM true
+    OR (SELECT competencia FROM public.catalogo_comissoes_offline
+        WHERE pedido_id='00000000-0000-4000-8000-00000000c605')<>'2024-02-01'
+    OR (SELECT count(*) FROM public.catalogo_comissoes_offline
+        WHERE pedido_id='00000000-0000-4000-8000-00000000c605')<>1
+ THEN RAISE EXCEPTION 'COB06_CI: replay da retirada reintroduziu comissao paga'; END IF;
+
  UPDATE public.catalogo_pedidos
     SET status='entregue',entrega_status='entregue',status_pagamento='aprovado',
         codigo_entrega_usado_em='2040-01-20T11:00:00Z'
@@ -152,8 +214,10 @@ BEGIN
      WHERE pedido_id IN ('00000000-0000-4000-8000-00000000c601',
                          '00000000-0000-4000-8000-00000000c602',
                          '00000000-0000-4000-8000-00000000c603',
-                         '00000000-0000-4000-8000-00000000c604'))<>4
+                         '00000000-0000-4000-8000-00000000c604',
+                         '00000000-0000-4000-8000-00000000c605'))<>5
  THEN RAISE EXCEPTION 'COB06_CI: comissao duplicada'; END IF;
+ RAISE NOTICE 'COB06_RETIRADA_HISTORICA_7_PCT_SEM_LOGISTICA_CI_OK';
  RAISE NOTICE 'COB06_COMPETENCIA_CONGELADA_E_PENDENTE_CI_ROLLBACK_OK';
 END;
 $prova$;
