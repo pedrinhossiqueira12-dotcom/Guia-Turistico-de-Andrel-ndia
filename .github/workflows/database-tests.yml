@@ -246,7 +246,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: public.ecr.aws/docker/library/postgres:17
+        image: postgres:17
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: local-ci-only
@@ -354,7 +354,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: public.ecr.aws/docker/library/postgres:17
+        image: postgres:17
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: local-ci-only
@@ -512,7 +512,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: public.ecr.aws/docker/library/postgres:17
+        image: postgres:17
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: local-ci-only
@@ -633,7 +633,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: public.ecr.aws/docker/library/postgres:17
+        image: postgres:17
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: local-ci-only
@@ -1317,8 +1317,6 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        # Mirror ECR bloqueia apenas este job por "toomanyrequests";
-        # o tag postgres:17 e a imagem oficial equivalente no Docker Hub.
         image: postgres:17
         env:
           POSTGRES_USER: postgres
