@@ -171,7 +171,8 @@ test("COB-06: apuracao do diario financeiro nunca quita nem reativa apos estorno
  assert.match(apuracaoSql,/CREATE FUNCTION public\.catalogo_asaas_apurar_estados_acumulo_inerte\(/);
  assert.match(apuracaoSql,/catalogo_asaas_conferir_conciliacao_acumulo\(p_lote\)/);
  assert.match(apuracaoSql,/REFUNDED','PARTIALLY_REFUNDED','REFUND_IN_PROGRESS'/);
- assert.match(apuracaoSql,/CHARGEBACK_REQUESTED','DELETED'/);
+ assert.match(apuracaoSql,/CHARGEBACK_REQUESTED','CHARGEBACK_DISPUTE'/);
+ assert.match(apuracaoSql,/AWAITING_CHARGEBACK_REVERSAL','DELETED'/);
  assert.match(apuracaoSql,/v_reversoes=0 AND NOT v_revisao/);
  assert.match(apuracaoSql,/'prova_bancaria_autonoma',false/);
  assert.match(apuracaoSql,/'pode_quitar',false,'pode_estornar',false/);
