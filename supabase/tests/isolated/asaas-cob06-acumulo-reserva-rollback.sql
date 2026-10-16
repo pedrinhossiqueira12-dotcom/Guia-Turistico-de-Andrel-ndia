@@ -3,7 +3,7 @@
 BEGIN;
 DO $teste$
 DECLARE
- v_p1 uuid; v_p2 uuid;
+ v_p1 uuid; v_p2 uuid; v_p_pendente uuid;
  v_f1 uuid; v_f2 uuid;
  v_r jsonb; v_outro jsonb; v_id uuid;
  v_negativas integer:=0;
@@ -597,6 +597,39 @@ BEGIN
         (v_p2,v_rem2,'00000000-0000-4000-8000-000000000099'::uuid,
          'remuneracao_motoboy',114,'retido','ci-cob06-atomic-entrega-2');
 
+  -- Pedido incompleto na MESMA competencia, nao incluído na fatura.
+  -- Sua comissao aberta nao pode bloquear a baixa dos pedidos faturados.
+  INSERT INTO public.catalogo_pedidos(
+    comercio_id,referencia_externa,provedor,idempotency_key,status,
+    status_pagamento,modalidade,forma_pagamento,subtotal_produtos_centavos,
+    entrega_centavos,total_centavos,taxa_plataforma_centavos,
+    repasse_bruto_comercio_centavos,cliente_nome,cliente_telefone,
+    versao_financeira,taxa_motoboy_centavos,taxa_total_centavos,
+    entrega_status,metadata
+  ) VALUES(
+    'comercio-de-exemplo','ci-cob06-pendente-mesma-competencia',
+    'offline',pg_catalog.gen_random_uuid(),'pronto',
+    'pendente','entrega','dinheiro',1429,
+    0,1429,71,1329,'Pedido ainda nao entregue','00000000000',
+    2,29,100,'pendente','{"cob06":"pendente-fora-da-fatura"}'::jsonb
+  ) RETURNING id INTO v_p_pendente;
+  INSERT INTO public.catalogo_comissoes_offline(
+    pedido_id,comercio_id,competencia,subtotal_produtos_centavos,
+    taxa_percentual,valor_comissao_centavos,status,
+    taxa_plataforma_centavos,taxa_motoboy_centavos,valor_total_centavos,
+    versao_financeira,motoboy_id,financiamento_logistica_comprovado
+  ) VALUES(
+    v_p_pendente,'comercio-de-exemplo','2040-03-01',1429,
+    5,100,'aberta',71,29,100,2,
+    '00000000-0000-4000-8000-000000000099'::uuid,false
+  );
+  IF (SELECT pg_catalog.count(*) FROM public.catalogo_comissoes_offline
+      WHERE comercio_id='comercio-de-exemplo'
+        AND competencia='2040-03-01')<>2
+     OR EXISTS(SELECT 1 FROM public.catalogo_fatura_componentes_v2
+               WHERE pedido_id=v_p_pendente)
+  THEN RAISE EXCEPTION 'COB06_ATOMICO: fixture pendente nao isolada'; END IF;
+
   v_projecao:=public.catalogo_asaas_projetar_baixa_acumulo_inerte(v_id);
   IF v_projecao->>'projecao_contabil_consistente'<>'true'
   THEN RAISE EXCEPTION 'COB06_ATOMICO: projecao inicial: %',v_projecao; END IF;
@@ -644,6 +677,13 @@ BEGIN
        WHERE id IN(v_f1,v_f2) AND status='pago')<>2
    OR (SELECT count(*) FROM public.catalogo_comissoes_offline
        WHERE pedido_id IN(v_p1,v_p2) AND status='paga')<>2
+   OR (SELECT status FROM public.catalogo_comissoes_offline
+       WHERE pedido_id=v_p_pendente) IS DISTINCT FROM 'aberta'
+   OR EXISTS(SELECT 1 FROM public.catalogo_comissoes_offline
+             WHERE pedido_id=v_p_pendente
+               AND (pago_em IS NOT NULL OR referencia_pagamento IS NOT NULL))
+   OR (SELECT status_pagamento FROM public.catalogo_pedidos
+       WHERE id=v_p_pendente) IS DISTINCT FROM 'pendente'
    OR (SELECT count(*) FROM public.catalogo_remuneracoes_v2
        WHERE pedido_id IN(v_p1,v_p2) AND status='disponivel'
          AND financiamento_comprovado=true)<>2
@@ -960,6 +1000,7 @@ BEGIN
  END;
  IF NOT v_atomico_rollback
   OR EXISTS(SELECT 1 FROM public.catalogo_asaas_acumulo_quitacoes_isoladas)
+  OR EXISTS(SELECT 1 FROM public.catalogo_pedidos WHERE id=v_p_pendente)
   OR EXISTS(SELECT 1 FROM public.catalogo_remuneracoes_v2 WHERE pedido_id IN(v_p1,v_p2))
   OR EXISTS(SELECT 1 FROM public.catalogo_lancamentos_financeiros_v2 WHERE pedido_id IN(v_p1,v_p2))
   OR (SELECT status FROM public.catalogo_fechamentos_offline WHERE id=v_f1)<>'faturado'
