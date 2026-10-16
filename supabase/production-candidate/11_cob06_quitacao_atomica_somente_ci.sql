@@ -91,10 +91,17 @@ BEGIN
 
  SELECT pg_catalog.count(*) INTO v_qtd FROM public.catalogo_asaas_acumulo_fontes
  WHERE lote_id=p_lote;
- SELECT pg_catalog.count(*) INTO v_pedidos
- FROM public.catalogo_comissoes_offline c WHERE c.comercio_id=v_lote.comercio_id
- AND EXISTS(SELECT 1 FROM public.catalogo_asaas_acumulo_fontes af
-            WHERE af.lote_id=p_lote AND af.competencia=c.competencia);
+ -- Somente pedidos faturados no snapshot; outros pedidos da mesma
+ -- competencia nao devem bloquear a baixa nem ser quitados.
+ SELECT pg_catalog.count(DISTINCT c.pedido_id) INTO v_pedidos
+ FROM public.catalogo_asaas_acumulo_fontes af
+ JOIN public.catalogo_fatura_componentes_v2 cp
+   ON cp.fechamento_id=af.fechamento_id
+ JOIN public.catalogo_comissoes_offline c
+   ON c.pedido_id=cp.pedido_id
+  AND c.comercio_id=v_lote.comercio_id
+  AND c.competencia=af.competencia
+ WHERE af.lote_id=p_lote;
  IF v_qtd IS DISTINCT FROM (v_projecao->>'quantidade_competencias')::bigint
     OR v_pedidos IS DISTINCT FROM (v_projecao->>'pedidos')::bigint
     OR v_pedidos<1 THEN
