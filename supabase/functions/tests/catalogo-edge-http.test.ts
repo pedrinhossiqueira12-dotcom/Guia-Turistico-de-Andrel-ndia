@@ -92,6 +92,8 @@ globalThis.fetch = (input: RequestInfo | URL, init?: RequestInit) => currentMock
 
 await capture("pix", new URL("../catalogo-pedido-pix/index.ts", import.meta.url).href);
 await capture("offline", new URL("../catalogo-pedido-offline/index.ts", import.meta.url).href);
+await capture("offline-admin", new URL("../catalogo-pedidos-offline-admin/index.ts", import.meta.url).href);
+await capture("entregas", new URL("../catalogo-entregas/index.ts", import.meta.url).href);
 await capture("fatura", new URL("../catalogo-fatura-pix/index.ts", import.meta.url).href);
 await capture("webhook", new URL("../mercadopago-marketplace-webhook/index.ts", import.meta.url).href);
 
@@ -1117,5 +1119,118 @@ Deno.test("webhook HMAC valido consulta fatos autenticados e aplica RPC financei
     assert(calls.length === 4, "Tarifa ausente executou operações inesperadas");
   } finally {
     currentMockFetch = denyNetwork;
+  }
+});
+
+
+// COB-06: os conflitos temporários de lock SQL são traduzidos pelos handlers
+// reais; apenas um humano pode repetir a operação. Nenhuma rede é permitida.
+Deno.test("COB-06: fechamento concorrente responde HTTP 409 sem replay automático", async () => {
+  const comercioId = "ci-comercio-fechamento";
+  const pedidoId = "00000000-0000-4000-8000-000000000811";
+  const merchantId = "00000000-0000-4000-8000-000000000812";
+  const courierId = "00000000-0000-4000-8000-000000000813";
+  const SQL_MESSAGE = "COB06_CI_ONLY: competencia em fechamento; tente novamente";
+  const expectedMessage = "O fechamento deste comércio está em andamento. Aguarde alguns segundos e tente novamente.";
+  const scenarios: {
+    label: string; handler: "offline-admin" | "entregas"; identity: string;
+    action: Record<string, unknown>; rpcName: string; success: Record<string, unknown>;
+  }[] = [
+    {
+      label: "aceite pelo comércio", handler: "offline-admin", identity: merchantId,
+      action: { acao: "atualizar_status", comercio_id: comercioId, pedido_id: pedidoId, status: "em_preparo" },
+      rpcName: "catalogo_operar_pedido_v2", success: { ok: true, pedido: { id: pedidoId, status: "em_preparo" } },
+    },
+    {
+      label: "entrega confirmada pelo comércio", handler: "offline-admin", identity: merchantId,
+      action: { acao: "confirmar_entrega", comercio_id: comercioId, pedido_id: pedidoId, codigo_entrega: "123456" },
+      rpcName: "catalogo_confirmar_entrega_autenticada", success: { ok: true, pedido_id: pedidoId, status: "entregue" },
+    },
+    {
+      label: "entrega confirmada pelo motoboy", handler: "entregas", identity: courierId,
+      action: { acao: "confirmar_entrega", comercio_id: comercioId, pedido_id: pedidoId,
+        codigo_entrega: "123456", recebimento_confirmado: true },
+      rpcName: "catalogo_confirmar_entrega_motoboy", success: { ok: true, pedido_id: pedidoId, status: "entregue" },
+    },
+    {
+      label: "atribuição pelo comércio", handler: "entregas", identity: merchantId,
+      action: { acao: "atribuir_pedido", comercio_id: comercioId, pedido_id: pedidoId, motoboy_id: courierId },
+      rpcName: "catalogo_operar_pedido_v2", success: { ok: true, pedido_id: pedidoId },
+    },
+  ];
+  for (const scenario of scenarios) {
+    const handler = handlers.get(scenario.handler)!;
+    const endpoint = "/functions/v1/" + (scenario.handler === "entregas" ? "catalogo-entregas" : "catalogo-pedidos-offline-admin");
+    let rpcCalls = 0;
+    let serveNextSuccess = false;
+    let sqlState = "55P03";
+    let otherWrites = 0;
+    try {
+      currentMockFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+        const raw = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+        const url = new URL(raw);
+        assert(url.host === "ci-supabase.invalid", "COB-06 tentou acessar host inesperado");
+        const method = init?.method || "GET";
+        if (url.pathname === "/auth/v1/user" && method === "GET") {
+          return result({ id: scenario.identity, aud: "authenticated", role: "authenticated",
+            app_metadata: {}, user_metadata: {} });
+        }
+        if (url.pathname === "/rest/v1/catalogos" && method === "GET") {
+          return result({ comercio_id: comercioId, proprietario_id: merchantId, bloqueado: false });
+        }
+        if (url.pathname === "/rest/v1/catalogo_aceites_operacionais" && method === "GET") {
+          return result([{ documento: "termos" }, { documento: "privacidade" }]);
+        }
+        if (url.pathname === "/rest/v1/catalogo_motoboys" && method === "GET") {
+          return result({ usuario_id: courierId });
+        }
+        if (url.pathname === "/rest/v1/catalogo_entregas_atribuidas" && method === "GET") {
+          return result({ pedido_id: pedidoId });
+        }
+        if (url.pathname === "/rest/v1/rpc/" + scenario.rpcName && method === "POST") {
+          rpcCalls++;
+          const sent = JSON.parse(String(init?.body));
+          assert(sent.p_operador_id === scenario.identity && sent.p_pedido_id === pedidoId,
+            scenario.label + ": RPC recebeu identidade ou pedido errado");
+          if (serveNextSuccess) return result(scenario.success);
+          return result({ code: sqlState, message: SQL_MESSAGE, details: "detalhes internos", hint: null }, 409);
+        }
+        if (method !== "GET") otherWrites++;
+        throw new Error("Rota não permitida no COB-06: " + method + " " + url.pathname);
+      };
+      const headers = { authorization: "Bearer ci-user-token" };
+      const blocked = await handler(post(endpoint, scenario.action, headers));
+      assertions(blocked, 409, scenario.label);
+      assert(blocked.headers.get("cache-control") === "no-store", scenario.label + ": resposta cacheável");
+      const payload = await blocked.json();
+      assert(payload.success === false && payload.codigo === "competencia_em_fechamento" &&
+        payload.tentar_novamente === true && payload.mensagem === expectedMessage,
+        scenario.label + ": contrato de retry incorreto");
+      assert(!JSON.stringify(payload).includes("COB06_CI_ONLY") &&
+        !JSON.stringify(payload).includes("detalhes internos"),
+        scenario.label + ": detalhes de SQL vazaram");
+      assert(rpcCalls === 1 && otherWrites === 0, scenario.label + ": houve replay ou escrita inesperada");
+
+      // A aplicação não repete por conta própria; somente nova requisição simula retry manual.
+      serveNextSuccess = true;
+      const again = await handler(post(endpoint, scenario.action, headers));
+      assertions(again, 200, scenario.label + " após retry manual");
+      assert((await again.json()).success === true && rpcCalls === 2,
+        scenario.label + ": retry manual não concluiu com exatamente uma RPC adicional");
+
+      // Um erro com mensagem parecida, mas outro SQLSTATE, jamais é marcado retryable.
+      serveNextSuccess = false;
+      sqlState = "P0001";
+      const failed = await handler(post(endpoint, scenario.action, headers));
+      assertions(failed, 500, scenario.label + " outro SQLSTATE");
+      const generic = await failed.json();
+      assert(generic.codigo !== "competencia_em_fechamento" &&
+        generic.tentar_novamente !== true &&
+        !JSON.stringify(generic).includes(SQL_MESSAGE),
+        scenario.label + ": erro genérico foi confundido com conflito de competência");
+      assert(rpcCalls === 3 && otherWrites === 0, scenario.label + ": erro genérico provocou mutação extra");
+    } finally {
+      currentMockFetch = denyNetwork;
+    }
   }
 });
