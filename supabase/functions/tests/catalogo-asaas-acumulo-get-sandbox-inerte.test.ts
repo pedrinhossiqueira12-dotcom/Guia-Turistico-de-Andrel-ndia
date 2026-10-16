@@ -1,3 +1,4 @@
+import { postarPixAcumuloSandboxCandidatoSomenteCi } from "../_shared/catalogo-asaas-acumulo-post-sandbox-candidato.ts";
 import { consultarPagamentoAcumuloSandboxGet,
   encontrarIdPagamentoAcumuloSandboxPorReferencia } from "../_shared/catalogo-asaas-acumulo-get-sandbox-inerte.ts";
 import { conferirPagamentoAcumuloPorGet } from "../_shared/catalogo-asaas-acumulo-get-verificado-inerte.ts";
@@ -108,4 +109,107 @@ Deno.test("COB06 lista Sandbox: entrada errada e falha de rede nunca registram p
   await hold(() => encontrarIdPagamentoAcumuloSandboxPorReferencia(esperado.referencia,
     "segredo-ci", mock), "GET_INDISPONIVEL");
   assert(calls === 1, "falha de rede nao tenta POST nem retry automatico");
+});
+
+
+// As provas POST abaixo nunca saem da CI: injecao de fetch ficticio sem rede.
+// O modulo candidato nao esta ligado a nenhuma rota e nao recebe autorização SQL.
+Deno.test("COB06 POST candidato: corpo de Pix agregado, unica tentativa e GET verificado em HOLD", async () => {
+  let posts = 0;
+  let gets = 0;
+  const mock = (async (raw: string | URL | Request, init?: RequestInit) => {
+    const url = String(raw);
+    assert((init?.headers as Record<string, string>)?.access_token === "segredo-ficticio-ci",
+      "token do servidor obrigatorio");
+    assert(init?.redirect === "error" && init?.signal instanceof AbortSignal,
+      "sem redirect e com timeout");
+    if (url === "https://api-sandbox.asaas.com/v3/payments") {
+      posts++;
+      assert(init?.method === "POST", "POST unico");
+      const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      assert(Object.keys(body).sort().join(",") ===
+        ["billingType", "customer", "description", "dueDate", "externalReference", "value"].sort().join(","),
+        "somente campos previstos");
+      assert(body.customer === esperado.clienteId && body.billingType === "PIX" &&
+        body.value === 5 && body.dueDate === "2099-01-06" &&
+        body.externalReference === esperado.referencia,
+        "identidade e dinheiro de origem do servidor");
+      return new Response(JSON.stringify({ id }), { status: 201,
+        headers: { "content-type": "application/json" } });
+    }
+    assert(url === "https://api-sandbox.asaas.com/v3/payments/" + id &&
+      init?.method === "GET", "GET por ID apos POST");
+    gets++;
+    return new Response(JSON.stringify(remoto), { status: 200,
+      headers: { "content-type": "application/json" } });
+  }) as typeof fetch;
+  const r = await postarPixAcumuloSandboxCandidatoSomenteCi(
+    esperado, "2099-01-06", "segredo-ficticio-ci", mock);
+  assert(posts === 1 && gets === 1 && r.paymentId === id &&
+    r.observacao.p_status === "PENDING" && r.holdObrigatorio === true &&
+    r.podeQuitar === false && r.podeLiberarMotoboy === false,
+    "GET confirmado nunca baixa nem libera saldo");
+});
+
+Deno.test("COB06 POST candidato: argumentos invalidos bloqueados antes da rede", async () => {
+  let chamadas = 0;
+  const mock = (async () => { chamadas++; throw Error("rede nao permitida"); }) as typeof fetch;
+  const invalidos = [
+    [{ ...esperado, loteId: "nao-uuid" }, "2099-01-06", "segredo-ficticio-ci", "LOTE_INVALIDO"],
+    [{ ...esperado, referencia: "outra" }, "2099-01-06", "segredo-ficticio-ci", "REFERENCIA_INVALIDA"],
+    [{ ...esperado, clienteId: "cus_!" }, "2099-01-06", "segredo-ficticio-ci", "CLIENTE_INVALIDO"],
+    [{ ...esperado, valorCentavos: 499 }, "2099-01-06", "segredo-ficticio-ci", "VALOR_INVALIDO"],
+    [esperado, "2025-02-30", "segredo-ficticio-ci", "VENCIMENTO_INVALIDO"],
+    [esperado, "2099-01-06", "", "CREDENCIAL_INDISPONIVEL"],
+  ] as const;
+  for (const [dados, vencimento, token, motivo] of invalidos) {
+    await hold(() => postarPixAcumuloSandboxCandidatoSomenteCi(
+      dados, vencimento, token, mock), motivo);
+  }
+  assert(chamadas === 0, "nenhuma tentativa remota com dado invalido");
+});
+
+Deno.test("COB06 POST candidato: falhas ambiguas sao HOLD sem retry automatico", async () => {
+  for (const modo of ["rede", "503", "html", "id", "grande"] as const) {
+    let posts = 0;
+    let gets = 0;
+    const mock = (async (raw: string | URL | Request, init?: RequestInit) => {
+      if (init?.method === "POST") {
+        posts++;
+        if (modo === "rede") throw Error("resposta perdida apos envio");
+        if (modo === "503") return new Response("indisponivel", { status: 503 });
+        if (modo === "html") return new Response("<html>", { status: 201,
+          headers: { "content-type": "text/html" } });
+        if (modo === "grande") return new Response("x".repeat(65537), {
+          status: 201, headers: { "content-type": "application/json" } });
+        return new Response(JSON.stringify({ id: "pay_!" }), { status: 201,
+          headers: { "content-type": "application/json" } });
+      }
+      gets++;
+      throw Error("GET nao pode ocorrer");
+    }) as typeof fetch;
+    const erro = modo === "rede" || modo === "503" ? "POST_INCONCLUSIVO"
+      : modo === "id" ? "POST_ID_INVALIDO" : "POST_RESPOSTA_INVALIDA";
+    await hold(() => postarPixAcumuloSandboxCandidatoSomenteCi(
+      esperado, "2099-01-06", "segredo-ficticio-ci", mock), erro);
+    assert(posts === 1 && gets === 0, "sem repetir POST apos falha " + modo);
+  }
+});
+
+Deno.test("COB06 POST candidato: divergencia no GET impede aceitar resposta do POST", async () => {
+  let posts = 0;
+  let gets = 0;
+  const mock = (async (_raw: string | URL | Request, init?: RequestInit) => {
+    if (init?.method === "POST") {
+      posts++;
+      return new Response(JSON.stringify({ id }), { status: 201,
+        headers: { "content-type": "application/json" } });
+    }
+    gets++;
+    return new Response(JSON.stringify({ ...remoto, value: 6 }), { status: 200,
+      headers: { "content-type": "application/json" } });
+  }) as typeof fetch;
+  await hold(() => postarPixAcumuloSandboxCandidatoSomenteCi(
+    esperado, "2099-01-06", "segredo-ficticio-ci", mock), "VALOR_DIVERGENTE");
+  assert(posts === 1 && gets === 1, "GET divergente sem outra emissao");
 });
