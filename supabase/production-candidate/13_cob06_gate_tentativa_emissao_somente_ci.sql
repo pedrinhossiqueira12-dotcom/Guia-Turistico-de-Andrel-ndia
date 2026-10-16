@@ -5,6 +5,17 @@
 -- por futura Edge administrativa antes de qualquer tentativa real de POST.
 BEGIN;
 
+-- Recusa a INSTALACAO fora do clone de CI, alem da guarda na chamada.
+DO $somente_ci$
+BEGIN
+ IF pg_catalog.current_database() IS DISTINCT FROM 'catalogo_cob06_ci'
+    OR pg_catalog.inet_server_port() IS DISTINCT FROM 5432
+    OR current_user IS DISTINCT FROM 'postgres'
+ THEN RAISE EXCEPTION 'COB06_CI_ONLY: instalacao do gate proibida'
+    USING ERRCODE='42501'; END IF;
+END;
+$somente_ci$;
+
 CREATE TABLE public.catalogo_asaas_acumulo_tentativas_emissao_ci (
  lote_id uuid PRIMARY KEY
    REFERENCES public.catalogo_asaas_acumulo_referencias(lote_id) ON DELETE RESTRICT,
