@@ -20,7 +20,8 @@ function load(path,{membership=true,assigned=true,rpcResult={ok:true,status:'ent
  };
  const source=fs.readFileSync(path,'utf8').replace(/^import[^;]+;\s*/gm,'');
  const helper=stripTypeScriptTypes(fs.readFileSync('supabase/functions/_shared/catalogo-entregas-crypto-v2.ts','utf8')).replace(/^export\s+/gm,'');
- vm.runInNewContext(helper+"\n"+stripTypeScriptTypes(source),{createClient:()=>db,Request,Response,TextEncoder,TextDecoder,atob,btoa,crypto:webcrypto,console:{error(){}},Deno:{env:{get:key=>key==='OFFLINE_CHECKOUT_ENABLED'?(offline?'true':'false'):'test'},serve:h=>{handler=h;}}});
+ const conflictHelper=stripTypeScriptTypes(fs.readFileSync('supabase/functions/_shared/catalogo-competencia-conflito.ts','utf8')).replace(/^export\s+/gm,'');
+ vm.runInNewContext(helper+"\n"+conflictHelper+"\n"+stripTypeScriptTypes(source),{createClient:()=>db,Request,Response,TextEncoder,TextDecoder,atob,btoa,crypto:webcrypto,console:{error(){}},Deno:{env:{get:key=>key==='OFFLINE_CHECKOUT_ENABLED'?(offline?'true':'false'):'test'},serve:h=>{handler=h;}}});
  return {handler,calls};
 }
 function req(body,auth='Bearer valid'){
