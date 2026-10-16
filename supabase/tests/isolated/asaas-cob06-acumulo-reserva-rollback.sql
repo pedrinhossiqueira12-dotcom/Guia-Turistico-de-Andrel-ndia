@@ -37,6 +37,9 @@ DECLARE
  v_referencia_paga text;
  v_pago_em_antes timestamptz;
  v_disputa_rollback boolean:=false;
+ v_repasse_teste jsonb;
+ v_repasse_id uuid;
+ v_pago_em_repasse timestamptz;
 BEGIN
  IF pg_catalog.current_database()<>'catalogo_cob06_ci'
  OR pg_catalog.inet_server_port()<>5432
@@ -633,6 +636,105 @@ BEGIN
    OR v_atomico->>'motivo'<>'lote_nao_aberto'
    OR (SELECT count(*) FROM public.catalogo_asaas_acumulo_quitacoes_isoladas)<>1
   THEN RAISE EXCEPTION 'COB06_ATOMICO: replay duplicou recibo'; END IF;
+
+  -- Ensaio POS-REPASSE: RPC administrativa real, banco e comprovante
+  -- inteiramente sinteticos. NAO transfere Pix, NAO homologa minimo R$100.
+  -- Neste fixture os dois creditos do motoboy somam somente R$1,43.
+  BEGIN
+   INSERT INTO auth.users(id)
+   VALUES('4b9a0233-6b72-4573-aebd-d596c5b15e1b'::uuid)
+   ON CONFLICT(id) DO NOTHING;
+   v_repasse_teste:=public.catalogo_operacao_admin_v2(
+     p_operador_id=>'4b9a0233-6b72-4573-aebd-d596c5b15e1b'::uuid,
+     p_acao=>'registrar_repasse',
+     p_motoboy_id=>'00000000-0000-4000-8000-000000000099'::uuid,
+     p_pedido_ids=>ARRAY[v_p1,v_p2],
+     p_referencia=>'ci-cob06-pos-repasse-001',
+     p_comprovante=>'COMPROVANTE_FICTICIO_CI_NAO_TRANSFERIDO');
+   IF v_repasse_teste->>'ok'<>'true'
+      OR v_repasse_teste->>'transferencia_executada'<>'false'
+      OR (v_repasse_teste->>'valor_centavos')::int<>143
+      OR (SELECT count(*) FROM public.catalogo_remuneracoes_v2
+          WHERE pedido_id IN(v_p1,v_p2) AND status='pago')<>2
+      OR (SELECT count(*) FROM public.catalogo_lancamentos_financeiros_v2
+          WHERE pedido_id IN(v_p1,v_p2) AND tipo='remuneracao_motoboy'
+            AND status='pago')<>2
+   THEN RAISE EXCEPTION 'COB06_POS_REPASSE: nao registrou livro sintetico: %',
+     v_repasse_teste; END IF;
+   v_repasse_id:=(v_repasse_teste->>'repasse_id')::uuid;
+   v_pago_em_repasse:=(SELECT pago_em FROM public.catalogo_remuneracoes_v2
+                       WHERE pedido_id=v_p1);
+
+   v_evento:=public.catalogo_asaas_registrar_evento_acumulo_inerte(
+     v_id,'pay_cob06_obs_123456','ci-cob06-refund-pos-repasse-001','REFUNDED');
+   IF v_evento->>'ok'<>'true'
+   THEN RAISE EXCEPTION 'COB06_POS_REPASSE: evento refund nao observado'; END IF;
+   v_reverso:=catalogo_private.catalogo_asaas_suspender_lote_atomico_ci(
+     v_id,(v_evento->>'evento_id')::bigint);
+   IF v_reverso->>'ok'<>'true' OR v_reverso->>'estado'<>'estornado'
+      OR (SELECT count(*) FROM public.catalogo_remuneracoes_v2
+          WHERE pedido_id IN(v_p1,v_p2) AND status='pendencia_revisao'
+            AND financiamento_comprovado=false AND repasse_id=v_repasse_id)<>2
+      OR (SELECT count(*) FROM public.catalogo_lancamentos_financeiros_v2
+          WHERE pedido_id IN(v_p1,v_p2) AND tipo='remuneracao_motoboy'
+            AND status='pendencia_revisao')<>2
+      OR (SELECT count(*) FROM public.catalogo_lancamentos_financeiros_v2
+          WHERE pedido_id IN(v_p1,v_p2) AND tipo='comissao_plataforma'
+            AND status='retido')<>2
+      OR (SELECT count(*) FROM public.catalogo_lancamentos_financeiros_v2
+          WHERE pedido_id IN(v_p1,v_p2) AND tipo='pendencia_revisao'
+            AND status='pendencia_revisao'
+            AND chave_idempotencia='estorno-revisao:'||pedido_id::text)<>2
+      OR (SELECT sum(valor_centavos) FROM public.catalogo_lancamentos_financeiros_v2
+          WHERE pedido_id IN(v_p1,v_p2) AND tipo='pendencia_revisao')<>-143
+      OR (SELECT pago_em FROM public.catalogo_remuneracoes_v2
+          WHERE pedido_id=v_p1) IS DISTINCT FROM v_pago_em_repasse
+      OR (SELECT valor_centavos FROM public.catalogo_repasses_v2
+          WHERE id=v_repasse_id AND status='registrado')<>143
+   THEN RAISE EXCEPTION 'COB06_POS_REPASSE: faltou pendencia/ajuste: %',v_reverso; END IF;
+
+   -- A mesma transferencia nao sera feita de novo, nem como novo registro.
+   v_repasse_teste:=public.catalogo_operacao_admin_v2(
+     p_operador_id=>'4b9a0233-6b72-4573-aebd-d596c5b15e1b'::uuid,
+     p_acao=>'registrar_repasse',
+     p_motoboy_id=>'00000000-0000-4000-8000-000000000099'::uuid,
+     p_pedido_ids=>ARRAY[v_p1,v_p2],
+     p_referencia=>'ci-cob06-novo-repasse-negado-001',
+     p_comprovante=>'OUTRO_COMPROVANTE_FICTICIO_CI');
+   IF v_repasse_teste->>'ok'<>'false'
+      OR (v_repasse_teste->>'http_status')::int<>409
+      OR (SELECT count(*) FROM public.catalogo_repasses_v2
+          WHERE motoboy_id='00000000-0000-4000-8000-000000000099'::uuid)<>1
+   THEN RAISE EXCEPTION 'COB06_POS_REPASSE: repetiu repasse apos estorno: %',
+     v_repasse_teste; END IF;
+   v_reverso:=catalogo_private.catalogo_asaas_suspender_lote_atomico_ci(
+     v_id,(v_evento->>'evento_id')::bigint);
+   IF v_reverso->>'motivo'<>'quitacao_nao_ativa'
+      OR (SELECT count(*) FROM public.catalogo_lancamentos_financeiros_v2
+          WHERE pedido_id IN(v_p1,v_p2) AND tipo='pendencia_revisao')<>2
+   THEN RAISE EXCEPTION 'COB06_POS_REPASSE: segunda reversao duplicou debito'; END IF;
+
+   -- Este bloco inteiro volta ao estado anterior: replica apenas uma
+   -- hipotese contabil, sem conservar usuario, comprovante, evento ou repasse.
+   RAISE EXCEPTION 'COB06_POS_REPASSE_ROLLBACK_ESPERADO';
+  EXCEPTION WHEN raise_exception THEN
+   IF SQLERRM IS DISTINCT FROM 'COB06_POS_REPASSE_ROLLBACK_ESPERADO' THEN RAISE; END IF;
+  END;
+  IF EXISTS(SELECT 1 FROM public.catalogo_repasses_v2
+            WHERE referencia='ci-cob06-pos-repasse-001')
+    OR EXISTS(SELECT 1 FROM public.catalogo_asaas_acumulo_eventos
+              WHERE evento_externo='ci-cob06-refund-pos-repasse-001')
+    OR EXISTS(SELECT 1 FROM public.catalogo_lancamentos_financeiros_v2
+              WHERE pedido_id IN(v_p1,v_p2) AND tipo='pendencia_revisao')
+    OR (SELECT count(*) FROM public.catalogo_remuneracoes_v2
+        WHERE pedido_id IN(v_p1,v_p2) AND status='disponivel'
+          AND repasse_id IS NULL)<>2
+    OR (SELECT count(*) FROM public.catalogo_lancamentos_financeiros_v2
+        WHERE pedido_id IN(v_p1,v_p2) AND status='disponivel')<>4
+    OR (SELECT estado FROM public.catalogo_asaas_acumulo_quitacoes_isoladas
+        WHERE lote_id=v_id)<>'pago'
+  THEN RAISE EXCEPTION 'COB06_POS_REPASSE: subtransacao deixou residuos'; END IF;
+  RAISE NOTICE 'COB06_POS_REPASSE_PENDENCIA_REVISAO_IDEMPOTENTE_ROLLBACK_OK';
 
   -- Candidato 12: revogacao/suspensao atomica depois de um estorno.
   IF pg_catalog.has_function_privilege('service_role',
