@@ -63,7 +63,7 @@ test("COB-04: botões de retirada antiga indisponíveis durante teste de entrega
  assert.match(qaHtml, /id="qa-create" disabled/);
  assert.match(qaHtml, /id="qa-finish" disabled/);
  assert.match(qaHtml, /COB-04 · Entrega V2 com motoboy/);
- assert.match(qaHtml, /value="2026-12"/);
+ assert.match(qaHtml, /value="2027-02"/);
 });
 test("COB-04: fechamento exige entrega física e pagamento confirmado para TODOS os componentes",()=>{
  const guardSql=fs.readFileSync("supabase/pending-migrations/20261012104000_cob04_fechamento_apenas_entregas_confirmadas.sql","utf8");
@@ -129,4 +129,14 @@ test("COB-04: conciliação da fatura só libera pedidos do snapshot pago",()=>{
  assert.match(src,/IF v_cobranca\.status='pago'/);
  assert.match(src,/IF p_estado IN \('estornado','contestado'\)/);
  assert.doesNotMatch(src,/\b(?:TRUNCATE|DROP TABLE|DELETE FROM)\b/i);
+});
+
+test("COB-06: seletor de produto QA em STAGING e guarda de fatura inferior a R$5",()=>{
+ assert.match(qaHtml,/id="qa-product"/);
+ assert.match(qaHtml,/id="qa-products-load"/);
+ assert.match(qaHtml,/\.eq\("id",selectedId\)/);
+ assert.match(qaHtml,/expectedTotal=expectedPlatform\+expectedMotoboy/);
+ assert.match(qaHtml,/expectedTotal<500/);
+ assert.match(qaHtml,/total_comissao_centavos<500/);
+ assert.match(qaHtml,/NÃO emita Pix/);
 });
