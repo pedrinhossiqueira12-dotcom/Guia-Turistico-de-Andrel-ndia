@@ -57,6 +57,14 @@ pre{white-space:pre-wrap;word-break:break-all;padding:14px;background:#f3f5f1;bo
 <pre id="qa-result">Nenhum pedido criado. O aceite dos termos não cria um pedido.</pre>
 </section>
 
+<section id="qa-cob06" hidden>
+<h2>COB-06 · Solicitar revisao de cancelamento ficticio</h2>
+<p class="muted"><strong>Somente STAGING.</strong> Entre como proprietario <strong>pedrinhossiqueira@gmail.com</strong>. O pedido ja existe e esta pronto; este botao <strong>nao cria nenhum pedido, nao cobra Pix e nao devolve dinheiro</strong>. Ele apenas solicita a revisao administrativa para um pedido de retirada inteiramente ficticio e confirmado sem entrega ou recebimento.</p>
+<p class="muted">Pedido exclusivo: <code>a4ca7c4e-465f-4342-ae18-5c7eea1dec15</code> · comercio <code>asaas-cob02</code>. Nao toque nos botoes de criacao, entrega ou fechamento acima.</p>
+<div class="actions"><button type="button" id="qa-cob06-request">COB-06 · Solicitar cancelamento ficticio</button></div>
+<pre id="qa-cob06-output">Nenhuma solicitacao de cancelamento enviada.</pre>
+</section>
+
 <section id="qa-delivery" hidden>
 <h2>COB-04 · Entrega V2 com motoboy (somente STAGING)</h2><p class="muted"><strong>Próxima ação:</strong> botão 7 para autorizar a conta de motoboy existente, depois botão 8 para criar UM pedido de entrega. Não confirme o pedido de retirada que ficou “pronto”.</p>
 <p class="muted">COB-04 (já homologado): produto R$100 gera R$7 de comissão. COB-06 (preparo): produto QA R$40 gera R$2,80 (R$2 plataforma + R$0,80 motoboy). A cobrança abaixo de R$5 deve permanecer BLOQUEADA, sem Pix ou quitação fictícia. Todos os pedidos são somente de homologação.</p>
@@ -121,7 +129,7 @@ const pretty=data=>{const {pix,...publicResult}=data||{};return JSON.stringify(p
 async function refresh(){
  const {data}=await client.auth.getUser();
  const u=data?.user||null;
- $("billing").hidden=!u;$("qa-order").hidden=!u;$("qa-delivery").hidden=!u;$("logout").hidden=!u;
+ $("billing").hidden=!u;$("qa-order").hidden=!u;$("qa-delivery").hidden=!u;$("qa-cob06").hidden=!u;$("logout").hidden=!u;
  $("login-form").hidden=!!u;
  $("session").textContent=u?"Autenticado no Sandbox: "+u.email:"Não autenticado.";
  $("uid").hidden=!u;$("uid").textContent=u?"Seu User UID de testes: "+u.id:"";
@@ -222,6 +230,27 @@ async function qaApi(slug,body,authenticated=true){
  return out;
 }
 const qaLog=(o)=>{const formatted=JSON.stringify(o,null,2);$("qa-result").textContent=formatted;$("qa-delivery-result").textContent=formatted;};
+
+// COB-06: unica solicitacao elegivel. Apenas o proprietario autenticado.
+const COB06_QA_CANCEL_PEDIDO = "a4ca7c4e-465f-4342-ae18-5c7eea1dec15";
+let cob06PedidoSolicitado = false;
+$("qa-cob06-request").addEventListener("click",()=>withBusy($("qa-cob06-request"),async()=>{
+ if(cob06PedidoSolicitado)throw Error("A solicitacao ja foi enviada nesta sessao. Nao repita.");
+ const {data,error}=await client.auth.getUser();
+ if(error||data?.user?.email?.toLowerCase()!=="pedrinhossiqueira@gmail.com")
+   throw Error("Entre como proprietario pedrinhossiqueira@gmail.com no STAGING. Nao use admin nem motoboy.");
+ if(!window.confirm("Solicitar UMA revisao de cancelamento do pedido ficticio COB-06? Nenhuma mercadoria ou dinheiro foi recebido/entregue."))
+   return false;
+ const out=await qaApi("catalogo-pedidos-offline-admin",{
+   acao:"atualizar_status",pedido_id:COB06_QA_CANCEL_PEDIDO,status:"cancelado",
+   motivo:"Solicitacao QA COB-06: retirada inteiramente ficticia, sem entrega de produto ou recebimento de dinheiro."
+ });
+ cob06PedidoSolicitado=true;
+ const result={etapa:"solicitar_cancelamento_ficticio",pedido_id:COB06_QA_CANCEL_PEDIDO,resultado:out};
+ $("qa-cob06-output").textContent=JSON.stringify(result,null,2);
+ qaLog(result);
+ msg("Solicitacao registrada. Nao clique novamente: aguarde revisao administrativa.");
+}).then(()=>{if(cob06PedidoSolicitado)$("qa-cob06-request").disabled=true;}));
 
 async function deliveryApi(acao,body={}){
  const out=await qaApi("catalogo-entregas",{acao,...body});
