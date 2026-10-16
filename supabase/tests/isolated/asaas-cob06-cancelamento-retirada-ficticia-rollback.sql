@@ -10,6 +10,11 @@ BEGIN
 END;
 $guard$;
 
+-- O clone nao possui o operador real: criar somente o ID sintético na transação.
+INSERT INTO auth.users(id)
+VALUES ('4b9a0233-6b72-4573-aebd-d596c5b15e1b')
+ON CONFLICT (id) DO NOTHING;
+
 INSERT INTO public.catalogo_pedidos(
  id,comercio_id,referencia_externa,idempotency_key,provedor,modalidade,
  forma_pagamento,subtotal_produtos_centavos,entrega_centavos,total_centavos,
