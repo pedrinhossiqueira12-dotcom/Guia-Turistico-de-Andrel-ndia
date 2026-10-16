@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import { encryptCourierPix, decryptCourierPix } from "../_shared/catalogo-entregas-crypto-v2.ts";
+import { COMPETENCIA_BUSY_CODE, COMPETENCIA_BUSY_MESSAGE, COMPETENCIA_BUSY_STATUS, isCompetenciaBusy } from "../_shared/catalogo-competencia-conflito.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const BUNDLE = Deno.env.get("SUPABASE_SECRET_KEYS") ?? "";
@@ -56,6 +57,9 @@ async function rpc(name: string, args: Record<string, unknown>) {
   const { data, error } = await db.rpc(name, args);
   if (error) {
     console.error("Delivery transaction failed", { name, code: error.code });
+    if (["catalogo_operar_pedido_v2", "catalogo_confirmar_entrega_motoboy"].includes(name) && isCompetenciaBusy(error)) {
+      throw new HttpError(COMPETENCIA_BUSY_MESSAGE, COMPETENCIA_BUSY_STATUS, COMPETENCIA_BUSY_CODE);
+    }
     throw new HttpError("Não foi possível processar a operação de entrega. Tente novamente.", 500);
   }
   const result = record(data);
@@ -221,7 +225,7 @@ Deno.serve(async (request: Request) => {
   if (request.method !== "POST") return json({ success: false, mensagem: "Use POST." }, 405);
   try { return await run((await user(request)).id, record(await request.json().catch(() => ({})))); }
   catch (error) {
-    if (error instanceof HttpError) return json({ success: false, mensagem: error.message, codigo: error.code }, error.status);
+    if (error instanceof HttpError) return json({ success: false, mensagem: error.message, codigo: error.code, ...(error.code === COMPETENCIA_BUSY_CODE ? { tentar_novamente: true } : {}) }, error.status);
     console.error("catalogo-entregas failed", { type: (error as Error).name });
     return json({ success: false, mensagem: "Não foi possível processar a operação de entrega." }, 500);
   }
