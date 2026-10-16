@@ -26,9 +26,14 @@ Os testes negativos cobrem usuário não autorizado, ausência de confirmação,
 
 O convite para `pedrinhossiqueira12@gmail.com` foi aceito. A consulta **somente leitura** em `auth.users` no projeto STAGING `jbttwihctuibchhcyqtl` confirmou `id=d896cc0c-31e4-4ef7-8fa4-13d15f02dd2a`, `email_confirmed_at` preenchido e inicio de sessao registrado. A pagina `localhost:3000` nao abriu porque o redirecionamento do template Auth aponta para servidor local inexistente; isso **nao desfez** a confirmacao. Nao reemitir convite nem colar links/OTP em relatorios.
 
-O candidato 16 e a rota `cancelar_retirada_ficticia_qa` passam a reconhecer **somente esse UID em STAGING**, e somente com projeto exato, flag explicita, pedido ficticio unico e revisao fundamentada. O UUID administrativo historico permanece inalterado para as demais operacoes, inclusive repasses. No clone CI, o candidato 16 continua exigindo o operador sintetico historico em uma transacao revertida. Em banco `postgres`, a instalacao da funcao exige **tambem** a existencia desse usuario Auth confirmado com e-mail exato, reduzindo o risco de instalacao em outro projeto.
+O candidato 16 e o endpoint independente `catalogo-cob06-qa` reconhecem **somente esse UID em STAGING**, e somente com projeto exato, flag explicita, pedido ficticio unico e revisao fundamentada. O UUID administrativo historico permanece inalterado para as demais operacoes, inclusive repasses. No clone CI, o candidato 16 continua exigindo o operador sintetico historico em uma transacao revertida. Em banco `postgres`, a instalacao da funcao exige **tambem** a existencia desse usuario Auth confirmado com e-mail exato, reduzindo o risco de instalacao em outro projeto.
 
-**Estado:** arquivos preparados na PR Draft, sem implantacao, sem flag habilitada, sem ocorrencia administrativa resolvida e sem alteracoes no pedido/faturas STAGING. Antes do deploy, conferir diferenca entre Edge implantada e branch: nao substituir a Edge inteira se houver funcionalidades ainda nao revisadas. Para confirmar autoria real, a Edge valida o JWT e encaminha exclusivamente o UID obtido via `auth.getUser(token)` à RPC `service_role`.
+**Estado:** codigo novo na PR Draft, inicialmente sem flag habilitada, sem ocorrencia administrativa resolvida e sem alteracoes no pedido/faturas STAGING. A Edge `catalogo-entregas` existente (v36) e preservada: a nova `catalogo-cob06-qa` e implantavel separadamente. Para confirmar autoria real, o endpoint valida o JWT via `auth.getUser(token)` e encaminha exclusivamente o UID autenticado à RPC `service_role`.
+
+
+## Preflight financeiro antes da instalacao (16/10/2026)
+
+Consultas exclusivamente de leitura confirmaram: pedido `a4ca7c4e-465f-4342-ae18-5c7eea1dec15` continua `pronto`, retirada offline/dinheiro, pagamento `pendente`, sem ocorrencias, componentes de fatura, pagamentos, remuneracoes nem entregas atribuidas. A loja de testes tem **quatro faturas pagas**, que nao devem sofrer mudancas. Checksums da tabela de faturas pagas: `e7178b44eea23278122ce479db866f5e`; componentes historicos pagos: `864cafbaef0652cb8003b065299f9379`. Recalcular com a mesma ordenacao SQL antes e depois da eventual revisao; bloquear se houver divergencia, nao restaurar automaticamente.
 
 ## Impedimentos de publicação
 
@@ -36,7 +41,7 @@ O candidato 16 e a rota `cancelar_retirada_ficticia_qa` passam a reconhecer **so
 2. Antes de promover: revisar concorrência, política e autorização JWT/service role, trilha de auditoria, estados de reembolso e impacto sobre outras modalidades; gerar **migration definitiva separada**, feature flag inicialmente desligada e testes de integração.
 3. Antes de qualquer cancelamento real, obter autorização específica para o ID do pedido e executar novo preflight **somente leitura** de pagamento, cobrança, comissão, logística e fatura para detectar mudanças ocorridas desde a inspeção.
 4. Nunca cancelar pedidos que possuam pagamento recebido, componentes faturados, entrega confirmada, motoboy ou qualquer saldo liberado, mesmo sob justificativa de teste.
-5. COB-06 emissão/acúmulo Asaas permanece HOLD. Não executar Pix, repasse, saque, reconciliação externa, deploy/merge ou dados PROD neste trabalho.
+5. COB-06 emissao/acumulo Asaas permanece HOLD. Nao executar Pix, repasse, saque, reconciliacao externa, merge ou qualquer alteracao PROD. Deploy permitido apenas de endpoint exclusivo no STAGING, sem alterar a Edge `catalogo-entregas`.
 
 A aprovação do usuário de que o pedido é fictício **autoriza preparar e testar a correção**, não constitui registro de recebimento financeiro nem executa alterações no STAGING.
 
@@ -44,10 +49,10 @@ A aprovação do usuário de que o pedido é fictício **autoriza preparar e tes
 ## Avanço: candidata STAGING-QA com flag desligada (ainda não implantada)
 
 - `supabase/production-candidate/16_cob06_cancelamento_retirada_qa_staging_pendente.sql` replica o motor transacional validado para RPC pública com EXECUTE exclusivo de `service_role`; nega `anon` e `authenticated`. No clone CI permite apenas a fixture UUID terminada em `c606`. No banco `postgres` exige o UUID exato do pedido STAGING `a4ca7c4e-465f-4342-ae18-5c7eea1dec15`, comércio `asaas-cob02`, versão 2, retirada, pagamento pendente e status pronto. Qualquer outro pedido é barrado. **Não foi instalada em Supabase remoto.**
-- `supabase/functions/catalogo-entregas/index.ts` adiciona ação interna `cancelar_retirada_ficticia_qa` somente para JWT do administrador, URL STAGING exata, comércio/pedido fixos, decisão legítima, motivo fundamentado e confirmação expressa de **nenhuma entrega e nenhum recebimento**. A variável `COB06_QA_CANCELAMENTO_HABILITADO` exige exatamente `true`; ausente ou em outro valor bloqueia a RPC. Nenhuma interface pública oferece a ação.
-- `tests/catalogo-v2-roteadores.test.cjs` cobre motoboy/comércio, PROD, flag ausente, UUID errado, identidade forjada e falta de atestado.
+- `supabase/functions/catalogo-cob06-qa/index.ts` e um endpoint novo e independente da `catalogo-entregas` em uso, disponivel apenas em STAGING; valida em Auth o JWT do revisor confirmado, URL do projeto, comercio e pedido fixos, decisao legitima, motivo e confirmacao de **nenhuma entrega e nenhum recebimento**. A variavel `COB06_QA_CANCELAMENTO_HABILITADO` exige exatamente `true`; ausente ou em outro valor bloqueia a RPC. Nao expor a chave `service_role` ao cliente. Nenhuma interface publica oferece a acao.
+- `tests/catalogo-cob06-qa-endpoint.test.cjs` cobre PROD, flag ausente, JWT inexistente/invalido, usuario/admin historico divergente, comercio e UUID errados, identidade forjada e falta de atestado; `deno check` valida a funcao isolada.
 - `supabase/tests/isolated/asaas-cob06-cancelamento-retirada-qa-publica-rollback.sql` cobre permissões, escopo do UUID, bloqueios financeiros, fatura preservada e rollback.
 
-A existência da candidata no PR **não** implica execução nem disponibilidade no STAGING. Sequência exigida: CI integral verde, revisão de SQL/Edge, preflight somente leitura de pedido/ocorrência/fatura, decisão específica sobre aplicação em STAGING, instalação controlada, habilitação temporária e explícita da flag para uma ação única autorizada, desabilitação da flag e conciliação final.
+A existencia do codigo no PR **nao** implica execucao do cancelamento. Sequencia: CI integral verde, preflight somente leitura de pedido/ocorrencia/faturas, instalacao exclusiva do endpoint novo e da RPC no STAGING, verificacao com flag desligada, criacao da ocorrencia pelo comercio autenticado, habilitacao temporaria da flag para uma unica revisao autenticada, desabilitacao da flag e conciliacao com checksums de faturas.
 
 A operação é exclusiva de uma retirada fictícia identificada. O fluxo geral `resolver_ocorrencia` continua exigindo projeto separado para pagamentos confirmados, motoboys e reembolsos.
