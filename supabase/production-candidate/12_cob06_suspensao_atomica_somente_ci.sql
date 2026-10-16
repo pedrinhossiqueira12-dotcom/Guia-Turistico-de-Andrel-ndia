@@ -76,7 +76,8 @@ BEGIN
  WHERE c.comercio_id=v_comercio AND EXISTS (
     SELECT 1 FROM public.catalogo_asaas_acumulo_fontes af
     JOIN public.catalogo_fatura_componentes_v2 cp ON cp.fechamento_id=af.fechamento_id
-    WHERE af.lote_id=p_lote AND cp.pedido_id=c.pedido_id)
+    WHERE af.lote_id=p_lote AND cp.pedido_id=c.pedido_id
+      AND af.competencia=c.competencia)
  ORDER BY c.pedido_id FOR UPDATE OF c;
 
  SELECT pg_catalog.count(*),coalesce(pg_catalog.sum(af.valor_centavos),0),
@@ -106,7 +107,10 @@ BEGIN
  INTO v_pedidos,v_comissoes
  FROM public.catalogo_asaas_acumulo_fontes af
  JOIN public.catalogo_fatura_componentes_v2 cp ON cp.fechamento_id=af.fechamento_id
- LEFT JOIN public.catalogo_comissoes_offline c ON c.pedido_id=cp.pedido_id
+ LEFT JOIN public.catalogo_comissoes_offline c
+   ON c.pedido_id=cp.pedido_id
+  AND c.comercio_id=v_comercio
+  AND c.competencia=af.competencia
  WHERE af.lote_id=p_lote;
  IF v_pedidos<1 OR v_comissoes IS DISTINCT FROM v_pedidos THEN
   RETURN pg_catalog.jsonb_build_object('ok',false,'motivo','comissoes_quitadas_inconsistentes'); END IF;
@@ -138,7 +142,8 @@ BEGIN
    AND EXISTS (
      SELECT 1 FROM public.catalogo_asaas_acumulo_fontes af
      JOIN public.catalogo_fatura_componentes_v2 cp ON cp.fechamento_id=af.fechamento_id
-     WHERE af.lote_id=p_lote AND cp.pedido_id=c.pedido_id);
+     WHERE af.lote_id=p_lote AND cp.pedido_id=c.pedido_id
+       AND af.competencia=c.competencia);
  GET DIAGNOSTICS v_alterados = ROW_COUNT;
  IF v_alterados IS DISTINCT FROM v_pedidos THEN
   RAISE EXCEPTION 'COB06_SUSPENSAO: comissoes parcialmente contestadas' USING ERRCODE='23514'; END IF;
