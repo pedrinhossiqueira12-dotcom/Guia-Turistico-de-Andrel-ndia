@@ -611,7 +611,7 @@ BEGIN
     'offline',pg_catalog.gen_random_uuid(),'pronto',
     'pendente','entrega','dinheiro',1429,
     0,1429,71,1329,'Pedido ainda nao entregue','00000000000',
-    2,29,100,'pendente','{"cob06":"pendente-fora-da-fatura"}'::jsonb
+    2,29,100,'nao_atribuido','{"cob06":"pendente-fora-da-fatura"}'::jsonb
   ) RETURNING id INTO v_p_pendente;
   INSERT INTO public.catalogo_comissoes_offline(
     pedido_id,comercio_id,competencia,subtotal_produtos_centavos,
