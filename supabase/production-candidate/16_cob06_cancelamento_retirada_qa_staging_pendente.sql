@@ -57,18 +57,22 @@ BEGIN
  -- confirmacao EXPRESSA de que nenhum produto/dinheiro foi entregue/recebido.
  -- CI segue exigindo o ID historico e ROLLBACK. O STAGING exige
  -- exclusivamente o usuario convidado e confirmado no Auth daquele projeto.
- IF NOT (
-   (pg_catalog.current_database()='catalogo_cob06_ci'
-     AND p_operador_id='4b9a0233-6b72-4573-aebd-d596c5b15e1b'::uuid)
-   OR
-   (pg_catalog.current_database()='postgres'
-     AND p_operador_id='d896cc0c-31e4-4ef7-8fa4-13d15f02dd2a'::uuid
-     AND EXISTS(
+ -- O clone de CI usa auth.users minima (somente id); NAO consultar
+ -- colunas reais do Supabase nesse ramo. PL/pgSQL so prepara o ramo executado.
+ IF pg_catalog.current_database()='catalogo_cob06_ci' THEN
+   IF p_operador_id IS DISTINCT FROM '4b9a0233-6b72-4573-aebd-d596c5b15e1b'::uuid
+   THEN RETURN pg_catalog.jsonb_build_object('ok',false,'http_status',403,'mensagem','Administrador nao autorizado.'); END IF;
+ ELSIF pg_catalog.current_database()='postgres' THEN
+   IF p_operador_id IS DISTINCT FROM 'd896cc0c-31e4-4ef7-8fa4-13d15f02dd2a'::uuid
+     OR NOT EXISTS(
        SELECT 1 FROM auth.users u
        WHERE u.id=p_operador_id AND u.email='pedrinhossiqueira12@gmail.com'
          AND u.email_confirmed_at IS NOT NULL
-     ))
- ) THEN RETURN pg_catalog.jsonb_build_object('ok',false,'http_status',403,'mensagem','Administrador nao autorizado.'); END IF;
+     )
+   THEN RETURN pg_catalog.jsonb_build_object('ok',false,'http_status',403,'mensagem','Administrador nao autorizado.'); END IF;
+ ELSE
+   RETURN pg_catalog.jsonb_build_object('ok',false,'http_status',403,'mensagem','Banco nao autorizado.');
+ END IF;
  IF p_ocorrencia_id IS NULL OR p_decisao IS DISTINCT FROM 'cancelamento_legitimo'
     OR p_ficticio_sem_recebimento IS DISTINCT FROM true
     OR pg_catalog.char_length(pg_catalog.btrim(coalesce(p_motivo,''))) < 15
