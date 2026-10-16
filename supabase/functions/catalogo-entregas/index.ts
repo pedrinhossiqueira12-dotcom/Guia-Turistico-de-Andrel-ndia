@@ -12,6 +12,8 @@ const COB06_QA_CANCEL_ENABLED = Deno.env.get("COB06_QA_CANCELAMENTO_HABILITADO")
 // O SQL ainda exige revisao administrativa e todos os guardas financeiros.
 const COB06_QA_STAGING_URL = "https://jbttwihctuibchhcyqtl.supabase.co";
 const COB06_QA_PEDIDO_ID = "a4ca7c4e-465f-4342-ae18-5c7eea1dec15";
+// Id Auth REAL e confirmado no projeto STAGING; nao concede poderes admin globais.
+const COB06_QA_STAGING_REVISOR_ID = "d896cc0c-31e4-4ef7-8fa4-13d15f02dd2a";
 const COB06_QA_COMERCIO_ID = "asaas-cob02";
 const HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -175,7 +177,7 @@ async function run(userId: string, body: Record<string, unknown>) {
   if (action === "cancelar_retirada_ficticia_qa") {
     // O botao nao existe no produto; a operacao fica impossivel por padrao.
     // JWT validado na entrada + whitelist de projeto, pedido e comercio.
-    if (userId !== ADMIN_USER_ID) throw new HttpError("Somente a administração pode revisar este teste.", 403);
+    if (userId !== COB06_QA_STAGING_REVISOR_ID) throw new HttpError("Somente o revisor autorizado do STAGING pode revisar este teste.", 403);
     if (!COB06_QA_CANCEL_ENABLED || SUPABASE_URL !== COB06_QA_STAGING_URL)
       throw new HttpError("Cancelamento de homologação desabilitado.", 403);
     const pedidoId = uuid(body.pedido_id);
