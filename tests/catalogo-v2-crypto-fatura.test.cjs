@@ -25,7 +25,8 @@ function delivery(actor, result={ok:true}, key=KEY) {
       return q;
     }};
   const context={...c,Request,Response,createClient:()=>db,console:{error(){}},Deno:{env:{get:name=>name==='MP_OAUTH_ENCRYPTION_KEY'?key:''},serve:fn=>{handler=fn;}}};
-  vm.runInNewContext(stripTypeScriptTypes(fs.readFileSync('supabase/functions/catalogo-entregas/index.ts','utf8').replace(/^import[^;]+;\s*/gm,'')),context);
+  const conflictHelper=stripTypeScriptTypes(fs.readFileSync('supabase/functions/_shared/catalogo-competencia-conflito.ts','utf8')).replace(/^export\s+/gm,'');
+  vm.runInNewContext(conflictHelper+'\n'+stripTypeScriptTypes(fs.readFileSync('supabase/functions/catalogo-entregas/index.ts','utf8').replace(/^import[^;]+;\s*/gm,'')),context);
   return {handler,calls};
 }
 function req(body) { return new Request('https://example.invalid/functions/v1/catalogo-entregas',{method:'POST',headers:{authorization:'Bearer QA-token','content-type':'application/json'},body:JSON.stringify(body)}); }
