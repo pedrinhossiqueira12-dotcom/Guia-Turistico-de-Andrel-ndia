@@ -55,6 +55,26 @@ Evidência CI [38783258331](https://github.com/pedrinhossiqueira12-dotcom/Guia-T
 
 ## Contrato técnico que precisa ser implementado e testado
 
+### Preparação administrativa integrada — candidato da PR (17/10/2026)
+
+A Edge `catalogo-asaas-financeiro` contém a ação candidata
+`preparar_acumulo_sandbox_admin`, exclusivamente para a loja fictícia
+`asaas-cob02`, com sessão administrativa validada, ambiente `sandbox` e a
+flag independente `ASAAS_COB06_PREPARACAO_ADMIN_ENABLED=true`. A flag é
+**OFF por padrão** e não foi configurada em nenhum projeto nesta etapa.
+
+A ação encadeia pré-visualização, reserva contábil, conferência de origens e
+reserva de referência imutável. Nunca chama Asaas, não cria cobrança e devolve
+`pode_emitir_pix=false`, `pode_quitar=false`, `pode_liberar_motoboy=false` e
+`hold_obrigatorio=true`. Uma falha após a reserva exige consultar o estado
+existente; não se recupera criando um segundo lote ou emitindo Pix.
+
+Os três contratos Node em `tests/catalogo-asaas-acumulo-preparacao-admin.test.cjs`
+verificam a identidade administrativa, ambiente e loja QA, sequência das RPCs e
+ausência de chamada bancária. **Nenhum deploy, ativação de flag ou pagamento foi
+feito**. Essa preparação não substitui GET bancário independente, autorização
+durável de tentativa, liquidação/estorno multicompetências ou homologação E2E.
+
 1. Registrar vínculo durável e único entre fechamento(s) de origem e cobrança consolidada de destino, sem modificar os totais históricos originais; impedir que uma competência já emitida/paga/reservada seja acumulada novamente.
 2. Usar bloqueio transacional por comércio e conferir todas as fontes para prevenir dois agrupamentos concorrentes ou dois POSTs Pix após timeout. Cada cobrança deve ter referência externa imutável.
 3. Preservar os snapshots `catalogo_fatura_componentes_v2` e demonstrar que a soma das parcelas financeiras vinculadas corresponde exatamente à cobrança. Não usar apenas a soma de `total_comissao_centavos` sem vínculos.

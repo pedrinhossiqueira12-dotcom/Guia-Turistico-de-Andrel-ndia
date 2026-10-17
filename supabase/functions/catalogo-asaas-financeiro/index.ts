@@ -27,6 +27,9 @@ const PRODUCTION_BILLING_APPROVED = Deno.env.get("ASAAS_PRODUCTION_BILLING_APPRO
 // Somente auditoria GET no Sandbox; independente das flags de emissão e saque.
 const COB06_GET_ADMIN_READONLY_ON = Deno.env.get("ASAAS_COB06_GET_ADMIN_READONLY_ENABLED") === "true";
 const COB06_OBSERVACAO_ADMIN_ON = Deno.env.get("ASAAS_COB06_OBSERVACAO_ADMIN_ENABLED") === "true";
+// Prepara apenas o livro contabil de um comercio ficticio no Sandbox.
+// Nao autoriza POST /payments, baixa, credito ou transferencias.
+const COB06_PREPARACAO_ADMIN_ON = Deno.env.get("ASAAS_COB06_PREPARACAO_ADMIN_ENABLED") === "true";
 const PAYOUTS_ON = Deno.env.get("ASAAS_PAYOUTS_ENABLED") === "true";
 const ENVIRONMENT = Deno.env.get("ASAAS_ENVIRONMENT") === "production" ? "production" : "sandbox";
 const API_BASE = ENVIRONMENT === "production" ? "https://api.asaas.com/v3" : "https://api-sandbox.asaas.com/v3";
@@ -78,6 +81,52 @@ async function rpc(name:string,args:Record<string,unknown>){
  check(data?.ok!==false,data?.mensagem||"Operação recusada.");
  return data;
 }
+// COB-06: liga preflight, reserva contabil e referencia inerte no backend.
+// Escopo propositalmente limitado ao comercio QA; flag OFF por padrao.
+// Em erro parcial, a reserva SQL e preservada para consulta e reconciliacao;
+// nunca criar outro lote nem tentar POST Pix como recuperacao.
+async function prepararAcumuloSandboxAdmin(uid:string,body:Record<string,unknown>){
+ if(uid!==ADMIN_USER_ID)throw new Failure("Acesso restrito à administração.",403);
+ if(ENVIRONMENT!=="sandbox"||!COB06_PREPARACAO_ADMIN_ON)
+  throw new Failure("Preparação de acúmulo COB-06 desabilitada.",503);
+ if(body.comercio_id!=="asaas-cob02")
+  throw new Failure("Somente o comércio fictício COB-06 é permitido.",400);
+ const corte=body.competencia_corte;
+ if(typeof corte!=="string"||!/^\d{4}-(?:0[1-9]|1[0-2])-01$/.test(corte))
+  throw new Failure("Competência de corte inválida.",400);
+ const prev=await rpc("catalogo_asaas_previsualizar_acumulo",{
+  p_comercio:"asaas-cob02",p_competencia_corte:corte});
+ const total=Number(prev?.total_centavos);
+ if(prev?.pronto_para_preparar!==true||
+    !Number.isSafeInteger(total)||total<500||total>2147483647||
+    !Number.isSafeInteger(Number(prev?.quantidade_faturas))||
+    Number(prev.quantidade_faturas)<2||prev?.snapshots_inconsistentes!==0)
+  throw new Failure("Acúmulo sem competências elegíveis ou snapshot íntegro. HOLD.",409);
+ const reservado=await rpc("catalogo_asaas_reservar_acumulo",{
+  p_comercio:"asaas-cob02",p_competencia_corte:corte});
+ const lote=reservado?.lote_id;
+ if(typeof lote!=="string"||
+    !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(lote)||
+    Number(reservado?.total_centavos)!==total||reservado?.pix_emitido!==false)
+  throw new Failure("Reserva contábil inconclusiva. Consultar antes de tentar novamente.",503);
+ const conferencia=await rpc("catalogo_asaas_conferir_conciliacao_acumulo",{p_lote:lote});
+ if(conferencia?.integridade_contabil_ok!==true||
+    Number(conferencia?.valor_fontes_centavos)!==total||
+    conferencia?.pode_emitir_pix!==false||conferencia?.pode_quitar!==false||
+    conferencia?.pode_liberar_motoboy!==false)
+  throw new Failure("Origens acumuladas divergentes. HOLD.",409);
+ const referencia=await rpc("catalogo_asaas_reservar_referencia_acumulo",{p_lote:lote});
+ if(referencia?.referencia!=="guia-acumulo-"+lote||
+    Number(referencia?.valor_centavos)!==total||
+    referencia?.pode_emitir_pix!==false||referencia?.payment_id!==null)
+  throw new Failure("Referência bancária inerte inconsistente. HOLD.",409);
+ return respond({success:true,lote_id:lote,competencia_corte:corte,
+  total_centavos:total,quantidade_faturas:Number(prev.quantidade_faturas),
+  referencia:referencia.referencia,ja_reservado:reservado.ja_reservado===true,
+  pix_emitido:false,pode_emitir_pix:false,pode_quitar:false,
+  pode_liberar_motoboy:false,hold_obrigatorio:true});
+}
+
 // COB-06: prova remota somente leitura de um lote JA observado.
 // Nenhum identificador bancario, cliente, referencia ou valor vem do navegador.
 // Candidatos 03-07 ainda nao estao instalados em STAGING/PROD: manter a flag OFF.
@@ -2079,6 +2128,7 @@ Deno.serve(async (request:Request)=>{
    case "listar_encerramentos_admin":return await listarEncerramentosAdmin(user.id);
    case "finalizar_encerramento_admin":return await finalizarEncerramentoAdmin(user.id,body);
    case "diagnosticar_faturas_sandbox_admin":return await diagnosticarFaturasSandboxAdmin(user.id);
+   case "preparar_acumulo_sandbox_admin":return await prepararAcumuloSandboxAdmin(user.id,body);
    case "observar_primeiro_acumulo_sandbox_admin":return await observarPrimeiroAcumuloSandboxAdmin(user.id,body);
    case "conferir_acumulo_sandbox_admin":return await conferirAcumuloSandboxAdmin(user.id,body);
    case "registrar_estado_acumulo_sandbox_admin":return await conferirAcumuloSandboxAdmin(user.id,body,true);
