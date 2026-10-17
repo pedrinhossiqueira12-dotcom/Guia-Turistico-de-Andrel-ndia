@@ -34,7 +34,10 @@ function cenario(opts={}){
  let publicState=opts.publicState||"ativo";
  let finalState=opts.finalState||"deletado";
  let tombstone=opts.tombstone||"arquivado";
- let jsonState="ativo",putCount=0;
+ let jsonState=opts.alreadySynced?"deletado":"ativo",putCount=0;
+ let jsonImagem=opts.alreadySynced?"":"foto";
+ let jsonImagens=opts.alreadySynced?[]:["foto"];
+ let shaVersao=1;
  const db={
   auth:{async getUser(token){
     calls.push("auth.getUser:"+token);
@@ -50,7 +53,8 @@ function cenario(opts={}){
     eq(){return query},
     async maybeSingle(){
      calls.push("db.read:"+table+":"+selected);
-     if(opts.dbUnavailable===table)return {data:null,error:{message:"Mock database failure"}};
+     if(opts.dbUnavailable===table || (opts.failConfirmedRead&&table==="comercios_publicados"&&selected==="status"))
+      return {data:null,error:{message:"Mock database failure"}};
      if(table==="cadastros_comercios")return {data:{local_id:"loja-mock",usuario_id:owner},error:null};
      if(table==="comercios_publicados")return {data:{local_id:"loja-mock",status:selected==="status"?finalState:publicState},error:null};
      if(table==="catalogos")return {data:opts.noCatalog?null:{comercio_id:"loja-mock",proprietario_id:owner},error:null};
@@ -79,8 +83,23 @@ function cenario(opts={}){
  Deno:{env:{get:n=>n==="WHATSAPP_APP_SECRET"?(opts.appSecret||""):""}},T:{"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"authorization,content-type"},
  F:"token-de-verificacao-local",Request,Response,URL,console:{log(){},error(){}},
  u:v=>v==null?"":String(v).trim(),
- z:async()=>{calls.push("github:get");return {comercios:[{id:"loja-mock",nome:"Loja",status:jsonState,imagem:"foto",imagens:["foto"]}],sha:"mock-sha"}},
- b:async()=>{calls.push("github:put");if(opts.githubFailure)throw Error("GitHub offline");jsonState="deletado";putCount++},
+ z:async()=>{
+  calls.push("github:get");
+  if(opts.githubGetFailure)throw Error("GitHub GET offline");
+  return {comercios:opts.githubMissing?[]:[{id:"loja-mock",nome:"Loja",
+    status:jsonState,imagem:jsonImagem,imagens:[...jsonImagens],destaque:false}],sha:"mock-sha-"+shaVersao};
+ },
+ b:async(_path,conteudo,sha)=>{
+  calls.push("github:put");
+  if(opts.githubFailure)throw Error("GitHub PUT offline");
+  if(opts.githubConflict){opts.githubConflict=false;shaVersao++;throw Error("GitHub SHA conflict 409");}
+  if(sha!=="mock-sha-"+shaVersao)throw Error("GitHub SHA stale 409");
+  const row=JSON.parse(conteudo).find(entry=>entry.id==="loja-mock");
+  if(!row)throw Error("GitHub file missing target");
+  jsonState=row.status;jsonImagem=row.imagem;jsonImagens=[...row.imagens];
+  putCount++;shaVersao++;
+  if(opts.timeoutAfterCommit){opts.timeoutAfterCommit=false;throw Error("Network timeout after GitHub commit");}
+ },
  S:"DATA/comercios.json"};
  // Para os handlers nao exercitados: as funcoes precisam existir somente quando chamadas.
  for(const n of ["me","fe","he","ge","_e","ve","Se","qe","re","be","Ee","ze","Ie","Te"]){
@@ -101,7 +120,11 @@ function cenario(opts={}){
  }
  return {call,request,raw:ctx.http,safe:ctx.safeHttp,calls,owner,admin,
   get putCount(){return putCount},get jsonState(){return jsonState},
-  setGithubFailure(v){opts.githubFailure=v}};
+  get jsonImage(){return jsonImagem},get jsonImages(){return [...jsonImagens]},
+  get shaVersao(){return shaVersao},
+  setGithubFailure(v){opts.githubFailure=v},
+  setGithubGetFailure(v){opts.githubGetFailure=v},
+  setFailConfirmedRead(v){opts.failConfirmedRead=v}};
 }
 const noWrites=c=>assert.equal(c.calls.filter(x=>x==="github:put").length,0);
 test("HTTP real: rejeita dono anonimo e token invalido; nao toca banco financeiro",async()=>{
@@ -225,4 +248,77 @@ test("HTTP real: excecao inesperada nao revela detalhes internos ao solicitante"
   assert.ok(!JSON.stringify(body).includes("Unexpected handler"));
   assert.ok(!JSON.stringify(body).includes("NAO_EXIBIR"));
   noWrites(c);
+});
+
+test("HTTP recuperação: falha GitHub GET depois de RPC confirmada permite repetição",async()=>{
+ const c=cenario({debtClear:true,githubGetFailure:true});
+ const first=await c.call("excluir_comercio","admin-jwt");
+ assert.equal(first.status,503);
+ assert.equal(first.data.arquivado,true);
+ assert.equal(first.data.pendente_sincronizacao,true);
+ assert.equal(c.putCount,0);
+ c.setGithubGetFailure(false);
+ const again=await c.call("excluir_comercio","admin-jwt");
+ assert.equal(again.status,200);
+ assert.equal(c.putCount,1);
+ assert.equal(c.jsonState,"deletado");
+ assert.equal(c.jsonImage,"");
+ assert.deepEqual(c.jsonImages,[]);
+});
+test("HTTP recuperação: timeout depois do PUT confirmado não grava duas vezes",async()=>{
+ const c=cenario({debtClear:true,timeoutAfterCommit:true});
+ const first=await c.call("excluir_comercio","admin-jwt");
+ assert.equal(first.status,503);
+ assert.equal(first.data.pendente_sincronizacao,true);
+ assert.equal(c.putCount,1);
+ assert.equal(c.jsonState,"deletado");
+ const second=await c.call("excluir_comercio","admin-jwt");
+ assert.equal(second.status,200);
+ assert.equal(c.putCount,1);
+ assert.equal(c.calls.filter(x=>x==="github:put").length,1);
+});
+test("HTTP recuperação: conflito SHA GitHub permite releitura e escrita no novo SHA",async()=>{
+ const c=cenario({debtClear:true,githubConflict:true});
+ const first=await c.call("excluir_comercio","admin-jwt");
+ assert.equal(first.status,503);
+ assert.equal(first.data.pendente_sincronizacao,true);
+ assert.equal(c.putCount,0);
+ assert.equal(c.shaVersao,2);
+ const next=await c.call("excluir_comercio","admin-jwt");
+ assert.equal(next.status,200);
+ assert.equal(c.putCount,1);
+ assert.equal(c.shaVersao,3);
+});
+test("HTTP recuperação: vitrine já sincronizada retorna 200 sem PUT redundante",async()=>{
+ const c=cenario({debtClear:true,alreadySynced:true});
+ const r=await c.call("excluir_comercio","admin-jwt");
+ assert.equal(r.status,200);
+ assert.equal(r.data.arquivado,true);
+ assert.equal(c.putCount,0);
+ assert.equal(c.calls.filter(x=>x==="github:get").length,1);
+});
+test("HTTP recuperação: arquivo sem comércio nunca cria cadastro substituto",async()=>{
+ const c=cenario({debtClear:true,githubMissing:true});
+ const r=await c.call("excluir_comercio","admin-jwt");
+ assert.equal(r.status,503);
+ assert.equal(r.data.pendente_sincronizacao,true);
+ noWrites(c);
+});
+test("HTTP recuperação: falha de confirmação SQL impede consulta e escrita GitHub",async()=>{
+ const c=cenario({debtClear:true,failConfirmedRead:true});
+ const first=await c.call("excluir_comercio","admin-jwt");
+ assert.equal(first.status,503);
+ assert.equal(first.data.pendente_sincronizacao,true);
+ assert.equal(c.calls.filter(x=>x.startsWith("github:")).length,0);
+ c.setFailConfirmedRead(false);
+ const second=await c.call("excluir_comercio","admin-jwt");
+ assert.equal(second.status,200);
+ assert.equal(c.putCount,1);
+});
+test("HTTP recuperação: erro da RPC financeira nunca tenta atualizar vitrine",async()=>{
+ const c=cenario({debtClear:true,rpcFailure:true});
+ const result=await c.call("excluir_comercio","admin-jwt");
+ assert.equal(result.status,503);
+ assert.equal(result.data.arquivado,false);
+ assert.equal(c.calls.filter(x=>x.startsWith("github:")).length,0);
 });
