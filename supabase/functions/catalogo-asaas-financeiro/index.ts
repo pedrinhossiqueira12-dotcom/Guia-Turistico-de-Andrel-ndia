@@ -8,6 +8,7 @@ import { encontrarIdPagamentoAcumuloSandboxPorReferencia } from "../_shared/cata
 import { observarPagamentoAcumuloSomenteGet } from "../_shared/catalogo-asaas-acumulo-get-verificado-inerte.ts";
 import { auditarDuplicidadeAcumuloSomenteGet } from "../_shared/catalogo-asaas-acumulo-auditoria-duplicidade-inerte.ts";
 import { retomarPreparacaoAcumuloInerte } from "../_shared/catalogo-asaas-acumulo-retomada-inerte.ts";
+import { montarAuditoriaBaixaAcumuloInerte } from "../_shared/catalogo-asaas-acumulo-auditoria-baixa-inerte.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const BUNDLE = Deno.env.get("SUPABASE_SECRET_KEYS") || "";
@@ -34,6 +35,8 @@ const COB06_OBSERVACAO_ADMIN_ON = Deno.env.get("ASAAS_COB06_OBSERVACAO_ADMIN_ENA
 const COB06_PREPARACAO_ADMIN_ON = Deno.env.get("ASAAS_COB06_PREPARACAO_ADMIN_ENABLED") === "true";
 // Auditoria pontual apenas GET, separada da preparacao e de qualquer POST.
 const COB06_DUPLICIDADE_ADMIN_ON = Deno.env.get("ASAAS_COB06_DUPLICIDADE_ADMIN_ENABLED") === "true";
+// Relatorio multi-competencias somente leitura, independente de todas as flags de Pix.
+const COB06_BAIXA_AUDITORIA_ADMIN_ON = Deno.env.get("ASAAS_COB06_BAIXA_AUDITORIA_ADMIN_ENABLED") === "true";
 const PAYOUTS_ON = Deno.env.get("ASAAS_PAYOUTS_ENABLED") === "true";
 const ENVIRONMENT = Deno.env.get("ASAAS_ENVIRONMENT") === "production" ? "production" : "sandbox";
 const API_BASE = ENVIRONMENT === "production" ? "https://api.asaas.com/v3" : "https://api-sandbox.asaas.com/v3";
@@ -355,6 +358,58 @@ async function conferirAcumuloSandboxAdmin(uid:string,body:Record<string,unknown
   recibo_local_pos_quitacao:reciboLocalPosQuitacao,
   pode_emitir_pix:false,pode_quitar:false,pode_estornar:false,
   pode_liberar_motoboy:false,hold_obrigatorio:true,registro});
+}
+// Diagnostico unico: fontes de cada competencia + diario local + GET bancario
+// autenticado por ID. NAO executa RPC de quitacao/estorno, nao grava evento e
+// nao pode ser usado como autorizacao financeira ou como comprovante autonomo.
+async function auditarBaixaMulticompetenciaSandboxAdmin(uid:string,body:Record<string,unknown>){
+ if(uid!==ADMIN_USER_ID)throw new Failure("Acesso restrito à administração.",403);
+ if(ENVIRONMENT!=="sandbox"||!COB06_GET_ADMIN_READONLY_ON||!COB06_BAIXA_AUDITORIA_ADMIN_ON)
+  throw new Failure("Auditoria de baixa COB-06 desabilitada.",503);
+ if(!ASAAS_TOKEN)throw new Failure("Consulta Sandbox sem credencial.",503);
+ const lote=value(body.lote_id,70);
+ if(!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(lote))
+  throw new Failure("Lote inválido.",400);
+ const [referencia,observacao,loteAtual,cliente]=await Promise.all([
+  db.from("catalogo_asaas_acumulo_referencias")
+   .select("lote_id,comercio_id,referencia,valor_centavos,estado,payment_id,pode_emitir_pix")
+   .eq("lote_id",lote).maybeSingle(),
+  db.from("catalogo_asaas_acumulo_observacoes")
+   .select("lote_id,payment_id,customer_id,referencia,valor_centavos,pode_quitar,pode_liberar_motoboy")
+   .eq("lote_id",lote).maybeSingle(),
+  db.from("catalogo_asaas_acumulo_lotes")
+   .select("id,comercio_id,total_centavos,estado")
+   .eq("id",lote).maybeSingle(),
+  db.from("catalogo_asaas_clientes")
+   .select("cliente_id").eq("comercio_id","asaas-cob02").maybeSingle(),
+ ]);
+ const r=referencia.data,o=observacao.data,l=loteAtual.data,c=cliente.data;
+ const total=Number(r?.valor_centavos);
+ if(referencia.error||observacao.error||loteAtual.error||cliente.error||
+  !r||!o||!l||!c||r.lote_id!==lote||o.lote_id!==lote||l.id!==lote||
+  r.comercio_id!=="asaas-cob02"||l.comercio_id!=="asaas-cob02"||
+  r.estado!=="reservado"||r.referencia!=="guia-acumulo-"+lote||
+  o.referencia!==r.referencia||
+  r.payment_id!==null||r.pode_emitir_pix!==false||
+  o.pode_quitar!==false||o.pode_liberar_motoboy!==false||
+  o.customer_id!==c.cliente_id||
+  Number(o.valor_centavos)!==total||Number(l.total_centavos)!==total||
+  !Number.isSafeInteger(total)||total<500||total>2147483647||
+  !["preparado","emitido","pago","estornado","contestado"].includes(String(l.estado)))
+  throw new Failure("Livro multicompetências inconsistente. HOLD.",409);
+ const [apuracao,projecao]=await Promise.all([
+  rpc("catalogo_asaas_apurar_estados_acumulo_inerte",{p_lote:lote}),
+  rpc("catalogo_asaas_projetar_baixa_acumulo_inerte",{p_lote:lote}),
+ ]);
+ const esperado={loteId:lote,referencia:r.referencia,
+  clienteId:c.cliente_id,valorCentavos:total};
+ const get=await conferirPagamentoAcumuloPorGet(esperado,o.payment_id,
+  (id)=>consultarPagamentoAcumuloSandboxGet(id,ASAAS_TOKEN));
+ try{
+  return respond(montarAuditoriaBaixaAcumuloInerte(esperado,get,apuracao,projecao));
+ }catch{
+  throw new Failure("Relatório de competências divergente. HOLD.",409);
+ }
 }
 // GET paginado traz ate 100 transferencias por requisicao. Nao confiar no
 // Content-Length: validar tambem os bytes efetivamente recebidos. Apenas
@@ -2219,6 +2274,7 @@ Deno.serve(async (request:Request)=>{
    case "observar_primeiro_acumulo_sandbox_admin":return await observarPrimeiroAcumuloSandboxAdmin(user.id,body);
    case "conferir_acumulo_sandbox_admin":return await conferirAcumuloSandboxAdmin(user.id,body);
    case "registrar_estado_acumulo_sandbox_admin":return await conferirAcumuloSandboxAdmin(user.id,body,true);
+   case "auditar_baixa_multicompetencia_sandbox_admin":return await auditarBaixaMulticompetenciaSandboxAdmin(user.id,body);
    case "confirmar_fatura_sandbox_admin":return await confirmarFaturaSandboxAdmin(user.id,body);
    case "diagnosticar_webhooks_asaas_admin":return await diagnosticarWebhooksAsaasAdmin(user.id);
    case "reprocessar_webhooks_asaas_admin":return await reprocessarWebhooksAsaasAdmin(user.id);

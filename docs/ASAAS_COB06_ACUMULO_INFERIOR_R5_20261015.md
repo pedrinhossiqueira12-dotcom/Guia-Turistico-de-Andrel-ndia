@@ -150,6 +150,30 @@ fictícias de CI e nega alvos remotos; o SQL 13 continua impossível de aplicar
 em STAGING/produção. Uma prova E2E real do Asaas Sandbox, implantação e
 autorização de emissão ainda são etapas separadas e pendentes.
 
+### Auditoria de baixa por competência — relatório administrativo candidato (17/10/2026)
+
+Adicionada a ação `auditar_baixa_multicompetencia_sandbox_admin` à Edge
+`catalogo-asaas-financeiro`, com flag específica
+`ASAAS_COB06_BAIXA_AUDITORIA_ADMIN_ENABLED=true` **OFF por padrão**. Exige
+sessão administrativa, `ASAAS_COB06_GET_ADMIN_READONLY_ENABLED`, ambiente
+Sandbox e lote da loja QA `asaas-cob02`. O único dado financeiro aceito do
+navegador é o identificador do lote; referência, ID bancário, cliente e valor
+são obtidos do livro privado.
+
+A ação combina as RPCs **somente leitura** 08/09 (diário e projeção de baixa)
+com GET Asaas autenticado por ID. Valida a divisão das origens por competências,
+seus valores exatos e as parcelas de plataforma/logística, sem aceitar fontes
+repetidas, soma divergente ou permissão positiva nas RPCs. Retorna estados e
+valores por competência para inspeção administrativa, mas **sempre**
+`pode_emitir_pix=false`, `pode_quitar=false`, `pode_estornar=false`,
+`pode_liberar_motoboy=false` e `hold_obrigatorio=true`.
+
+Os testes HTTP isolados simulam R$1+R$4, `RECEIVED`, `REFUNDED`, origem
+alterada, RPC inesperadamente autorizadora, observação ausente e acesso de
+usuário não administrador. **Não há INSERT/UPDATE financeiro, registro de
+evento, POST bancário ou saque** nessa rota. Os SQL 08/09 seguem candidatos
+não aplicados em STAGING/produção e o relatório não autoriza liberação.
+
 1. Registrar vínculo durável e único entre fechamento(s) de origem e cobrança consolidada de destino, sem modificar os totais históricos originais; impedir que uma competência já emitida/paga/reservada seja acumulada novamente.
 2. Usar bloqueio transacional por comércio e conferir todas as fontes para prevenir dois agrupamentos concorrentes ou dois POSTs Pix após timeout. Cada cobrança deve ter referência externa imutável.
 3. Preservar os snapshots `catalogo_fatura_componentes_v2` e demonstrar que a soma das parcelas financeiras vinculadas corresponde exatamente à cobrança. Não usar apenas a soma de `total_comissao_centavos` sem vínculos.

@@ -42,3 +42,24 @@ test('COB-06: preparação nunca chama Asaas nem habilita dinheiro', () => {
   assert.match(preparar, /pix_emitido:false,pode_emitir_pix:false,pode_quitar:false/);
   assert.match(preparar, /pode_liberar_motoboy:false,hold_obrigatorio:true/);
 });
+
+test('COB-06: auditoria de baixa multicompetências exige flag OFF e apenas GET bancário', () => {
+  const start = edge.indexOf('async function auditarBaixaMulticompetenciaSandboxAdmin(');
+  const end = edge.indexOf('// GET paginado traz', start);
+  assert.ok(start > 0 && end > start, 'rota de auditoria presente');
+  const audit = edge.slice(start, end);
+  const pure = fs.readFileSync(path.join(__dirname, '..', 'supabase', 'functions',
+    '_shared', 'catalogo-asaas-acumulo-auditoria-baixa-inerte.ts'), 'utf8');
+  assert.match(edge, /Deno\.env\.get\("ASAAS_COB06_BAIXA_AUDITORIA_ADMIN_ENABLED"\) === "true"/);
+  assert.match(audit, /uid!==ADMIN_USER_ID/);
+  assert.match(audit, /ENVIRONMENT!=="sandbox"\|\|!COB06_GET_ADMIN_READONLY_ON\|\|!COB06_BAIXA_AUDITORIA_ADMIN_ON/);
+  assert.match(audit, /"asaas-cob02"/);
+  assert.match(audit, /catalogo_asaas_apurar_estados_acumulo_inerte/);
+  assert.match(audit, /catalogo_asaas_projetar_baixa_acumulo_inerte/);
+  assert.match(audit, /conferirPagamentoAcumuloPorGet/);
+  assert.match(audit, /consultarPagamentoAcumuloSandboxGet/);
+  assert.doesNotMatch(audit, /catalogo_asaas_quitar_lote_atomico_ci|catalogo_asaas_suspender_lote_atomico_ci|postarPix|\/payments|transferir/);
+  assert.match(pure, /pode_emitir_pix: false, pode_quitar: false/);
+  assert.match(pure, /pode_estornar: false, pode_liberar_motoboy: false/);
+  assert.match(edge, /case "auditar_baixa_multicompetencia_sandbox_admin":return await auditarBaixaMulticompetenciaSandboxAdmin\(user\.id,body\)/);
+});

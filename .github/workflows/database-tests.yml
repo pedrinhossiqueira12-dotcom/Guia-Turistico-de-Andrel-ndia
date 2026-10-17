@@ -117,6 +117,8 @@ jobs:
           deno check --node-modules-dir=auto supabase/functions/whatsapp-bot/index.ts
           deno check supabase/functions/_shared/catalogo-asaas-acumulo-get-verificado-inerte.ts
           deno check supabase/functions/_shared/catalogo-asaas-acumulo-get-sandbox-inerte.ts
+          deno check supabase/functions/_shared/catalogo-asaas-acumulo-auditoria-baixa-inerte.ts
+          deno check supabase/functions/tests/catalogo-asaas-acumulo-auditoria-baixa-inerte.test.ts
           deno check supabase/functions/_shared/catalogo-asaas-acumulo-retomada-inerte.ts
           deno check supabase/functions/tests/catalogo-asaas-acumulo-get-verificado-inerte.test.ts
           deno check supabase/functions/tests/catalogo-asaas-acumulo-get-sandbox-inerte.test.ts
@@ -144,7 +146,7 @@ jobs:
         run: deno test --no-check --allow-read=supabase/functions supabase/functions/tests/catalogo-asaas-acumulo-get-verificado-inerte.test.ts supabase/functions/tests/catalogo-financeiro.test.ts supabase/functions/tests/catalogo-checkouts-contract.test.ts supabase/functions/tests/catalogo-seguranca-pagamentos.test.ts supabase/functions/tests/catalogo-webhook-identificacao.test.ts supabase/functions/tests/catalogo-fatura-provedor.test.ts supabase/functions/tests/catalogo-asaas-stepup-documental-ensaio.test.ts supabase/functions/tests/catalogo-asaas-gotrue-mfa-transporte-inerte.test.ts supabase/functions/tests/catalogo-asaas-jwt-sessao-assinada-ensaio.test.ts supabase/functions/tests/catalogo-asaas-gotrue-jwt-assinado-integracao-inerte.test.ts supabase/functions/tests/catalogo-asaas-mfa-orquestrador-prechallenge-inerte.test.ts supabase/functions/tests/catalogo-asaas-livro-owner-sql-inerte.test.ts supabase/functions/tests/catalogo-asaas-livro-ponte-nologin-inerte.test.ts supabase/functions/tests/catalogo-asaas-ponte-orquestrador-integracao-inerte.test.ts
 
       - name: Test COB06 Sandbox GET and interrupted preparation recovery without network
-        run: deno test --no-check supabase/functions/tests/catalogo-asaas-acumulo-get-sandbox-inerte.test.ts supabase/functions/tests/catalogo-asaas-acumulo-retomada-inerte.test.ts
+        run: deno test --no-check supabase/functions/tests/catalogo-asaas-acumulo-get-sandbox-inerte.test.ts supabase/functions/tests/catalogo-asaas-acumulo-retomada-inerte.test.ts supabase/functions/tests/catalogo-asaas-acumulo-auditoria-baixa-inerte.test.ts
       - name: Test COB06 administrative HTTP registration with provider and database mocks
         run: deno test --no-check --node-modules-dir=auto --allow-env --allow-read=supabase/functions supabase/functions/tests/catalogo-asaas-acumulo-registro-http-inerte.test.ts
       - name: Test COB06 isolated audit Edge fail-closed with no network

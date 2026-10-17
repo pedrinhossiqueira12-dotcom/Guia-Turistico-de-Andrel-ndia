@@ -30,6 +30,8 @@ let escritas = 0;
 let chaveAnterior = "";
 let eventoAnterior = 0;
 let proximoEvento = 20;
+let projecaoDivergente = false;
+let permissaoInesperada = false;
 const responder = (data: unknown, code = 200) => new Response(JSON.stringify(data), {
   status: code, headers: { "content-type": "application/json" },
 });
@@ -42,6 +44,7 @@ function reiniciar() {
   temObservacao = true; listaDuplicada = false; listaVazia = false;
   listaPaginada = false; respostaRemotaOutraRef = false;
   chaveAnterior = ""; eventoAnterior = 0; proximoEvento = 20;
+  projecaoDivergente = false; permissaoInesperada = false;
 }
 const originalFetch = globalThis.fetch;
 globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
@@ -77,7 +80,7 @@ globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise
       app_metadata: {}, user_metadata: {} });
   if (url.pathname.startsWith("/rest/v1/catalogo_asaas_acumulo_referencias") && method === "GET") {
     getsBanco++;
-    return responder({ lote_id: LOTE, comercio_id: "comercio-ci", referencia: REF,
+    return responder({ lote_id: LOTE, comercio_id: "asaas-cob02", referencia: REF,
       valor_centavos: 500, estado: "reservado", payment_id: null, pode_emitir_pix: false });
   }
   if (url.pathname.startsWith("/rest/v1/catalogo_asaas_acumulo_observacoes") && method === "GET") {
@@ -95,7 +98,7 @@ globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise
   }
   if (url.pathname.startsWith("/rest/v1/catalogo_asaas_acumulo_lotes") && method === "GET") {
     getsBanco++;
-    return responder({ id: LOTE, comercio_id: "comercio-ci",
+    return responder({ id: LOTE, comercio_id: "asaas-cob02",
       total_centavos: 500, estado: estadoQuitacao });
   }
   if (url.pathname.startsWith("/rest/v1/catalogo_asaas_clientes") && method === "GET") {
@@ -105,6 +108,39 @@ globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise
   if (url.pathname === "/rest/v1/rpc/catalogo_asaas_conferir_conciliacao_acumulo" && method === "POST") {
     getsBanco++;
     return responder({ integridade_contabil_ok: !falhaPreflight, valor_fontes_centavos: 500 });
+  }
+  if (url.pathname === "/rest/v1/rpc/catalogo_asaas_apurar_estados_acumulo_inerte" && method === "POST") {
+    getsBanco++;
+    return responder({ ok: true, lote_id: LOTE, valor_centavos: 500,
+      integridade_contabil_ok: !falhaPreflight, identidade_local_ok: true,
+      exige_revisao: status === "REFUNDED",
+      classificacao: status === "REFUNDED" ? "reversao_ou_disputa_irreversivel_sem_analise"
+        : "recebimento_observado_pendente_de_prova_e_conciliacao",
+      prova_bancaria_autonoma: false,
+      pode_emitir_pix: false, pode_quitar: permissaoInesperada,
+      pode_estornar: false, pode_liberar_motoboy: false });
+  }
+  if (url.pathname === "/rest/v1/rpc/catalogo_asaas_projetar_baixa_acumulo_inerte" && method === "POST") {
+    getsBanco++;
+    return responder({ ok: true, lote_id: LOTE, valor_centavos: 500,
+      plataforma_centavos: 357, logistica_centavos: 143,
+      quantidade_competencias: 2, pedidos: 2, parcelas: 4,
+      parcelas_sem_credito_seguro: 0, parcelas_ja_liberadas: 0,
+      projecao_contabil_consistente: !falhaPreflight,
+      helper_legado_incompativel_sem_cobranca_individual: true,
+      origens: [
+        { fechamento_id: "11111111-2222-4333-8444-555555555551",
+          competencia: "2040-03-01", total_centavos: 100,
+          plataforma_centavos: 71, logistica_centavos: 29,
+          pedidos: 1, parcelas: 2, parcelas_sem_credito_seguro: 0,
+          parcelas_ja_liberadas: 0 },
+        { fechamento_id: "11111111-2222-4333-8444-555555555552",
+          competencia: "2040-04-01", total_centavos: projecaoDivergente ? 401 : 400,
+          plataforma_centavos: 286, logistica_centavos: 114,
+          pedidos: 1, parcelas: 2, parcelas_sem_credito_seguro: 0,
+          parcelas_ja_liberadas: 0 },
+      ], pode_emitir_pix: false, pode_quitar: false,
+      pode_estornar: false, pode_liberar_motoboy: false });
   }
   if (url.pathname === "/rest/v1/rpc/catalogo_asaas_registrar_observacao_acumulo" && method === "POST") {
     escritas++;
@@ -145,6 +181,7 @@ Deno.env.set("ASAAS_ENVIRONMENT", "sandbox");
 Deno.env.set("ASAAS_API_KEY", "ci-token-ficticio");
 Deno.env.set("ASAAS_COB06_GET_ADMIN_READONLY_ENABLED", "true");
 Deno.env.set("ASAAS_COB06_OBSERVACAO_ADMIN_ENABLED", "true");
+Deno.env.set("ASAAS_COB06_BAIXA_AUDITORIA_ADMIN_ENABLED", "true");
 Deno.env.set("ASAAS_BILLING_ENABLED", "false");
 Deno.env.set("ASAAS_PAYOUTS_ENABLED", "false");
 const serveAnterior = Deno.serve;
@@ -344,6 +381,53 @@ Deno.test("COB06 HTTP: apos quitacao, diario SQL recusa origem alterada sem baix
   assert(falhou.http >= 400 && falhou.body.success !== true &&
     getsAsaas === 1 && escritas === 1,
     "origem inconsistente foi aceita no diario posquitacao");
+});
+
+Deno.test("COB06 auditoria baixa HTTP: R$1 + R$4 e 4 parcelas somente GET/HOLD", async () => {
+  reiniciar(); status = "RECEIVED";
+  const r = await chamar("auditar_baixa_multicompetencia_sandbox_admin");
+  const competencias = r.body.competencias as Array<Record<string, unknown>>;
+  assert(r.http === 200 && r.body.success === true &&
+    r.body.valor_centavos === 500 && r.body.quantidade_competencias === 2 &&
+    r.body.plataforma_centavos === 357 && r.body.logistica_centavos === 143 &&
+    r.body.status_bancario_verificado === "RECEIVED" &&
+    competencias?.length === 2 && competencias[0].competencia === "2040-03-01" &&
+    competencias[0].total_centavos === 100 &&
+    competencias[1].competencia === "2040-04-01" &&
+    competencias[1].total_centavos === 400 &&
+    r.body.prova_bancaria_autonoma === false && r.body.hold_obrigatorio === true &&
+    r.body.pode_quitar === false && r.body.pode_estornar === false &&
+    r.body.pode_liberar_motoboy === false && r.body.pode_emitir_pix === false &&
+    getsAsaas === 1 && getsListaAsaas === 0 && escritas === 0,
+    "auditoria nao reconciliou competencias ou liberou dinheiro");
+});
+
+Deno.test("COB06 auditoria baixa HTTP: estorno remoto nao altera livros", async () => {
+  reiniciar(); status = "REFUNDED";
+  const r = await chamar("auditar_baixa_multicompetencia_sandbox_admin");
+  assert(r.http === 200 && r.body.status_bancario_verificado === "REFUNDED" &&
+    r.body.exige_revisao === true && r.body.pode_estornar === false &&
+    r.body.pode_quitar === false && r.body.hold_obrigatorio === true &&
+    escritas === 0, "GET de estorno liberou mutacao contábil");
+});
+
+Deno.test("COB06 auditoria baixa HTTP: divergencia, permissao ou intruso falham fechados", async () => {
+  reiniciar(); projecaoDivergente = true;
+  const total = await chamar("auditar_baixa_multicompetencia_sandbox_admin");
+  assert(total.http === 409 && total.body.success === false &&
+    getsAsaas === 1 && escritas === 0, "origens divergentes aceitas");
+  reiniciar(); permissaoInesperada = true;
+  const permissao = await chamar("auditar_baixa_multicompetencia_sandbox_admin");
+  assert(permissao.http === 409 && escritas === 0,
+    "RPC com permissao de pagamento aceita");
+  reiniciar(); temObservacao = false;
+  const semObservacao = await chamar("auditar_baixa_multicompetencia_sandbox_admin");
+  assert(semObservacao.http === 409 && getsAsaas === 0 && escritas === 0,
+    "GET realizado sem pagamento associado ao lote");
+  reiniciar(); usuario = OUTRO;
+  const intruso = await chamar("auditar_baixa_multicompetencia_sandbox_admin");
+  assert(intruso.http === 403 && getsAsaas === 0 && getsBanco === 0 && escritas === 0,
+    "nao-admin acessou livro ou provedor");
 });
 
 // Cada arquivo de teste roda em worker isolado; nenhuma chamada de rede real ocorreu.
