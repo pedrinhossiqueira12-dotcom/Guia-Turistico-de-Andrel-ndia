@@ -7,6 +7,7 @@ import { consultarPagamentoAcumuloSandboxGet } from "../_shared/catalogo-asaas-a
 import { encontrarIdPagamentoAcumuloSandboxPorReferencia } from "../_shared/catalogo-asaas-acumulo-get-sandbox-inerte.ts";
 import { observarPagamentoAcumuloSomenteGet } from "../_shared/catalogo-asaas-acumulo-get-verificado-inerte.ts";
 import { auditarDuplicidadeAcumuloSomenteGet } from "../_shared/catalogo-asaas-acumulo-auditoria-duplicidade-inerte.ts";
+import { retomarPreparacaoAcumuloInerte } from "../_shared/catalogo-asaas-acumulo-retomada-inerte.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const BUNDLE = Deno.env.get("SUPABASE_SECRET_KEYS") || "";
@@ -128,6 +129,33 @@ async function prepararAcumuloSandboxAdmin(uid:string,body:Record<string,unknown
   referencia:referencia.referencia,ja_reservado:reservado.ja_reservado===true,
   pix_emitido:false,pode_emitir_pix:false,pode_quitar:false,
   pode_liberar_motoboy:false,hold_obrigatorio:true});
+}
+
+// COB-06: apos timeout ou falha entre reservar lote e reservar referencia,
+// retomar o MESMO lote pelo corte. A previsualizacao inicial exclui fontes
+// reservadas, por isso ela nao serve para recuperacao idempotente.
+async function retomarPreparacaoAcumuloSandboxAdmin(uid:string,body:Record<string,unknown>){
+ if(uid!==ADMIN_USER_ID)throw new Failure("Acesso restrito à administração.",403);
+ if(ENVIRONMENT!=="sandbox"||!COB06_PREPARACAO_ADMIN_ON)
+  throw new Failure("Retomada de acúmulo COB-06 desabilitada.",503);
+ if(body.comercio_id!=="asaas-cob02")
+  throw new Failure("Somente o comércio fictício COB-06 é permitido.",400);
+ const corte=body.competencia_corte;
+ if(typeof corte!=="string"||!/^[0-9]{4}-(?:0[1-9]|1[0-2])-01$/.test(corte))
+  throw new Failure("Competência de corte inválida.",400);
+ const {data:lote,error}=await db.from("catalogo_asaas_acumulo_lotes")
+  .select("id,comercio_id,competencia_corte,total_centavos,estado")
+  .eq("comercio_id","asaas-cob02").eq("competencia_corte",corte).maybeSingle();
+ if(error||!lote)
+  throw new Failure("Nenhum lote reservado para retomar. Não criar outro automaticamente.",409);
+ try {
+  const retomada=await retomarPreparacaoAcumuloInerte(lote,corte,
+   (id)=>rpc("catalogo_asaas_conferir_conciliacao_acumulo",{p_lote:id}),
+   (id)=>rpc("catalogo_asaas_reservar_referencia_acumulo",{p_lote:id}));
+  return respond(retomada);
+ }catch{
+  throw new Failure("Retomada inconclusiva. Consultar o lote; não emitir Pix. HOLD.",409);
+ }
 }
 
 // Verifica a referencia de um lote QA contra o Asaas Sandbox sem mutacoes.
@@ -2186,6 +2214,7 @@ Deno.serve(async (request:Request)=>{
    case "finalizar_encerramento_admin":return await finalizarEncerramentoAdmin(user.id,body);
    case "diagnosticar_faturas_sandbox_admin":return await diagnosticarFaturasSandboxAdmin(user.id);
    case "preparar_acumulo_sandbox_admin":return await prepararAcumuloSandboxAdmin(user.id,body);
+   case "retomar_preparacao_acumulo_sandbox_admin":return await retomarPreparacaoAcumuloSandboxAdmin(user.id,body);
    case "auditar_duplicidade_acumulo_sandbox_admin":return await auditarDuplicidadeAcumuloSandboxAdmin(user.id,body);
    case "observar_primeiro_acumulo_sandbox_admin":return await observarPrimeiroAcumuloSandboxAdmin(user.id,body);
    case "conferir_acumulo_sandbox_admin":return await conferirAcumuloSandboxAdmin(user.id,body);

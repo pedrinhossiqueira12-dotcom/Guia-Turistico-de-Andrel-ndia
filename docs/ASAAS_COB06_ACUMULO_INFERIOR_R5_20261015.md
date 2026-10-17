@@ -75,6 +75,24 @@ ausência de chamada bancária. **Nenhum deploy, ativação de flag ou pagamento
 feito**. Essa preparação não substitui GET bancário independente, autorização
 durável de tentativa, liquidação/estorno multicompetências ou homologação E2E.
 
+#### Retomada idempotente da preparação — candidato (17/10/2026)
+
+Se o primeiro preparo sofreu timeout após gravar o lote, a pré-visualização
+normal pode deixar de enxergar as fontes já reservadas. Foi acrescentada a
+ação `retomar_preparacao_acumulo_sandbox_admin`, sob a **mesma flag
+administrativa OFF**, somente para `asaas-cob02` no Sandbox. Ela localiza o
+lote existente pela loja e competência de corte, exige estado `preparado`,
+reconfere todas as fontes/competências/componentes e usa a RPC idempotente de
+referência já existente. **Não cria segundo lote**, não repete reserva de
+origens, não procura autorização bancária e não envia cobrança. A operação
+retorna HOLD e campos financeiros sempre `false`, inclusive em nova execução.
+
+O ensaio Deno simula perda da resposta SQL após reservar uma referência e
+confirma que a retomada recupera a **mesma** referência. A ação requer os
+candidatos SQL 03–05 previamente instalados; **não está publicada nem ativada
+em STAGING ou produção**. Após retomada validada, a auditoria GET separada
+pode inspecionar a referência sem autorizar emissão.
+
 ### Auditoria de duplicidade por GET — candidato da PR (17/10/2026)
 
 Adicionada à Edge a ação `auditar_duplicidade_acumulo_sandbox_admin`, com
