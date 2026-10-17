@@ -21,7 +21,7 @@ test('botao COB06 verifica conta proprietaria de STAGING e confirma natureza fic
  assert.match(block,/cob06PedidoSolicitado\)\$\("qa-cob06-request"\)\.disabled=true/);
 });
 
-const admin=src.slice(src.indexOf('// COB-06 revisao final:'),src.indexOf('async function deliveryApi('));
+const admin=src.slice(src.indexOf('// COB-06 revisao final:'),src.indexOf('// COB-06: somente a sessao Auth real do administrador pode pedir reserva.'));
 
 test('revisor COB06 usa conta real e ocorrencia aberta unica, com duas confirmacoes',()=>{
  assert.match(src,/id="qa-cob06-review" hidden/);
