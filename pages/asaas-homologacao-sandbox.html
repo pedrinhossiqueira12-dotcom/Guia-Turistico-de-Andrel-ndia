@@ -92,6 +92,16 @@ pre{white-space:pre-wrap;word-break:break-all;padding:14px;background:#f3f5f1;bo
 <pre id="qa-cob06-encerramento-output" role="status">Verificação não executada.</pre>
 </section>
 
+<section id="qa-cob06-integracao" hidden>
+<h2>COB-06 · Conferir integração GitHub isolada (somente leitura)</h2>
+<p class="muted"><strong>STAGING · conta administrativa pedrinhossiqueira12@gmail.com.</strong> Os dois botões abaixo apenas verificam se as secrets estão presentes e se a branch isolada contém o comércio fictício. <strong>Não encerram comércio, não alteram GitHub e não movimentam Pix.</strong> Mantenha <code>COB06_ENCERRAMENTO_HTTP_QA_ENABLED=false</code>.</p>
+<div class="actions">
+<button type="button" class="secondary" id="qa-cob06-integracao-config">1 · Verificar secrets e bloqueio</button>
+<button type="button" class="secondary" id="qa-cob06-integracao-repo">2 · Verificar GitHub QA</button>
+</div>
+<pre id="qa-cob06-integracao-output" role="status">Ainda não verificado. Clique primeiro no botão 1.</pre>
+</section>
+
 <section id="qa-delivery" hidden>
 <h2>COB-04 · Entrega V2 com motoboy (somente STAGING)</h2><p class="muted"><strong>Próxima ação:</strong> botão 7 para autorizar a conta de motoboy existente, depois botão 8 para criar UM pedido de entrega. Não confirme o pedido de retirada que ficou “pronto”.</p>
 <p class="muted">COB-04 (já homologado): produto R$100 gera R$7 de comissão. COB-06: produto QA R$40 gera R$2,80 (R$2 plataforma + R$0,80 motoboy). Fevereiro/2027 já foi faturado com R$2,80; o novo pedido aceito deve ir para março/2027. Somente após entrega confirmada, feche março e confira a prévia de R$5,60 acumulados em duas competências. Não emita Pix, não quite e não transfira valores neste ensaio.</p>
@@ -156,7 +166,7 @@ const pretty=data=>{const {pix,...publicResult}=data||{};return JSON.stringify(p
 async function refresh(){
  const {data}=await client.auth.getUser();
  const u=data?.user||null;
- $("billing").hidden=!u;$("qa-order").hidden=!u;$("qa-delivery").hidden=!u;$("qa-cob06").hidden=!u||u.email?.toLowerCase()!=="pedrinhossiqueira@gmail.com";$("qa-cob06-review").hidden=!u||u.email?.toLowerCase()!=="pedrinhossiqueira12@gmail.com";$("qa-cob06-acumulo").hidden=!u||u.id!=="d896cc0c-31e4-4ef7-8fa4-13d15f02dd2a"||u.email?.toLowerCase()!=="pedrinhossiqueira12@gmail.com";$("qa-cob06-encerramento").hidden=!u||u.id!=="d896cc0c-31e4-4ef7-8fa4-13d15f02dd2a"||u.email?.toLowerCase()!=="pedrinhossiqueira12@gmail.com";$("logout").hidden=!u;
+ $("billing").hidden=!u;$("qa-order").hidden=!u;$("qa-delivery").hidden=!u;$("qa-cob06").hidden=!u||u.email?.toLowerCase()!=="pedrinhossiqueira@gmail.com";$("qa-cob06-review").hidden=!u||u.email?.toLowerCase()!=="pedrinhossiqueira12@gmail.com";$("qa-cob06-acumulo").hidden=!u||u.id!=="d896cc0c-31e4-4ef7-8fa4-13d15f02dd2a"||u.email?.toLowerCase()!=="pedrinhossiqueira12@gmail.com";$("qa-cob06-encerramento").hidden=!u||u.id!=="d896cc0c-31e4-4ef7-8fa4-13d15f02dd2a"||u.email?.toLowerCase()!=="pedrinhossiqueira12@gmail.com";$("qa-cob06-integracao").hidden=!u||u.id!=="d896cc0c-31e4-4ef7-8fa4-13d15f02dd2a"||u.email?.toLowerCase()!=="pedrinhossiqueira12@gmail.com";$("logout").hidden=!u;
  $("login-form").hidden=!!u;
  $("session").textContent=u?"Autenticado no Sandbox: "+u.email:"Não autenticado.";
  $("uid").hidden=!u;$("uid").textContent=u?"Seu User UID de testes: "+u.id:"";
@@ -364,6 +374,45 @@ $("qa-cob06-encerramento-submit").addEventListener("click",()=>withBusy($("qa-co
    throw Error(out.mensagem||"Preflight HTTP recusado. Nenhuma mudanca foi feita.");
  msg("Autenticacao HTTP e consultas de STAGING verificadas, sem qualquer escrita.");
 }));
+
+// COB-06: duas conferencias isoladas apenas de leitura, sem token GitHub no navegador.
+async function verificarIntegracaoCOb06(acao){
+ const {data:auth,error:authError}=await client.auth.getUser();
+ if(authError||auth?.user?.id!=="d896cc0c-31e4-4ef7-8fa4-13d15f02dd2a"||
+    auth?.user?.email?.toLowerCase()!=="pedrinhossiqueira12@gmail.com")
+   throw Error("Entre com a conta administrativa confirmada do Supabase STAGING.");
+ const {data,error}=await client.auth.getSession();
+ if(error||!data?.session?.access_token)throw Error("Sua sessao STAGING expirou. Entre novamente.");
+ const response=await fetch(URL_SUPABASE+"/functions/v1/catalogo-cob06-encerramento-integracao-qa",{
+   method:"POST",
+   headers:{"Content-Type":"application/json",apikey:PUBLIC_KEY,
+     Authorization:"Bearer "+data.session.access_token},
+   body:JSON.stringify({acao})
+ });
+ const out=await response.json().catch(()=>({}));
+ $("qa-cob06-integracao-output").textContent=JSON.stringify({etapa:acao,http_status:response.status,resultado:out},null,2);
+ if(!response.ok||out.success!==true||out.operacao!=="somente_leitura"||
+    out.github_alterado!==false||out.encerramento_executado!==false||
+    out.pix_emitido!==false)
+   throw Error(out.mensagem||"Conferencia QA recusada ("+response.status+"). Mantenha HOLD.");
+ if(out.integracao_habilitada!==false)
+   throw Error("A flag de encerramento esta ligada. Desligue-a antes de continuar.");
+ if(acao==="verificar_config_qa" &&
+    (out.alvo_ficticio_preparado!==true||out.branch_qa_configurada!==true||
+     out.token_github_configurado!==true))
+   throw Error("Uma das configuracoes ou o registro ficticio ainda nao foi validado. Mantenha HOLD.");
+ if(acao==="verificar_repositorio_qa" &&
+    (out.alvo_ficticio_preparado!==true||out.registro_github_qa!==true||
+     out.status_github_qa!=="ativo"))
+   throw Error("Vitrine GitHub isolada divergente. Mantenha HOLD.");
+ msg("Conferencia COB-06 aprovada: nenhuma escrita, encerramento bloqueado e Pix nao emitido.");
+}
+for(const [id,acao] of [
+ ["qa-cob06-integracao-config","verificar_config_qa"],
+ ["qa-cob06-integracao-repo","verificar_repositorio_qa"]
+]){
+ $(id).addEventListener("click",()=>withBusy($(id),()=>verificarIntegracaoCOb06(acao)));
+}
 
 async function deliveryApi(acao,body={}){
  const out=await qaApi("catalogo-entregas",{acao,...body});
