@@ -74,6 +74,17 @@ pre{white-space:pre-wrap;word-break:break-all;padding:14px;background:#f3f5f1;bo
 <pre id="qa-cob06-review-output">Nenhuma revisao administrativa enviada.</pre>
 </section>
 
+<section id="qa-cob06-acumulo" hidden>
+<h2>COB-06 · Preparar acúmulo contábil de R$ 5,60</h2>
+<p class="muted"><strong>Somente Supabase STAGING e conta administrativa pedrinhossiqueira12@gmail.com.</strong> Fevereiro/2027 e março/2027 já foram fechados com R$ 2,80 cada. A preparação cria <strong>um lote contábil persistente e uma referência interna imutável</strong> para a loja fictícia <code>asaas-cob02</code>. Não emite Pix, não quita dívida, não libera remuneração e não faz saque.</p>
+<p class="muted"><strong>Antes de clicar:</strong> confirme no painel que as duas flags <code>ASAAS_COB06_PREPARACAO_ISOLADA_ENABLED</code> e <code>ASAAS_COB06_PREPARACAO_ADMIN_ENABLED</code> estão em <code>true</code> apenas no projeto de testes. A operação não é reversível pela interface; caso a resposta seja incerta, <strong>não prepare de novo</strong>, use “Retomar lote”.</p>
+<div class="actions">
+<button type="button" id="qa-cob06-acumulo-submit">COB-06 · Preparar lote fictício (R$ 5,60)</button>
+<button type="button" class="secondary" id="qa-cob06-acumulo-retomar">Retomar lote já reservado</button>
+</div>
+<pre id="qa-cob06-acumulo-output" role="status">Nenhuma reserva permanente solicitada.</pre>
+</section>
+
 <section id="qa-delivery" hidden>
 <h2>COB-04 · Entrega V2 com motoboy (somente STAGING)</h2><p class="muted"><strong>Próxima ação:</strong> botão 7 para autorizar a conta de motoboy existente, depois botão 8 para criar UM pedido de entrega. Não confirme o pedido de retirada que ficou “pronto”.</p>
 <p class="muted">COB-04 (já homologado): produto R$100 gera R$7 de comissão. COB-06: produto QA R$40 gera R$2,80 (R$2 plataforma + R$0,80 motoboy). Fevereiro/2027 já foi faturado com R$2,80; o novo pedido aceito deve ir para março/2027. Somente após entrega confirmada, feche março e confira a prévia de R$5,60 acumulados em duas competências. Não emita Pix, não quite e não transfira valores neste ensaio.</p>
@@ -138,7 +149,7 @@ const pretty=data=>{const {pix,...publicResult}=data||{};return JSON.stringify(p
 async function refresh(){
  const {data}=await client.auth.getUser();
  const u=data?.user||null;
- $("billing").hidden=!u;$("qa-order").hidden=!u;$("qa-delivery").hidden=!u;$("qa-cob06").hidden=!u||u.email?.toLowerCase()!=="pedrinhossiqueira@gmail.com";$("qa-cob06-review").hidden=!u||u.email?.toLowerCase()!=="pedrinhossiqueira12@gmail.com";$("logout").hidden=!u;
+ $("billing").hidden=!u;$("qa-order").hidden=!u;$("qa-delivery").hidden=!u;$("qa-cob06").hidden=!u||u.email?.toLowerCase()!=="pedrinhossiqueira@gmail.com";$("qa-cob06-review").hidden=!u||u.email?.toLowerCase()!=="pedrinhossiqueira12@gmail.com";$("qa-cob06-acumulo").hidden=!u||u.id!=="d896cc0c-31e4-4ef7-8fa4-13d15f02dd2a"||u.email?.toLowerCase()!=="pedrinhossiqueira12@gmail.com";$("logout").hidden=!u;
  $("login-form").hidden=!!u;
  $("session").textContent=u?"Autenticado no Sandbox: "+u.email:"Não autenticado.";
  $("uid").hidden=!u;$("uid").textContent=u?"Seu User UID de testes: "+u.id:"";
@@ -289,6 +300,45 @@ $("qa-cob06-review-submit").addEventListener("click",()=>withBusy($("qa-cob06-re
  qaLog(result);
  msg("Revisao do pedido ficticio concluida. Nao repita; desabilite a flag do servidor e aguarde a conciliacao.");
 }).then(()=>{if(cob06Revisado)$("qa-cob06-review-submit").disabled=true;}));
+
+// COB-06: somente a sessao Auth real do administrador pode pedir reserva.
+const COB06_ACUMULO_CORTE = "2027-03-01";
+let cob06AcumuloPreparado = false;
+async function adminAcumulo(acao) {
+ const {data,error}=await client.auth.getUser();
+ if(error||data?.user?.id!==COB06_QA_REVISOR||
+    data?.user?.email?.toLowerCase()!=="pedrinhossiqueira12@gmail.com")
+   throw Error("Entre como administrador pedrinhossiqueira12@gmail.com no STAGING.");
+ if(acao!=="preparar_acumulo_qa"&&acao!=="retomar_acumulo_qa")
+   throw Error("Operação COB-06 não autorizada.");
+ const out=await qaApi("catalogo-cob06-acumulo-preparacao",{
+   acao,comercio_id:STORE,competencia_corte:COB06_ACUMULO_CORTE
+ });
+ if(out.pix_emitido!==false||out.pode_emitir_pix!==false||
+    out.pode_quitar!==false||out.pode_liberar_motoboy!==false||
+    out.hold_obrigatorio!==true||out.total_centavos!==560||
+    out.quantidade_faturas!==2)
+   throw Error("Resposta contábil inconsistente: mantenha HOLD e não repita o preparo.");
+ cob06AcumuloPreparado=true;
+ const result={etapa:acao,resultado:out};
+ $("qa-cob06-acumulo-output").textContent=JSON.stringify(result,null,2);
+ qaLog(result);
+ msg("Lote contábil fictício confirmado. Pix, quitação e saque continuam proibidos.");
+ return out;
+}
+$("qa-cob06-acumulo-submit").addEventListener("click",()=>withBusy($("qa-cob06-acumulo-submit"),async()=>{
+ if(cob06AcumuloPreparado)throw Error("Lote ja confirmado nesta sessao. Nao prepare novamente.");
+ if(!window.confirm("STAGING COB-06: criar reserva contábil PERSISTENTE de R$ 5,60 para 2 competências fictícias? Sem Pix, quitação ou saque."))
+   return false;
+ if(window.prompt("Para confirmar o lote contábil persistente, digite RESERVAR COB06:")!=="RESERVAR COB06")
+   return false;
+ return await adminAcumulo("preparar_acumulo_qa");
+}).then(()=>{if(cob06AcumuloPreparado)$("qa-cob06-acumulo-submit").disabled=true;}));
+$("qa-cob06-acumulo-retomar").addEventListener("click",()=>withBusy($("qa-cob06-acumulo-retomar"),async()=>{
+ if(!window.confirm("Retomar SOMENTE um lote COB-06 já reservado após timeout ou erro inconclusivo? Nenhum novo lote será criado."))
+   return false;
+ return await adminAcumulo("retomar_acumulo_qa");
+}).then(()=>{if(cob06AcumuloPreparado)$("qa-cob06-acumulo-submit").disabled=true;}));
 
 async function deliveryApi(acao,body={}){
  const out=await qaApi("catalogo-entregas",{acao,...body});
