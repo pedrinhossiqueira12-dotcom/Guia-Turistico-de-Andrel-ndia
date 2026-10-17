@@ -1,6 +1,6 @@
 # COB-06 — acumulação de comissões abaixo de R$ 5 (decisão aprovada)
 
-**Decisão do proprietário em 15/10/2026.** Escopo restrito à COB-06 da backlog financeira da PR #39. **Estado: regra aprovada; reserva contábil transacional no candidato SQL e pré-validação testadas em PostgreSQL descartável. Emissão Pix, conciliação intercompetências de pagamento/estorno, homologação e liberação continuam pendentes.** Este documento não autoriza alteração em produção, emissão Pix, saque ou merge.
+**Decisão do proprietário em 15/10/2026.** Escopo restrito à COB-06 da backlog financeira da PR #39. **Estado: regra aprovada; reserva, conciliação e estorno contábil sintéticos testados em PostgreSQL descartável. Emissão Pix, conciliação com pagamentos bancários reais, homologação Sandbox/STAGING e liberação continuam pendentes.** Este documento não autoriza alteração em produção, emissão Pix, saque ou merge.
 
 ## Regra aprovada
 
@@ -149,6 +149,30 @@ Executa apenas no clone `catalogo_cob06_ci` com PostgreSQL local, credenciais
 fictícias de CI e nega alvos remotos; o SQL 13 continua impossível de aplicar
 em STAGING/produção. Uma prova E2E real do Asaas Sandbox, implantação e
 autorização de emissão ainda são etapas separadas e pendentes.
+
+#### Prova integrada GET + quitação + estorno multi-competência — CI descartável (17/10/2026)
+
+Após a prova do gate persistente, a CI prepara dois livros de créditos
+**retidos** para as fontes sintéticas de março (R$1) e abril (R$4).
+`catalogo-asaas-acumulo-liquidacao-get-postgres-ci.test.ts` lê a referência e
+o cliente do banco local, usa o adaptador de **GET Sandbox 100% mockado**,
+registra a observação e o evento `RECEIVED` nas funções SQL 06/07 e verifica
+que o diário sozinho **não dá baixa nem libera saldos**. Somente a função
+atômica **CI-only** SQL 11 reconhece os dois meses: R$3,57 de plataforma e
+R$1,43 de entregador nos livros do clone, sem autorizar transferência.
+
+Um segundo GET simulado e validado detecta `REFUNDED`; o diário registra
+evento distinto e a função **CI-only** SQL 12 suspende as duas competências e
+retém os quatro lançamentos. O teste recusa identidade/valor/modalidade
+divergentes, replay de baixa, replay de estorno e `RECEIVED` atrasado, e
+confere que a fatura histórica Mercado Pago paga permanece intocada. A
+fixture só faz `COMMIT` em `catalogo_cob06_ci`, banco destruído ao final
+da etapa; o Deno corre sem `--allow-net` nem credenciais Asaas.
+
+**Isso não atesta pagamento nem estorno bancário verdadeiro**: os GETs são
+fictícios e as funções 11/12 proíbem execução fora do banco local. A prova
+real Sandbox/STAGING, autorização explícita para emissão, critérios operacionais
+de saque e revisão para produção continuam pendentes.
 
 ### Auditoria de baixa por competência — relatório administrativo candidato (17/10/2026)
 
