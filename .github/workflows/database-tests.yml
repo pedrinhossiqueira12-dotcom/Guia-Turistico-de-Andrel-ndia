@@ -107,8 +107,59 @@ jobs:
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
+      - name: Type-check Asaas financial Edge Function
+        run: |
+          deno check --node-modules-dir=auto supabase/functions/catalogo-asaas-financeiro/index.ts
+          deno check --node-modules-dir=auto supabase/functions/catalogo-cob06-qa/index.ts
+          deno check --node-modules-dir=auto supabase/functions/catalogo-asaas-cob06-auditoria/index.ts
+          deno check --node-modules-dir=auto supabase/functions/tests/catalogo-asaas-cob06-auditoria-http-inerte.test.ts
+          deno check --node-modules-dir=auto supabase/functions/tests/catalogo-asaas-cob06-auditoria-http-sandbox-mock.test.ts
+          deno check --node-modules-dir=auto supabase/functions/whatsapp-bot/index.ts
+          deno check supabase/functions/_shared/catalogo-asaas-acumulo-get-verificado-inerte.ts
+          deno check supabase/functions/_shared/catalogo-asaas-acumulo-get-sandbox-inerte.ts
+          deno check supabase/functions/_shared/catalogo-asaas-acumulo-auditoria-baixa-inerte.ts
+          deno check supabase/functions/tests/catalogo-asaas-acumulo-auditoria-baixa-inerte.test.ts
+          deno check supabase/functions/_shared/catalogo-asaas-acumulo-retomada-inerte.ts
+          deno check supabase/functions/tests/catalogo-asaas-acumulo-get-verificado-inerte.test.ts
+          deno check supabase/functions/tests/catalogo-asaas-acumulo-get-sandbox-inerte.test.ts
+          deno check supabase/functions/tests/catalogo-asaas-acumulo-liquidacao-get-postgres-ci.test.ts
+          deno check supabase/functions/tests/catalogo-asaas-acumulo-retomada-inerte.test.ts
+          deno check --node-modules-dir=auto supabase/functions/tests/catalogo-asaas-acumulo-registro-http-inerte.test.ts
+          deno check supabase/functions/catalogo-cob06-acumulo-preparacao/index.ts
+          deno check --node-modules-dir=auto supabase/functions/catalogo-cob06-encerramento-integracao-qa/index.ts
+          deno check supabase/functions/_shared/catalogo-asaas-stepup-documental-ensaio.ts
+          deno check supabase/functions/_shared/catalogo-asaas-mfa-orquestrador-prechallenge-inerte.ts
+          deno check supabase/functions/_shared/catalogo-asaas-livro-owner-sql-inerte.ts
+          deno check supabase/functions/_shared/catalogo-asaas-livro-ponte-nologin-inerte.ts
+          deno check supabase/functions/tests/catalogo-asaas-livro-ponte-nologin-inerte.test.ts
+          deno check supabase/functions/tests/catalogo-asaas-ponte-orquestrador-integracao-inerte.test.ts
+          deno check supabase/functions/tests/catalogo-asaas-livro-owner-sql-inerte.test.ts
+          deno check supabase/functions/tests/catalogo-asaas-mfa-orquestrador-prechallenge-inerte.test.ts
+          deno check supabase/functions/_shared/catalogo-asaas-gotrue-mfa-transporte-inerte.ts
+          deno check supabase/functions/_shared/catalogo-asaas-jwt-sessao-assinada-ensaio.ts
+          deno check supabase/functions/_shared/catalogo-asaas-jwks-fixo-cache-inerte.ts
+          deno check supabase/functions/tests/catalogo-asaas-jwks-fixo-cache-inerte.test.ts
+          deno check supabase/functions/tests/catalogo-asaas-jwt-sessao-assinada-ensaio.test.ts
+          deno check supabase/functions/tests/catalogo-asaas-gotrue-jwt-assinado-integracao-inerte.test.ts supabase/functions/tests/catalogo-asaas-jwks-fixo-cache-inerte.test.ts
+          deno check scripts/validacao-pagamentos/validar-gotrue-totp-staging-manual.ts
+          deno check scripts/validacao-pagamentos/validar-gotrue-totp-staging-manual.test.ts
+      - name: Test STAGING MFA operator contract offline without network credentials
+        run: deno test --no-check scripts/validacao-pagamentos/validar-gotrue-totp-staging-manual.test.ts
       - name: Test financial snapshots without database access
-        run: deno test --no-check --allow-read=supabase/functions supabase/functions/tests/catalogo-financeiro.test.ts supabase/functions/tests/catalogo-checkouts-contract.test.ts supabase/functions/tests/catalogo-seguranca-pagamentos.test.ts supabase/functions/tests/catalogo-webhook-identificacao.test.ts supabase/functions/tests/catalogo-fatura-provedor.test.ts
+        run: deno test --no-check --allow-read=supabase/functions supabase/functions/tests/catalogo-asaas-acumulo-get-verificado-inerte.test.ts supabase/functions/tests/catalogo-financeiro.test.ts supabase/functions/tests/catalogo-checkouts-contract.test.ts supabase/functions/tests/catalogo-seguranca-pagamentos.test.ts supabase/functions/tests/catalogo-webhook-identificacao.test.ts supabase/functions/tests/catalogo-fatura-provedor.test.ts supabase/functions/tests/catalogo-asaas-stepup-documental-ensaio.test.ts supabase/functions/tests/catalogo-asaas-gotrue-mfa-transporte-inerte.test.ts supabase/functions/tests/catalogo-asaas-jwt-sessao-assinada-ensaio.test.ts supabase/functions/tests/catalogo-asaas-gotrue-jwt-assinado-integracao-inerte.test.ts supabase/functions/tests/catalogo-asaas-mfa-orquestrador-prechallenge-inerte.test.ts supabase/functions/tests/catalogo-asaas-livro-owner-sql-inerte.test.ts supabase/functions/tests/catalogo-asaas-livro-ponte-nologin-inerte.test.ts supabase/functions/tests/catalogo-asaas-ponte-orquestrador-integracao-inerte.test.ts
+
+      - name: Test COB06 Sandbox GET and interrupted preparation recovery without network
+        run: deno test --no-check supabase/functions/tests/catalogo-asaas-acumulo-get-sandbox-inerte.test.ts supabase/functions/tests/catalogo-asaas-acumulo-retomada-inerte.test.ts supabase/functions/tests/catalogo-asaas-acumulo-auditoria-baixa-inerte.test.ts
+      - name: Test COB06 administrative HTTP registration with provider and database mocks
+        run: deno test --no-check --node-modules-dir=auto --allow-env --allow-read=supabase/functions supabase/functions/tests/catalogo-asaas-acumulo-registro-http-inerte.test.ts
+      - name: Test COB06 isolated audit Edge fail-closed with no network
+        run: deno test --no-check --node-modules-dir=auto --allow-env --allow-read=supabase/functions supabase/functions/tests/catalogo-asaas-cob06-auditoria-http-inerte.test.ts
+      - name: Test COB06 isolated audit Edge enabled only with fully mocked Sandbox and Supabase
+        run: deno test --no-check --node-modules-dir=auto --allow-env --allow-read=supabase/functions supabase/functions/tests/catalogo-asaas-cob06-auditoria-http-sandbox-mock.test.ts
+      - name: Test COB06 isolated accounting preparation OFF without network
+        run: deno test --no-check --node-modules-dir=auto --allow-env --allow-read=supabase/functions supabase/functions/tests/catalogo-cob06-acumulo-preparacao-http-inerte.test.ts
+      - name: Test COB06 isolated preparation ON with mocked Auth and SQL only
+        run: deno test --no-check --node-modules-dir=auto --allow-env --allow-read=supabase/functions supabase/functions/tests/catalogo-cob06-acumulo-preparacao-http-sandbox-mock.test.ts
 
   edge-http-mock-tests:
     name: Real Edge HTTP handlers with fake provider and blocked network (Deno)
@@ -129,7 +180,8 @@ jobs:
       - name: Exercise Edge functions without listening sockets or network permission
         run: |
           deno test --no-check --node-modules-dir=auto --allow-env --allow-read=supabase/functions \
-            supabase/functions/tests/catalogo-edge-http.test.ts
+            supabase/functions/tests/catalogo-edge-http.test.ts \
+            supabase/functions/tests/catalogo-asaas-replay-webhook-http.test.ts
 
   supabase-native-local-pgtap:
     name: Supabase native local reset and 23 pgTAP (temporary project, no external schedule)
@@ -162,6 +214,15 @@ jobs:
           ! grep -R -F 'xdmbkflufsfqziixzpxc' \
             /tmp/guia-supabase-native-ci/supabase/config.toml \
             /tmp/guia-supabase-native-ci/supabase/migrations
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Typecheck and unit-test real LOCAL GoTrue MFA harness (offline)
+        run: |
+          deno check scripts/validacao-pagamentos/test-gotrue-mfa-real-local.ts
+          deno check scripts/validacao-pagamentos/test-gotrue-mfa-real-local.unit.test.ts
+          deno check scripts/validacao-pagamentos/vinculo-mfa-dossie-local-ci.ts scripts/validacao-pagamentos/vinculo-mfa-dossie-local-ci.test.ts
+          deno test --no-check scripts/validacao-pagamentos/test-gotrue-mfa-real-local.unit.test.ts scripts/validacao-pagamentos/vinculo-mfa-dossie-local-ci.test.ts
       - name: Verify available local CLI commands
         run: |
           supabase --version
@@ -183,6 +244,21 @@ jobs:
           grep -q 'All tests successful' /tmp/guia-native-pgtap.log
           grep -q 'Result: PASS' /tmp/guia-native-pgtap.log
           echo 'PASS: pgTAP ran natively against completely isolated Supabase local stack'
+          # Verificacao de Auth/GoTrue VERDADEIRO na stack inteiramente local:
+          # apenas ANON_KEY publica, nenhuma role administrativa ou segredo real.
+          # Nao imprimir "supabase status -o env": inclui chaves locais.
+          status_file=$(mktemp)
+          chmod 600 "$status_file"
+          supabase status -o env > "$status_file"
+          local_anon=$(grep -m1 '^ANON_KEY=' "$status_file" | cut -d= -f2- | tr -d '"')
+          rm -f "$status_file"
+          test "${#local_anon}" -gt 50
+          LOCAL_SUPABASE_ANON_KEY="$local_anon" deno run \
+            --allow-net=127.0.0.1:54321 --allow-env \
+            "$GITHUB_WORKSPACE/scripts/validacao-pagamentos/test-gotrue-mfa-real-local.ts" \
+            --native-ci-local-only
+          unset local_anon
+          echo 'PASS: GoTrue real local MFA enrollment/challenge/verify AAL2; zero Pix'
 
   legacy-baseline-smoke:
     name: Legacy baseline and first migration (disposable PostgreSQL)
@@ -596,6 +672,9 @@ jobs:
       PGDATABASE: catalogo_ci
     steps:
       - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
       - name: Enforce ephemeral target without external cron extensions
         run: |
           test "$PGHOST" = localhost
@@ -690,6 +769,358 @@ jobs:
           total=$(find supabase/migrations -maxdepth 1 -name '*.sql' | wc -l)
           test "$count" -eq "$((total - 1))"
           echo "Applied $count of $total real migrations to disposable catalogo_ci."
+      - name: COB-06 selective billing and safeguards on local production-like clone (no payouts)
+        run: |
+          set -euo pipefail
+          test "$PGHOST" = localhost
+          test "$PGDATABASE" = catalogo_ci
+          test -z "${DATABASE_URL:-}"
+          test -z "${PGSERVICE:-}"
+          test -z "${PGHOSTADDR:-}"
+          createdb --template=catalogo_ci catalogo_cob06_ci
+          # Banco previo Asaas precisa ter O MESMO esquema operacional critico
+          # identificado por leitura em PROD 12/10/2026 (nao usa dados reais).
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -At -F '|' \
+            -f scripts/validacao-pagamentos/asaas-cob06-schema-fingerprint-readonly.sql \
+            > /tmp/catalogo-cob06-actual-fingerprint.txt
+          diff -u \
+            <(grep -v '^#' scripts/validacao-pagamentos/asaas-cob06-esquema-producao-golden-20261012.txt \
+              | sed '/^$/d') \
+            /tmp/catalogo-cob06-actual-fingerprint.txt
+          rm -f /tmp/catalogo-cob06-actual-fingerprint.txt
+          echo "PASS: COB06 baseline espelha estrutura critica de PROD nas 6 tabelas"
+          trap 'dropdb --if-exists --force catalogo_cob06_restore_ci; dropdb --if-exists --force catalogo_cob06_ci; rm -f /tmp/catalogo-cob06-before.dump' EXIT
+          # Contrato de compatibilidade: cobrança legada Mercado Pago já quitada
+          # existe ANTES de introduzir o gateway Asaas neste clone sintético.
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO public.catalogo_fechamentos_offline
+            (comercio_id,competencia,total_pedidos,total_comissao_centavos,status)
+          VALUES ('comercio-de-exemplo','2024-01-01',1,700,'pago');
+          INSERT INTO public.catalogo_fatura_cobrancas
+            (fechamento_id,comercio_id,competencia,gateway,order_id,status,valor_centavos)
+          SELECT id,comercio_id,competencia,'mercadopago','legacy-cob06-ci','pago',700
+          FROM public.catalogo_fechamentos_offline
+          WHERE comercio_id='comercio-de-exemplo' AND competencia='2024-01-01';
+          SQL
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -Atqc \
+            "SELECT gateway||'|'||status||'|'||valor_centavos
+              FROM public.catalogo_fatura_cobrancas WHERE order_id='legacy-cob06-ci'" \
+            | grep -Fx 'mercadopago|pago|700'
+
+          # Snapshot PRE-Asaas do clone com cobrança MP quitada.
+          # pg_dump 17 via container PostgreSQL descartável; nunca um DB remoto.
+          service_container="${{ job.services.postgres.id }}"
+          test -n "$service_container"
+          docker exec "$service_container" pg_dump -U postgres -Fc --no-owner --no-acl \
+            -d catalogo_cob06_ci -f /tmp/catalogo-cob06-before.dump
+          docker exec "$service_container" sh -c 'test -s /tmp/catalogo-cob06-before.dump'
+          docker cp "$service_container:/tmp/catalogo-cob06-before.dump" /tmp/catalogo-cob06-before.dump
+          test -s /tmp/catalogo-cob06-before.dump
+          sha256sum /tmp/catalogo-cob06-before.dump
+
+          for sql in \
+            supabase/production-candidate/01_asaas_cobrancas_inbox_sem_saques.sql \
+            supabase/production-candidate/02_termos_encerramento_sem_saques.sql \
+            supabase/pending-migrations/20261009162000_bloquear_exclusao_debitos_e_finalizar_arquivamento.sql \
+            supabase/pending-migrations/20261009163000_impedir_reabertura_encerramento.sql \
+            supabase/pending-migrations/20261009180000_status_publicacao_publica_restrita.sql \
+            supabase/pending-migrations/20261009183000_proteger_republicacao_legada_apos_encerramento.sql \
+            supabase/pending-migrations/20261009184000_bloquear_despublicacao_legada_qualquer_status.sql \
+            supabase/pending-migrations/20261012104000_cob04_fechamento_apenas_entregas_confirmadas.sql \
+            supabase/pending-migrations/20261012163000_cob04_pagamento_somente_componentes_da_fatura.sql; do
+            echo "COB06 isolated SQL: $sql"
+            psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -f "$sql"
+          done
+          # Aplicar o pacote nao pode migrar, baixar ou sobrescrever a cobranca MP.
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -Atqc \
+            "SELECT gateway||'|'||status||'|'||valor_centavos
+              FROM public.catalogo_fatura_cobrancas WHERE order_id='legacy-cob06-ci'" \
+            | grep -Fx 'mercadopago|pago|700'
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -Atqc \
+            "SELECT count(*) FROM public.catalogo_fatura_cobrancas
+              WHERE order_id='legacy-cob06-ci'" | grep -Fx 1
+
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -Atqc "SELECT to_regclass('public.catalogo_asaas_saques') IS NULL" | grep -Fx t
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -Atqc "SELECT to_regprocedure('public.catalogo_asaas_reservar_saque(uuid)') IS NULL" | grep -Fx t
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -At -F '|' \
+            -f scripts/validacao-pagamentos/asaas-producao-readiness-readonly.sql \
+            | grep -E '^0\|0\|t\|'
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -At -F '|' \
+            -f scripts/validacao-pagamentos/asaas-cob06-seguranca-readonly.sql \
+            | grep -E '^0\|0\|0\|0\|0\|0\|'
+          # Gate comportamental: a Edge legada tenta deletar/despublicar via UPDATE.
+          # As fixture e escrituras deste ensaio sao locais e revertidas.
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
+            -f supabase/tests/isolated/asaas-cob06-guardas-legadas-clone.sql
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -Atqc \
+            "SELECT count(*) FROM public.catalogo_fechamentos_offline
+              WHERE comercio_id='comercio-de-exemplo' AND competencia='2024-02-01'" | grep -Fx 0
+
+          # COB-06 acumulo R$5: candidato adicional INERTE, NAO incluido
+          # no pacote produtivo congelado das nove fontes acima.
+          # Teste exclusivo deste banco descartavel; fixture com ROLLBACK.
+          # Capturar a função que reconhece dinheiro ANTES dos candidatos 03-07.
+          # A fase de observação NÃO pode alterá-la.
+          parcela_recebida_antes=$(psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -Atqc \
+            "SELECT md5(pg_get_functiondef('catalogo_private.catalogo_v2_parcela_recebida(uuid,text)'::regprocedure))")
+          test -n "$parcela_recebida_antes"
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
+            -f supabase/production-candidate/03_cob06_acumulo_intercompetencias_preparacao.sql
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
+            -f supabase/production-candidate/04_cob06_conciliacao_preflight_inerte.sql
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
+            -f supabase/production-candidate/05_cob06_referencia_bancaria_inerte.sql
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
+            -f supabase/production-candidate/06_cob06_observacao_bancaria_sem_baixa.sql
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
+            -f supabase/production-candidate/07_cob06_eventos_bancarios_inertes.sql
+          parcela_recebida_depois=$(psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -Atqc \
+            "SELECT md5(pg_get_functiondef('catalogo_private.catalogo_v2_parcela_recebida(uuid,text)'::regprocedure))")
+          test "$parcela_recebida_antes" = "$parcela_recebida_depois"
+          # Gate reutilizavel de observação, sem acesso a dados pessoais.
+          # Nove contagens 0 e três barreiras de baixa/estorno ausentes.
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -At -F '|' \
+            -f scripts/validacao-pagamentos/asaas-cob06-acumulo-homologacao-readonly.sql \
+            | grep -Fx '0|0|0|0|0|0|0|0|0|t|t|t'
+          echo "PASS: COB06 SQL 03-07 observacao inerte, sem alterar elegibilidade financeira"
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
+            -f supabase/production-candidate/08_cob06_apuracao_estados_sem_baixa.sql
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
+            -f supabase/production-candidate/09_cob06_projecao_baixa_multicompetencias_inerte.sql
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
+            -f supabase/production-candidate/10_cob06_ponte_quitacao_multicompetencia_isolada.sql
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
+            -f supabase/production-candidate/11_cob06_quitacao_atomica_somente_ci.sql
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
+            -f supabase/production-candidate/12_cob06_suspensao_atomica_somente_ci.sql
+          # Tentativa de instalar em outro banco DEVE falhar antes de criar tabelas.
+          if psql -d catalogo_ci -v ON_ERROR_STOP=1 \
+            -f supabase/production-candidate/13_cob06_gate_tentativa_emissao_somente_ci.sql \
+            > /tmp/cob06-gate-outside-ci.log 2>&1; then
+            echo "ERROR: COB06 gate instalado fora do banco efemero" >&2
+            exit 1
+          fi
+          grep -F 'COB06_CI_ONLY: instalacao' /tmp/cob06-gate-outside-ci.log
+          psql -d catalogo_ci -Atqc "SELECT to_regclass('public.catalogo_asaas_acumulo_tentativas_emissao_ci') IS NULL" | grep -Fx t
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
+            -f supabase/production-candidate/13_cob06_gate_tentativa_emissao_somente_ci.sql
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
+            -f supabase/tests/isolated/asaas-cob06-acumulo-preview-rollback.sql
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
+            -f supabase/tests/isolated/asaas-cob06-acumulo-reserva-rollback.sql
+          # Candidato 14 altera APENAS as funcoes do clone descartavel.
+          # Instalacao fora da CI deve falhar sem qualquer DDL persistida.
+          if psql -d catalogo_ci -v ON_ERROR_STOP=1 \
+            -f supabase/production-candidate/14_cob06_competencia_congelada_somente_ci.sql \
+            > /tmp/cob06-competencia-outside-ci.log 2>&1; then
+            echo "ERROR: COB06 competencia instalada fora do banco efemero" >&2
+            exit 1
+          fi
+          grep -F 'COB06_CI_ONLY: instalacao de competencia' /tmp/cob06-competencia-outside-ci.log
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
+            -f supabase/production-candidate/14_cob06_competencia_congelada_somente_ci.sql
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
+            -f supabase/tests/isolated/asaas-cob06-competencia-congelada-rollback.sql
+          # Cancelamento ficticio auditado: guard fora do clone,
+          # bloqueios financeiros, fatura paga intocada e ROLLBACK.
+          if psql -d catalogo_ci -v ON_ERROR_STOP=1 \
+            -f supabase/production-candidate/15_cob06_cancelamento_retirada_ficticia_somente_ci.sql \
+            > /tmp/cob06-cancelamento-outside-ci.log 2>&1; then
+            echo "ERROR: COB06 cancelamento QA instalado fora do banco efemero" >&2
+            exit 1
+          fi
+          grep -F 'COB06_CI_ONLY: cancelamento QA proibido' /tmp/cob06-cancelamento-outside-ci.log
+          psql -d catalogo_ci -v ON_ERROR_STOP=1 -Atqc \
+            "SELECT to_regprocedure('catalogo_private.catalogo_cob06_cancelar_retirada_qa_ci(uuid,uuid,text,text,boolean)') IS NULL" | grep -Fx t
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
+            -f supabase/production-candidate/15_cob06_cancelamento_retirada_ficticia_somente_ci.sql
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
+            -f supabase/tests/isolated/asaas-cob06-cancelamento-retirada-ficticia-rollback.sql
+          # Candidata 16: RPC publicavel apenas por revisao manual, permitida
+          # em CI somente no clone; nao instalar no Supabase por workflow.
+          if psql -d catalogo_ci -v ON_ERROR_STOP=1 \
+            -f supabase/production-candidate/16_cob06_cancelamento_retirada_qa_staging_pendente.sql \
+            > /tmp/cob06-qa-publica-outside-ci.log 2>&1; then
+            echo "ERROR: COB06 QA RPC instalada fora do alvo permitido" >&2
+            exit 1
+          fi
+          grep -F 'COB06_QA_ONLY: banco de dados nao autorizado' /tmp/cob06-qa-publica-outside-ci.log
+          psql -d catalogo_ci -v ON_ERROR_STOP=1 -Atqc \
+            "SELECT to_regprocedure('public.catalogo_cob06_cancelar_retirada_qa_v2(uuid,uuid,text,text,boolean)') IS NULL" | grep -Fx t
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
+            -f supabase/production-candidate/16_cob06_cancelamento_retirada_qa_staging_pendente.sql
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
+            -f supabase/tests/isolated/asaas-cob06-cancelamento-retirada-qa-publica-rollback.sql
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -Atqc \
+            "SELECT count(*) FROM public.catalogo_pedidos WHERE id='00000000-0000-4000-8000-00000000c607'" | grep -Fx 0
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -Atqc \
+            "SELECT count(*) FROM public.catalogo_pedidos WHERE id='00000000-0000-4000-8000-00000000c606'" | grep -Fx 0
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -Atqc \
+            "SELECT count(*) FROM public.catalogo_ocorrencias_v2 WHERE id='00000000-0000-4000-8000-00000000c626'" | grep -Fx 0
+          # Duas conexoes SQL REAIS: fechamento concorrente com entrega e aceite.
+          # Banco extra descartavel e removido pelo script mesmo se der erro.
+          bash scripts/validacao-pagamentos/asaas-cob06-competencia-concorrencia-ci.sh
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -Atqc \
+            "SELECT count(*) FROM public.catalogo_comissoes_offline WHERE pedido_id IN ('00000000-0000-4000-8000-00000000c601','00000000-0000-4000-8000-00000000c602','00000000-0000-4000-8000-00000000c603','00000000-0000-4000-8000-00000000c604')" | grep -Fx 0
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -Atqc \
+            "SELECT COUNT(*) FROM public.catalogo_asaas_acumulo_lotes" | grep -Fx 0
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -Atqc \
+            "SELECT COUNT(*) FROM public.catalogo_asaas_acumulo_fontes" | grep -Fx 0
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -Atqc \
+            "SELECT COUNT(*) FROM public.catalogo_asaas_acumulo_observacoes" | grep -Fx 0
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -Atqc \
+            "SELECT COUNT(*) FROM public.catalogo_asaas_acumulo_eventos" | grep -Fx 0
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -Atqc \
+            "SELECT COUNT(*) FROM public.catalogo_asaas_acumulo_quitacoes_isoladas" | grep -Fx 0
+          echo "PASS: COB06 observacao GET simulada+referencia unica sem baixa nem dados residuais"
+
+          # Verificar restauração do estado PRE-Asaas em outro DB local isolado.
+          createdb catalogo_cob06_restore_ci
+          docker exec "$service_container" pg_restore -U postgres \
+            --exit-on-error --no-owner --no-acl \
+            -d catalogo_cob06_restore_ci /tmp/catalogo-cob06-before.dump
+          psql -d catalogo_cob06_restore_ci -v ON_ERROR_STOP=1 -Atqc \
+            "SELECT gateway||'|'||status||'|'||valor_centavos
+              FROM public.catalogo_fatura_cobrancas WHERE order_id='legacy-cob06-ci'" \
+            | grep -Fx 'mercadopago|pago|700'
+          psql -d catalogo_cob06_restore_ci -v ON_ERROR_STOP=1 -Atqc \
+            "SELECT COUNT(*) FROM public.catalogo_fatura_cobrancas
+              WHERE order_id='legacy-cob06-ci'" | grep -Fx 1
+          psql -d catalogo_cob06_restore_ci -v ON_ERROR_STOP=1 -Atqc \
+            "SELECT to_regclass('public.catalogo_asaas_emissoes') IS NULL
+               AND to_regclass('public.catalogo_asaas_webhook_eventos') IS NULL
+               AND to_regclass('public.catalogo_asaas_saques') IS NULL" | grep -Fx t
+          psql -d catalogo_cob06_restore_ci -v ON_ERROR_STOP=1 -Atqc \
+            "SELECT COUNT(*) FROM pg_constraint
+              WHERE conname='catalogo_fatura_cobrancas_gateway_check'
+              AND pg_get_constraintdef(oid) LIKE '%mercadopago%'
+              AND pg_get_constraintdef(oid) NOT LIKE '%asaas%'" | grep -Fx 1
+          dropdb --if-exists --force catalogo_cob06_restore_ci
+          docker exec "$service_container" rm -f /tmp/catalogo-cob06-before.dump
+          rm -f /tmp/catalogo-cob06-before.dump
+
+          # Ultima prova no clone que sera destruido: duas conexoes reais
+          # disputam o MESMO lote. Uma unica intencao, segundo POST vedado.
+          # Fixture COMMIT somente aqui; nenhuma verificacao de rollback
+          # anterior e afetada. Nenhum acesso Asaas nem a Supabase remoto.
+          bash scripts/validacao-pagamentos/asaas-cob06-gate-concorrencia-ci.sh
+
+          # Prova integrada: GET Asaas 100% mockado + SQL13 persistido REAL.
+          # Deno sem --allow-net; so pode chamar psql no localhost efemero.
+          deno test --no-check --allow-env --allow-run=psql \
+            supabase/functions/tests/catalogo-asaas-acumulo-pre-post-postgres-ci.test.ts
+
+          # Segunda prova integrada: GET RECEIVED e REFUNDED simulados atravessam
+          # as funcoes SQL 06/07/11/12 com COMMIT somente no clone descartavel.
+          # Nao ha credenciais reais, rede, POST Pix, saque ou STAGING.
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
+            -f supabase/tests/isolated/asaas-cob06-liquidacao-get-fixture-ci.sql
+          deno test --no-check --allow-env --allow-run=psql \
+            supabase/functions/tests/catalogo-asaas-acumulo-liquidacao-get-postgres-ci.test.ts
+
+          dropdb --if-exists --force catalogo_cob06_ci
+          trap - EXIT
+          echo "PASS: COB-06 selective billing and pre-Asaas dump/restore verified with paid MP intact, no payouts"
+      - name: Apply staged Asaas migration to disposable clone only
+        run: |
+          set -euo pipefail
+          test "$PGHOST" = localhost
+          test "$PGDATABASE" = catalogo_ci
+          test -z "${DATABASE_URL:-}"
+          createdb --template=catalogo_ci catalogo_asaas_ci
+          trap 'dropdb --if-exists --force catalogo_asaas_ci' EXIT
+          psql -d catalogo_asaas_ci -v ON_ERROR_STOP=1 -f supabase/pending-migrations/20261008180000_asaas_faturas_saques_controlados.sql
+          psql -d catalogo_asaas_ci -v ON_ERROR_STOP=1 -Atqc "SELECT relrowsecurity FROM pg_class WHERE oid='public.catalogo_asaas_saques'::regclass" | grep -Fx t
+          psql -d catalogo_asaas_ci -v ON_ERROR_STOP=1 -Atqc "SELECT to_regprocedure('public.catalogo_asaas_reservar_saque(uuid)') IS NOT NULL" | grep -Fx t
+          psql -d catalogo_asaas_ci -v ON_ERROR_STOP=1 -Atqc "SELECT to_regprocedure('public.catalogo_asaas_saldo_sacavel(uuid)') IS NOT NULL" | grep -Fx t
+          dropdb --if-exists --force catalogo_asaas_ci
+          trap - EXIT
+          echo "PASS: Asaas staging migration parsed, applied and RLS validated on local clone"
+      - name: Test incremental Asaas inbox upgrade from legacy schema (disposable PostgreSQL)
+        run: |
+          bash scripts/validacao-pagamentos/test-asaas-inbox-upgrade-ci.sh
+      - name: Apply all staged Asaas migrations and test closure guards on disposable clone
+        run: |
+          set -euo pipefail
+          test "$PGHOST" = localhost
+          test "$PGDATABASE" = catalogo_ci
+          test -z "${DATABASE_URL:-}"
+          test -z "${SUPABASE_ACCESS_TOKEN:-}"
+          test -z "${SUPABASE_DB_PASSWORD:-}"
+          createdb --template=catalogo_ci catalogo_asaas_guards_ci
+          trap 'dropdb --if-exists --force catalogo_asaas_guards_ci' EXIT
+          # auth.jwt() e auth.sessions do Supabase nao existem no bootstrap fake:
+          # mock local separado, com guarda pelo nome do banco e opt-in.
+          # O script NUNCA usa URL/tokens de projetos reais.
+          psql -X -d catalogo_asaas_guards_ci -v ON_ERROR_STOP=1 -1 \
+            -c "SET app.catalogo_ci_mfa_mock='enabled'" \
+            -f supabase/tests/baseline/catalogo-asaas-auth-mfa-ephemeral.sql
+          # A ponte SEC DEFINER e restrita a este clone e um opt-in
+          # EXPLICITO, jamais permitida no projeto Supabase ou no DB base.
+          bridge_sql=supabase/pending-migrations/20261010021000_ponte_mfa_role_nologin_inerte.sql
+          if psql -X -d catalogo_asaas_guards_ci -v ON_ERROR_STOP=1 \
+            -f "$bridge_sql" > /tmp/asaas-bridge-without-opt-in.log 2>&1; then
+            echo 'ERROR: ponte MFA instalada sem opt-in' >&2
+            exit 1
+          fi
+          grep -F 'CI_ONLY_MFA_BRIDGE' /tmp/asaas-bridge-without-opt-in.log
+          if psql -X -d catalogo_ci -v ON_ERROR_STOP=1 \
+            -c "SET app.catalogo_ci_mfa_bridge='enabled'" \
+            -f "$bridge_sql" > /tmp/asaas-bridge-wrong-db.log 2>&1; then
+            echo 'ERROR: ponte MFA instalada no banco incorreto' >&2
+            exit 1
+          fi
+          grep -F 'CI_ONLY_MFA_BRIDGE' /tmp/asaas-bridge-wrong-db.log
+          test "$(psql -X -d catalogo_asaas_guards_ci -Atqc \
+            "SELECT count(*) FROM pg_roles WHERE rolname='catalogo_mfa_ponte_ci_inerte'")" = 0
+          for migration in supabase/pending-migrations/*.sql; do
+            echo "Validating staged SQL: $migration"
+            case "$migration" in
+              "$bridge_sql")
+                psql -X -d catalogo_asaas_guards_ci -v ON_ERROR_STOP=1 \
+                  -c "SET app.catalogo_ci_mfa_bridge='enabled'" \
+                  -f "$migration" > /dev/null
+                ;;
+              *)
+                psql -X -d catalogo_asaas_guards_ci -v ON_ERROR_STOP=1 \
+                  -f "$migration" > /dev/null
+                ;;
+            esac
+          done
+          psql -X -d catalogo_asaas_guards_ci -v ON_ERROR_STOP=1 \
+            -f supabase/tests/isolated/catalogo-asaas-staged-guards-postgres.sql
+          psql -X -d catalogo_asaas_guards_ci -v ON_ERROR_STOP=1 \
+            -c "SET app.catalogo_ci_mfa_test='enabled'" \
+            -f supabase/tests/isolated/catalogo-asaas-ponte-nologin-mfa-inerte-postgres.sql
+          psql -X -d catalogo_asaas_guards_ci -v ON_ERROR_STOP=1 \
+            -c "SET app.catalogo_ci_mfa_test='enabled'" \
+            -f supabase/tests/isolated/catalogo-asaas-preflight-mfa-inerte-postgres.sql
+          psql -X -d catalogo_asaas_guards_ci -v ON_ERROR_STOP=1 \
+            -c "SET app.catalogo_ci_mfa_test='enabled'" \
+            -f supabase/tests/isolated/catalogo-asaas-auth-sessao-owner-inerte-postgres.sql
+          psql -X -d catalogo_asaas_guards_ci -v ON_ERROR_STOP=1 \
+            -c "SET app.catalogo_ci_mfa_test='enabled'" \
+            -f supabase/tests/isolated/catalogo-asaas-aal1-pre-desafio-inerte-postgres.sql
+          psql -X -d catalogo_asaas_guards_ci -v ON_ERROR_STOP=1 \
+            -c "SET app.catalogo_ci_mfa_test='enabled'" \
+            -f supabase/tests/isolated/catalogo-asaas-fator-totp-aal1-owner-inerte-postgres.sql
+          # Criar clone separado APOS os ensaios com ROLLBACK: as duas sessoes
+          # concorrentes fazem COMMIT real (dados inteiramente ficticios).
+          # Este banco e sempre destruido. Nao poluir catalogo_asaas_guards_ci.
+          createdb --template=catalogo_asaas_guards_ci catalogo_asaas_race_ci
+          trap 'dropdb --if-exists --force catalogo_asaas_race_ci; dropdb --if-exists --force catalogo_asaas_guards_ci' EXIT
+          python3 scripts/validacao-pagamentos/test-asaas-advisory-concurrency.py \
+            --database catalogo_asaas_race_ci
+          dropdb --if-exists --force catalogo_asaas_race_ci
+          trap 'dropdb --if-exists --force catalogo_asaas_guards_ci' EXIT
+          test "$(psql -X -d catalogo_asaas_guards_ci -Atqc \
+            "SELECT count(*) FROM public.catalogos WHERE comercio_id='ci-asaas-encerramento-guard'")" = 0
+          test "$(psql -X -d catalogo_asaas_guards_ci -Atqc \
+            "SELECT count(*) FROM public.catalogo_asaas_saldos_residuais")" = 0
+          dropdb --if-exists --force catalogo_asaas_guards_ci
+          trap - EXIT
+          echo "PASS: staged guards tested transactionally in disposable PostgreSQL"
+
       - name: Read-only historical pricing preflight on disposable database
         run: |
           set -euo pipefail

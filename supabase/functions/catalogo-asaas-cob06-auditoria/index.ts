@@ -1,0 +1,167 @@
+// COB-06 / PR #39: funcao ISOLADA de auditoria Sandbox do acumulo.
+// Nenhum caminho POST para /payments ou /transfers, nem RPC de baixa/estorno/saque.
+// Desligada por padrao e sem alterar a Edge financeira existente.
+import { createClient } from "npm:@supabase/supabase-js@2.117.2";
+import {
+  encontrarIdPagamentoAcumuloSandboxPorReferencia,
+  consultarPagamentoAcumuloSandboxGet,
+} from "../_shared/catalogo-asaas-acumulo-get-sandbox-inerte.ts";
+import {
+  observarPagamentoAcumuloSomenteGet,
+} from "../_shared/catalogo-asaas-acumulo-get-verificado-inerte.ts";
+
+const URL_SUPABASE = Deno.env.get("SUPABASE_URL") || "";
+const CHAVES_BUNDLE = Deno.env.get("SUPABASE_SECRET_KEYS") || "";
+let CHAVE_SERVICO = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+try {
+  const obj = CHAVES_BUNDLE ? JSON.parse(CHAVES_BUNDLE) : null;
+  CHAVE_SERVICO = obj?.default || obj?.service_role || CHAVE_SERVICO;
+} catch { /* sem expor valores em erros */ }
+const db = createClient(URL_SUPABASE, CHAVE_SERVICO, {
+  auth: { persistSession: false, autoRefreshToken: false },
+});
+const ASAAS_TOKEN = Deno.env.get("ASAAS_API_KEY") || "";
+const ADMIN_STAGING = Deno.env.get("ASAAS_COB06_STAGING_ADMIN_UID") || "";
+const SANDBOX = Deno.env.get("ASAAS_ENVIRONMENT") === "sandbox";
+const ATIVO = Deno.env.get("ASAAS_COB06_AUDITORIA_ISOLADA_ENABLED") === "true";
+const GET_ATIVO = Deno.env.get("ASAAS_COB06_GET_ADMIN_READONLY_ENABLED") === "true";
+const REGISTRO_ATIVO = Deno.env.get("ASAAS_COB06_OBSERVACAO_ADMIN_ENABLED") === "true";
+const HEADERS = {
+  "Content-Type": "application/json",
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, apikey, content-type",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+};
+class Hold extends Error {
+  constructor(message: string, readonly code = 503) { super(message); }
+}
+function resposta(body: Record<string, unknown>, status = 200) {
+  return new Response(JSON.stringify(body), { status, headers: HEADERS });
+}
+function recusar(message: string, status = 503): never {
+  throw new Hold(message, status);
+}
+function texto(v: unknown): string {
+  return typeof v === "string" ? v : "";
+}
+async function rpc(name: string, params: Record<string, unknown>) {
+  const { data, error } = await db.rpc(name, params);
+  if (error || data === null || typeof data !== "object" || Array.isArray(data)) {
+    return recusar("Conferencia SQL indisponivel. HOLD.");
+  }
+  return data as Record<string, unknown>;
+}
+async function exigirAdmin(req: Request) {
+  // Nao reutilizar o UID da producao. A identidade STAGING deve ser configurada
+  // e auditada em etapa separada; ate la esta rota permanece inacessivel.
+  if (!ADMIN_STAGING || !/^[0-9a-f-]{36}$/i.test(ADMIN_STAGING)) {
+    return recusar("Administrador STAGING nao configurado. HOLD.", 503);
+  }
+  const match = /^Bearer\s+(.+)$/i.exec(req.headers.get("authorization") || "");
+  if (!match || match[1].length > 8192) return recusar("Sessao necessaria.", 401);
+  const { data, error } = await db.auth.getUser(match[1]);
+  if (error || !data?.user) return recusar("Sessao invalida.", 401);
+  if (data.user.id !== ADMIN_STAGING) return recusar("Acesso restrito.", 403);
+}
+async function observarPrimeiro(lote: string) {
+  if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(lote)) {
+    return recusar("Lote invalido.", 400);
+  }
+  const [r, anterior] = await Promise.all([
+    db.from("catalogo_asaas_acumulo_referencias")
+      .select("lote_id,comercio_id,referencia,valor_centavos,estado,payment_id,pode_emitir_pix")
+      .eq("lote_id", lote).maybeSingle(),
+    db.from("catalogo_asaas_acumulo_observacoes")
+      .select("lote_id,payment_id").eq("lote_id", lote).maybeSingle(),
+  ]);
+  if (r.error || anterior.error || !r.data) return recusar("Referencia ausente. HOLD.");
+  if (anterior.data) return recusar("Ja observado; nao repetir.", 409);
+  const ref = r.data;
+  const cents = Number(ref.valor_centavos);
+  if (ref.lote_id !== lote || ref.referencia !== "guia-acumulo-" + lote ||
+      ref.estado !== "reservado" || ref.payment_id !== null ||
+      ref.pode_emitir_pix !== false ||
+      !Number.isSafeInteger(cents) || cents < 500 || cents > 2147483647) {
+    return recusar("Referencia inconsistente. HOLD.", 409);
+  }
+  const cliente = await db.from("catalogo_asaas_clientes")
+    .select("cliente_id").eq("comercio_id", ref.comercio_id).maybeSingle();
+  if (cliente.error || !cliente.data) return recusar("Cliente ausente. HOLD.", 409);
+  const origem = await rpc("catalogo_asaas_conferir_conciliacao_acumulo", { p_lote: lote });
+  if (origem.integridade_contabil_ok !== true ||
+      Number(origem.valor_fontes_centavos) !== cents) {
+    return recusar("Fontes nao conferidas. HOLD.", 409);
+  }
+  // A chamada externa e SOMENTE GET, com base fixa api-sandbox.asaas.com.
+  const paymentId = await encontrarIdPagamentoAcumuloSandboxPorReferencia(
+    ref.referencia, ASAAS_TOKEN,
+  );
+  const observada = await observarPagamentoAcumuloSomenteGet({
+    loteId: lote, referencia: ref.referencia,
+    clienteId: cliente.data.cliente_id, valorCentavos: cents,
+  }, paymentId,
+    (id) => consultarPagamentoAcumuloSandboxGet(id, ASAAS_TOKEN),
+    (params) => rpc("catalogo_asaas_registrar_observacao_acumulo", { ...params }),
+  );
+  const ack = observada.retorno as Record<string, unknown>;
+  if (ack.status_observado !== observada.observacao.p_status) {
+    return recusar("Registro bancario inconclusivo. HOLD.");
+  }
+  return resposta({
+    success: true, lote_id: lote, payment_id: paymentId,
+    status_bancario_observado: observada.observacao.p_status,
+    registro: { ja_observado: ack.ja_observado === true },
+    pode_emitir_pix: false, pode_quitar: false, pode_estornar: false,
+    pode_liberar_motoboy: false, hold_obrigatorio: true,
+  });
+}
+Deno.serve(async (req: Request) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: HEADERS });
+  try {
+    const path = new URL(req.url).pathname.replace(/\/$/, "");
+    if (!path.endsWith("/catalogo-asaas-cob06-auditoria")) {
+      return resposta({ success: false, hold_obrigatorio: true }, 404);
+    }
+    // GET publico nao consulta tokens, banco ou informacoes financeiras.
+    if (req.method === "GET") {
+      return resposta({
+        success: true, modo: "STAGING_HOLD", banco_consultado: false,
+        pode_emitir_pix: false, pode_quitar: false, pode_estornar: false,
+        pode_liberar_motoboy: false, hold_obrigatorio: true,
+      });
+    }
+    if (req.method !== "POST") return resposta({ success: false }, 405);
+    const length = Number(req.headers.get("content-length") || "0");
+    if (!Number.isFinite(length) || length > 8192) return recusar("Payload grande.", 413);
+    const raw = await req.text();
+    if (raw.length > 8192) return recusar("Payload grande.", 413);
+    let body: unknown;
+    try { body = JSON.parse(raw); } catch { return recusar("JSON invalido.", 400); }
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return recusar("Payload invalido.", 400);
+    }
+    const entrada = body as Record<string, unknown>;
+    if (entrada.acao !== "observar_primeiro_acumulo_sandbox_admin") {
+      return recusar("Acao financeira indisponivel nesta funcao.", 403);
+    }
+    if (!ATIVO || !GET_ATIVO || !REGISTRO_ATIVO || !SANDBOX || !ASAAS_TOKEN) {
+      return recusar("Observacao inativa. HOLD.");
+    }
+    await exigirAdmin(req);
+    return await observarPrimeiro(texto(entrada.lote_id));
+  } catch (e) {
+    if (e instanceof Hold) return resposta({
+      success: false, mensagem: e.message,
+      pode_emitir_pix: false, pode_quitar: false,
+      pode_estornar: false, pode_liberar_motoboy: false,
+      hold_obrigatorio: true,
+    }, e.code);
+    // Nao registrar credenciais, corpos da API ou dados de clientes.
+    return resposta({
+      success: false, mensagem: "Auditoria indisponivel. HOLD.",
+      pode_emitir_pix: false, pode_quitar: false,
+      pode_estornar: false, pode_liberar_motoboy: false,
+      hold_obrigatorio: true,
+    }, 503);
+  }
+});

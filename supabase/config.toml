@@ -26,3 +26,6 @@ verify_jwt = false
 
 [functions.catalogo-entregas]
 verify_jwt = false # JWT validado explicitamente com auth.getUser na função.
+
+[functions.catalogo-asaas-financeiro]
+verify_jwt = false # Webhook protegido por token; rotas de usuário usam auth.getUser.

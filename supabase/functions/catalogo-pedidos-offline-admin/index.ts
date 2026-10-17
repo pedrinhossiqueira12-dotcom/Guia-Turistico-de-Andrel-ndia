@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
+import { COMPETENCIA_BUSY_CODE, COMPETENCIA_BUSY_MESSAGE, COMPETENCIA_BUSY_STATUS, isCompetenciaBusy } from "../_shared/catalogo-competencia-conflito.ts";
 
 const URL = Deno.env.get("SUPABASE_URL") ?? "";
 const BUNDLE = Deno.env.get("SUPABASE_SECRET_KEYS") ?? "";
@@ -8,7 +9,7 @@ const HEADERS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Head
 let key = LEGACY;
 try { const parsed = BUNDLE ? JSON.parse(BUNDLE) : null; key = parsed?.default || parsed?.service_role || LEGACY; } catch { /* fallback */ }
 const db = createClient(URL, key, { auth: { persistSession: false, autoRefreshToken: false } });
-class HttpError extends Error { status: number; constructor(message: string, status = 400) { super(message); this.status = status; } }
+class HttpError extends Error { status: number; code: string; constructor(message: string, status = 400, code = "") { super(message); this.status = status; this.code = code; } }
 const json = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: HEADERS });
 const text = (value: unknown, max: number) => { const v = typeof value === "string" ? value.trim() : ""; if (v.length > max) throw new HttpError("Campo inválido."); return v; };
 function month(value: unknown): string {
@@ -57,9 +58,20 @@ async function listOrders(comercioId: string, isPlatformAdmin = false) {
     return visible;
   });
 }
+async function requireTermsForNewOrders(userId:string,comercioId:string){
+ if(userId===ADMIN_USER_ID)return;
+ const {data,error}=await db.from("catalogo_aceites_operacionais")
+  .select("documento").eq("usuario_id",userId).eq("papel","comercio")
+  .eq("comercio_id",comercioId).eq("versao","2026-10-09");
+ if(error)throw new HttpError("Aceite de termos indisponível.",503);
+ const docs=new Set((data||[]).map(x=>x.documento));
+ if(!docs.has("termos")||!docs.has("privacidade"))
+  throw new HttpError("Aceite os Termos de Uso e confirme ciência da Política de Privacidade.",428);
+}
 async function updateStatus(userId: string, body: Record<string, unknown>) {
   const comercioId = text(body.comercio_id, 180); const pedidoId = text(body.pedido_id, 60); const next = text(body.status, 30); const motivo = text(body.motivo, 500);
   const access = await owner(userId, comercioId); if (access.bloqueado && next !== "cancelado") throw new HttpError("Catálogo bloqueado por inadimplência.", 423);
+  if(next==="em_preparo")await requireTermsForNewOrders(userId,comercioId);
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(pedidoId)) throw new HttpError("Pedido inválido.");
   const operations: Record<string, string> = { em_preparo: "aceitar", pronto: "pronto", cancelado: "solicitar_cancelamento" };
   if (!operations[next]) throw new HttpError("Transição inválida.");
@@ -68,7 +80,11 @@ async function updateStatus(userId: string, body: Record<string, unknown>) {
     p_operador_id: userId, p_comercio_id: comercioId, p_pedido_id: pedidoId,
     p_acao: operations[next], p_motoboy_id: null, p_motivo: motivo || null,
   });
-  if (error) { console.error("Order operation failed", { code: error.code }); throw new Error("Falha ao processar a transição do pedido."); }
+  if (error) {
+    console.error("Order operation failed", { code: error.code });
+    if (isCompetenciaBusy(error)) throw new HttpError(COMPETENCIA_BUSY_MESSAGE, COMPETENCIA_BUSY_STATUS, COMPETENCIA_BUSY_CODE);
+    throw new Error("Falha ao processar a transição do pedido.");
+  }
   if (!data?.ok) throw new HttpError(String(data?.mensagem || "A operação não foi autorizada."), Number(data?.http_status) || 409);
   return data.pedido || data;
 }
@@ -90,6 +106,7 @@ async function confirmDelivery(userId: string, body: Record<string, unknown>) {
   });
   if (error) {
     console.error("Authenticated delivery RPC failed", { code: error.code });
+    if (isCompetenciaBusy(error)) throw new HttpError(COMPETENCIA_BUSY_MESSAGE, COMPETENCIA_BUSY_STATUS, COMPETENCIA_BUSY_CODE);
     throw new Error("Falha ao confirmar entrega. Verifique a migração de confirmação autenticada.");
   }
   const result = data as Record<string, unknown> | null;
@@ -131,5 +148,5 @@ Deno.serve(async (request: Request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: HEADERS });
   if (request.method !== "POST") return json({ success: false, mensagem: "Use POST." }, 405);
   try { return await run((await auth(request)).id, (await request.json().catch(() => ({}))) as Record<string, unknown>); }
-  catch (error) { if (error instanceof HttpError) return json({ success: false, mensagem: error.message }, error.status); console.error("catalogo-pedidos-offline-admin failed:", (error as Error).message); return json({ success: false, mensagem: "Falha temporária ao consultar pedidos offline." }, 500); }
+  catch (error) { if (error instanceof HttpError) return json({ success: false, mensagem: error.message, ...(error.code ? { codigo: error.code, tentar_novamente: error.code === COMPETENCIA_BUSY_CODE } : {}) }, error.status); console.error("catalogo-pedidos-offline-admin failed:", (error as Error).message); return json({ success: false, mensagem: "Falha temporária ao consultar pedidos offline." }, 500); }
 });

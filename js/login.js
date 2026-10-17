@@ -23,11 +23,16 @@
    CONFIGURAÇÃO SUPABASE
 ========================================================= */
 
-const LOGIN_SUPABASE_URL =
-  "https://xdmbkflufsfqziixzpxc.supabase.co";
-
-const LOGIN_SUPABASE_KEY =
-  "sb_publishable_dvwNkLDf3oZrCqvZ5uAaRA_VsfiuZFy";
+// Login Sandbox apenas em catalogo.html e catalogo-admin.html com opt-in.
+// Nao reutilizar a identidade de producao durante o ensaio financeiro.
+const LOGIN_QA_SANDBOX = /\/catalogo(?:-admin)?\.html$/.test(String(window.location?.pathname || "")) &&
+  new URLSearchParams(String(window.location?.search || "")).get("asaas-sandbox") === "1";
+const LOGIN_SUPABASE_URL = LOGIN_QA_SANDBOX
+  ? "https://jbttwihctuibchhcyqtl.supabase.co"
+  : "https://xdmbkflufsfqziixzpxc.supabase.co";
+const LOGIN_SUPABASE_KEY = LOGIN_QA_SANDBOX
+  ? "sb_publishable_W80rooaGpHP4voYiLwtz7w_-k32qHsF"
+  : "sb_publishable_dvwNkLDf3oZrCqvZ5uAaRA_VsfiuZFy";
 
 
 /* =========================================================
