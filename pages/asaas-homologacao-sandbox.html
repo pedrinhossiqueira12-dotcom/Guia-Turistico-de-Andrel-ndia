@@ -93,13 +93,19 @@ pre{white-space:pre-wrap;word-break:break-all;padding:14px;background:#f3f5f1;bo
 </section>
 
 <section id="qa-cob06-integracao" hidden>
-<h2>COB-06 · Conferir integração GitHub isolada (somente leitura)</h2>
-<p class="muted"><strong>STAGING · conta administrativa pedrinhossiqueira12@gmail.com.</strong> Os dois botões abaixo apenas verificam se as secrets estão presentes e se a branch isolada contém o comércio fictício. <strong>Não encerram comércio, não alteram GitHub e não movimentam Pix.</strong> Mantenha <code>COB06_ENCERRAMENTO_HTTP_QA_ENABLED=false</code>.</p>
+<h2>COB-06 · Integração GitHub isolada</h2>
+<p class="muted"><strong>Somente STAGING · administrador pedrinhossiqueira12@gmail.com.</strong> Comece pelas duas conferências de leitura com <code>COB06_ENCERRAMENTO_HTTP_QA_ENABLED=false</code>. Esses botões não encerram comércio nem alteram GitHub ou Pix.</p>
 <div class="actions">
 <button type="button" class="secondary" id="qa-cob06-integracao-config">1 · Verificar secrets e bloqueio</button>
 <button type="button" class="secondary" id="qa-cob06-integracao-repo">2 · Verificar GitHub QA</button>
 </div>
 <pre id="qa-cob06-integracao-output" role="status">Ainda não verificado. Clique primeiro no botão 1.</pre>
+<div style="margin-top:20px;padding:16px;border:2px solid #b46b35;border-radius:12px;background:#fff8ed">
+<p><strong>Etapa 3 · Executa arquivamento real SOMENTE do registro fictício QA.</strong> Depois que os dois testes acima passarem, habilite TEMPORARIAMENTE <code>COB06_ENCERRAMENTO_HTTP_QA_ENABLED=true</code> nas secrets do projeto STAGING, apenas sob orientação. Esta ação altera o banco de testes e a branch <code>qa/cob06-isolado</code>; não move dinheiro, não modifica a branch principal e não aciona WhatsApp.</p>
+<div class="actions"><button type="button" id="qa-cob06-integracao-concluir" disabled>3 · ARQUIVAR comércio FICTÍCIO (somente QA)</button></div>
+<p class="muted">O botão 3 só será liberado após os dois testes locais. Exige nova conferência no servidor, duas confirmações e a frase de segurança. Se a resposta for inconclusiva, não clique novamente. Ao terminar, desligue a flag no STAGING.</p>
+</div>
+<pre id="qa-cob06-integracao-concluir-output" role="status">Encerramento QA não executado.</pre>
 </section>
 
 <section id="qa-delivery" hidden>
@@ -375,6 +381,8 @@ $("qa-cob06-encerramento-submit").addEventListener("click",()=>withBusy($("qa-co
  msg("Autenticacao HTTP e consultas de STAGING verificadas, sem qualquer escrita.");
 }));
 
+const cob06IntegracaoChecks=new Set();
+let cob06IntegracaoEncerramentoEnviado=false;
 // COB-06: duas conferencias isoladas apenas de leitura, sem token GitHub no navegador.
 async function verificarIntegracaoCOb06(acao){
  const {data:auth,error:authError}=await client.auth.getUser();
@@ -405,6 +413,8 @@ async function verificarIntegracaoCOb06(acao){
     (out.alvo_ficticio_preparado!==true||out.registro_github_qa!==true||
      out.status_github_qa!=="ativo"))
    throw Error("Vitrine GitHub isolada divergente. Mantenha HOLD.");
+ cob06IntegracaoChecks.add(acao);
+ $("qa-cob06-integracao-concluir").disabled=!(cob06IntegracaoChecks.has("verificar_config_qa")&&cob06IntegracaoChecks.has("verificar_repositorio_qa"));
  msg("Conferencia COB-06 aprovada: nenhuma escrita, encerramento bloqueado e Pix nao emitido.");
 }
 for(const [id,acao] of [
@@ -413,6 +423,60 @@ for(const [id,acao] of [
 ]){
  $(id).addEventListener("click",()=>withBusy($(id),()=>verificarIntegracaoCOb06(acao)));
 }
+
+// Etapa final: somente o alvo ficticio, com dois preflights HTTP antes da unica escrita.
+$("qa-cob06-integracao-concluir").addEventListener("click",()=>withBusy($("qa-cob06-integracao-concluir"),async()=>{
+ if(cob06IntegracaoEncerramentoEnviado)throw Error("Ja houve tentativa nesta sessao. Nao repita; envie o resultado para revisao.");
+ if(!cob06IntegracaoChecks.has("verificar_config_qa")||
+    !cob06IntegracaoChecks.has("verificar_repositorio_qa"))
+   throw Error("Execute primeiro os botoes de leitura 1 e 2 com a flag desligada.");
+ const {data:auth,error:authError}=await client.auth.getUser();
+ if(authError||auth?.user?.id!=="d896cc0c-31e4-4ef7-8fa4-13d15f02dd2a"||
+    auth?.user?.email?.toLowerCase()!=="pedrinhossiqueira12@gmail.com")
+   throw Error("Somente o administrador de STAGING pode executar a etapa 3.");
+ const {data,error}=await client.auth.getSession();
+ if(error||!data?.session?.access_token)throw Error("Sessao de testes expirada. Entre novamente.");
+ const endpoint=URL_SUPABASE+"/functions/v1/catalogo-cob06-encerramento-integracao-qa";
+ async function consultar(acao){
+  const res=await fetch(endpoint,{method:"POST",headers:{
+   "Content-Type":"application/json",apikey:PUBLIC_KEY,
+   Authorization:"Bearer "+data.session.access_token
+  },body:JSON.stringify({acao})});
+  const out=await res.json().catch(()=>({}));
+  if(!res.ok||out.success!==true||out.operacao!=="somente_leitura"||
+     out.github_alterado!==false||out.encerramento_executado!==false||
+     out.pix_emitido!==false)
+   throw Error(out.mensagem||"Preflight HTTP nao aprovado. Nenhuma escrita enviada.");
+  return out;
+ }
+ const config=await consultar("verificar_config_qa");
+ if(config.integracao_habilitada!==true||config.alvo_ficticio_preparado!==true||
+    config.branch_qa_configurada!==true||config.token_github_configurado!==true)
+   throw Error("Flag/credenciais/registro STAGING nao preparados. Nenhuma escrita enviada.");
+ const repo=await consultar("verificar_repositorio_qa");
+ if(repo.integracao_habilitada!==true||repo.alvo_ficticio_preparado!==true||
+    repo.registro_github_qa!==true||repo.status_github_qa!=="ativo")
+   throw Error("GitHub QA mudou ou registro ficticio nao esta ativo. Nenhuma escrita enviada.");
+ if(!window.confirm("ARQUIVAR SOMENTE cob06-qa-integracao-ficticia-20261017 em STAGING e mudar APENAS a branch qa/cob06-isolado?"))
+   return false;
+ if(!window.confirm("CONFIRMA que este comercio e inteiramente ficticio, sem catalogo, sem pedidos, sem dinheiro real, e que voce desativara a flag apos o teste?"))
+   return false;
+ if(window.prompt("Digite ENCERRAR COB06 FICTICIO para autorizar a operacao QA:")!=="ENCERRAR COB06 FICTICIO")
+   return false;
+ cob06IntegracaoEncerramentoEnviado=true; // Bloqueia repeticao se houver timeout.
+ const response=await fetch(endpoint,{method:"POST",headers:{
+   "Content-Type":"application/json",apikey:PUBLIC_KEY,
+   Authorization:"Bearer "+data.session.access_token
+ },body:JSON.stringify({acao:"concluir_encerramento_qa"})});
+ const out=await response.json().catch(()=>({}));
+ $("qa-cob06-integracao-concluir-output").textContent=JSON.stringify(
+   {etapa:"concluir_encerramento_qa",http_status:response.status,resultado:out},null,2);
+ if(!response.ok||out.success!==true||out.arquivado!==true||
+    out.github_qa_sincronizado!==true||out.pix_emitido!==false||
+    out.hold_financeiro_mantido!==true)
+   throw Error(out.mensagem||"Resultado inconclusivo. Nao clique novamente; envie o JSON para revisao.");
+ msg("Arquivamento ficticio isolado executado. Desative AGORA a flag no STAGING e envie o JSON.");
+}).then(()=>{if(cob06IntegracaoEncerramentoEnviado)$("qa-cob06-integracao-concluir").disabled=true;}));
 
 async function deliveryApi(acao,body={}){
  const out=await qaApi("catalogo-entregas",{acao,...body});
