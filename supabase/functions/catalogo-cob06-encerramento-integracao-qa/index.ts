@@ -132,18 +132,19 @@ Deno.serve(async (req: Request) => {
     if (!["verificar_config_qa", "verificar_repositorio_qa", "concluir_encerramento_qa"].includes(acao || ""))
       return fail(403, "Acao nao autorizada.");
 
-    const [pub, perfil, catalogo] = await Promise.all([
-      db.from("comercios_publicados").select("local_id,status")
-        .eq("local_id", QA_ID).maybeSingle(),
-      db.from("cadastros_comercios").select("local_id,nome,status")
+    const [pub, catalogo] = await Promise.all([
+      db.from("comercios_publicados")
+        .select("local_id,status,solicitante_id,dados,destaque,deletado_em,atualizado_em,atualizado_por")
         .eq("local_id", QA_ID).maybeSingle(),
       db.from("catalogos").select("comercio_id")
         .eq("comercio_id", QA_ID).maybeSingle(),
     ]);
-    if (pub.error || perfil.error || catalogo.error)
-      return fail(503, "Leitura QA indisponivel.");
-    const fixture = Boolean(pub.data && perfil.data?.nome === QA_NAME
-      && perfil.data?.status === "aprovado" && !catalogo.data
+    if (pub.error || catalogo.error)
+      return fail(503, "Leitura QA indisponivel ou schema incompatível.");
+    const fixture = Boolean(pub.data
+      && pub.data.solicitante_id === ADMIN_UID
+      && pub.data.dados?.nome === QA_NAME
+      && !catalogo.data
       && ["ativo", "deletado"].includes(pub.data.status));
     const flag = Deno.env.get("COB06_ENCERRAMENTO_HTTP_QA_ENABLED") === "true";
     const branchOk = Deno.env.get("COB06_GITHUB_BRANCH") === BRANCH;
