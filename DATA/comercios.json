@@ -2726,5 +2726,26 @@
     ],
     "status": "ativo",
     "destaque": false
+  },
+  {
+    "id": "cob06-qa-sentinela-20261017",
+    "nome": "COB-06 QA FICTICIO - NAO PUBLICAR",
+    "categoria": "Teste",
+    "descricao": "Registro temporario ficticio exclusivo da branch QA. Sem operacoes financeiras.",
+    "historia": "",
+    "curiosidades": "",
+    "endereco": "",
+    "horario": "",
+    "entrada": "",
+    "telefone": "",
+    "site": "",
+    "instagram": "",
+    "latitude": null,
+    "longitude": null,
+    "whatsapp": "",
+    "imagem": "",
+    "imagens": [],
+    "status": "ativo",
+    "destaque": false
   }
 ]
