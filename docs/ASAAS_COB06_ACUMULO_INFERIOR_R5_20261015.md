@@ -96,6 +96,23 @@ pagamento existente; os contratos Node conferem os bloqueios na rota.
 **Nenhuma flag foi ligada e nenhum GET externo, POST Pix, deploy ou alteração
 em STAGING/produção foi executado nesta etapa.**
 
+### Concorrência real do gate CI-only — prova adicional (17/10/2026)
+
+Um novo ensaio de duas conexões PostgreSQL foi anexado ao final da CI COB-06,
+**depois** das verificações de rollback, restauração de backup e preservação da
+fatura Mercado Pago já paga. No banco sintético `catalogo_cob06_ci`, uma
+fixture prepara R$1+R$4 com componentes, entrega comprovada e referência
+imutável; a primeira transação registra o recibo do SQL candidato 13 e segura
+a trava da loja enquanto a segunda aguarda no PostgreSQL. A validação exige
+**uma única tentativa** e segunda resposta `nova_tentativa=false`, mesmo após
+o COMMIT; o recibo não pode ser alterado ou usado para repetir POST.
+
+A fixture é persistida somente no clone descartável imediatamente antes de
+sua destruição pela CI. O gate 13 permanece **CI-only**, não há conexão com
+a Edge de emissão e nenhuma autorização bancária foi criada. A prova mede
+concorrência real de transações e idempotência do banco; timeout HTTP real,
+GET Asaas em STAGING e conciliação ponta a ponta ainda precisam de homologação.
+
 1. Registrar vínculo durável e único entre fechamento(s) de origem e cobrança consolidada de destino, sem modificar os totais históricos originais; impedir que uma competência já emitida/paga/reservada seja acumulada novamente.
 2. Usar bloqueio transacional por comércio e conferir todas as fontes para prevenir dois agrupamentos concorrentes ou dois POSTs Pix após timeout. Cada cobrança deve ter referência externa imutável.
 3. Preservar os snapshots `catalogo_fatura_componentes_v2` e demonstrar que a soma das parcelas financeiras vinculadas corresponde exatamente à cobrança. Não usar apenas a soma de `total_comissao_centavos` sem vínculos.

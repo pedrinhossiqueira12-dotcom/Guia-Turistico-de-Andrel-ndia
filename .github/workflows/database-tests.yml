@@ -985,6 +985,12 @@ jobs:
           docker exec "$service_container" rm -f /tmp/catalogo-cob06-before.dump
           rm -f /tmp/catalogo-cob06-before.dump
 
+          # Ultima prova no clone que sera destruido: duas conexoes reais
+          # disputam o MESMO lote. Uma unica intencao, segundo POST vedado.
+          # Fixture COMMIT somente aqui; nenhuma verificacao de rollback
+          # anterior e afetada. Nenhum acesso Asaas nem a Supabase remoto.
+          bash scripts/validacao-pagamentos/asaas-cob06-gate-concorrencia-ci.sh
+
           dropdb --if-exists --force catalogo_cob06_ci
           trap - EXIT
           echo "PASS: COB-06 selective billing and pre-Asaas dump/restore verified with paid MP intact, no payouts"
