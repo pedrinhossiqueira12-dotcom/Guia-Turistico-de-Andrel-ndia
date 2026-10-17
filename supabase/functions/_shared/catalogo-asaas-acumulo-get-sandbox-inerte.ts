@@ -93,16 +93,16 @@ export async function encontrarIdPagamentoAcumuloSandboxPorReferencia(
   const lista = bruto as Record<string, unknown>;
   if (lista.object !== "list" || !Array.isArray(lista.data) ||
     typeof lista.hasMore !== "boolean" ||
-    (lista.totalCount !== undefined &&
-      (typeof lista.totalCount !== "number" ||
-        !Number.isSafeInteger(lista.totalCount) || lista.totalCount < 0)) ||
+    // totalCount e obrigatorio para distinguir ausencia real de pagina
+    // parcial/truncada. Sem ele, uma lista vazia NAO e prova negativa.
+    typeof lista.totalCount !== "number" ||
+    !Number.isSafeInteger(lista.totalCount) || lista.totalCount < 0 ||
     (lista.offset !== undefined && lista.offset !== 0))
     throw new Error("COB06_HOLD_LISTAGEM_INVALIDA");
   if (lista.data.length === 0 && lista.hasMore === false &&
-    (lista.totalCount === undefined || lista.totalCount === 0))
+    lista.totalCount === 0)
     throw new Error("COB06_HOLD_PAGAMENTO_NAO_LOCALIZADO");
-  if (lista.hasMore || lista.data.length !== 1 ||
-    (lista.totalCount !== undefined && lista.totalCount !== 1))
+  if (lista.hasMore || lista.data.length !== 1 || lista.totalCount !== 1)
     throw new Error("COB06_HOLD_REFERENCIA_NAO_UNICA");
   const item = lista.data[0] as Record<string, unknown> | null;
   if (!item || typeof item !== "object" || Array.isArray(item) ||

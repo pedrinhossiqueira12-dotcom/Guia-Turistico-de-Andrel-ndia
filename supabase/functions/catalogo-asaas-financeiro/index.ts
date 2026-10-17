@@ -6,6 +6,7 @@ import { conferirPagamentoAcumuloPorGet } from "../_shared/catalogo-asaas-acumul
 import { consultarPagamentoAcumuloSandboxGet } from "../_shared/catalogo-asaas-acumulo-get-sandbox-inerte.ts";
 import { encontrarIdPagamentoAcumuloSandboxPorReferencia } from "../_shared/catalogo-asaas-acumulo-get-sandbox-inerte.ts";
 import { observarPagamentoAcumuloSomenteGet } from "../_shared/catalogo-asaas-acumulo-get-verificado-inerte.ts";
+import { auditarDuplicidadeAcumuloSomenteGet } from "../_shared/catalogo-asaas-acumulo-auditoria-duplicidade-inerte.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const BUNDLE = Deno.env.get("SUPABASE_SECRET_KEYS") || "";
@@ -30,6 +31,8 @@ const COB06_OBSERVACAO_ADMIN_ON = Deno.env.get("ASAAS_COB06_OBSERVACAO_ADMIN_ENA
 // Prepara apenas o livro contabil de um comercio ficticio no Sandbox.
 // Nao autoriza POST /payments, baixa, credito ou transferencias.
 const COB06_PREPARACAO_ADMIN_ON = Deno.env.get("ASAAS_COB06_PREPARACAO_ADMIN_ENABLED") === "true";
+// Auditoria pontual apenas GET, separada da preparacao e de qualquer POST.
+const COB06_DUPLICIDADE_ADMIN_ON = Deno.env.get("ASAAS_COB06_DUPLICIDADE_ADMIN_ENABLED") === "true";
 const PAYOUTS_ON = Deno.env.get("ASAAS_PAYOUTS_ENABLED") === "true";
 const ENVIRONMENT = Deno.env.get("ASAAS_ENVIRONMENT") === "production" ? "production" : "sandbox";
 const API_BASE = ENVIRONMENT === "production" ? "https://api.asaas.com/v3" : "https://api-sandbox.asaas.com/v3";
@@ -125,6 +128,60 @@ async function prepararAcumuloSandboxAdmin(uid:string,body:Record<string,unknown
   referencia:referencia.referencia,ja_reservado:reservado.ja_reservado===true,
   pix_emitido:false,pode_emitir_pix:false,pode_quitar:false,
   pode_liberar_motoboy:false,hold_obrigatorio:true});
+}
+
+// Verifica a referencia de um lote QA contra o Asaas Sandbox sem mutacoes.
+// Mesmo lista vazia e integra NAO comprova ausencia definitiva nem habilita POST:
+// falta coordenacao duravel entre o GET e o eventual envio bancario.
+async function auditarDuplicidadeAcumuloSandboxAdmin(uid:string,body:Record<string,unknown>){
+ if(uid!==ADMIN_USER_ID)throw new Failure("Acesso restrito à administração.",403);
+ if(ENVIRONMENT!=="sandbox"||!COB06_GET_ADMIN_READONLY_ON||!COB06_DUPLICIDADE_ADMIN_ON)
+  throw new Failure("Auditoria COB-06 de duplicidade desabilitada.",503);
+ if(!ASAAS_TOKEN)throw new Failure("Consulta Sandbox sem credencial.",503);
+ const lote=value(body.lote_id,70);
+ if(!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(lote))
+  throw new Failure("Lote inválido.",400);
+ const [referencia,observacao]=await Promise.all([
+  db.from("catalogo_asaas_acumulo_referencias")
+   .select("lote_id,comercio_id,referencia,valor_centavos,estado,payment_id,pode_emitir_pix")
+   .eq("lote_id",lote).maybeSingle(),
+  db.from("catalogo_asaas_acumulo_observacoes")
+   .select("lote_id").eq("lote_id",lote).maybeSingle(),
+ ]);
+ if(referencia.error||observacao.error||!referencia.data)
+  throw new Failure("Livro COB-06 indisponível. HOLD.",503);
+ const ref=referencia.data,valorCentavos=Number(ref.valor_centavos);
+ if(ref.lote_id!==lote||ref.comercio_id!=="asaas-cob02"||
+    ref.referencia!=="guia-acumulo-"+lote||ref.estado!=="reservado"||
+    ref.payment_id!==null||ref.pode_emitir_pix!==false||
+    !Number.isSafeInteger(valorCentavos)||valorCentavos<500||valorCentavos>2147483647)
+  throw new Failure("Reserva de acumulo inconsistente. HOLD.",409);
+ if(observacao.data)
+  return respond({success:true,lote_id:lote,estado:"observacao_local_existente",
+   pode_emitir_pix:false,pode_quitar:false,pode_liberar_motoboy:false,
+   prova_ausencia_para_emissao:false,hold_obrigatorio:true});
+ const cliente=await db.from("catalogo_asaas_clientes")
+  .select("cliente_id").eq("comercio_id",ref.comercio_id).maybeSingle();
+ if(cliente.error||!cliente.data)
+  throw new Failure("Cliente bancário indisponível. HOLD.",409);
+ const conferencia=await rpc("catalogo_asaas_conferir_conciliacao_acumulo",{p_lote:lote});
+ if(conferencia.integridade_contabil_ok!==true||
+    Number(conferencia.valor_fontes_centavos)!==valorCentavos||
+    conferencia.pode_emitir_pix!==false||conferencia.pode_quitar!==false)
+  throw new Failure("Origens financeiras não conferidas. HOLD.",409);
+ let resultado;
+ try {
+  resultado=await auditarDuplicidadeAcumuloSomenteGet({
+   loteId:lote,referencia:ref.referencia,
+   clienteId:cliente.data.cliente_id,valorCentavos,
+  },ASAAS_TOKEN);
+ }catch{
+  throw new Failure("GET bancário inconclusivo. Verificar manualmente. HOLD.",503);
+ }
+ return respond({success:true,lote_id:lote,estado:resultado.estado,
+  payment_id:resultado.paymentId,status_bancario:resultado.statusBancario,
+  pode_emitir_pix:false,pode_quitar:false,pode_liberar_motoboy:false,
+  prova_ausencia_para_emissao:false,hold_obrigatorio:true});
 }
 
 // COB-06: prova remota somente leitura de um lote JA observado.
@@ -2129,6 +2186,7 @@ Deno.serve(async (request:Request)=>{
    case "finalizar_encerramento_admin":return await finalizarEncerramentoAdmin(user.id,body);
    case "diagnosticar_faturas_sandbox_admin":return await diagnosticarFaturasSandboxAdmin(user.id);
    case "preparar_acumulo_sandbox_admin":return await prepararAcumuloSandboxAdmin(user.id,body);
+   case "auditar_duplicidade_acumulo_sandbox_admin":return await auditarDuplicidadeAcumuloSandboxAdmin(user.id,body);
    case "observar_primeiro_acumulo_sandbox_admin":return await observarPrimeiroAcumuloSandboxAdmin(user.id,body);
    case "conferir_acumulo_sandbox_admin":return await conferirAcumuloSandboxAdmin(user.id,body);
    case "registrar_estado_acumulo_sandbox_admin":return await conferirAcumuloSandboxAdmin(user.id,body,true);

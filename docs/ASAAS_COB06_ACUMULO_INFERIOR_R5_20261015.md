@@ -75,6 +75,27 @@ ausência de chamada bancária. **Nenhum deploy, ativação de flag ou pagamento
 feito**. Essa preparação não substitui GET bancário independente, autorização
 durável de tentativa, liquidação/estorno multicompetências ou homologação E2E.
 
+### Auditoria de duplicidade por GET — candidato da PR (17/10/2026)
+
+Adicionada à Edge a ação `auditar_duplicidade_acumulo_sandbox_admin`, com
+flag própria `ASAAS_COB06_DUPLICIDADE_ADMIN_ENABLED=true`, **OFF por padrão**,
+além do gate `ASAAS_COB06_GET_ADMIN_READONLY_ENABLED`. Exige sessão do
+administrador, ambiente Sandbox e lote pertencente à loja fictícia
+`asaas-cob02`. Obtém referência, cliente e valor exclusivamente do banco,
+confere as origens e consulta o Asaas apenas por **GET**.
+
+O adaptador exige a contagem total explícita e coerente na listagem do Asaas;
+resposta incompleta, duplicada, erro ou divergência no GET por ID é **HOLD**.
+Se a lista vier integralmente vazia, o retorno significa apenas *nenhum
+pagamento localizado nesta consulta*. **Não é prova definitiva de ausência nem
+autorização para emitir, repetir POST ou baixar valores**: o gate transacional
+da tentativa em SQL 13 ainda é CI-only e não está conectado à Edge.
+
+As provas Deno usam um provedor fictício com falha, ausência, duplicidade e
+pagamento existente; os contratos Node conferem os bloqueios na rota.
+**Nenhuma flag foi ligada e nenhum GET externo, POST Pix, deploy ou alteração
+em STAGING/produção foi executado nesta etapa.**
+
 1. Registrar vínculo durável e único entre fechamento(s) de origem e cobrança consolidada de destino, sem modificar os totais históricos originais; impedir que uma competência já emitida/paga/reservada seja acumulada novamente.
 2. Usar bloqueio transacional por comércio e conferir todas as fontes para prevenir dois agrupamentos concorrentes ou dois POSTs Pix após timeout. Cada cobrança deve ter referência externa imutável.
 3. Preservar os snapshots `catalogo_fatura_componentes_v2` e demonstrar que a soma das parcelas financeiras vinculadas corresponde exatamente à cobrança. Não usar apenas a soma de `total_comissao_centavos` sem vínculos.

@@ -7,7 +7,7 @@ const arquivo = path.join(__dirname, '..', 'supabase', 'functions',
   'catalogo-asaas-financeiro', 'index.ts');
 const edge = fs.readFileSync(arquivo, 'utf8');
 const inicio = edge.indexOf('async function prepararAcumuloSandboxAdmin(');
-const fim = edge.indexOf('// COB-06: prova remota somente leitura', inicio);
+const fim = edge.indexOf('// Verifica a referencia de um lote QA', inicio);
 const preparar = edge.slice(inicio, fim);
 
 test('COB-06: preparação administrativa só aceita Sandbox e comércio QA com flag própria OFF', () => {

@@ -3,6 +3,7 @@ import { postarPixAcumuloSandboxCandidatoSomenteCi } from "../_shared/catalogo-a
 import { consultarPagamentoAcumuloSandboxGet,
   encontrarIdPagamentoAcumuloSandboxPorReferencia } from "../_shared/catalogo-asaas-acumulo-get-sandbox-inerte.ts";
 import { conferirPagamentoAcumuloPorGet } from "../_shared/catalogo-asaas-acumulo-get-verificado-inerte.ts";
+import { auditarDuplicidadeAcumuloSomenteGet } from "../_shared/catalogo-asaas-acumulo-auditoria-duplicidade-inerte.ts";
 
 const id = "pay_cob06_test123";
 const lote = "22222222-3333-4444-8888-aaaaaaaaaaaa";
@@ -110,6 +111,67 @@ Deno.test("COB06 lista Sandbox: entrada errada e falha de rede nunca registram p
   await hold(() => encontrarIdPagamentoAcumuloSandboxPorReferencia(esperado.referencia,
     "segredo-ci", mock), "GET_INDISPONIVEL");
   assert(calls === 1, "falha de rede nao tenta POST nem retry automatico");
+});
+
+Deno.test("COB06 duplicidade: GET negativo com paginacao completa e sempre HOLD", async () => {
+  let gets = 0;
+  const mock = (async (_url: string | URL | Request, init?: RequestInit) => {
+    gets++;
+    assert(init?.method === "GET", "nenhuma escrita no banco ou Asaas");
+    return new Response(JSON.stringify({object:"list",data:[],hasMore:false,
+      totalCount:0,offset:0}), {status:200,headers:{"content-type":"application/json"}});
+  }) as typeof fetch;
+  const r=await auditarDuplicidadeAcumuloSomenteGet(esperado,"segredo-ci",mock);
+  assert(gets===1&&r.estado==="nenhuma_cobranca_localizada"&&r.paymentId===null&&
+    r.podeEmitirPix===false&&r.podeQuitar===false&&
+    r.podeLiberarMotoboy===false&&r.holdObrigatorio===true,
+    "GET sem resultado nunca autoriza POST");
+});
+
+Deno.test("COB06 duplicidade: pagamento existente requer GET por ID e identidade exata", async () => {
+  const chamadas:string[]=[];
+  const mock=(async (raw:string|URL|Request,init?:RequestInit)=>{
+    const url=new URL(String(raw));
+    chamadas.push((init?.method||"")+" "+url.pathname);
+    const dados=url.pathname==="/v3/payments"
+      ? {object:"list",hasMore:false,totalCount:1,data:[{id}]}
+      : remoto;
+    return new Response(JSON.stringify(dados),{status:200,
+      headers:{"content-type":"application/json"}});
+  }) as typeof fetch;
+  const r=await auditarDuplicidadeAcumuloSomenteGet(esperado,"segredo-ci",mock);
+  assert(r.estado==="cobranca_existente_verificada"&&r.paymentId===id&&
+    r.statusBancario==="PENDING"&&r.podeEmitirPix===false&&
+    r.holdObrigatorio===true&&chamadas.join(",")==="GET /v3/payments,GET /v3/payments/"+id,
+    "pagamento encontrado nao gera outra tentativa");
+});
+
+Deno.test("COB06 duplicidade: GET incompleto, ambiguo ou divergente impede qualquer prosseguimento",async()=>{
+  const casos=[
+    {object:"list",data:[],hasMore:false},
+    {object:"list",data:[],hasMore:false,totalCount:1},
+    {object:"list",data:[],hasMore:true,totalCount:0},
+    {object:"list",data:[{id},{id:"pay_outro_98765"}],hasMore:false,totalCount:2},
+  ];
+  for(const resposta of casos){
+    await hold(()=>auditarDuplicidadeAcumuloSomenteGet(esperado,"segredo-ci",
+      (async()=>new Response(JSON.stringify(resposta),{status:200,
+        headers:{"content-type":"application/json"}})) as typeof fetch),"GET_INCONCLUSIVO");
+  }
+  await hold(()=>auditarDuplicidadeAcumuloSomenteGet(esperado,"segredo-ci",
+    (async(raw:string|URL|Request)=>new Response(JSON.stringify(
+      new URL(String(raw)).pathname==="/v3/payments"
+        ? {object:"list",data:[{id}],hasMore:false,totalCount:1}
+        : {...remoto,value:6}),{status:200,
+      headers:{"content-type":"application/json"}})) as typeof fetch),"GET_INCONCLUSIVO");
+});
+
+Deno.test("COB06 duplicidade: identidade invalida bloqueia antes de acessar banco",async()=>{
+  let chamadas=0;
+  await hold(()=>auditarDuplicidadeAcumuloSomenteGet(
+    {...esperado,referencia:"outra"},"segredo-ci",
+    (async()=>{chamadas++;throw Error("nao chamar");}) as typeof fetch),"IDENTIDADE_INVALIDA");
+  assert(chamadas===0,"nenhum acesso de rede com identidade adulterada");
 });
 
 
