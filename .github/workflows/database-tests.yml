@@ -157,6 +157,8 @@ jobs:
         run: deno test --no-check --node-modules-dir=auto --allow-env --allow-read=supabase/functions supabase/functions/tests/catalogo-asaas-cob06-auditoria-http-sandbox-mock.test.ts
       - name: Test COB06 isolated accounting preparation OFF without network
         run: deno test --no-check --node-modules-dir=auto --allow-env --allow-read=supabase/functions supabase/functions/tests/catalogo-cob06-acumulo-preparacao-http-inerte.test.ts
+      - name: Test COB06 isolated preparation ON with mocked Auth and SQL only
+        run: deno test --no-check --node-modules-dir=auto --allow-env --allow-read=supabase/functions supabase/functions/tests/catalogo-cob06-acumulo-preparacao-http-sandbox-mock.test.ts
 
   edge-http-mock-tests:
     name: Real Edge HTTP handlers with fake provider and blocked network (Deno)
