@@ -398,7 +398,7 @@ Deno.test("COB06 auditoria baixa HTTP: R$1 + R$4 e 4 parcelas somente GET/HOLD",
     r.body.prova_bancaria_autonoma === false && r.body.hold_obrigatorio === true &&
     r.body.pode_quitar === false && r.body.pode_estornar === false &&
     r.body.pode_liberar_motoboy === false && r.body.pode_emitir_pix === false &&
-    getsAsaas === 1 && getsListaAsaas === 0 && escritas === 0,
+    Number(getsAsaas) === 1 && Number(getsListaAsaas) === 0 && Number(escritas) === 0,
     "auditoria nao reconciliou competencias ou liberou dinheiro");
 });
 
@@ -408,17 +408,17 @@ Deno.test("COB06 auditoria baixa HTTP: estorno remoto nao altera livros", async 
   assert(r.http === 200 && r.body.status_bancario_verificado === "REFUNDED" &&
     r.body.exige_revisao === true && r.body.pode_estornar === false &&
     r.body.pode_quitar === false && r.body.hold_obrigatorio === true &&
-    escritas === 0, "GET de estorno liberou mutacao contábil");
+    Number(escritas) === 0, "GET de estorno liberou mutacao contábil");
 });
 
 Deno.test("COB06 auditoria baixa HTTP: divergencia, permissao ou intruso falham fechados", async () => {
   reiniciar(); projecaoDivergente = true;
   const total = await chamar("auditar_baixa_multicompetencia_sandbox_admin");
   assert(total.http === 409 && total.body.success === false &&
-    getsAsaas === 1 && escritas === 0, "origens divergentes aceitas");
+    Number(getsAsaas) === 1 && Number(escritas) === 0, "origens divergentes aceitas");
   reiniciar(); permissaoInesperada = true;
   const permissao = await chamar("auditar_baixa_multicompetencia_sandbox_admin");
-  assert(permissao.http === 409 && escritas === 0,
+  assert(permissao.http === 409 && Number(escritas) === 0,
     "RPC com permissao de pagamento aceita");
   reiniciar(); temObservacao = false;
   const semObservacao = await chamar("auditar_baixa_multicompetencia_sandbox_admin");
@@ -426,7 +426,8 @@ Deno.test("COB06 auditoria baixa HTTP: divergencia, permissao ou intruso falham 
     "GET realizado sem pagamento associado ao lote");
   reiniciar(); usuario = OUTRO;
   const intruso = await chamar("auditar_baixa_multicompetencia_sandbox_admin");
-  assert(intruso.http === 403 && getsAsaas === 0 && getsBanco === 0 && escritas === 0,
+  assert(intruso.http === 403 && Number(getsAsaas) === 0 &&
+    Number(getsBanco) === 0 && Number(escritas) === 0,
     "nao-admin acessou livro ou provedor");
 });
 
