@@ -63,7 +63,8 @@ test("COB-04: botões de retirada antiga indisponíveis durante teste de entrega
  assert.match(qaHtml, /id="qa-create" disabled/);
  assert.match(qaHtml, /id="qa-finish" disabled/);
  assert.match(qaHtml, /COB-04 · Entrega V2 com motoboy/);
- assert.match(qaHtml, /value="2027-02"/);
+ assert.match(qaHtml, /value="2027-03"/);
+ assert.match(qaHtml, /fevereiro\/2027 está faturado com R\$2,80/);
 });
 test("COB-04: fechamento exige entrega física e pagamento confirmado para TODOS os componentes",()=>{
  const guardSql=fs.readFileSync("supabase/pending-migrations/20261012104000_cob04_fechamento_apenas_entregas_confirmadas.sql","utf8");

@@ -76,7 +76,7 @@ pre{white-space:pre-wrap;word-break:break-all;padding:14px;background:#f3f5f1;bo
 
 <section id="qa-delivery" hidden>
 <h2>COB-04 · Entrega V2 com motoboy (somente STAGING)</h2><p class="muted"><strong>Próxima ação:</strong> botão 7 para autorizar a conta de motoboy existente, depois botão 8 para criar UM pedido de entrega. Não confirme o pedido de retirada que ficou “pronto”.</p>
-<p class="muted">COB-04 (já homologado): produto R$100 gera R$7 de comissão. COB-06 (preparo): produto QA R$40 gera R$2,80 (R$2 plataforma + R$0,80 motoboy). A cobrança abaixo de R$5 deve permanecer BLOQUEADA, sem Pix ou quitação fictícia. Todos os pedidos são somente de homologação.</p>
+<p class="muted">COB-04 (já homologado): produto R$100 gera R$7 de comissão. COB-06: produto QA R$40 gera R$2,80 (R$2 plataforma + R$0,80 motoboy). Fevereiro/2027 já foi faturado com R$2,80; o novo pedido aceito deve ir para março/2027. Somente após entrega confirmada, feche março e confira a prévia de R$5,60 acumulados em duas competências. Não emita Pix, não quite e não transfira valores neste ensaio.</p>
 <label>E-mail do motoboy de testes já cadastrado<input id="qa-moto-email" type="email" autocomplete="off" placeholder="Informe o e-mail da conta de motoboy do Sandbox"></label><p class="muted">O ID do motoboy é localizado pela API quando você autoriza. Não precisa consultar ou digitar esse ID.</p>
 <label>Nome de identificação do motoboy<input id="qa-moto-name" maxlength="120" autocomplete="off" value="Motoboy de homologação" placeholder="Motoboy de homologação"></label>
 <label>ID do motoboy autorizado (automático)<input id="qa-moto-id" readonly aria-readonly="true" placeholder="Será preenchido pelo botão 7; não precisa digitar"></label>
@@ -103,7 +103,7 @@ pre{white-space:pre-wrap;word-break:break-all;padding:14px;background:#f3f5f1;bo
 <section id="billing" hidden>
 <h2>3. Consultar fatura de homologação</h2>
 <p>O comércio <strong>asaas-cob02</strong> está vinculado à conta existente de homologação. Primeiro conclua o pedido do Sandbox e feche a competência.</p>
-<label>Competência da fatura<input id="competencia" type="month" value="2027-02"></label><p class="muted">Em 16/10/2026 a última competência paga da loja QA era janeiro/2027; confira a competência do novo pedido antes de fechar. Não reabra meses pagos. Se o total for menor que R$5, apenas consulte: NÃO clique em emitir Pix.</p>
+<label>Competência da fatura<input id="competencia" type="month" value="2027-03"></label><p class="muted">COB-06 (17/10/2026): fevereiro/2027 está faturado com R$2,80 e deve ficar imutável. Use março/2027 apenas após concluir a nova entrega de R$40; confira a comissão antes de fechar. A prévia acumulada esperada é R$5,60 (fevereiro + março). NÃO clique em emitir Pix neste teste, mesmo que o valor acumulado atinja R$5.</p>
 <div class="actions"><button id="consultar" type="button">Consultar fatura</button><button class="secondary" id="conciliar" type="button">Verificar pagamento no Asaas</button></div>
 <h2 style="margin-top:25px">4. Emitir Pix fictício da fatura</h2>
 <p class="muted">Execute somente depois de habilitar <code>ASAAS_BILLING_ENABLED=true</code> no Supabase de testes. A emissão é recuperável e não deve ser feita novamente para a mesma competência se existir cobrança anterior.</p>
