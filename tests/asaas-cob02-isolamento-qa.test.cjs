@@ -141,3 +141,30 @@ test("COB-06: seletor de produto QA em STAGING e guarda de fatura inferior a R$5
  assert.match(qaHtml,/total_comissao_centavos<500/);
  assert.match(qaHtml,/NÃO emita Pix/);
 });
+
+test("COB-06: preparo acumulado exige administrador Auth, confirmacao escrita e API isolada STAGING",()=>{
+ const src=fs.readFileSync("supabase/functions/catalogo-cob06-acumulo-preparacao/index.ts","utf8");
+ assert.match(qaHtml,/id="qa-cob06-acumulo" hidden/);
+ assert.match(qaHtml,/id="qa-cob06-acumulo-submit"/);
+ assert.match(qaHtml,/id="qa-cob06-acumulo-retomar"/);
+ assert.match(qaHtml,/id="qa-cob06-acumulo-output" role="status"/);
+ assert.match(qaHtml,/\$\("qa-cob06-acumulo"\)\.hidden=!u\|\|u\.id!==/);
+ assert.match(qaHtml,/data\?\.user\?\.id!==COB06_QA_REVISOR/);
+ assert.match(qaHtml,/window\.prompt\("Para confirmar o lote contábil persistente, digite RESERVAR COB06:"\)/);
+ assert.match(qaHtml,/qaApi\("catalogo-cob06-acumulo-preparacao"/);
+ assert.match(qaHtml,/adminAcumulo\("preparar_acumulo_qa"\)/);
+ assert.match(qaHtml,/adminAcumulo\("retomar_acumulo_qa"\)/);
+ assert.match(qaHtml,/cob06AcumuloPreparado=true/);
+ assert.match(qaHtml,/pode_emitir_pix!==false/);
+ assert.match(qaHtml,/pode_quitar!==false/);
+ assert.match(qaHtml,/pode_liberar_motoboy!==false/);
+ assert.match(src,/SUPABASE_URL === STAGING_URL && AMBIENTE_SANDBOX/);
+ assert.match(src,/ISOLADA_ON && PREPARACAO_ON/);
+ assert.match(src,/auth\.user\.id === ADMIN_UID/);
+ assert.match(src,/const CORTE = "2027-03-01"/);
+ assert.match(src,/const TOTAL_CENTAVOS = 560/);
+ assert.doesNotMatch(src,/api-sandbox\.asaas\.com|\/v3\/payments|\/v3\/transfers/);
+ const inline=qaHtml.match(/<script>\s*([\s\S]*?)<\/script>/);
+ assert.ok(inline,"script de homologacao presente");
+ assert.doesNotThrow(()=>new vm.Script(inline[1]),"JS inline valido");
+});
