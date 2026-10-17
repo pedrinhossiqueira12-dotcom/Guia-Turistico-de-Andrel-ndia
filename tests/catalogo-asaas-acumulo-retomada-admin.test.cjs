@@ -35,3 +35,11 @@ test('COB-06 retomada: sem rede bancaria, POST, baixas ou saques',()=>{
   assert.match(modulo,/pode_emitir_pix: false, pode_quitar: false, pode_estornar: false/);
   assert.match(modulo,/pode_liberar_motoboy: false, hold_obrigatorio: true/);
 });
+
+test('COB-06 retomada: teste Deno e verificacao de tipos estao na CI',()=>{
+  const workflow=fs.readFileSync(path.join(__dirname,'..','.github','workflows',
+    'database-tests.yml'),'utf8');
+  assert.match(workflow,/deno check supabase\/functions\/_shared\/catalogo-asaas-acumulo-retomada-inerte\.ts/);
+  assert.match(workflow,/deno check supabase\/functions\/tests\/catalogo-asaas-acumulo-retomada-inerte\.test\.ts/);
+  assert.match(workflow,/deno test --no-check [^\n]*catalogo-asaas-acumulo-retomada-inerte\.test\.ts/);
+});
