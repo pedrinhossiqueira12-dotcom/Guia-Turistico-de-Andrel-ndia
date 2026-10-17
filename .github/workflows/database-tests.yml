@@ -663,6 +663,9 @@ jobs:
       PGDATABASE: catalogo_ci
     steps:
       - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
       - name: Enforce ephemeral target without external cron extensions
         run: |
           test "$PGHOST" = localhost
@@ -992,6 +995,11 @@ jobs:
           # Fixture COMMIT somente aqui; nenhuma verificacao de rollback
           # anterior e afetada. Nenhum acesso Asaas nem a Supabase remoto.
           bash scripts/validacao-pagamentos/asaas-cob06-gate-concorrencia-ci.sh
+
+          # Prova integrada: GET Asaas 100% mockado + SQL13 persistido REAL.
+          # Deno sem --allow-net; so pode chamar psql no localhost efemero.
+          deno test --no-check --allow-env --allow-run=psql \
+            supabase/functions/tests/catalogo-asaas-acumulo-pre-post-postgres-ci.test.ts
 
           dropdb --if-exists --force catalogo_cob06_ci
           trap - EXIT

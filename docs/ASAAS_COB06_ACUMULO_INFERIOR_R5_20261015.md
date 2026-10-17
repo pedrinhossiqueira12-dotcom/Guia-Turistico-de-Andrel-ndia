@@ -131,6 +131,25 @@ a Edge de emissão e nenhuma autorização bancária foi criada. A prova mede
 concorrência real de transações e idempotência do banco; timeout HTTP real,
 GET Asaas em STAGING e conciliação ponta a ponta ainda precisam de homologação.
 
+#### Prova integrada GET + gate persistente — CI descartável (17/10/2026)
+
+O ensaio `catalogo-asaas-acumulo-pre-post-postgres-ci.test.ts` conecta o
+coordenador Deno `conciliarAntesDePixAcumuloCandidatoSomenteCi` à função **real**
+`catalogo_private.catalogo_asaas_autorizar_tentativa_emissao_ci` via `psql`,
+após a fixture de R$1+R$4 e a prova de concorrência. Ele obtém identidade,
+referência e valor do livro PostgreSQL descartável, não do navegador. O Asaas
+é simulado por `fetch` injetado e o Deno é executado **sem permissão de rede**.
+
+Os contratos obrigatórios são: pagamento encontrado e verificado por GET não
+chama o gate; GET vazio após tentativa persistida retorna reconciliação manual
+e não permite novo POST; GET duplicado ou indisponível não aciona o gate; o
+recibo permanece único e inalterado, não há registro de emissão e a cobrança
+Mercado Pago histórica já paga continua íntegra. **O teste não envia Pix**.
+Executa apenas no clone `catalogo_cob06_ci` com PostgreSQL local, credenciais
+fictícias de CI e nega alvos remotos; o SQL 13 continua impossível de aplicar
+em STAGING/produção. Uma prova E2E real do Asaas Sandbox, implantação e
+autorização de emissão ainda são etapas separadas e pendentes.
+
 1. Registrar vínculo durável e único entre fechamento(s) de origem e cobrança consolidada de destino, sem modificar os totais históricos originais; impedir que uma competência já emitida/paga/reservada seja acumulada novamente.
 2. Usar bloqueio transacional por comércio e conferir todas as fontes para prevenir dois agrupamentos concorrentes ou dois POSTs Pix após timeout. Cada cobrança deve ter referência externa imutável.
 3. Preservar os snapshots `catalogo_fatura_componentes_v2` e demonstrar que a soma das parcelas financeiras vinculadas corresponde exatamente à cobrança. Não usar apenas a soma de `total_comissao_centavos` sem vínculos.
