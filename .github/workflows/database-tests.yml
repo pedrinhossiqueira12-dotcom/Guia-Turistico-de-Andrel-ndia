@@ -126,6 +126,7 @@ jobs:
           deno check supabase/functions/tests/catalogo-asaas-acumulo-retomada-inerte.test.ts
           deno check --node-modules-dir=auto supabase/functions/tests/catalogo-asaas-acumulo-registro-http-inerte.test.ts
           deno check supabase/functions/catalogo-cob06-acumulo-preparacao/index.ts
+          deno check --node-modules-dir=auto supabase/functions/catalogo-cob06-encerramento-integracao-qa/index.ts
           deno check supabase/functions/_shared/catalogo-asaas-stepup-documental-ensaio.ts
           deno check supabase/functions/_shared/catalogo-asaas-mfa-orquestrador-prechallenge-inerte.ts
           deno check supabase/functions/_shared/catalogo-asaas-livro-owner-sql-inerte.ts
