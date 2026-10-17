@@ -2726,5 +2726,26 @@
     ],
     "status": "ativo",
     "destaque": false
+  },
+  {
+    "id": "cob06-qa-integracao-ficticia-20261017",
+    "nome": "COB06 QA FICTICIO - NAO PUBLICAR",
+    "categoria": "Teste QA",
+    "descricao": "Registro estritamente ficticio para teste isolado. Nao publicar.",
+    "historia": "",
+    "curiosidades": "",
+    "endereco": "",
+    "horario": "",
+    "entrada": "",
+    "telefone": "",
+    "whatsapp": "",
+    "instagram": "",
+    "site": "",
+    "latitude": null,
+    "longitude": null,
+    "imagem": "",
+    "imagens": [],
+    "status": "ativo",
+    "destaque": false
   }
 ]
