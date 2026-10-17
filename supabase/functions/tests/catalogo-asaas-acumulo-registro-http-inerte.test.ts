@@ -422,7 +422,7 @@ Deno.test("COB06 auditoria baixa HTTP: divergencia, permissao ou intruso falham 
     "RPC com permissao de pagamento aceita");
   reiniciar(); temObservacao = false;
   const semObservacao = await chamar("auditar_baixa_multicompetencia_sandbox_admin");
-  assert(semObservacao.http === 409 && getsAsaas === 0 && escritas === 0,
+  assert(semObservacao.http === 409 && Number(getsAsaas) === 0 && Number(escritas) === 0,
     "GET realizado sem pagamento associado ao lote");
   reiniciar(); usuario = OUTRO;
   const intruso = await chamar("auditar_baixa_multicompetencia_sandbox_admin");
