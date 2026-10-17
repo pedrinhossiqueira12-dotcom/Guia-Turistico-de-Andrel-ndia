@@ -85,6 +85,13 @@ pre{white-space:pre-wrap;word-break:break-all;padding:14px;background:#f3f5f1;bo
 <pre id="qa-cob06-acumulo-output" role="status">Nenhuma reserva permanente solicitada.</pre>
 </section>
 
+<section id="qa-cob06-encerramento" hidden>
+<h2>COB-06 · Conferência HTTP do encerramento (somente leitura)</h2>
+<p class="muted">Conta administrativa de testes apenas. Este botão verifica sua sessão no servidor e consulta o lote fictício de R$ 5,60 e uma identificação inexistente de comércio. Não fecha loja, não chama as RPCs de arquivamento, não altera GitHub ou WhatsApp, nem emite Pix.</p>
+<div class="actions"><button type="button" class="secondary" id="qa-cob06-encerramento-submit">Verificar HTTP de encerramento (sem alterações)</button></div>
+<pre id="qa-cob06-encerramento-output" role="status">Verificação não executada.</pre>
+</section>
+
 <section id="qa-delivery" hidden>
 <h2>COB-04 · Entrega V2 com motoboy (somente STAGING)</h2><p class="muted"><strong>Próxima ação:</strong> botão 7 para autorizar a conta de motoboy existente, depois botão 8 para criar UM pedido de entrega. Não confirme o pedido de retirada que ficou “pronto”.</p>
 <p class="muted">COB-04 (já homologado): produto R$100 gera R$7 de comissão. COB-06: produto QA R$40 gera R$2,80 (R$2 plataforma + R$0,80 motoboy). Fevereiro/2027 já foi faturado com R$2,80; o novo pedido aceito deve ir para março/2027. Somente após entrega confirmada, feche março e confira a prévia de R$5,60 acumulados em duas competências. Não emita Pix, não quite e não transfira valores neste ensaio.</p>
@@ -149,7 +156,7 @@ const pretty=data=>{const {pix,...publicResult}=data||{};return JSON.stringify(p
 async function refresh(){
  const {data}=await client.auth.getUser();
  const u=data?.user||null;
- $("billing").hidden=!u;$("qa-order").hidden=!u;$("qa-delivery").hidden=!u;$("qa-cob06").hidden=!u||u.email?.toLowerCase()!=="pedrinhossiqueira@gmail.com";$("qa-cob06-review").hidden=!u||u.email?.toLowerCase()!=="pedrinhossiqueira12@gmail.com";$("qa-cob06-acumulo").hidden=!u||u.id!=="d896cc0c-31e4-4ef7-8fa4-13d15f02dd2a"||u.email?.toLowerCase()!=="pedrinhossiqueira12@gmail.com";$("logout").hidden=!u;
+ $("billing").hidden=!u;$("qa-order").hidden=!u;$("qa-delivery").hidden=!u;$("qa-cob06").hidden=!u||u.email?.toLowerCase()!=="pedrinhossiqueira@gmail.com";$("qa-cob06-review").hidden=!u||u.email?.toLowerCase()!=="pedrinhossiqueira12@gmail.com";$("qa-cob06-acumulo").hidden=!u||u.id!=="d896cc0c-31e4-4ef7-8fa4-13d15f02dd2a"||u.email?.toLowerCase()!=="pedrinhossiqueira12@gmail.com";$("qa-cob06-encerramento").hidden=!u||u.id!=="d896cc0c-31e4-4ef7-8fa4-13d15f02dd2a"||u.email?.toLowerCase()!=="pedrinhossiqueira12@gmail.com";$("logout").hidden=!u;
  $("login-form").hidden=!!u;
  $("session").textContent=u?"Autenticado no Sandbox: "+u.email:"Não autenticado.";
  $("uid").hidden=!u;$("uid").textContent=u?"Seu User UID de testes: "+u.id:"";
@@ -339,6 +346,24 @@ $("qa-cob06-acumulo-retomar").addEventListener("click",()=>withBusy($("qa-cob06-
    return false;
  return await adminAcumulo("retomar_acumulo_qa");
 }).then(()=>{if(cob06AcumuloPreparado)$("qa-cob06-acumulo-submit").disabled=true;}));
+
+$("qa-cob06-encerramento-submit").addEventListener("click",()=>withBusy($("qa-cob06-encerramento-submit"),async()=>{
+ const {data,error}=await client.auth.getSession();
+ if(error||!data?.session?.access_token)throw Error("Entre como administrador de STAGING.");
+ const res=await fetch(URL_SUPABASE+"/functions/v1/catalogo-cob06-encerramento-preflight",{
+   method:"POST",
+   headers:{"Content-Type":"application/json",apikey:PUBLIC_KEY,
+     Authorization:"Bearer "+data.session.access_token},
+   body:JSON.stringify({acao:"verificar_encerramento_http_qa"})
+ });
+ const out=await res.json().catch(()=>({}));
+ $("qa-cob06-encerramento-output").textContent=JSON.stringify(
+   {etapa:"preflight_encerramento_http_qa",http_status:res.status,resultado:out},null,2);
+ if(!res.ok||out.success!==true||out.operacao!=="somente_leitura"||
+    out.hold_obrigatorio!==true||out.pix_emitido!==false)
+   throw Error(out.mensagem||"Preflight HTTP recusado. Nenhuma mudanca foi feita.");
+ msg("Autenticacao HTTP e consultas de STAGING verificadas, sem qualquer escrita.");
+}));
 
 async function deliveryApi(acao,body={}){
  const out=await qaApi("catalogo-entregas",{acao,...body});
