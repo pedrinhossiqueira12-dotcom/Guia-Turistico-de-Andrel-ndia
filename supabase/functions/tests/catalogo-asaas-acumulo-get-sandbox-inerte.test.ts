@@ -177,6 +177,23 @@ Deno.test("COB06 duplicidade: identidade invalida bloqueia antes de acessar banc
 
 // As provas POST abaixo nunca saem da CI: injecao de fetch ficticio sem rede.
 // O modulo candidato nao esta ligado a nenhuma rota e nao recebe autorização SQL.
+// O recibo positivo abaixo e EXCLUSIVAMENTE sintetico para testar o transporte.
+// O SQL13 real em CI retorna autorizacao_externa=false e pode_emitir_pix=false.
+const autorizacaoFicticiaSomenteCi = {
+  lote_id: esperado.loteId,
+  referencia: esperado.referencia,
+  cliente_id: esperado.clienteId,
+  valor_centavos: esperado.valorCentavos,
+  operacao_id: "77777777-7777-4777-8777-777777777777",
+  nova_tentativa: true,
+  prova_get_externa: true,
+  autorizacao_externa: true,
+  pode_emitir_pix: true,
+  pode_repetir_post: false,
+  pode_quitar: false,
+  pode_liberar_motoboy: false,
+} as const;
+
 Deno.test("COB06 POST candidato: corpo de Pix agregado, unica tentativa e GET verificado em HOLD", async () => {
   let posts = 0;
   let gets = 0;
@@ -207,7 +224,7 @@ Deno.test("COB06 POST candidato: corpo de Pix agregado, unica tentativa e GET ve
       headers: { "content-type": "application/json" } });
   }) as typeof fetch;
   const r = await postarPixAcumuloSandboxCandidatoSomenteCi(
-    esperado, "2099-01-06", "segredo-ficticio-ci", mock);
+    esperado, "2099-01-06", "segredo-ficticio-ci", autorizacaoFicticiaSomenteCi, mock);
   assert(posts === 1 && gets === 1 && r.paymentId === id &&
     r.observacao.p_status === "PENDING" && r.holdObrigatorio === true &&
     r.podeQuitar === false && r.podeLiberarMotoboy === false,
@@ -227,7 +244,7 @@ Deno.test("COB06 POST candidato: argumentos invalidos bloqueados antes da rede",
   ] as const;
   for (const [dados, vencimento, token, motivo] of invalidos) {
     await hold(() => postarPixAcumuloSandboxCandidatoSomenteCi(
-      dados, vencimento, token, mock), motivo);
+      dados, vencimento, token, autorizacaoFicticiaSomenteCi, mock), motivo);
   }
   assert(chamadas === 0, "nenhuma tentativa remota com dado invalido");
 });
@@ -254,7 +271,7 @@ Deno.test("COB06 POST candidato: falhas ambiguas sao HOLD sem retry automatico",
     const erro = modo === "rede" || modo === "503" ? "POST_INCONCLUSIVO"
       : modo === "id" ? "POST_ID_INVALIDO" : "POST_RESPOSTA_INVALIDA";
     await hold(() => postarPixAcumuloSandboxCandidatoSomenteCi(
-      esperado, "2099-01-06", "segredo-ficticio-ci", mock), erro);
+      esperado, "2099-01-06", "segredo-ficticio-ci", autorizacaoFicticiaSomenteCi, mock), erro);
     assert(posts === 1 && gets === 0, "sem repetir POST apos falha " + modo);
   }
 });
@@ -273,10 +290,36 @@ Deno.test("COB06 POST candidato: divergencia no GET impede aceitar resposta do P
       headers: { "content-type": "application/json" } });
   }) as typeof fetch;
   await hold(() => postarPixAcumuloSandboxCandidatoSomenteCi(
-    esperado, "2099-01-06", "segredo-ficticio-ci", mock), "VALOR_DIVERGENTE");
+    esperado, "2099-01-06", "segredo-ficticio-ci", autorizacaoFicticiaSomenteCi, mock), "VALOR_DIVERGENTE");
   assert(posts === 1 && gets === 1, "GET divergente sem outra emissao");
 });
 
+
+Deno.test("COB06 POST candidato: so aceita recibo positivo ficticio e fetch injetado", async () => {
+  let chamadas = 0;
+  const mock = (async () => { chamadas++; throw Error("rede nao pode ocorrer"); }) as typeof fetch;
+  for (const invalido of [
+    null,
+    { ...autorizacaoFicticiaSomenteCi, autorizacao_externa: false },
+    { ...autorizacaoFicticiaSomenteCi, prova_get_externa: false },
+    { ...autorizacaoFicticiaSomenteCi, pode_emitir_pix: false },
+    { ...autorizacaoFicticiaSomenteCi, nova_tentativa: false },
+    { ...autorizacaoFicticiaSomenteCi, pode_repetir_post: true },
+    { ...autorizacaoFicticiaSomenteCi, pode_quitar: true },
+    { ...autorizacaoFicticiaSomenteCi, pode_liberar_motoboy: true },
+    { ...autorizacaoFicticiaSomenteCi, valor_centavos: 600 },
+    { ...autorizacaoFicticiaSomenteCi, referencia: "guia-acumulo-divergente" },
+    { ...autorizacaoFicticiaSomenteCi, operacao_id: "nao-uuid" },
+  ]) {
+    await hold(() => postarPixAcumuloSandboxCandidatoSomenteCi(
+      esperado, "2099-01-06", "segredo-ficticio-ci", invalido, mock),
+      "AUTORIZACAO_SQL_AUSENTE");
+  }
+  await hold(() => postarPixAcumuloSandboxCandidatoSomenteCi(
+    esperado, "2099-01-06", "segredo-ficticio-ci", autorizacaoFicticiaSomenteCi),
+    "CI_ONLY_REDE_REAL_BLOQUEADA");
+  assert(chamadas === 0, "sem POST quando gate invalido ou fetch nativo");
+});
 
 // Coordenacao do pre-POST: banco e Asaas 100% ficticios, SEM rede real.
 const gateCi = {
