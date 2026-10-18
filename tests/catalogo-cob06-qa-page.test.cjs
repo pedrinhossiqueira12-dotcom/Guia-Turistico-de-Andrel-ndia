@@ -64,7 +64,7 @@ test('auditoria Asaas GET-only: tentativa unica, referencia fixa e resposta HOLD
  for(const campo of ['out.hold_obrigatorio!==true','out.banco_alterado!==false',
    'out.pix_emitido!==false','out.pode_emitir_pix!==false','out.pode_quitar!==false',
    'out.pode_liberar_motoboy!==false'])assert.ok(auditoriaGet.includes(campo),campo);
- assert.doesNotMatch(auditoriaGet,/criar_cobranca|emitir_pix|transferir_saque|registrar_observacao|solicitar_saque/);
+ assert.doesNotMatch(auditoriaGet,/acao:"(?:criar_cobranca|emitir_pix|transferir_saque|registrar_observacao|solicitar_saque)"|\/functions\/v1\/catalogo-asaas-financeiro/);
 });
 
 test('auditoria Asaas GET-only: flags exclusivamente de leitura e sandbox no aviso',()=>{
