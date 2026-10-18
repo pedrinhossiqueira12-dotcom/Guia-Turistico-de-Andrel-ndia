@@ -1492,7 +1492,7 @@ jobs:
         with:
           python-version: '3.13'
       - name: Install PostgreSQL parser
-        run: python -m pip install --disable-pip-version-check pglast==7.10
+        run: python -m pip install --disable-pip-version-check pglast==7.21
       - name: Parse SQL
         run: |
           python - <<'PY'
