@@ -85,6 +85,17 @@ pre{white-space:pre-wrap;word-break:break-all;padding:14px;background:#f3f5f1;bo
 <pre id="qa-cob06-acumulo-output" role="status">Nenhuma reserva permanente solicitada.</pre>
 </section>
 
+
+<section id="qa-cob06-get-auditoria" hidden>
+<h2>COB-06 · Auditar duplicidade no Asaas Sandbox (somente GET bancário)</h2>
+<p class="muted"><strong>Somente administrador do Supabase de testes.</strong> A operação consulta unicamente a referência do lote fictício de <strong>R$ 5,60</strong> no Asaas Sandbox. No navegador, envia uma solicitação administrativa autenticada à Edge; a Edge pode executar apenas GET bancário, nunca criar cobrança, registrar observação, quitar ou liberar valores.</p>
+<p class="muted"><strong>Antes de usar:</strong> no projeto de testes, confirme <code>ASAAS_COB06_AUDITORIA_ISOLADA_ENABLED=true</code>, <code>ASAAS_COB06_GET_ADMIN_READONLY_ENABLED=true</code>, <code>ASAAS_ENVIRONMENT=sandbox</code>, token Asaas Sandbox apenas nas Secrets do servidor e UID de administrador correto. Mantenha as flags de Pix e saques desligadas. Não copie nenhum token para esta página nem para o chat.</p>
+<div class="actions">
+<button type="button" class="secondary" id="qa-cob06-get-auditoria-submit">Consultar duplicidade GET — lote R$ 5,60 (uma tentativa)</button>
+</div>
+<pre id="qa-cob06-get-auditoria-output" role="status">Aguardando autorização e configuração de leitura. Nenhuma consulta feita.</pre>
+</section>
+
 <section id="qa-cob06-encerramento" hidden>
 <h2>COB-06 · Conferência HTTP do encerramento (somente leitura)</h2>
 <p class="muted">Conta administrativa de testes apenas. Este botão verifica sua sessão no servidor e consulta o lote fictício de R$ 5,60 e uma identificação inexistente de comércio. Não fecha loja, não chama as RPCs de arquivamento, não altera GitHub ou WhatsApp, nem emite Pix.</p>
@@ -180,7 +191,7 @@ const pretty=data=>{const {pix,...publicResult}=data||{};return JSON.stringify(p
 async function refresh(){
  const {data}=await client.auth.getUser();
  const u=data?.user||null;
- $("billing").hidden=!u;$("qa-order").hidden=!u;$("qa-delivery").hidden=!u;$("qa-cob06").hidden=!u||u.email?.toLowerCase()!=="pedrinhossiqueira@gmail.com";$("qa-cob06-review").hidden=!u||u.email?.toLowerCase()!=="pedrinhossiqueira12@gmail.com";$("qa-cob06-acumulo").hidden=!u||u.id!=="d896cc0c-31e4-4ef7-8fa4-13d15f02dd2a"||u.email?.toLowerCase()!=="pedrinhossiqueira12@gmail.com";$("qa-cob06-encerramento").hidden=!u||u.id!=="d896cc0c-31e4-4ef7-8fa4-13d15f02dd2a"||u.email?.toLowerCase()!=="pedrinhossiqueira12@gmail.com";$("qa-cob06-integracao").hidden=!u||u.id!=="d896cc0c-31e4-4ef7-8fa4-13d15f02dd2a"||u.email?.toLowerCase()!=="pedrinhossiqueira12@gmail.com";$("logout").hidden=!u;
+ $("billing").hidden=!u;$("qa-order").hidden=!u;$("qa-delivery").hidden=!u;$("qa-cob06").hidden=!u||u.email?.toLowerCase()!=="pedrinhossiqueira@gmail.com";$("qa-cob06-review").hidden=!u||u.email?.toLowerCase()!=="pedrinhossiqueira12@gmail.com";$("qa-cob06-acumulo").hidden=!u||u.id!=="d896cc0c-31e4-4ef7-8fa4-13d15f02dd2a"||u.email?.toLowerCase()!=="pedrinhossiqueira12@gmail.com";$("qa-cob06-get-auditoria").hidden=!u||u.id!==COB06_QA_REVISOR||u.email?.toLowerCase()!=="pedrinhossiqueira12@gmail.com";$("qa-cob06-encerramento").hidden=!u||u.id!=="d896cc0c-31e4-4ef7-8fa4-13d15f02dd2a"||u.email?.toLowerCase()!=="pedrinhossiqueira12@gmail.com";$("qa-cob06-integracao").hidden=!u||u.id!=="d896cc0c-31e4-4ef7-8fa4-13d15f02dd2a"||u.email?.toLowerCase()!=="pedrinhossiqueira12@gmail.com";$("logout").hidden=!u;
  $("login-form").hidden=!!u;
  $("session").textContent=u?"Autenticado no Sandbox: "+u.email:"Não autenticado.";
  $("uid").hidden=!u;$("uid").textContent=u?"Seu User UID de testes: "+u.id:"";
@@ -370,6 +381,55 @@ $("qa-cob06-acumulo-retomar").addEventListener("click",()=>withBusy($("qa-cob06-
    return false;
  return await adminAcumulo("retomar_acumulo_qa");
 }).then(()=>{if(cob06AcumuloPreparado)$("qa-cob06-acumulo-submit").disabled=true;}));
+
+// COB-06: uma unica tentativa de auditoria com token de sessao STAGING.
+// Nao faz POST bancario, e nao transfere segredo Asaas para o navegador.
+let cob06AuditoriaGetSolicitada=false;
+$("qa-cob06-get-auditoria-submit").addEventListener("click",async()=>{
+ const button=$("qa-cob06-get-auditoria-submit");
+ const output=$("qa-cob06-get-auditoria-output");
+ if(cob06AuditoriaGetSolicitada)return;
+ if(!window.confirm("Consultar somente o lote ficticio COB-06 de R$ 5,60 no Asaas Sandbox? Nao havera Pix, quitacao, observacao ou saque."))return;
+ cob06AuditoriaGetSolicitada=true;
+ button.disabled=true;
+ output.textContent="Consultando. Nao clique novamente e nao recarregue enquanto aguarda.";
+ try{
+  const {data:user,error:userError}=await client.auth.getUser();
+  if(userError||user?.user?.id!==COB06_QA_REVISOR||
+     user?.user?.email?.toLowerCase()!=="pedrinhossiqueira12@gmail.com")
+    throw Error("Entre com a conta administrativa de STAGING, nao a de motoboy.");
+  const {data:auth,error:authError}=await client.auth.getSession();
+  if(authError||!auth?.session?.access_token)
+    throw Error("Sessao de STAGING expirada. Entre novamente antes de tentar.");
+  const res=await fetch(URL_SUPABASE+"/functions/v1/catalogo-asaas-cob06-auditoria",{
+   method:"POST",
+   headers:{"Content-Type":"application/json",apikey:PUBLIC_KEY,
+     Authorization:"Bearer "+auth.session.access_token},
+   body:JSON.stringify({
+     acao:"auditar_duplicidade_acumulo_sandbox_admin",
+     lote_id:"583d761a-ecb9-49be-b484-e43f6183971e"
+   })
+  });
+  const out=await res.json().catch(()=>({}));
+  output.textContent=JSON.stringify({
+   etapa:"auditar_duplicidade_acumulo_sandbox_admin",http_status:res.status,resultado:out
+  },null,2);
+  if(!res.ok||out.success!==true||out.hold_obrigatorio!==true||
+     out.banco_alterado!==false||out.pix_emitido!==false||
+     out.pode_emitir_pix!==false||out.pode_quitar!==false||
+     out.pode_liberar_motoboy!==false){
+   msg("Auditoria em HOLD: "+(out.mensagem||"verifique configuracao e resposta HTTP."),true);
+  }else{
+   msg("GET Sandbox concluido. O HOLD financeiro continua obrigatorio.");
+  }
+ }catch(e){
+  output.textContent=JSON.stringify({
+   etapa:"auditar_duplicidade_acumulo_sandbox_admin",erro:e?.message||"Falha na consulta.",
+   hold_obrigatorio:true
+  },null,2);
+  msg("Consulta nao confirmada. Nenhuma liberacao financeira autorizada.",true);
+ }
+});
 
 $("qa-cob06-encerramento-submit").addEventListener("click",()=>withBusy($("qa-cob06-encerramento-submit"),async()=>{
  const {data,error}=await client.auth.getSession();
