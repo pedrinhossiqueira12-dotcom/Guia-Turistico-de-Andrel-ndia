@@ -212,3 +212,11 @@ A Edge `catalogo-asaas-financeiro/index.ts` atualmente retorna HTTP 409 para fec
 **Aceite exigido antes de liberar no código:** R$1 + R$4; R$2 + R$2 + R$1; valores ainda inferiores ao mínimo; exatamente R$5; cobranças antigas existentes; alteração concorrente; duas tentativas simultâneas; timeout do provedor; webhook duplicado; estorno e contestação; fechamento do comércio com dívida residual; idempotência em clone PostgreSQL isolado com ROLLBACK; e E2E em STAGING. Não utilizar quitações manuais em SQL para simular pagamentos reais.
 
 **Não fazer deploy**, nem mudar o pacote seletivo congelado de nove SQL, até completar a revisão COB-06 e obter autorização específica.
+
+### Barreira de autorização para o transporte POST fictício (18/10/2026)
+
+O transporte candidato `catalogo-asaas-acumulo-post-sandbox-candidato.ts`, **não importado pela Edge publicada**, passou a exigir um recibo positivo de autorização vinculado ao lote, referência, cliente, valor e operação, com `nova_tentativa=true`, prova GET e autorização externa positivas, e permissão de repetição, quitação e liberação de motoboy explicitamente falsas. Ele também recusa o `fetch` nativo: somente testes com transporte injetado podem simular o POST nesta fase. Essa checagem de transporte injetado não equivale a uma política de rede do ambiente de execução; o módulo continua CI-only e não pode ser conectado a uma rota.
+
+O recibo do SQL 13 atual **não satisfaz** o contrato: `prova_get_externa=false`, `autorizacao_externa=false` e `pode_emitir_pix=false`. Um recibo inteiramente sintético, restrito à suíte Deno, cobre POST único mockado, GET verificado, timeout e divergência. Testes negativos confirmam que recibos ausentes, divergentes ou sem autorização não chegam à tentativa HTTP. **Não foi emitido Pix acumulado, nem houve escrita em STAGING/produção ou mudança de flags.**
+
+**Próximo gate pendente:** projetar, revisar e homologar a autorização transacional SQL real em STAGING, com prova bancária GET, proteção durável de tentativa única após falha ambígua e política de operação; só depois considerar integrar o POST Sandbox com aprovação específica. As proteções contábeis, quitação multi-competência e estorno permanecem CI-only ou somente leitura.
