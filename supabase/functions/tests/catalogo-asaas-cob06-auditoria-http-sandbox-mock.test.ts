@@ -1,7 +1,8 @@
 // COB-06 / PR39: Edge isolada com flags TRUE SOMENTE neste processo de CI.
 // Provedor Asaas, Supabase, sessao e pagamentos sao 100% ficticios.
 // NUNCA executar este teste contra banco, JWT ou token de um ambiente real.
-const ROOT = "https://ci-cob06-isolado.invalid";
+// URL STAGING interceptada integralmente pelo fetch fake; NENHUMA rede autorizada.
+const ROOT = "https://jbttwihctuibchhcyqtl.supabase.co";
 const ASAAS = "https://api-sandbox.asaas.com";
 const ADMIN = "4b9a0233-6b72-4573-aebd-d596c5b15e1b";
 const INTRUSO = "11111111-2222-4333-8444-555555555555";
@@ -245,4 +246,98 @@ Deno.test("COB06 Edge simulada: mesmo com flags TRUE nenhuma acao de Pix ou saqu
   assert(Number(chamadasAuth) === 0 && Number(consultasLocal) === 0 &&
     Number(consultasListagem) === 0 && Number(gravacoesObservacao) === 0,
     "ACAO_PROIBIDA_ACIONOU_REDE");
+});
+
+const acaoAuditar = "auditar_duplicidade_acumulo_sandbox_admin";
+
+Deno.test("COB06 auditoria somente GET: cobranca existente e status conferidos sem escrita", async () => {
+  reset();
+  const r = await chamar(acaoAuditar);
+  assert(r.http === 200 && r.body.success === true &&
+    r.body.lote_id === LOTE &&
+    r.body.estado === "cobranca_existente_verificada" &&
+    r.body.payment_id === PAGAMENTO && r.body.status_bancario === "PENDING" &&
+    r.body.banco_alterado === false && r.body.pix_emitido === false &&
+    r.body.hold_obrigatorio === true && r.body.pode_emitir_pix === false &&
+    r.body.pode_quitar === false && r.body.pode_estornar === false &&
+    r.body.pode_liberar_motoboy === false,
+    "AUDITORIA_EXISTENTE_SEM_HOLD");
+  assert(chamadasAuth === 1 && consultasListagem === 1 &&
+    consultasDetalhe === 1 && gravacoesObservacao === 0,
+    "AUDITORIA_EXISTENTE_GRAVOU");
+});
+
+Deno.test("COB06 auditoria somente GET: ausencia comprovada nao reserva, emite ou registra", async () => {
+  reset();
+  listagem = "vazia";
+  const r = await chamar(acaoAuditar);
+  assert(r.http === 200 && r.body.success === true &&
+    r.body.estado === "nenhuma_cobranca_localizada" &&
+    r.body.payment_id === null && r.body.status_bancario === null &&
+    r.body.hold_obrigatorio === true && r.body.pode_emitir_pix === false &&
+    r.body.pode_quitar === false && r.body.pode_liberar_motoboy === false,
+    "GET_NEGATIVO_NAO_E_AUTORIZACAO");
+  assert(consultasListagem === 1 && consultasDetalhe === 0 &&
+    gravacoesObservacao === 0,
+    "GET_NEGATIVO_TENTOU_GRAVAR");
+});
+
+Deno.test("COB06 auditoria somente GET: duplicidade, paginacao e divergencia nunca autorizam", async () => {
+  for (const modo of ["dupla", "paginada"] as const) {
+    reset();
+    listagem = modo;
+    const r = await chamar(acaoAuditar);
+    assert(r.http === 503 && r.body.success === false &&
+      r.body.hold_obrigatorio === true && r.body.pode_emitir_pix === false &&
+      consultasListagem === 1 && consultasDetalhe === 0 &&
+      gravacoesObservacao === 0,
+      "GET_INCONCLUSIVO_" + modo);
+  }
+  for (const alteracao of ["customer", "referencia", "valor", "modalidade", "status", "id"] as const) {
+    reset();
+    alteracaoRemota = alteracao;
+    const r = await chamar(acaoAuditar);
+    assert(r.http === 503 && r.body.success === false &&
+      r.body.hold_obrigatorio === true && r.body.pode_quitar === false &&
+      consultasListagem === 1 && consultasDetalhe === 1 &&
+      gravacoesObservacao === 0,
+      "GET_DIVERGENTE_" + alteracao);
+  }
+});
+
+Deno.test("COB06 auditoria somente GET: admin e origem do banco obrigatorios", async () => {
+  reset();
+  const semSessao = await chamar(acaoAuditar, { bearer: "" });
+  assert(semSessao.http === 401 && consultasLocal === 0 &&
+    consultasListagem === 0 && gravacoesObservacao === 0,
+    "AUDITORIA_SEM_SESSAO");
+  reset();
+  identidade = INTRUSO;
+  const intruso = await chamar(acaoAuditar);
+  assert(intruso.http === 403 && consultasLocal === 0 &&
+    consultasListagem === 0 && gravacoesObservacao === 0,
+    "AUDITORIA_INTRUSO");
+  reset();
+  origemValida = false;
+  const divergente = await chamar(acaoAuditar);
+  assert(divergente.http === 409 && consultasListagem === 0 &&
+    gravacoesObservacao === 0,
+    "AUDITORIA_ORIGEM_DIVERGENTE");
+  reset();
+  referenciaValida = false;
+  const referencia = await chamar(acaoAuditar);
+  assert(referencia.http === 409 && consultasListagem === 0 &&
+    gravacoesObservacao === 0,
+    "AUDITORIA_REFERENCIA_DIVERGENTE");
+});
+
+Deno.test("COB06 auditoria somente GET: ja observado nao cria segunda gravacao", async () => {
+  reset();
+  anterior = true;
+  const r = await chamar(acaoAuditar);
+  assert(r.http === 200 && r.body.hold_obrigatorio === true &&
+    r.body.pode_emitir_pix === false &&
+    consultasListagem === 1 && consultasDetalhe === 1 &&
+    gravacoesObservacao === 0,
+    "AUDITORIA_REPETIDA_NAO_GRAVA");
 });
