@@ -546,3 +546,28 @@ Este documento é a **única fila operacional** do trabalho financeiro do PR #39
 - Acrescentada em `supabase/config.toml` a secao explicita `[functions.catalogo-asaas-cob06-auditoria] verify_jwt = true` para o **proximo deploy**; nao altera configuracao remota por si. Como o `project_id` do arquivo raiz aponta para PROD, um deploy futuro exige passar explicitamente a referencia STAGING, conferir a identidade do projeto e executar apenas com aprovacao especifica. Testes de contrato estaticos em `tests/asaas-cob06-auditoria-deploy-gate.test.cjs` recusam a ausencia de JWT e da guarda de STAGING/lote.
 - Suite HTTP Deno in-process com Asaas, Auth e PostgREST ficticios passou **16/16 testes**, inclusive comercio/competencia/valor/estado divergentes, flag contabil indevidamente positiva e acesso a outro lote. Os grupos completos de [GitHub Actions #1854](https://github.com/pedrinhossiqueira12-dotcom/Guia-Turistico-de-Andrel-ndia/actions/runs/39144669330) passaram **12/12** na branch `feat/asaas-faturas-saques-seguros`. Nenhum deploy, secret, flag, POST bancario, Pix, credito, saque, webhook ou PROD alterado.
 - **Proximo bloqueio intencional:** revisar/autorizar especificamente o deploy **somente da Edge administrativa de leitura** no projeto STAGING com `verify_jwt=true` e flags ainda OFF; comparar novamente codigo remoto. A ativacao temporaria das flags GET e o ensaio autenticado Asaas Sandbox exigem autorizacao separada, credenciais de servidor existentes e prova do administrador. Um GET com 0 pagamentos **nao** autoriza POST.
+
+
+### COB-06 — deploy STAGING v21 de auditoria com JWT e POST bloqueado no binario (18/10/2026)
+
+- **Autorizacao pontual do usuario neste chat:** publicar SOMENTE `catalogo-asaas-cob06-auditoria` em `jbttwihctuibchhcyqtl` (projeto STAGING `testes`), com `verify_jwt=true`, sem ativar flags nem acionar Asaas, Pix, quitacao ou saques. Antes do deploy, confirmados projeto `ACTIVE_HEALTHY`, slug existente em **v20 / verify_jwt=false**, branch Draft e pacote de 4 fontes versionadas.
+- Implantada **v21 ACTIVE**, `verify_jwt=true`, `ezbr_sha256=a930dcb052d8d896aca82c8186160d5af3c87f6ca6a22848a12673164709e3a7`. O pacote inclui `catalogo-asaas-cob06-auditoria/index.ts` e os tres modulos compartilhados `catalogo-asaas-acumulo-get-sandbox-inerte.ts`, `catalogo-asaas-acumulo-get-verificado-inerte.ts` e `catalogo-asaas-acumulo-auditoria-duplicidade-inerte.ts`.
+- **Diferenca INTENCIONAL entre o codigo da PR e a versao 21 implantada:** para garantir `HOLD` mesmo se uma flag remota anterior ainda estivesse configurada (o conector nao permite ler Edge Secrets), a entrada da v21 recebeu **somente no artefato de deploy** uma trava imutavel, imediatamente depois de `if (req.method === "OPTIONS") ...` e antes do `try` do handler:
+
+```ts
+  // TRAVA DE PUBLICACAO INICIAL APROVADA: esta versao implantada
+  // NAO aceita acao administrativa POST, independente de Secrets/flags.
+  // Para homologar GET real sera necessario outro deploy autorizado.
+  if (req.method === "POST") {
+    return resposta({
+      success: false, modo: "STAGING_PUBLICACAO_HOLD",
+      pode_emitir_pix: false, pode_quitar: false, pode_estornar: false,
+      pode_liberar_motoboy: false, hold_obrigatorio: true,
+      banco_consultado: false, asaas_consultado: false,
+    }, 503);
+  }
+```
+
+- A revisao **independente apos o deploy** via `get_edge_function` confirmou v21 ACTIVE, JWT true, os 4 arquivos, **correspondencia byte a byte** do `index.ts` com o payload preparado, a trava POST antes da leitura do corpo/acao, e ausencia de importacao de POST bancario. Qualquer chamada administrativa POST recebe `503 STAGING_PUBLICACAO_HOLD` sem banco ou Asaas; a nova acao GET autenticada **ainda nao esta operacional**, por desenho. Nao houve teste com JWT ou token Asaas real nesta etapa. A seguranca nao depende de ler o estado efetivo das flags secretas.
+- Verificacao SQL **somente leitura apos implantacao**: lote `583d761a-ecb9-49be-b484-e43f6183971e` `preparado`, **560 centavos**, referencia `reservado`, `payment_id IS NULL`, `pode_emitir_pix=false`, **0 observacoes**. Nenhum valor, webhook, secret, flag, Edge de producao ou PR merge foi alterado.
+- **Proxima etapa exige nova autorizacao delimitada:** remover a trava de publicacao v21 por redeploy revisado em STAGING somente quando houver credencial Asaas Sandbox server-side, sessao QA valida e preparacao para **apenas GET remoto**, mantendo POST bancario e credito impossiveis. Nao basta ligar flags; sem outro deploy a rota permanece bloqueada.
