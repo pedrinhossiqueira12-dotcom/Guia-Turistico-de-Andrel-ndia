@@ -22,7 +22,9 @@ test('COB-06: duas conexões SQL serializadas verificam uma tentativa e replay b
   assert.match(script, /primeiro_pid=\$!/);
   assert.match(script, /segundo_pid=\$!/);
   assert.match(script, /wait_event_type='Lock'/);
-  assert.match(script, /grep -Fx 'true\|true\|false'/);
+  assert.match(script, /catalogo_asaas_autorizar_post_mock_ci/);
+  assert.match(script, /COB06_AUTORIZACAO_MOCK_RACE_POSITIVA_UNICA_SEM_POST_OK/);
+  assert.match(script, /grep -Fx 'true\|true\|true'/);
   assert.match(script, /grep -Fx 'false\|false\|false'/);
   assert.match(script, /pode_repetir_post=false/);
   assert.match(script, /post_externo_comprovado=false/);
