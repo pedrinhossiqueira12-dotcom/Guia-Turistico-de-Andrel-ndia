@@ -3,6 +3,8 @@
 // Deno sem --allow-net: nenhum GET/POST pode sair para o Asaas.
 import { conciliarAntesDePixAcumuloCandidatoSomenteCi } from
   "../_shared/catalogo-asaas-acumulo-pre-post-somente-ci.ts";
+import { postarPixAcumuloSandboxCandidatoSomenteCi } from
+  "../_shared/catalogo-asaas-acumulo-post-sandbox-candidato.ts";
 
 function assert(ok: unknown, message: string): asserts ok {
   if (!ok) throw new Error("COB06_INTEGRACAO_CI: " + message);
@@ -95,6 +97,30 @@ Deno.test("COB06 integracao real: GET mock + gate PostgreSQL persistido nunca li
     return JSON.parse(await sqlSomenteCi(
       `SELECT catalogo_private.catalogo_asaas_autorizar_tentativa_emissao_ci('${loteId}'::uuid)::text`));
   };
+
+  // Usa o recibo do gate SQL13 REAL contra o transporte candidato.
+  // A primeira tentativa ja foi persistida pela prova de concorrencia,
+  // logo o banco so pode devolver replay/GET manual, jamais autorizar POST.
+  const reciboReal = await gateSql(livro.loteId);
+  assert(reciboReal.ok === false && reciboReal.nova_tentativa === false &&
+    reciboReal.pode_emitir_pix === false,
+    "SQL13 real nao deve conceder permissao de emissao");
+  let chamadasPost = 0;
+  const mockSemRede = (async () => {
+    chamadasPost++;
+    throw Error("nao fazer chamada HTTP");
+  }) as typeof fetch;
+  let erroAutorizacao = "";
+  try {
+    await postarPixAcumuloSandboxCandidatoSomenteCi(
+      livro, "2099-01-06", "token-ficticio-ci", reciboReal, mockSemRede);
+  } catch (erro) {
+    erroAutorizacao = String(erro);
+  }
+  assert(erroAutorizacao.includes("COB06_HOLD_AUTORIZACAO_SQL_AUSENTE") &&
+    chamadasPost === 0,
+    "recibo REAL do banco bloqueia transporte POST antes da rede");
+  consultasGate = 0;
 
   const existente = await conciliarAntesDePixAcumuloCandidatoSomenteCi(
     livro, "token-ficticio-ci", gateSql, fetchFalso("existente"));
