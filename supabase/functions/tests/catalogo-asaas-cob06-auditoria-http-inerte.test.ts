@@ -78,12 +78,12 @@ Deno.test("COB06 Edge isolada: Pix, transferencia, saque e webhook nao possuem r
   assert(webhook.status === 404, "webhook nao foi rejeitado");
   assert(tentativasDeRede === 0, "chamou rede para acao proibida");
 });
-Deno.test("COB06 Edge isolada: observacao administrativa inativa nao consulta o banco", async () => {
+Deno.test("COB06 Edge isolada: rota de observacao inexistente nao consulta o banco", async () => {
   tentativasDeRede = 0;
   const r = await chamar("POST", undefined,
     { acao: "observar_primeiro_acumulo_sandbox_admin",
       lote_id: "22222222-3333-4444-8888-aaaaaaaaaaaa" });
-  assert(r.status === 503 && r.dados.hold_obrigatorio === true &&
+  assert(r.status === 403 && r.dados.hold_obrigatorio === true &&
     r.dados.pode_emitir_pix === false && r.dados.pode_quitar === false &&
     r.dados.pode_estornar === false && r.dados.pode_liberar_motoboy === false,
     "observacao desligada foi executada");
