@@ -18,11 +18,11 @@ test("COB06 integracao: ambiente, branch e identidade fixos somente em STAGING",
   assert.match(source, /Deno\.env\.get\("COB06_GITHUB_BRANCH"\) === BRANCH/);
 });
 
-test("COB06 integracao: somente JWT e tres acoes QA sem outros caminhos", () => {
+test("COB06 integracao: somente JWT e quatro acoes QA sem outros caminhos", () => {
   assert.match(source, /const jwt = \/\^Bearer/);
   assert.match(source, /await db\.auth\.getUser\(jwt\)/);
   assert.match(source, /Object\.keys\(body\)\.length !== 1/);
-  for (const acao of ["verificar_config_qa", "verificar_repositorio_qa", "concluir_encerramento_qa"]) {
+  for (const acao of ["verificar_config_qa", "verificar_repositorio_qa", "concluir_encerramento_qa", "sincronizar_pendente_qa"]) {
     assert.ok(source.includes('"' + acao + '"'));
   }
   assert.doesNotMatch(source, /aprovar_cadastro|excluir_comercio|fatura_quitar|pix_emitir|transferencia_criar/);
@@ -36,7 +36,7 @@ test("COB06 integracao: escrita inabilitada por padrao e fluxo e fail-closed", (
   const readRepo = source.indexOf('repo = await readRepo(token)');
   assert.ok(readRepo > 0 && readRepo < rpc, "GitHub deve ser conferido antes da RPC");
   const postConfirm = source.indexOf('confirmado.data?.status !== "deletado"');
-  const put = source.indexOf("await writeRepo(token, repo)");
+  const put = source.indexOf("await writeRepo(token, repo)", postConfirm);
   assert.ok(postConfirm > rpc && put > postConfirm, "PUT precisa de confirmacao SQL posterior");
   assert.match(source, /pendente_sincronizacao: true/);
 });
@@ -59,4 +59,18 @@ test("COB06 integracao: GitHub apenas branch QA e sentinela unica, sem notificac
   assert.match(source, /status: "deletado", destaque: false, imagem: "", imagens: \[\]/);
   assert.doesNotMatch(source, /api\.asaas\.com|api\.mercadopago\.com|graph\.facebook\.com/);
   assert.doesNotMatch(source, /console\.(log|error)\([^)]*(token|Authorization)/i);
+});
+
+test("COB06 integracao: recuperacao pendente altera somente GitHub apos arquivamento confirmado", () => {
+  const marker = source.indexOf('if (acao === "sincronizar_pendente_qa")');
+  const rpc = source.indexOf('const { data: encerrado, error: rpcError } = await db.rpc(');
+  assert.ok(marker > 0 && marker < rpc, "recuperacao precisa anteceder RPC");
+  const recovery = source.slice(marker, rpc);
+  assert.match(recovery, /pub\.data\?\.status !== "deletado"/);
+  assert.match(recovery, /pub\.data\?\.atualizado_por !== ADMIN_UID/);
+  assert.match(recovery, /pub\.data\?\.destaque !== false/);
+  assert.match(recovery, /await writeRepo\(token, repo\)/);
+  assert.match(recovery, /rpc_executada: false/);
+  assert.doesNotMatch(recovery, /\.rpc\(|catalogo_arquivar_sem_catalogo_admin/);
+  assert.match(source, /github_put_http_/);
 });
