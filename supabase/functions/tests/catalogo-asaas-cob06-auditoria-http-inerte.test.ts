@@ -100,3 +100,15 @@ Deno.test("COB06 Edge isolada: entrada invalida e caminhos desconhecidos falham 
     "payload grande aceito");
   assert(tentativasDeRede === 0, "entradas invalidas tocaram a rede");
 });
+
+Deno.test("COB06 Edge isolada: consulta de duplicidade inativa nao toca Supabase ou Asaas", async () => {
+  tentativasDeRede = 0;
+  const r = await chamar("POST", undefined, {
+    acao: "auditar_duplicidade_acumulo_sandbox_admin",
+    lote_id: "22222222-3333-4444-8888-aaaaaaaaaaaa",
+  });
+  assert(r.status === 503 && r.dados.success === false &&
+    r.dados.hold_obrigatorio === true &&
+    r.dados.pode_emitir_pix === false && r.dados.pode_quitar === false &&
+    tentativasDeRede === 0, "AUDITORIA_DESLIGADA_ACIONOU_REDE");
+});
