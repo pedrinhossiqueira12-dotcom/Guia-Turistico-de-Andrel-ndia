@@ -20,6 +20,24 @@ export type CobrancaCandidata = {
   podeLiberarMotoboy: false;
 };
 
+// Contrato FUTURO, ainda sem emissor SQL real. A reserva SQL05 e o gate
+// SQL13 CI-only retornam permissoes falsas: ambos devem ser recusados.
+// Somente fixture sintetica em CI pode produzir um recibo positivo hoje.
+export type AutorizacaoEmissaoSandbox = {
+  lote_id: string;
+  referencia: string;
+  cliente_id: string;
+  valor_centavos: number;
+  operacao_id: string;
+  nova_tentativa: true;
+  prova_get_externa: true;
+  autorizacao_externa: true;
+  pode_emitir_pix: true;
+  pode_repetir_post: false;
+  pode_quitar: false;
+  pode_liberar_motoboy: false;
+};
+
 function exige(ok: boolean, motivo: string): asserts ok {
   if (!ok) throw new Error("COB06_HOLD_" + motivo);
 }
@@ -43,6 +61,29 @@ function validarEntrada(esperado: ExpectativaAcumulo, vencimento: string, token:
   exige(typeof token === "string" && token.trim().length > 0 &&
     token.length <= 2048 && !/[\r\n]/.test(token), "CREDENCIAL_INDISPONIVEL");
 }
+// Recusa qualquer recibo SQL13 atual (autorizacao_externa=false) e qualquer
+// permissao fabricada com identidade/valor divergentes. Esta verificacao nao
+// substitui a futura autenticacao/atestado GET no backend e gate transacional.
+function validarRecibo(esperado: ExpectativaAcumulo, bruto: unknown): void {
+  exige(bruto !== null && typeof bruto === "object" && !Array.isArray(bruto),
+    "AUTORIZACAO_SQL_AUSENTE");
+  const r = bruto as Record<string, unknown>;
+  exige(r.lote_id === esperado.loteId &&
+    r.referencia === esperado.referencia &&
+    r.cliente_id === esperado.clienteId &&
+    r.valor_centavos === esperado.valorCentavos &&
+    typeof r.operacao_id === "string" &&
+    /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(r.operacao_id) &&
+    r.nova_tentativa === true &&
+    r.prova_get_externa === true &&
+    r.autorizacao_externa === true &&
+    r.pode_emitir_pix === true &&
+    r.pode_repetir_post === false &&
+    r.pode_quitar === false &&
+    r.pode_liberar_motoboy === false,
+    "AUTORIZACAO_SQL_AUSENTE");
+}
+
 async function respostaLimitada(response: Response): Promise<unknown> {
   exige(response.status === 200 || response.status === 201,
     "POST_INCONCLUSIVO");
@@ -86,9 +127,14 @@ export async function postarPixAcumuloSandboxCandidatoSomenteCi(
   esperado: ExpectativaAcumulo,
   vencimento: string,
   tokenServidor: string,
+  recibo: unknown,
   fetchSeguro: FetchSeguro = fetch,
 ): Promise<CobrancaCandidata> {
   validarEntrada(esperado, vencimento, tokenServidor);
+  // O modulo ainda e CI-ONLY. Proibir o fetch nativo mesmo que o recibo
+  // venha a ser positivo: nenhuma Edge pode importar e emitir por acidente.
+  exige(fetchSeguro !== fetch, "CI_ONLY_REDE_REAL_BLOQUEADA");
+  validarRecibo(esperado, recibo);
   const corpo = {
     customer: esperado.clienteId,
     billingType: "PIX" as const,
