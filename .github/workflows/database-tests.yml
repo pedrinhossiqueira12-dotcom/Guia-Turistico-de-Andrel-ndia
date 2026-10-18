@@ -1488,6 +1488,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
       - name: Install PostgreSQL parser
         run: python -m pip install --disable-pip-version-check pglast==7.10
       - name: Parse SQL
