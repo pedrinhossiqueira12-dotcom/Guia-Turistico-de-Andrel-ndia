@@ -107,6 +107,16 @@ jobs:
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
+      - name: Refuse CI-only accumulated Pix POST in deployed Edge entrypoints
+        run: |
+          set -euo pipefail
+          # O transporte de emissao permanece SOMENTE mock/CI; nenhuma
+          # Edge publica pode importá-lo sem uma revisao separada.
+          if rg -n --glob 'index.ts' 'catalogo-asaas-acumulo-post-sandbox-candidato' supabase/functions; then
+            echo 'ERROR: COB06 transporte POST CI-only importado por uma Edge' >&2
+            exit 1
+          fi
+          echo 'PASS: COB06 POST CI-only ausente das rotas Edge'
       - name: Type-check Asaas financial Edge Function
         run: |
           deno check --node-modules-dir=auto supabase/functions/catalogo-asaas-financeiro/index.ts
