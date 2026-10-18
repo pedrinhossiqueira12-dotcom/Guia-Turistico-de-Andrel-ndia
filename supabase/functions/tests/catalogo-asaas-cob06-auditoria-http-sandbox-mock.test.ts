@@ -14,14 +14,12 @@ const REFERENCIA = "guia-acumulo-" + LOTE;
 type Handler = (req: Request) => Response | Promise<Response>;
 let handler: Handler | null = null;
 let identidade = ADMIN;
-let anterior = false;
 let origemValida = true;
 let referenciaValida = true;
 let listagem: "unica" | "dupla" | "vazia" | "paginada" = "unica";
 let alteracaoRemota: "nenhuma" | "customer" | "referencia" | "valor" |
   "modalidade" | "status" | "id" = "nenhuma";
 let statusRemoto = "PENDING";
-let corromperAck = false;
 let permissaoContabilInsegura = false;
 let loteIncorreto: "nenhum" | "comercio" | "corte" | "valor" | "estado" = "nenhum";
 let chamadasAuth = 0;
@@ -30,10 +28,9 @@ let consultasListagem = 0;
 let consultasDetalhe = 0;
 let gravacoesObservacao = 0;
 function reset() {
-  identidade = ADMIN; anterior = false; origemValida = true;
+  identidade = ADMIN; origemValida = true;
   referenciaValida = true; listagem = "unica"; alteracaoRemota = "nenhuma";
-  statusRemoto = "PENDING"; corromperAck = false;
-  permissaoContabilInsegura = false; loteIncorreto = "nenhum";
+  statusRemoto = "PENDING"; permissaoContabilInsegura = false; loteIncorreto = "nenhum";
   chamadasAuth = 0; consultasLocal = 0; consultasListagem = 0;
   consultasDetalhe = 0; gravacoesObservacao = 0;
 }
@@ -94,17 +91,8 @@ globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
       pode_quitar: false, pode_liberar_motoboy: false });
   }
   if (url.pathname === "/rest/v1/rpc/catalogo_asaas_registrar_observacao_acumulo") {
-    assert(method === "POST", "RPC_OBSERVACAO_NAO_POST");
     gravacoesObservacao++;
-    const args = JSON.parse(String(init?.body)) as Record<string, unknown>;
-    assert(args.p_lote === LOTE && args.p_payment === PAGAMENTO &&
-      args.p_customer === CLIENTE && args.p_referencia === REFERENCIA &&
-      args.p_valor === 560 && args.p_status === statusRemoto,
-      "PARAMETROS_OBSERVACAO_INVALIDOS");
-    anterior = true;
-    return reply({ ok: !corromperAck, lote_id: LOTE, payment_id: PAGAMENTO,
-      status_observado: statusRemoto, ja_observado: false,
-      pode_quitar: corromperAck, pode_liberar_motoboy: false });
+    throw Error("COB06_TESTE_GRAVACAO_PROIBIDA");
   }
   assert(method === "GET", "ESCRITA_DIRETA_PROIBIDA");
   consultasLocal++;
@@ -124,7 +112,7 @@ globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
       payment_id: null, pode_emitir_pix: false });
   }
   if (url.pathname === "/rest/v1/catalogo_asaas_acumulo_observacoes") {
-    return reply(anterior ? { lote_id: LOTE, payment_id: PAGAMENTO } : null);
+    throw Error("COB06_TESTE_LEITURA_OBSERVACAO_DESNECESSARIA");
   }
   if (url.pathname === "/rest/v1/catalogo_asaas_clientes") {
     return reply({ cliente_id: CLIENTE });
@@ -140,6 +128,7 @@ Deno.env.set("ASAAS_API_KEY", "token-ficticio-exclusivo-ci");
 Deno.env.set("ASAAS_COB06_STAGING_ADMIN_UID", ADMIN);
 Deno.env.set("ASAAS_COB06_AUDITORIA_ISOLADA_ENABLED", "true");
 Deno.env.set("ASAAS_COB06_GET_ADMIN_READONLY_ENABLED", "true");
+// Intencionalmente true em CI: nao pode criar rota de observacao.
 Deno.env.set("ASAAS_COB06_OBSERVACAO_ADMIN_ENABLED", "true");
 Deno.env.set("ASAAS_BILLING_ENABLED", "false");
 Deno.env.set("ASAAS_PAYOUTS_ENABLED", "false");
@@ -167,100 +156,30 @@ async function chamar(acao: string, opts: { bearer?: string; lote?: string } = {
 }
 const acao = "observar_primeiro_acumulo_sandbox_admin";
 
-Deno.test("COB06 Edge simulada: identidade admin, GET bancario duplo e observacao em HOLD", async () => {
+Deno.test("COB06 GET-only: observacao administrativa e proibida ate com flags ativas", async () => {
   reset();
   const r = await chamar(acao);
-  assert(r.http === 200 && r.body.success === true &&
-    r.body.payment_id === PAGAMENTO && r.body.status_bancario_observado === "PENDING" &&
-    r.body.hold_obrigatorio === true &&
-    r.body.pode_emitir_pix === false && r.body.pode_quitar === false &&
-    r.body.pode_estornar === false && r.body.pode_liberar_motoboy === false,
-    "OPERACAO_NAO_MANTEVE_HOLD");
-  assert(Number(chamadasAuth) === 1 && Number(consultasListagem) === 1 &&
-    Number(consultasDetalhe) === 1 && Number(gravacoesObservacao) === 1,
-    "CHAMADAS_INESPERADAS");
-  const repetido = await chamar(acao);
-  assert(repetido.http === 409 && Number(consultasListagem) === 1 &&
-    Number(consultasDetalhe) === 1 && Number(gravacoesObservacao) === 1,
-    "REPLAY_REPETIU_BANCO_OU_GRAVACAO");
-});
-Deno.test("COB06 Edge simulada: sessao ausente, intruso e lote adulterado nao acionam GET", async () => {
-  reset();
-  const semSessao = await chamar(acao, { bearer: "" });
-  assert(semSessao.http === 401 && Number(chamadasAuth) === 0 &&
-    Number(consultasLocal) === 0 && Number(consultasListagem) === 0, "SEM_SESSAO");
-  reset();
-  identidade = INTRUSO;
-  const intruso = await chamar(acao);
-  assert(intruso.http === 403 && Number(chamadasAuth) === 1 &&
-    Number(consultasLocal) === 0 && Number(consultasListagem) === 0, "USUARIO_NAO_ADMIN");
-  reset();
-  const loteInvalido = await chamar(acao, { lote: "nao-e-uuid" });
-  assert(loteInvalido.http === 400 && Number(chamadasAuth) === 1 &&
-    Number(consultasLocal) === 0 && Number(consultasListagem) === 0, "LOTE_ALTERADO");
-});
-Deno.test("COB06 Edge simulada: preflight de origem ou referencia falha antes do banco", async () => {
-  for (const falha of ["origem", "referencia"]) {
-    reset();
-    if (falha === "origem") origemValida = false;
-    else referenciaValida = false;
-    const r = await chamar(acao);
-    assert(r.http === 409 && r.body.success === false &&
-      Number(consultasListagem) === 0 && Number(consultasDetalhe) === 0 &&
-      Number(gravacoesObservacao) === 0, "PRECHECK_" + falha);
-  }
-});
-Deno.test("COB06 Edge simulada: nenhuma identidade, valor ou status remoto divergente registra", async () => {
-  for (const diferenca of ["customer", "referencia", "valor", "modalidade",
-    "status", "id"] as const) {
-    reset();
-    alteracaoRemota = diferenca;
-    const r = await chamar(acao);
-    assert(r.http === 503 && r.body.success === false &&
-      r.body.hold_obrigatorio === true && r.body.pode_quitar === false &&
-      Number(consultasListagem) === 1 && Number(consultasDetalhe) === 1 &&
-      Number(gravacoesObservacao) === 0, "GET_DIVERGENTE_" + diferenca);
-  }
-});
-Deno.test("COB06 Edge simulada: listagem duplicada, vazia ou paginada nao faz GET de ID", async () => {
-  for (const modo of ["dupla", "vazia", "paginada"] as const) {
-    reset();
-    listagem = modo;
-    const r = await chamar(acao);
-    assert(r.http === 503 && r.body.success === false &&
-      Number(consultasListagem) === 1 && Number(consultasDetalhe) === 0 &&
-      Number(gravacoesObservacao) === 0, "LISTAGEM_" + modo);
-  }
-});
-Deno.test("COB06 Edge simulada: status recebido ainda nao permite quitação ou motoboy", async () => {
-  reset();
-  statusRemoto = "RECEIVED";
-  const r = await chamar(acao);
-  assert(r.http === 200 && r.body.status_bancario_observado === "RECEIVED" &&
+  assert(r.http === 403 && r.body.success === false &&
+    r.body.hold_obrigatorio === true && r.body.pode_emitir_pix === false &&
     r.body.pode_quitar === false && r.body.pode_estornar === false &&
-    r.body.pode_liberar_motoboy === false && Number(gravacoesObservacao) === 1,
-    "RECEIVED_NAO_PODE_LIQUIDAR");
+    r.body.pode_liberar_motoboy === false, "OBSERVACAO_NAO_PROIBIDA");
+  assert(chamadasAuth === 0 && consultasLocal === 0 &&
+    consultasListagem === 0 && consultasDetalhe === 0 &&
+    gravacoesObservacao === 0, "OBSERVACAO_ACIONOU_REDE");
 });
-Deno.test("COB06 Edge simulada: RPC que tenta habilitar quitação causa HOLD", async () => {
-  reset();
-  corromperAck = true;
-  const r = await chamar(acao);
-  assert(r.http === 503 && r.body.hold_obrigatorio === true &&
-    r.body.pode_quitar === false && r.body.pode_liberar_motoboy === false &&
-    Number(gravacoesObservacao) === 1, "ACK_BANCO_INSEGURO");
-});
-Deno.test("COB06 Edge simulada: mesmo com flags TRUE nenhuma acao de Pix ou saque existe", async () => {
+
+Deno.test("COB06 GET-only: nenhum comando financeiro, webhook ou escrita tem rota", async () => {
   reset();
   for (const proibida of ["criar_cobranca", "emitir_pix", "transferir_saque",
     "registrar_estado_acumulo_sandbox_admin", "webhook"]) {
     const r = await chamar(proibida);
     assert(r.http === 403 && r.body.hold_obrigatorio === true &&
       r.body.pode_emitir_pix === false && r.body.pode_quitar === false,
-      "ACAO_FATURAMENTO_" + proibida);
+      "ACAO_FINANCEIRA_" + proibida);
   }
-  assert(Number(chamadasAuth) === 0 && Number(consultasLocal) === 0 &&
-    Number(consultasListagem) === 0 && Number(gravacoesObservacao) === 0,
-    "ACAO_PROIBIDA_ACIONOU_REDE");
+  assert(chamadasAuth === 0 && consultasLocal === 0 &&
+    consultasListagem === 0 && gravacoesObservacao === 0,
+    "COMANDO_FINANCEIRO_ACIONOU_REDE");
 });
 
 const acaoAuditar = "auditar_duplicidade_acumulo_sandbox_admin";
@@ -346,19 +265,34 @@ Deno.test("COB06 auditoria somente GET: admin e origem do banco obrigatorios", a
     "AUDITORIA_REFERENCIA_DIVERGENTE");
 });
 
-Deno.test("COB06 auditoria somente GET: ja observado nao cria segunda gravacao", async () => {
+Deno.test("COB06 GET-only: repeticao nunca cria observacao ou pagamento", async () => {
   reset();
-  anterior = true;
-  const r = await chamar(acaoAuditar);
-  assert(r.http === 200 && r.body.hold_obrigatorio === true &&
-    r.body.pode_emitir_pix === false &&
-    consultasListagem === 1 && consultasDetalhe === 1 &&
-    gravacoesObservacao === 0,
-    "AUDITORIA_REPETIDA_NAO_GRAVA");
+  const primeiro = await chamar(acaoAuditar);
+  const segundo = await chamar(acaoAuditar);
+  assert(primeiro.http === 200 && segundo.http === 200 &&
+    primeiro.body.hold_obrigatorio === true &&
+    segundo.body.hold_obrigatorio === true &&
+    consultasListagem === 2 && consultasDetalhe === 2 &&
+    gravacoesObservacao === 0, "GET_REPETIDO_GRAVOU");
 });
 
-Deno.test("COB06 QA: so o lote de R$5,60 pode ser auditado ou registrado", async () => {
-  for (const a of [acao, acaoAuditar]) {
+Deno.test("COB06 GET-only: contrato fonte proibe observar, gravar e faturar", async () => {
+  const fonte = await Deno.readTextFile(
+    new URL("../catalogo-asaas-cob06-auditoria/index.ts", import.meta.url),
+  );
+  for (const trecho of ["observar_primeiro_acumulo_sandbox_admin",
+    "catalogo_asaas_registrar_observacao_acumulo",
+    ".insert(", ".update(", ".upsert(", ".delete(",
+    "criar_cobranca", "transferir_saque"]) {
+    assert(!fonte.includes(trecho), "FONTE_NAO_READONLY_" + trecho);
+  }
+  assert(fonte.includes("auditar_duplicidade_acumulo_sandbox_admin") &&
+    fonte.includes("URL_SUPABASE !== STAGING_URL") &&
+    fonte.includes("!GET_ATIVO"), "GATES_DO_GET_NAO_PRESENTES");
+});
+
+Deno.test("COB06 QA: so o lote de R$5,60 pode ser auditado", async () => {
+  for (const a of [acaoAuditar]) {
     reset();
     const r = await chamar(a, { lote: OUTRO_LOTE });
     assert(r.http === 403 && r.body.success === false &&
@@ -382,7 +316,7 @@ Deno.test("COB06 QA: comercio, corte, valor e estado devem corresponder ao lote 
 });
 
 Deno.test("COB06 QA: flag contabil inesperadamente positiva impede ate GET remoto", async () => {
-  for (const a of [acao, acaoAuditar]) {
+  for (const a of [acaoAuditar]) {
     reset();
     permissaoContabilInsegura = true;
     const r = await chamar(a);
