@@ -63,6 +63,10 @@ test("COB-06: gate complementar é somente leitura e monitora privilégios e gua
   "catalogo_encerramento_sem_reabertura","catalogo_encerramento_sem_republicacao",
   "catalogo_asaas_webhook_receber","catalogo_finalizar_encerramento_financeiro"])
   assert.ok(gate.includes(need),need);
+ assert.match(gate,/to_regprocedure\('public\.'/);
+ assert.match(gate,/rpcs_sobrecargas_inesperadas/);
+ assert.match(gate,/outras_assinaturas/);
+ assert.doesNotMatch(gate,/ORDER BY p\.oid LIMIT 1/);
 });
 test("COB-06: inventário exige clone, gates, ordem seletiva e autorização de produção",()=>{
  for(const name of [
