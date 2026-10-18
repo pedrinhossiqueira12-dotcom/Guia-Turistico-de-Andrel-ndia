@@ -36,11 +36,11 @@ lote="$(psql -X -d catalogo_cob06_ci -Atqc \
    WHERE comercio_id='comercio-de-exemplo' AND competencia_corte='2040-04-01'")"
 [[ "$lote" =~ ^[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}$ ]]
 
-# A registra a primeira tentativa em transacao aberta e mantem o lock.
+# A registra a primeira autorizacao POSITIVA MOCKADA em CI e mantem o lock.
 timeout 14s psql -X -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -Atq \
   -c "BEGIN;
       SELECT (x->>'ok')||'|'||(x->>'nova_tentativa')||'|'||(x->>'pode_emitir_pix')
-      FROM (SELECT catalogo_private.catalogo_asaas_autorizar_tentativa_emissao_ci('$lote') x) t;
+      FROM (SELECT catalogo_private.catalogo_asaas_autorizar_post_mock_ci('$lote','guia-acumulo-$lote','cus_cob06_gate_race_123',500,0,true) x) t;
       SELECT pg_catalog.pg_sleep(4);
       COMMIT;" > "$primeiro_log" 2>&1 &
 primeiro_pid=$!
@@ -61,10 +61,10 @@ if [[ "$lock_adquirido" != "true" ]]; then
   exit 1
 fi
 
-# B aguarda o COMMIT de A, depois deve receber so o recibo de replay.
+# B disputa a mesma autorizacao CI, espera o COMMIT e recebe so replay.
 timeout 14s psql -X -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -Atq \
   -c "SELECT (x->>'ok')||'|'||(x->>'nova_tentativa')||'|'||(x->>'pode_emitir_pix')
-      FROM (SELECT catalogo_private.catalogo_asaas_autorizar_tentativa_emissao_ci('$lote') x) t" \
+      FROM (SELECT catalogo_private.catalogo_asaas_autorizar_post_mock_ci('$lote','guia-acumulo-$lote','cus_cob06_gate_race_123',500,0,true) x) t" \
   > "$segundo_log" 2>&1 &
 segundo_pid=$!
 
@@ -74,7 +74,7 @@ for tentativa in $(seq 1 60); do
   if [[ "$(psql -X -d catalogo_cob06_ci -Atqc \
     "SELECT EXISTS(SELECT 1 FROM pg_catalog.pg_stat_activity
       WHERE datname='catalogo_cob06_ci' AND wait_event_type='Lock'
-      AND query LIKE '%catalogo_asaas_autorizar_tentativa_emissao_ci%')")" = "t" ]]; then
+      AND query LIKE '%catalogo_asaas_autorizar_post_mock_ci%')")" = "t" ]]; then
     esperou_lock="true"
     break
   fi
@@ -89,7 +89,7 @@ wait "$primeiro_pid"
 primeiro_pid=""
 wait "$segundo_pid"
 segundo_pid=""
-grep -Fx 'true|true|false' "$primeiro_log"
+grep -Fx 'true|true|true' "$primeiro_log"
 grep -Fx 'false|false|false' "$segundo_log"
 
 test "$(psql -X -d catalogo_cob06_ci -Atqc \
@@ -109,6 +109,6 @@ test "$(psql -X -d catalogo_cob06_ci -Atqc \
   "SELECT count(*) FROM public.catalogo_asaas_emissoes")" = '0'
 test "$(psql -X -d catalogo_cob06_ci -Atqc \
   "SELECT (x->>'ok')||'|'||(x->>'nova_tentativa')||'|'||(x->>'pode_emitir_pix')
-   FROM (SELECT catalogo_private.catalogo_asaas_autorizar_tentativa_emissao_ci('$lote') x) t")" = 'false|false|false'
+   FROM (SELECT catalogo_private.catalogo_asaas_autorizar_post_mock_ci('$lote','guia-acumulo-$lote','cus_cob06_gate_race_123',500,0,true) x) t")" = 'false|false|false'
 
-echo 'COB06_GATE_CONCORRENCIA_DUAS_CONEXOES_SEM_POST_OK'
+echo 'COB06_AUTORIZACAO_MOCK_RACE_POSITIVA_UNICA_SEM_POST_OK'
