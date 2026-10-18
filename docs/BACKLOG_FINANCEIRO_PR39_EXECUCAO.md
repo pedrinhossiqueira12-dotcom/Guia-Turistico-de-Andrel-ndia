@@ -582,3 +582,29 @@ Este documento é a **única fila operacional** do trabalho financeiro do PR #39
 - **Proxima autorizacao necessaria**: somente apos revisao autorizar especificamente publicar a versao GET-only desta Edge no projeto STAGING com JWT ativado. A propria ativacao temporaria de flags de leitura e a primeira consulta bancaria Asaas Sandbox real exigem autorizacao especifica adicional, identidade QA confirmada e credenciais servidor existentes; quaisquer respostas ainda mantem HOLD. Um GET com 0 resultados nunca libera criacao de cobranca.
 
 - **CI de codigo no commit `02fb2e1`:** [Actions #39146028091](https://github.com/pedrinhossiqueira12-dotcom/Guia-Turistico-de-Andrel-ndia/actions/runs/39146028091) **12/12 PASS**; teste HTTP GET-only mockado **11/11 PASS**, inclusive contrato estatico e recusas; teste da Edge desligada **5/5 PASS**. Nenhum teste chamou a rede real.
+
+
+### COB-06 — deploy STAGING v22 GET-only com trava imutavel de publicacao (18/10/2026)
+
+- **Autorizacao delimitada do usuario:** publicar apenas `catalogo-asaas-cob06-auditoria` no projeto STAGING `jbttwihctuibchhcyqtl` (`testes`), `verify_jwt=true`, sem ativar flags, sem consultar Asaas real e sem Pix, quitação, saque, repasse ou alteracao de PROD. Projeto STAGING confirmado `ACTIVE_HEALTHY`, com v21 `ACTIVE` e `verify_jwt=true` antes da mudanca.
+- Publicada **v22 ACTIVE / verify_jwt=true**, `ezbr_sha256=dab2105397fcced1edd85e2b874bd1e07a55807ec003dad27afc33802d69d7d7`. Os 4 arquivos da Edge (entrypoint GET-only e tres `_shared`) foram obtidos da branch do PR #39, sem imports de criacao de Pix ou escrita de observacao. Comparacao apos o deploy validou correspondencia **byte a byte** de todos os quatro arquivos com o payload enviado.
+- **Trava adicional de publicacao incondicional** inserida somente no artefato STAGING v22, depois do preflight OPTIONS, antes de corpo/acao/autenticacao/DB/Asaas, porque os valores atuais dos Secrets nao podem ser lidos pelo conector (mantivemos todos intocados):
+
+```ts
+  // PUBLICACAO STAGING V22: o codigo interno aceita apenas auditoria GET.
+  // Trava temporaria binaria aprovada: nenhum POST acionara Supabase ou Asaas,
+  // independentemente dos valores secretos das flags nao verificaveis daqui.
+  // Remocao SOMENTE em nova publicacao especificamente autorizada.
+  if (req.method === "POST") {
+    return resposta({
+      success: false, modo: "STAGING_GET_ONLY_PUBLICACAO_HOLD",
+      pode_emitir_pix: false, pode_quitar: false, pode_estornar: false,
+      pode_liberar_motoboy: false, hold_obrigatorio: true,
+      banco_consultado: false, asaas_consultado: false,
+    }, 503);
+  }
+```
+
+- Conferencia independente com `get_edge_function`: `version=22`, `ACTIVE`, `verify_jwt=true`, os 4 arquivos identicos, sem rota de observacao/gravacao, e guarda POST anterior a qualquer acesso a recursos remotos. A versao registrada em GitHub **nao inclui intencionalmente** esta guarda temporaria de publicacao; a chamada administrativa preparada no codigo da PR continua impossivel na versao implantada.
+- Consulta SQL read-only antes e depois: lote `583d761a-ecb9-49be-b484-e43f6183971e`, estado `preparado`, total **560 centavos**, referencia `reservado`, `payment_id=NULL`, `pode_emitir_pix=false`, **0 observacoes**. Sem consulta bancária real, flags/secrets/tokens modificados, pagamento, webhook ou merge.
+- **Proximo bloqueio:** para testar o GET real, solicitar autorizacao nova e especifica para remover a trava em outro deploy STAGING, confirmar as flags de auditoria e identidade admin STAGING, e invocar apenas o GET Asaas Sandbox na Edge com sessao QA. Mesmo um GET negativo nunca autoriza POST bancario, Pix ou quitacao.
