@@ -6,7 +6,8 @@ const ROOT = "https://jbttwihctuibchhcyqtl.supabase.co";
 const ASAAS = "https://api-sandbox.asaas.com";
 const ADMIN = "4b9a0233-6b72-4573-aebd-d596c5b15e1b";
 const INTRUSO = "11111111-2222-4333-8444-555555555555";
-const LOTE = "22222222-3333-4444-8888-aaaaaaaaaaaa";
+const LOTE = "583d761a-ecb9-49be-b484-e43f6183971e";
+const OUTRO_LOTE = "22222222-3333-4444-8888-aaaaaaaaaaaa";
 const CLIENTE = "cus_auditoria123";
 const PAGAMENTO = "pay_auditoria123";
 const REFERENCIA = "guia-acumulo-" + LOTE;
@@ -21,6 +22,8 @@ let alteracaoRemota: "nenhuma" | "customer" | "referencia" | "valor" |
   "modalidade" | "status" | "id" = "nenhuma";
 let statusRemoto = "PENDING";
 let corromperAck = false;
+let permissaoContabilInsegura = false;
+let loteIncorreto: "nenhum" | "comercio" | "corte" | "valor" | "estado" = "nenhum";
 let chamadasAuth = 0;
 let consultasLocal = 0;
 let consultasListagem = 0;
@@ -30,6 +33,7 @@ function reset() {
   identidade = ADMIN; anterior = false; origemValida = true;
   referenciaValida = true; listagem = "unica"; alteracaoRemota = "nenhuma";
   statusRemoto = "PENDING"; corromperAck = false;
+  permissaoContabilInsegura = false; loteIncorreto = "nenhum";
   chamadasAuth = 0; consultasLocal = 0; consultasListagem = 0;
   consultasDetalhe = 0; gravacoesObservacao = 0;
 }
@@ -68,7 +72,7 @@ globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
       externalReference: alteracaoRemota === "referencia"
         ? "guia-acumulo-outra-ref" : REFERENCIA,
       customer: alteracaoRemota === "customer" ? "cus_outro_123" : CLIENTE,
-      value: alteracaoRemota === "valor" ? 5.01 : 5,
+      value: alteracaoRemota === "valor" ? 5.61 : 5.6,
       billingType: alteracaoRemota === "modalidade" ? "CREDIT_CARD" : "PIX",
       status: alteracaoRemota === "status" ? "DESCONHECIDO" : statusRemoto,
     });
@@ -85,7 +89,9 @@ globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     assert(method === "POST", "RPC_CONCILIACAO_NAO_POST");
     consultasLocal++;
     return reply({ integridade_contabil_ok: origemValida,
-      valor_fontes_centavos: origemValida ? 500 : 400 });
+      valor_fontes_centavos: origemValida ? 560 : 400,
+      pode_emitir_pix: permissaoContabilInsegura,
+      pode_quitar: false, pode_liberar_motoboy: false });
   }
   if (url.pathname === "/rest/v1/rpc/catalogo_asaas_registrar_observacao_acumulo") {
     assert(method === "POST", "RPC_OBSERVACAO_NAO_POST");
@@ -93,7 +99,7 @@ globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     const args = JSON.parse(String(init?.body)) as Record<string, unknown>;
     assert(args.p_lote === LOTE && args.p_payment === PAGAMENTO &&
       args.p_customer === CLIENTE && args.p_referencia === REFERENCIA &&
-      args.p_valor === 500 && args.p_status === statusRemoto,
+      args.p_valor === 560 && args.p_status === statusRemoto,
       "PARAMETROS_OBSERVACAO_INVALIDOS");
     anterior = true;
     return reply({ ok: !corromperAck, lote_id: LOTE, payment_id: PAGAMENTO,
@@ -102,10 +108,19 @@ globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   }
   assert(method === "GET", "ESCRITA_DIRETA_PROIBIDA");
   consultasLocal++;
+  if (url.pathname === "/rest/v1/catalogo_asaas_acumulo_lotes") {
+    return reply({
+      id: LOTE,
+      comercio_id: loteIncorreto === "comercio" ? "outro-comercio" : "asaas-cob02",
+      competencia_corte: loteIncorreto === "corte" ? "2027-04-01" : "2027-03-01",
+      total_centavos: loteIncorreto === "valor" ? 600 : 560,
+      estado: loteIncorreto === "estado" ? "cancelado" : "preparado",
+    });
+  }
   if (url.pathname === "/rest/v1/catalogo_asaas_acumulo_referencias") {
-    return reply({ lote_id: LOTE, comercio_id: "comercio-ficticio",
+    return reply({ lote_id: LOTE, comercio_id: "asaas-cob02",
       referencia: referenciaValida ? REFERENCIA : "referencia-invalida",
-      valor_centavos: 500, estado: "reservado",
+      valor_centavos: 560, estado: "reservado",
       payment_id: null, pode_emitir_pix: false });
   }
   if (url.pathname === "/rest/v1/catalogo_asaas_acumulo_observacoes") {
@@ -340,4 +355,40 @@ Deno.test("COB06 auditoria somente GET: ja observado nao cria segunda gravacao",
     consultasListagem === 1 && consultasDetalhe === 1 &&
     gravacoesObservacao === 0,
     "AUDITORIA_REPETIDA_NAO_GRAVA");
+});
+
+Deno.test("COB06 QA: so o lote de R$5,60 pode ser auditado ou registrado", async () => {
+  for (const a of [acao, acaoAuditar]) {
+    reset();
+    const r = await chamar(a, { lote: OUTRO_LOTE });
+    assert(r.http === 403 && r.body.success === false &&
+      r.body.pode_emitir_pix === false &&
+      chamadasAuth === 1 && consultasLocal === 0 &&
+      consultasListagem === 0 && gravacoesObservacao === 0,
+      "LOTE_FORA_DA_QA_" + a);
+  }
+});
+
+Deno.test("COB06 QA: comercio, corte, valor e estado devem corresponder ao lote original", async () => {
+  for (const alteracao of ["comercio", "corte", "valor", "estado"] as const) {
+    reset();
+    loteIncorreto = alteracao;
+    const r = await chamar(acaoAuditar);
+    assert(r.http === 409 && r.body.success === false &&
+      r.body.hold_obrigatorio === true &&
+      consultasListagem === 0 && gravacoesObservacao === 0,
+      "LOTE_INCONSISTENTE_" + alteracao);
+  }
+});
+
+Deno.test("COB06 QA: flag contabil inesperadamente positiva impede ate GET remoto", async () => {
+  for (const a of [acao, acaoAuditar]) {
+    reset();
+    permissaoContabilInsegura = true;
+    const r = await chamar(a);
+    assert(r.http === 409 && r.body.success === false &&
+      r.body.pode_emitir_pix === false &&
+      consultasListagem === 0 && consultasDetalhe === 0 &&
+      gravacoesObservacao === 0, "GATE_CONTABIL_INSEGURO_" + a);
+  }
 });
