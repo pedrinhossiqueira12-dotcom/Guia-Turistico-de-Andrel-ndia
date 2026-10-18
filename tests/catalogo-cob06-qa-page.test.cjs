@@ -39,3 +39,39 @@ test('revisao COB06 exige API exclusiva, atestados completos e nao executa cobra
  assert.doesNotMatch(admin,/criar_pedido_offline|gerar_fechamento|criar_cobranca|solicitar_saque|confirmar_entrega/);
  assert.match(admin,/cob06Revisado\)\$\("qa-cob06-review-submit"\)\.disabled=true/);
 });
+
+const auditoriaGet=src.slice(
+ src.indexOf('// COB-06: uma unica tentativa de auditoria'),
+ src.indexOf('$("qa-cob06-encerramento-submit").addEventListener')
+);
+
+test('auditoria Asaas GET-only: botao visivel somente ao admin STAGING',()=>{
+ assert.match(src,/id="qa-cob06-get-auditoria" hidden/);
+ assert.match(src,/id="qa-cob06-get-auditoria-submit"/);
+ assert.match(src,/qa-cob06-get-auditoria"\)\.hidden=!u\|\|u\.id!==COB06_QA_REVISOR/);
+ assert.match(auditoriaGet,/client\.auth\.getUser\(\)/);
+ assert.match(auditoriaGet,/user\?\.user\?\.id!==COB06_QA_REVISOR/);
+ assert.match(auditoriaGet,/client\.auth\.getSession\(\)/);
+});
+
+test('auditoria Asaas GET-only: tentativa unica, referencia fixa e resposta HOLD',()=>{
+ assert.match(auditoriaGet,/cob06AuditoriaGetSolicitada=true/);
+ assert.match(auditoriaGet,/button\.disabled=true/);
+ assert.match(auditoriaGet,/window\.confirm\(/);
+ assert.match(auditoriaGet,/catalogo-asaas-cob06-auditoria/);
+ assert.match(auditoriaGet,/acao:"auditar_duplicidade_acumulo_sandbox_admin"/);
+ assert.match(auditoriaGet,/lote_id:"583d761a-ecb9-49be-b484-e43f6183971e"/);
+ for(const campo of ['out.hold_obrigatorio!==true','out.banco_alterado!==false',
+   'out.pix_emitido!==false','out.pode_emitir_pix!==false','out.pode_quitar!==false',
+   'out.pode_liberar_motoboy!==false'])assert.ok(auditoriaGet.includes(campo),campo);
+ assert.doesNotMatch(auditoriaGet,/criar_cobranca|emitir_pix|transferir_saque|registrar_observacao|solicitar_saque/);
+});
+
+test('auditoria Asaas GET-only: flags exclusivamente de leitura e sandbox no aviso',()=>{
+ const section=src.slice(src.indexOf('<section id="qa-cob06-get-auditoria"'),
+   src.indexOf('<section id="qa-cob06-encerramento"'));
+ for(const item of ['ASAAS_COB06_AUDITORIA_ISOLADA_ENABLED=true',
+   'ASAAS_COB06_GET_ADMIN_READONLY_ENABLED=true','ASAAS_ENVIRONMENT=sandbox'])
+   assert.ok(section.includes(item),item);
+ assert.match(section,/Mantenha as flags de Pix e saques desligadas/);
+});
