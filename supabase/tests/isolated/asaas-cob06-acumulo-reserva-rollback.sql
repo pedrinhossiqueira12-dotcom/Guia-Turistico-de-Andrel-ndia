@@ -339,6 +339,63 @@ BEGIN
  IF EXISTS(SELECT 1 FROM public.catalogo_asaas_acumulo_tentativas_emissao_ci)
  THEN RAISE EXCEPTION 'COB06_GATE: negativa gravou tentativa'; END IF;
 
+ -- SQL17: contrato POSITIVO ESTRITAMENTE SIMULADO, sem rede Asaas.
+ -- Nenhum papel exposto pode chamar a funcao nem escrever no livro.
+ IF pg_catalog.has_function_privilege('anon',
+    'catalogo_private.catalogo_asaas_autorizar_post_mock_ci(uuid,text,text,bigint,integer,boolean)','EXECUTE')
+ OR pg_catalog.has_function_privilege('authenticated',
+    'catalogo_private.catalogo_asaas_autorizar_post_mock_ci(uuid,text,text,bigint,integer,boolean)','EXECUTE')
+ OR pg_catalog.has_function_privilege('service_role',
+    'catalogo_private.catalogo_asaas_autorizar_post_mock_ci(uuid,text,text,bigint,integer,boolean)','EXECUTE')
+ THEN RAISE EXCEPTION 'COB06_MOCK_POST_CI: permissao insegura'; END IF;
+ v_tentativa:=catalogo_private.catalogo_asaas_autorizar_post_mock_ci(
+    v_id,v_referencia->>'referencia',v_cliente_obs,500,1,true);
+ IF v_tentativa->>'ok'<>'false' OR v_tentativa->>'pode_emitir_pix'<>'false'
+ THEN RAISE EXCEPTION 'COB06_MOCK_POST_CI: GET com pagamento aceito'; END IF;
+ v_tentativa:=catalogo_private.catalogo_asaas_autorizar_post_mock_ci(
+    v_id,v_referencia->>'referencia',v_cliente_obs,500,0,false);
+ IF v_tentativa->>'ok'<>'false' OR v_tentativa->>'pode_emitir_pix'<>'false'
+ THEN RAISE EXCEPTION 'COB06_MOCK_POST_CI: GET incompleto aceito'; END IF;
+ v_tentativa:=catalogo_private.catalogo_asaas_autorizar_post_mock_ci(
+    v_id,'outra-referencia',v_cliente_obs,500,0,true);
+ IF v_tentativa->>'ok'<>'false' OR v_tentativa->>'pode_emitir_pix'<>'false'
+ OR EXISTS(SELECT 1 FROM public.catalogo_asaas_acumulo_tentativas_emissao_ci)
+ THEN RAISE EXCEPTION 'COB06_MOCK_POST_CI: identidade errada reservou banco'; END IF;
+
+ -- Executa o caminho positivo de uma unica tentativa EM SUBTRANSACAO.
+ -- Excecao sentinela reverte a tentativa antes de prosseguir com SQL13.
+ BEGIN
+  v_tentativa:=catalogo_private.catalogo_asaas_autorizar_post_mock_ci(
+     v_id,v_referencia->>'referencia',v_cliente_obs,500,0,true);
+  IF v_tentativa->>'ok'<>'true'
+    OR v_tentativa->>'simulacao_ci'<>'true'
+    OR v_tentativa->>'nova_tentativa'<>'true'
+    OR v_tentativa->>'prova_get_externa'<>'true'
+    OR v_tentativa->>'autorizacao_externa'<>'true'
+    OR v_tentativa->>'pode_emitir_pix'<>'true'
+    OR v_tentativa->>'pode_repetir_post'<>'false'
+    OR v_tentativa->>'pode_quitar'<>'false'
+    OR v_tentativa->>'pode_liberar_motoboy'<>'false'
+    OR v_tentativa->>'referencia' IS DISTINCT FROM v_referencia->>'referencia'
+    OR v_tentativa->>'cliente_id' IS DISTINCT FROM v_cliente_obs
+    OR (v_tentativa->>'valor_centavos')::bigint<>500
+    OR (v_tentativa->>'operacao_id')::uuid IS DISTINCT FROM v_id_operacao
+    OR (SELECT count(*) FROM public.catalogo_asaas_acumulo_tentativas_emissao_ci)<>1
+  THEN RAISE EXCEPTION 'COB06_MOCK_POST_CI: recibo de CI positivo incorreto: %',v_tentativa; END IF;
+  v_tentativa2:=catalogo_private.catalogo_asaas_autorizar_post_mock_ci(
+     v_id,v_referencia->>'referencia',v_cliente_obs,500,0,true);
+  IF v_tentativa2->>'ok'<>'false'
+    OR v_tentativa2->>'nova_tentativa'<>'false'
+    OR v_tentativa2->>'pode_emitir_pix'<>'false'
+    OR (SELECT count(*) FROM public.catalogo_asaas_acumulo_tentativas_emissao_ci)<>1
+  THEN RAISE EXCEPTION 'COB06_MOCK_POST_CI: replay autorizou outro POST'; END IF;
+  RAISE EXCEPTION 'COB06_MOCK_POST_CI_ROLLBACK' USING ERRCODE='P0700';
+ EXCEPTION WHEN SQLSTATE 'P0700' THEN
+  IF EXISTS(SELECT 1 FROM public.catalogo_asaas_acumulo_tentativas_emissao_ci)
+  THEN RAISE EXCEPTION 'COB06_MOCK_POST_CI: rollback parcial'; END IF;
+ END;
+ RAISE NOTICE 'COB06_AUTORIZACAO_MOCK_CI_UNICA_E_REVERTIDA_OK';
+
  v_tentativa:=catalogo_private.catalogo_asaas_autorizar_tentativa_emissao_ci(v_id);
  IF v_tentativa->>'ok'<>'true'
     OR v_tentativa->>'nova_tentativa'<>'true'
