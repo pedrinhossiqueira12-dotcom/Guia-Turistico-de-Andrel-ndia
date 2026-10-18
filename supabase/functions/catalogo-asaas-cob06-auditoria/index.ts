@@ -9,7 +9,11 @@ import {
 import {
   observarPagamentoAcumuloSomenteGet,
 } from "../_shared/catalogo-asaas-acumulo-get-verificado-inerte.ts";
+import {
+  auditarDuplicidadeAcumuloSomenteGet,
+} from "../_shared/catalogo-asaas-acumulo-auditoria-duplicidade-inerte.ts";
 
+const STAGING_URL = "https://jbttwihctuibchhcyqtl.supabase.co";
 const URL_SUPABASE = Deno.env.get("SUPABASE_URL") || "";
 const CHAVES_BUNDLE = Deno.env.get("SUPABASE_SECRET_KEYS") || "";
 let CHAVE_SERVICO = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -63,7 +67,7 @@ async function exigirAdmin(req: Request) {
   if (error || !data?.user) return recusar("Sessao invalida.", 401);
   if (data.user.id !== ADMIN_STAGING) return recusar("Acesso restrito.", 403);
 }
-async function observarPrimeiro(lote: string) {
+async function conferirLoteNoBanco(lote: string, permitirObservado = false) {
   if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(lote)) {
     return recusar("Lote invalido.", 400);
   }
@@ -75,7 +79,7 @@ async function observarPrimeiro(lote: string) {
       .select("lote_id,payment_id").eq("lote_id", lote).maybeSingle(),
   ]);
   if (r.error || anterior.error || !r.data) return recusar("Referencia ausente. HOLD.");
-  if (anterior.data) return recusar("Ja observado; nao repetir.", 409);
+  if (anterior.data && !permitirObservado) return recusar("Ja observado; nao repetir.", 409);
   const ref = r.data;
   const cents = Number(ref.valor_centavos);
   if (ref.lote_id !== lote || ref.referencia !== "guia-acumulo-" + lote ||
@@ -92,14 +96,36 @@ async function observarPrimeiro(lote: string) {
       Number(origem.valor_fontes_centavos) !== cents) {
     return recusar("Fontes nao conferidas. HOLD.", 409);
   }
+  return {
+    loteId: lote, referencia: ref.referencia,
+    clienteId: cliente.data.cliente_id as string, valorCentavos: cents,
+  };
+}
+
+async function auditarDuplicidadeSemEscrita(lote: string) {
+  // A identidade financeira vem SOMENTE do banco, nao do corpo do request.
+  const esperado = await conferirLoteNoBanco(lote, true);
+  const auditoria = await auditarDuplicidadeAcumuloSomenteGet(
+    esperado, ASAAS_TOKEN,
+  );
+  return resposta({
+    success: true, lote_id: lote, estado: auditoria.estado,
+    payment_id: auditoria.paymentId,
+    status_bancario: auditoria.statusBancario,
+    banco_alterado: false, pix_emitido: false,
+    pode_emitir_pix: false, pode_quitar: false, pode_estornar: false,
+    pode_liberar_motoboy: false, hold_obrigatorio: true,
+  });
+}
+
+async function observarPrimeiro(lote: string) {
+  const esperado = await conferirLoteNoBanco(lote);
   // A chamada externa e SOMENTE GET, com base fixa api-sandbox.asaas.com.
   const paymentId = await encontrarIdPagamentoAcumuloSandboxPorReferencia(
-    ref.referencia, ASAAS_TOKEN,
+    esperado.referencia, ASAAS_TOKEN,
   );
-  const observada = await observarPagamentoAcumuloSomenteGet({
-    loteId: lote, referencia: ref.referencia,
-    clienteId: cliente.data.cliente_id, valorCentavos: cents,
-  }, paymentId,
+  const observada = await observarPagamentoAcumuloSomenteGet(
+    esperado, paymentId,
     (id) => consultarPagamentoAcumuloSandboxGet(id, ASAAS_TOKEN),
     (params) => rpc("catalogo_asaas_registrar_observacao_acumulo", { ...params }),
   );
@@ -141,14 +167,23 @@ Deno.serve(async (req: Request) => {
       return recusar("Payload invalido.", 400);
     }
     const entrada = body as Record<string, unknown>;
-    if (entrada.acao !== "observar_primeiro_acumulo_sandbox_admin") {
+    const somenteLeitura = entrada.acao ===
+      "auditar_duplicidade_acumulo_sandbox_admin";
+    const registrarObservacao = entrada.acao ===
+      "observar_primeiro_acumulo_sandbox_admin";
+    if (!somenteLeitura && !registrarObservacao) {
       return recusar("Acao financeira indisponivel nesta funcao.", 403);
     }
-    if (!ATIVO || !GET_ATIVO || !REGISTRO_ATIVO || !SANDBOX || !ASAAS_TOKEN) {
-      return recusar("Observacao inativa. HOLD.");
+    // Nunca abrir uma rota de auditoria habilitada em projeto de producao.
+    // A auditoria sem escrita nao depende da flag de registro contábil.
+    if (URL_SUPABASE !== STAGING_URL || !ATIVO || !GET_ATIVO ||
+        !SANDBOX || !ASAAS_TOKEN || (registrarObservacao && !REGISTRO_ATIVO)) {
+      return recusar("Auditoria inativa. HOLD.");
     }
     await exigirAdmin(req);
-    return await observarPrimeiro(texto(entrada.lote_id));
+    return somenteLeitura
+      ? await auditarDuplicidadeSemEscrita(texto(entrada.lote_id))
+      : await observarPrimeiro(texto(entrada.lote_id));
   } catch (e) {
     if (e instanceof Hold) return resposta({
       success: false, mensagem: e.message,
