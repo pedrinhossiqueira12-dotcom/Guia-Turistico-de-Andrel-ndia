@@ -13,7 +13,13 @@ import {
   auditarDuplicidadeAcumuloSomenteGet,
 } from "../_shared/catalogo-asaas-acumulo-auditoria-duplicidade-inerte.ts";
 
+// Ensaio remoto limitado ao unico lote sintetico COB-06 previamente preparado.
+// Retirar estes limites somente em uma etapa de rollout revisada, nunca via body.
 const STAGING_URL = "https://jbttwihctuibchhcyqtl.supabase.co";
+const QA_LOTE = "583d761a-ecb9-49be-b484-e43f6183971e";
+const QA_COMERCIO = "asaas-cob02";
+const QA_CORTE = "2027-03-01";
+const QA_TOTAL_CENTAVOS = 560;
 const URL_SUPABASE = Deno.env.get("SUPABASE_URL") || "";
 const CHAVES_BUNDLE = Deno.env.get("SUPABASE_SECRET_KEYS") || "";
 let CHAVE_SERVICO = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -71,21 +77,34 @@ async function conferirLoteNoBanco(lote: string, permitirObservado = false) {
   if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(lote)) {
     return recusar("Lote invalido.", 400);
   }
-  const [r, anterior] = await Promise.all([
+  if (lote !== QA_LOTE) return recusar("Lote fora do ensaio COB-06. HOLD.", 403);
+  const [l, r, anterior] = await Promise.all([
+    db.from("catalogo_asaas_acumulo_lotes")
+      .select("id,comercio_id,competencia_corte,total_centavos,estado")
+      .eq("id", lote).maybeSingle(),
     db.from("catalogo_asaas_acumulo_referencias")
       .select("lote_id,comercio_id,referencia,valor_centavos,estado,payment_id,pode_emitir_pix")
       .eq("lote_id", lote).maybeSingle(),
     db.from("catalogo_asaas_acumulo_observacoes")
       .select("lote_id,payment_id").eq("lote_id", lote).maybeSingle(),
   ]);
-  if (r.error || anterior.error || !r.data) return recusar("Referencia ausente. HOLD.");
+  if (l.error || r.error || anterior.error || !l.data || !r.data)
+    return recusar("Lote ou referencia ausente. HOLD.");
+  const loteQa = l.data;
+  if (loteQa.id !== QA_LOTE || loteQa.comercio_id !== QA_COMERCIO ||
+      loteQa.competencia_corte !== QA_CORTE ||
+      Number(loteQa.total_centavos) !== QA_TOTAL_CENTAVOS ||
+      loteQa.estado !== "preparado") {
+    return recusar("Lote QA divergente. HOLD.", 409);
+  }
   if (anterior.data && !permitirObservado) return recusar("Ja observado; nao repetir.", 409);
   const ref = r.data;
   const cents = Number(ref.valor_centavos);
-  if (ref.lote_id !== lote || ref.referencia !== "guia-acumulo-" + lote ||
+  if (ref.lote_id !== lote || ref.comercio_id !== QA_COMERCIO ||
+      ref.referencia !== "guia-acumulo-" + lote ||
       ref.estado !== "reservado" || ref.payment_id !== null ||
       ref.pode_emitir_pix !== false ||
-      !Number.isSafeInteger(cents) || cents < 500 || cents > 2147483647) {
+      !Number.isSafeInteger(cents) || cents !== QA_TOTAL_CENTAVOS) {
     return recusar("Referencia inconsistente. HOLD.", 409);
   }
   const cliente = await db.from("catalogo_asaas_clientes")
@@ -93,7 +112,10 @@ async function conferirLoteNoBanco(lote: string, permitirObservado = false) {
   if (cliente.error || !cliente.data) return recusar("Cliente ausente. HOLD.", 409);
   const origem = await rpc("catalogo_asaas_conferir_conciliacao_acumulo", { p_lote: lote });
   if (origem.integridade_contabil_ok !== true ||
-      Number(origem.valor_fontes_centavos) !== cents) {
+      Number(origem.valor_fontes_centavos) !== cents ||
+      origem.pode_emitir_pix !== false ||
+      origem.pode_quitar !== false ||
+      origem.pode_liberar_motoboy !== false) {
     return recusar("Fontes nao conferidas. HOLD.", 409);
   }
   return {
