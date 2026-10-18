@@ -101,11 +101,19 @@ pre{white-space:pre-wrap;word-break:break-all;padding:14px;background:#f3f5f1;bo
 </div>
 <pre id="qa-cob06-integracao-output" role="status">Ainda não verificado. Clique primeiro no botão 1.</pre>
 <div style="margin-top:20px;padding:16px;border:2px solid #b46b35;border-radius:12px;background:#fff8ed">
-<p><strong>Etapa 3 · Executa arquivamento real SOMENTE do registro fictício QA.</strong> Depois que os dois testes acima passarem, habilite TEMPORARIAMENTE <code>COB06_ENCERRAMENTO_HTTP_QA_ENABLED=true</code> nas secrets do projeto STAGING, apenas sob orientação. Esta ação altera o banco de testes e a branch <code>qa/cob06-isolado</code>; não move dinheiro, não modifica a branch principal e não aciona WhatsApp.</p>
-<div class="actions"><button type="button" id="qa-cob06-integracao-concluir" disabled>3 · ARQUIVAR comércio FICTÍCIO (somente QA)</button></div>
-<p class="muted">O botão 3 só será liberado após os dois testes locais. Exige nova conferência no servidor, duas confirmações e a frase de segurança. Se a resposta for inconclusiva, não clique novamente. Ao terminar, desligue a flag no STAGING.</p>
+<p><strong>Etapa 3 já executada no STAGING em 17/10/2026. Não repetir.</strong> Depois que os dois testes acima passarem, habilite TEMPORARIAMENTE <code>COB06_ENCERRAMENTO_HTTP_QA_ENABLED=true</code> nas secrets do projeto STAGING, apenas sob orientação. Esta ação altera o banco de testes e a branch <code>qa/cob06-isolado</code>; não move dinheiro, não modifica a branch principal e não aciona WhatsApp.</p>
+<div class="actions"><button type="button" id="qa-cob06-integracao-concluir" disabled>3 · Arquivamento QA já realizado — NÃO repetir</button></div>
+<p class="muted">O banco de testes já arquivou este comércio fictício. O botão 3 está bloqueado permanentemente nesta página. Use exclusivamente a recuperação GitHub abaixo.</p>
 </div>
-<pre id="qa-cob06-integracao-concluir-output" role="status">Encerramento QA não executado.</pre>
+<pre id="qa-cob06-integracao-concluir-output" role="status">Arquivamento STAGING confirmado anteriormente. Não repetir.</pre>
+<div style="margin-top:20px;padding:16px;border:2px solid #28557d;border-radius:12px;background:#f1f7ff">
+<h3>Etapa 4 · Recuperar sincronização pendente, somente GitHub QA</h3>
+<p class="muted"><strong>Use apenas após o erro 503 anterior.</strong> O servidor verificará que <code>cob06-qa-integracao-ficticia-20261017</code> já está <code>deletado</code> no STAGING e atualizará apenas esse registro na branch <code>qa/cob06-isolado</code>. Esta ação <strong>não chama a RPC de arquivamento, não altera registros reais, não emite Pix e não aciona WhatsApp</strong>.</p>
+<p class="muted">Antes de clicar, habilite temporariamente <code>COB06_ENCERRAMENTO_HTTP_QA_ENABLED=true</code> somente nas secrets do Supabase STAGING. A flag deve voltar para <code>false</code> imediatamente depois, mesmo se houver erro.</p>
+<div class="actions"><button type="button" id="qa-cob06-integracao-sincronizar">4 · SINCRONIZAR PENDÊNCIA GITHUB QA</button></div>
+<p class="muted">Executa uma vez, após dois preflights HTTP, duas confirmações e a frase de segurança. Resposta inconclusiva: não repetir; enviar o JSON para revisão.</p>
+</div>
+<pre id="qa-cob06-integracao-sincronizar-output" role="status">Recuperação GitHub ainda não executada.</pre>
 </section>
 
 <section id="qa-delivery" hidden>
@@ -414,7 +422,7 @@ async function verificarIntegracaoCOb06(acao){
      out.status_github_qa!=="ativo"))
    throw Error("Vitrine GitHub isolada divergente. Mantenha HOLD.");
  cob06IntegracaoChecks.add(acao);
- $("qa-cob06-integracao-concluir").disabled=!(cob06IntegracaoChecks.has("verificar_config_qa")&&cob06IntegracaoChecks.has("verificar_repositorio_qa"));
+ $("qa-cob06-integracao-concluir").disabled=true; // Arquivamento ja ocorreu; usar apenas etapa 4.
  msg("Conferencia COB-06 aprovada: nenhuma escrita, encerramento bloqueado e Pix nao emitido.");
 }
 for(const [id,acao] of [
@@ -477,6 +485,59 @@ $("qa-cob06-integracao-concluir").addEventListener("click",()=>withBusy($("qa-co
    throw Error(out.mensagem||"Resultado inconclusivo. Nao clique novamente; envie o JSON para revisao.");
  msg("Arquivamento ficticio isolado executado. Desative AGORA a flag no STAGING e envie o JSON.");
 }).then(()=>{if(cob06IntegracaoEncerramentoEnviado)$("qa-cob06-integracao-concluir").disabled=true;}));
+
+// Recuperacao de 503: SEM repetir a RPC financeira de encerramento.
+let cob06SincronizacaoPendenteEnviada=false;
+$("qa-cob06-integracao-sincronizar").addEventListener("click",()=>withBusy($("qa-cob06-integracao-sincronizar"),async()=>{
+ if(cob06SincronizacaoPendenteEnviada)
+   throw Error("Ja houve tentativa de sincronizacao nesta sessao. Nao repita.");
+ const {data:auth,error:authError}=await client.auth.getUser();
+ if(authError||auth?.user?.id!=="d896cc0c-31e4-4ef7-8fa4-13d15f02dd2a"||
+    auth?.user?.email?.toLowerCase()!=="pedrinhossiqueira12@gmail.com")
+   throw Error("Somente administrador STAGING pode sincronizar.");
+ const {data,error}=await client.auth.getSession();
+ if(error||!data?.session?.access_token)throw Error("Entre novamente no Sandbox de testes.");
+ const endpoint=URL_SUPABASE+"/functions/v1/catalogo-cob06-encerramento-integracao-qa";
+ async function verificar(acao){
+  const res=await fetch(endpoint,{method:"POST",headers:{
+   "Content-Type":"application/json",apikey:PUBLIC_KEY,
+   Authorization:"Bearer "+data.session.access_token
+  },body:JSON.stringify({acao})});
+  const out=await res.json().catch(()=>({}));
+  if(!res.ok||out.success!==true||out.operacao!=="somente_leitura"||
+     out.pix_emitido!==false||out.github_alterado!==false||out.encerramento_executado!==false)
+   throw Error(out.mensagem||"Preflight de leitura recusado. Nenhuma escrita enviada.");
+  return out;
+ }
+ const config=await verificar("verificar_config_qa");
+ if(config.integracao_habilitada!==true||config.alvo_ficticio_preparado!==true||
+    config.branch_qa_configurada!==true||config.token_github_configurado!==true)
+   throw Error("Flag ou configuracoes STAGING nao habilitadas para recuperacao.");
+ const repo=await verificar("verificar_repositorio_qa");
+ if(repo.integracao_habilitada!==true||repo.registro_github_qa!==true||
+    repo.status_github_qa!=="ativo")
+   throw Error("Registro GitHub QA nao esta mais ativo. Nao executar sincronizacao.");
+ if(!window.confirm("STAGING QA: sincronizar SOMENTE o comercio FICTICIO ja arquivado na branch qa/cob06-isolado, SEM repetir RPC e SEM mexer em pagamento?"))
+   return false;
+ if(!window.confirm("Confirma que o banco de testes JA arquivou este registro e que a flag sera desligada imediatamente apos esta tentativa?"))
+   return false;
+ if(window.prompt("Digite SINCRONIZAR GITHUB QA para confirmar:")!=="SINCRONIZAR GITHUB QA")
+   return false;
+ cob06SincronizacaoPendenteEnviada=true;
+ const response=await fetch(endpoint,{method:"POST",headers:{
+   "Content-Type":"application/json",apikey:PUBLIC_KEY,
+   Authorization:"Bearer "+data.session.access_token
+ },body:JSON.stringify({acao:"sincronizar_pendente_qa"})});
+ const out=await response.json().catch(()=>({}));
+ $("qa-cob06-integracao-sincronizar-output").textContent=JSON.stringify({
+   etapa:"sincronizar_pendente_qa",http_status:response.status,resultado:out
+ },null,2);
+ if(!response.ok||out.success!==true||out.operacao!=="somente_github_qa"||
+    out.arquivado!==true||out.github_qa_sincronizado!==true||
+    out.rpc_executada!==false||out.pix_emitido!==false||out.hold_financeiro_mantido!==true)
+   throw Error(out.mensagem||"Sincronizacao inconclusiva. Desligue a flag e envie o JSON. Nao repita.");
+ msg("Sincronizacao exclusiva GitHub QA confirmada. Desligue AGORA a flag no STAGING e envie o JSON.");
+}).then(()=>{if(cob06SincronizacaoPendenteEnviada)$("qa-cob06-integracao-sincronizar").disabled=true;}));
 
 async function deliveryApi(acao,body={}){
  const out=await qaApi("catalogo-entregas",{acao,...body});
