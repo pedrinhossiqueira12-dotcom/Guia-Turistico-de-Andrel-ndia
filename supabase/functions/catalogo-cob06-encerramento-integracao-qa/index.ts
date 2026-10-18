@@ -97,7 +97,7 @@ async function writeRepo(token: string, state: RepoState): Promise<boolean> {
     },
     body: JSON.stringify(body),
   });
-  if (!resp.ok) throw new Error(resp.status === 409 ? "github_conflict" : "github_put");
+  if (!resp.ok) throw new Error("github_put_http_" + resp.status);
   return true;
 }
 
@@ -129,7 +129,7 @@ Deno.serve(async (req: Request) => {
     if (!body || typeof body !== "object" || Array.isArray(body)
         || Object.keys(body).length !== 1) return fail(403, "Acao nao autorizada.");
     const acao = (body as { acao?: string }).acao;
-    if (!["verificar_config_qa", "verificar_repositorio_qa", "concluir_encerramento_qa"].includes(acao || ""))
+    if (!["verificar_config_qa", "verificar_repositorio_qa", "concluir_encerramento_qa", "sincronizar_pendente_qa"].includes(acao || ""))
       return fail(403, "Acao nao autorizada.");
 
     const [pub, catalogo] = await Promise.all([
@@ -170,6 +170,32 @@ Deno.serve(async (req: Request) => {
       encerramento_executado: false, pix_emitido: false,
     });
     if (!flag) return fail(403, "Integracao QA desabilitada. HOLD.");
+
+    // Recuperacao apos 503: exclusivamente GitHub QA. NUNCA invoca RPC novamente.
+    if (acao === "sincronizar_pendente_qa") {
+      if (pub.data?.status !== "deletado" || !pub.data?.deletado_em
+          || pub.data?.atualizado_por !== ADMIN_UID || pub.data?.destaque !== false)
+        return fail(409, "Arquivamento ficticio STAGING nao confirmado. Nenhum GitHub PUT.");
+      let escreveu = false;
+      try { escreveu = await writeRepo(token, repo); }
+      catch (error) {
+        const codigo = error instanceof Error
+          ? /^github_put_http_(\d{3})$/.exec(error.message)?.[1] : undefined;
+        return reply({
+          success: false, ambiente: "staging", operacao: "somente_github_qa",
+          arquivado: true, pendente_sincronizacao: true,
+          github_http_status: codigo ? Number(codigo) : null,
+          rpc_executada: false, pix_emitido: false,
+          mensagem: "Sincronizacao GitHub QA inconclusiva. Verificar antes de repetir.",
+        }, 503);
+      }
+      return reply({
+        success: true, ambiente: "staging", operacao: "somente_github_qa",
+        arquivado: true, github_qa_sincronizado: true,
+        github_put_realizado: escreveu, rpc_executada: false,
+        pix_emitido: false, hold_financeiro_mantido: true,
+      });
+    }
 
     const { data: encerrado, error: rpcError } = await db.rpc(
       "catalogo_arquivar_sem_catalogo_admin", { p_comercio: QA_ID, p_admin: ADMIN_UID },
