@@ -914,6 +914,20 @@ jobs:
           psql -d catalogo_ci -Atqc "SELECT to_regclass('public.catalogo_asaas_acumulo_tentativas_emissao_ci') IS NULL" | grep -Fx t
           psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
             -f supabase/production-candidate/13_cob06_gate_tentativa_emissao_somente_ci.sql
+          # SQL17 so autoriza um POST MOCKADO no clone PostgreSQL efemero:
+          # negativa de instalacao fora da CI, sem DB/Edge remoto ou Asaas.
+          if psql -d catalogo_ci -v ON_ERROR_STOP=1 \
+            -f supabase/production-candidate/17_cob06_autorizacao_post_mock_somente_ci.sql \
+            > /tmp/cob06-post-mock-outside-ci.log 2>&1; then
+            echo "ERROR: COB06 autorizacao positiva mock instalada fora da CI" >&2
+            exit 1
+          fi
+          grep -F 'COB06_CI_ONLY: instalacao do gate positivo simulado proibida' \
+            /tmp/cob06-post-mock-outside-ci.log
+          psql -d catalogo_ci -Atqc \
+            "SELECT to_regprocedure('catalogo_private.catalogo_asaas_autorizar_post_mock_ci(uuid,text,text,bigint,integer,boolean)') IS NULL" | grep -Fx t
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
+            -f supabase/production-candidate/17_cob06_autorizacao_post_mock_somente_ci.sql
           psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
             -f supabase/tests/isolated/asaas-cob06-acumulo-preview-rollback.sql
           psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
