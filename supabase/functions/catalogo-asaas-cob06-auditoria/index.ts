@@ -131,7 +131,8 @@ async function conferirLoteNoBanco(lote: string) {
     return recusar("Tentativa QA nao vinculada ao lote. HOLD.", 409);
   }
   return {
-    loteId: lote, referencia: ref.referencia,
+    loteId: lote, operacaoId: ref.operacao_id as string,
+    referencia: ref.referencia,
     clienteId: cliente.data.cliente_id as string, valorCentavos: cents,
   };
 }
@@ -139,6 +140,23 @@ async function conferirLoteNoBanco(lote: string) {
 async function auditarDuplicidadeComTrilhaQA(lote: string) {
   // A identidade financeira vem SOMENTE do banco, nao do corpo do request.
   const esperado = await conferirLoteNoBanco(lote);
+  // Transacao atomica ANTES de qualquer GET externo. A marca e definitiva
+  // mesmo em timeout, resposta ambigua ou falha na persistencia posterior.
+  // Uma segunda instancia/solicitacao nao recebe nova permissao de consulta.
+  const inicio = await rpc("catalogo_asaas_iniciar_get_unico_qa_sem_pix",
+    { p_lote: lote });
+  if (inicio.ok !== true || inicio.lote_id !== lote ||
+      inicio.operacao_id !== esperado.operacaoId ||
+      inicio.referencia !== esperado.referencia ||
+      inicio.nova_consulta !== true ||
+      inicio.pode_consultar_asaas !== true ||
+      inicio.pode_repetir_get !== false ||
+      inicio.pode_emitir_pix !== false || inicio.pode_quitar !== false ||
+      inicio.pode_estornar !== false ||
+      inicio.pode_liberar_motoboy !== false ||
+      inicio.hold_obrigatorio !== true) {
+    return recusar("GET ja iniciado ou marcacao nao confirmada. HOLD.", 409);
+  }
   const auditoria = await auditarDuplicidadeAcumuloSomenteGet(
     esperado, ASAAS_TOKEN,
   );
@@ -218,10 +236,10 @@ Deno.serve(async (req: Request) => {
     if (!somenteLeitura) {
       return recusar("Acao financeira indisponivel nesta funcao.", 403);
     }
-    // GET bancario exclusivamente Sandbox; trilha GET negativa somente
-    // com flag adicional e RPC privada. Sem rota financeira POST/Pix.
+    // GET bancario exige TAMBEM marcacao SQL previa permanente (sem retry).
+    // Nao existe caminho GET quando a persistencia estiver OFF.
     if (URL_SUPABASE !== STAGING_URL || !ATIVO || !GET_ATIVO ||
-        !SANDBOX || !ASAAS_TOKEN) {
+        !PERSISTIR_GET_QA || !SANDBOX || !ASAAS_TOKEN) {
       return recusar("Auditoria inativa. HOLD.");
     }
     await exigirAdmin(req);
