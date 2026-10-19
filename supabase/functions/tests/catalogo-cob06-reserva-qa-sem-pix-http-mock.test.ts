@@ -120,7 +120,7 @@ Deno.test("reserva COB-06: admin STAGING e JWT obrigatorios antes da RPC", async
   emHold(semJwt.body);
   reset(); identidade = INTRUSO;
   const intruso = await chamar();
-  assert(intruso.status === 403 && authCalls === 1 && rpcCalls === 0, "INTRUSO");
+  assert(intruso.status === 403 && Number(authCalls) === 1 && rpcCalls === 0, "INTRUSO");
   emHold(intruso.body);
 });
 
