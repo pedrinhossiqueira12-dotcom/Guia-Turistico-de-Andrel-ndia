@@ -526,6 +526,87 @@ BEGIN
  RAISE NOTICE 'COB06_VINCULO_QA_SOMENTE_LEITURA_HOLD_OK';
 
 
+ -- COB-06 GET negativo: trilha local imutavel em QA/CI.
+ -- ESTA E UMA FIXTURE SIMULADA, NUNCA UMA PROVA BANCARIA REAL.
+ -- O GET de 19/10/2026 nao e reconstituido nem gravado retroativamente.
+ IF pg_catalog.has_function_privilege('anon',
+   'public.catalogo_asaas_registrar_get_negativo_qa_sem_pix(uuid,integer,integer,integer,boolean,text)','EXECUTE')
+ OR pg_catalog.has_function_privilege('authenticated',
+   'public.catalogo_asaas_registrar_get_negativo_qa_sem_pix(uuid,integer,integer,integer,boolean,text)','EXECUTE')
+ OR NOT pg_catalog.has_function_privilege('service_role',
+   'public.catalogo_asaas_registrar_get_negativo_qa_sem_pix(uuid,integer,integer,integer,boolean,text)','EXECUTE')
+ OR pg_catalog.has_table_privilege('service_role',
+   'catalogo_private.catalogo_asaas_evidencias_get_qa_sem_pix','INSERT')
+ THEN RAISE EXCEPTION 'COB06_GET_EVIDENCIA: permissao insegura'; END IF;
+ v_outro:=public.catalogo_asaas_registrar_get_negativo_qa_sem_pix(
+   v_lote_extra,200,0,0,false,pg_catalog.repeat('a',64));
+ IF v_outro->>'ok'<>'false' THEN
+   RAISE EXCEPTION 'COB06_GET_EVIDENCIA: registrou lote sem reserva'; END IF;
+ v_outro:=public.catalogo_asaas_registrar_get_negativo_qa_sem_pix(
+   v_id,503,0,0,false,pg_catalog.repeat('a',64));
+ IF v_outro->>'motivo'<>'get_inconclusivo' THEN
+   RAISE EXCEPTION 'COB06_GET_EVIDENCIA: HTTP 503 aceito'; END IF;
+ v_outro:=public.catalogo_asaas_registrar_get_negativo_qa_sem_pix(
+   v_id,200,1,0,false,pg_catalog.repeat('a',64));
+ IF v_outro->>'motivo'<>'get_inconclusivo' THEN
+   RAISE EXCEPTION 'COB06_GET_EVIDENCIA: totalCount 1 aceito'; END IF;
+ v_outro:=public.catalogo_asaas_registrar_get_negativo_qa_sem_pix(
+   v_id,200,0,1,false,pg_catalog.repeat('a',64));
+ IF v_outro->>'motivo'<>'get_inconclusivo' THEN
+   RAISE EXCEPTION 'COB06_GET_EVIDENCIA: item inesperado aceito'; END IF;
+ v_outro:=public.catalogo_asaas_registrar_get_negativo_qa_sem_pix(
+   v_id,200,0,0,true,pg_catalog.repeat('a',64));
+ IF v_outro->>'motivo'<>'get_inconclusivo' THEN
+   RAISE EXCEPTION 'COB06_GET_EVIDENCIA: pagina incompleta aceita'; END IF;
+ v_outro:=public.catalogo_asaas_registrar_get_negativo_qa_sem_pix(
+   v_id,200,0,0,false,'nao-e-sha256');
+ IF v_outro->>'motivo'<>'get_inconclusivo'
+ OR EXISTS(SELECT 1 FROM catalogo_private.catalogo_asaas_evidencias_get_qa_sem_pix)
+ THEN RAISE EXCEPTION 'COB06_GET_EVIDENCIA: hash invalido persistido'; END IF;
+
+ v_outro:=public.catalogo_asaas_registrar_get_negativo_qa_sem_pix(
+   v_id,200,0,0,false,pg_catalog.repeat('a',64));
+ IF v_outro->>'ok'<>'true'
+ OR v_outro->>'nova_evidencia'<>'true'
+ OR v_outro->>'evidencia_get_persistida'<>'true'
+ OR v_outro->>'prova_get_externa'<>'false'
+ OR v_outro->>'pode_emitir_pix'<>'false'
+ OR v_outro->>'pode_quitar'<>'false'
+ OR v_outro->>'pode_estornar'<>'false'
+ OR v_outro->>'pode_liberar_motoboy'<>'false'
+ OR (SELECT pg_catalog.count(*) FROM catalogo_private.catalogo_asaas_evidencias_get_qa_sem_pix)<>1
+ THEN RAISE EXCEPTION 'COB06_GET_EVIDENCIA: persistencia ou HOLD incorretos: %',v_outro; END IF;
+
+ v_outro:=public.catalogo_asaas_registrar_get_negativo_qa_sem_pix(
+   v_id,200,0,0,false,pg_catalog.repeat('a',64));
+ IF v_outro->>'ok'<>'true'
+ OR v_outro->>'nova_evidencia'<>'false'
+ OR v_outro->>'evidencia_get_persistida'<>'true'
+ THEN RAISE EXCEPTION 'COB06_GET_EVIDENCIA: replay nao idempotente: %',v_outro; END IF;
+ v_outro:=public.catalogo_asaas_registrar_get_negativo_qa_sem_pix(
+   v_id,200,0,0,false,pg_catalog.repeat('b',64));
+ IF v_outro->>'ok'<>'false'
+ OR v_outro->>'motivo'<>'evidencia_divergente'
+ OR (SELECT pg_catalog.count(*) FROM catalogo_private.catalogo_asaas_evidencias_get_qa_sem_pix)<>1
+ THEN RAISE EXCEPTION 'COB06_GET_EVIDENCIA: divergencia criou segunda prova'; END IF;
+ BEGIN
+  UPDATE catalogo_private.catalogo_asaas_evidencias_get_qa_sem_pix
+    SET resposta_sha256=pg_catalog.repeat('b',64) WHERE lote_id=v_id;
+  RAISE EXCEPTION 'COB06_GET_EVIDENCIA: update permitido';
+ EXCEPTION WHEN SQLSTATE '23514' THEN NULL;
+ END;
+ BEGIN
+  DELETE FROM catalogo_private.catalogo_asaas_evidencias_get_qa_sem_pix
+    WHERE lote_id=v_id;
+  RAISE EXCEPTION 'COB06_GET_EVIDENCIA: delete permitido';
+ EXCEPTION WHEN SQLSTATE '23514' THEN NULL;
+ END;
+ IF EXISTS(SELECT 1 FROM catalogo_private.catalogo_asaas_evidencias_get_qa_sem_pix
+   WHERE prova_bancaria_suficiente OR pode_emitir_pix OR pode_quitar
+      OR pode_estornar OR pode_liberar_motoboy)
+ THEN RAISE EXCEPTION 'COB06_GET_EVIDENCIA: HOLD quebrado'; END IF;
+ RAISE NOTICE 'COB06_GET_EVIDENCIA_NEGATIVA_QA_APPEND_ONLY_CI_OK';
+
  IF pg_catalog.has_function_privilege('authenticated',
      'public.catalogo_asaas_registrar_observacao_acumulo(uuid,text,text,text,bigint,text)','EXECUTE')
   OR pg_catalog.has_function_privilege('anon',
