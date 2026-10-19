@@ -11,6 +11,7 @@ const OUTRO_LOTE = "22222222-3333-4444-8888-aaaaaaaaaaaa";
 const CLIENTE = "cus_auditoria123";
 const PAGAMENTO = "pay_auditoria123";
 const REFERENCIA = "guia-acumulo-" + LOTE;
+const OPERACAO = "522f6153-4651-484b-a374-edbb4e1a90f3";
 type Handler = (req: Request) => Response | Promise<Response>;
 let handler: Handler | null = null;
 let identidade = ADMIN;
@@ -22,6 +23,8 @@ let alteracaoRemota: "nenhuma" | "customer" | "referencia" | "valor" |
 let statusRemoto = "PENDING";
 let permissaoContabilInsegura = false;
 let loteIncorreto: "nenhum" | "comercio" | "corte" | "valor" | "estado" = "nenhum";
+let vinculoInvalido: "nenhum" | "sem_reserva" | "operacao" | "cliente" |
+  "referencia" | "valor" | "post" | "hold" | "rpc_indisponivel" = "nenhum";
 let chamadasAuth = 0;
 let consultasLocal = 0;
 let consultasListagem = 0;
@@ -31,6 +34,7 @@ function reset() {
   identidade = ADMIN; origemValida = true;
   referenciaValida = true; listagem = "unica"; alteracaoRemota = "nenhuma";
   statusRemoto = "PENDING"; permissaoContabilInsegura = false; loteIncorreto = "nenhum";
+  vinculoInvalido = "nenhum";
   chamadasAuth = 0; consultasLocal = 0; consultasListagem = 0;
   consultasDetalhe = 0; gravacoesObservacao = 0;
 }
@@ -90,6 +94,23 @@ globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
       pode_emitir_pix: permissaoContabilInsegura,
       pode_quitar: false, pode_liberar_motoboy: false });
   }
+  if (url.pathname === "/rest/v1/rpc/catalogo_asaas_conferir_vinculo_tentativa_qa_sem_pix") {
+    assert(method === "POST", "RPC_VINCULO_NAO_POST_HTTP_INTERNO");
+    consultasLocal++;
+    if (vinculoInvalido === "rpc_indisponivel") {
+      return reply({ code: "PGRST202", message: "mock: RPC nao instalada" }, 404);
+    }
+    return reply({ ok: vinculoInvalido !== "sem_reserva", lote_id: LOTE,
+      operacao_id: vinculoInvalido === "operacao" ? OUTRO_LOTE : OPERACAO,
+      comercio_id: "asaas-cob02",
+      referencia: vinculoInvalido === "referencia" ? "outra-referencia" : REFERENCIA,
+      cliente_id: vinculoInvalido === "cliente" ? "cus_outro_123" : CLIENTE,
+      valor_centavos: vinculoInvalido === "valor" ? 561 : 560,
+      reservada_em: "2026-10-19T17:38:01.446324+00:00",
+      post_executado: vinculoInvalido === "post", pode_emitir_pix: false,
+      pode_quitar: false, pode_liberar_motoboy: false,
+      hold_obrigatorio: vinculoInvalido !== "hold" });
+  }
   if (url.pathname === "/rest/v1/rpc/catalogo_asaas_registrar_observacao_acumulo") {
     gravacoesObservacao++;
     throw Error("COB06_TESTE_GRAVACAO_PROIBIDA");
@@ -106,7 +127,7 @@ globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     });
   }
   if (url.pathname === "/rest/v1/catalogo_asaas_acumulo_referencias") {
-    return reply({ lote_id: LOTE, comercio_id: "asaas-cob02",
+    return reply({ lote_id: LOTE, operacao_id: OPERACAO, comercio_id: "asaas-cob02",
       referencia: referenciaValida ? REFERENCIA : "referencia-invalida",
       valor_centavos: 560, estado: "reservado",
       payment_id: null, pode_emitir_pix: false });
@@ -191,6 +212,8 @@ Deno.test("COB06 auditoria somente GET: cobranca existente e status conferidos s
     r.body.lote_id === LOTE &&
     r.body.estado === "cobranca_existente_verificada" &&
     r.body.payment_id === PAGAMENTO && r.body.status_bancario === "PENDING" &&
+    r.body.reserva_qa_conferida === true &&
+    r.body.evidencia_get_persistida === false &&
     r.body.banco_alterado === false && r.body.pix_emitido === false &&
     r.body.hold_obrigatorio === true && r.body.pode_emitir_pix === false &&
     r.body.pode_quitar === false && r.body.pode_estornar === false &&
@@ -263,6 +286,26 @@ Deno.test("COB06 auditoria somente GET: admin e origem do banco obrigatorios", a
   assert(referencia.http === 409 && consultasListagem === 0 &&
     gravacoesObservacao === 0,
     "AUDITORIA_REFERENCIA_DIVERGENTE");
+});
+
+Deno.test("COB06 GET: sem vinculo exato da tentativa QA nao consulta o Asaas", async () => {
+  for (const falha of ["sem_reserva", "operacao", "cliente", "referencia",
+    "valor", "post", "hold"] as const) {
+    reset();
+    vinculoInvalido = falha;
+    const r = await chamar(acaoAuditar);
+    assert(r.http === 409 && r.body.success === false &&
+      r.body.hold_obrigatorio === true && r.body.pode_emitir_pix === false &&
+      r.body.pode_quitar === false && r.body.pode_liberar_motoboy === false &&
+      consultasListagem === 0 && consultasDetalhe === 0 &&
+      gravacoesObservacao === 0, "VINCULO_INVALIDO_CONSULTOU_BANCO_" + falha);
+  }
+  reset();
+  vinculoInvalido = "rpc_indisponivel";
+  const indisponivel = await chamar(acaoAuditar);
+  assert(indisponivel.http === 503 && indisponivel.body.hold_obrigatorio === true &&
+    consultasListagem === 0 && consultasDetalhe === 0 &&
+    gravacoesObservacao === 0, "RPC_AUSENTE_NAO_BLOQUEOU_GET");
 });
 
 Deno.test("COB06 GET-only: repeticao nunca cria observacao ou pagamento", async () => {

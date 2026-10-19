@@ -75,7 +75,7 @@ async function conferirLoteNoBanco(lote: string) {
       .select("id,comercio_id,competencia_corte,total_centavos,estado")
       .eq("id", lote).maybeSingle(),
     db.from("catalogo_asaas_acumulo_referencias")
-      .select("lote_id,comercio_id,referencia,valor_centavos,estado,payment_id,pode_emitir_pix")
+      .select("lote_id,operacao_id,comercio_id,referencia,valor_centavos,estado,payment_id,pode_emitir_pix")
       .eq("lote_id", lote).maybeSingle(),
   ]);
   if (l.error || r.error || !l.data || !r.data)
@@ -107,6 +107,26 @@ async function conferirLoteNoBanco(lote: string) {
       origem.pode_liberar_motoboy !== false) {
     return recusar("Fontes nao conferidas. HOLD.", 409);
   }
+  // Um GET ao banco remoto so e permitido quando ha UMA tentativa QA
+  // imutavel previamente reservada e ligada a este mesmo lote/cliente/valor.
+  // RPC de SOMENTE LEITURA, com EXECUTE apenas para service_role. A ausencia
+  // da RPC no STAGING publicado ate sua aprovacao deve resultar em HOLD.
+  const vinculo = await rpc("catalogo_asaas_conferir_vinculo_tentativa_qa_sem_pix",
+    { p_lote: lote });
+  if (vinculo.ok !== true || vinculo.lote_id !== lote ||
+      vinculo.operacao_id !== ref.operacao_id ||
+      vinculo.comercio_id !== QA_COMERCIO ||
+      vinculo.referencia !== ref.referencia ||
+      vinculo.cliente_id !== cliente.data.cliente_id ||
+      Number(vinculo.valor_centavos) !== cents ||
+      typeof vinculo.reservada_em !== "string" || !vinculo.reservada_em ||
+      vinculo.post_executado !== false ||
+      vinculo.pode_emitir_pix !== false ||
+      vinculo.pode_quitar !== false ||
+      vinculo.pode_liberar_motoboy !== false ||
+      vinculo.hold_obrigatorio !== true) {
+    return recusar("Tentativa QA nao vinculada ao lote. HOLD.", 409);
+  }
   return {
     loteId: lote, referencia: ref.referencia,
     clienteId: cliente.data.cliente_id as string, valorCentavos: cents,
@@ -123,6 +143,7 @@ async function auditarDuplicidadeSemEscrita(lote: string) {
     success: true, lote_id: lote, estado: auditoria.estado,
     payment_id: auditoria.paymentId,
     status_bancario: auditoria.statusBancario,
+    reserva_qa_conferida: true, evidencia_get_persistida: false,
     banco_alterado: false, pix_emitido: false,
     pode_emitir_pix: false, pode_quitar: false, pode_estornar: false,
     pode_liberar_motoboy: false, hold_obrigatorio: true,

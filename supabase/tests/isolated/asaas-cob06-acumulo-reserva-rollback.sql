@@ -19,6 +19,7 @@ DECLARE
  v_referencia jsonb;
  v_tentativa jsonb;
  v_tentativa2 jsonb;
+ v_vinculo jsonb;
  v_negativas_gate integer:=0;
  v_repeticao jsonb;
  v_id_operacao uuid;
@@ -458,6 +459,9 @@ BEGIN
  THEN RAISE EXCEPTION 'COB06_QA_GATE: lote sem referencia reservado'; END IF;
  IF EXISTS(SELECT 1 FROM catalogo_private.catalogo_asaas_tentativas_qa_sem_pix)
  THEN RAISE EXCEPTION 'COB06_QA_GATE: negativa gerou tentativa'; END IF;
+ v_vinculo:=public.catalogo_asaas_conferir_vinculo_tentativa_qa_sem_pix(v_id);
+ IF v_vinculo->>'ok'<>'false' OR v_vinculo->>'motivo'<>'sem_reserva'
+ THEN RAISE EXCEPTION 'COB06_VINCULO: GET sem reserva nao foi bloqueado'; END IF;
  v_tentativa:=public.catalogo_asaas_reservar_tentativa_qa_sem_pix(v_id);
  IF v_tentativa->>'ok'<>'true'
    OR v_tentativa->>'nova_tentativa'<>'true'
@@ -495,6 +499,31 @@ BEGIN
    WHERE pode_emitir_pix OR post_executado OR pode_quitar OR pode_liberar_motoboy)
  THEN RAISE EXCEPTION 'COB06_QA_GATE: HOLD quebrado'; END IF;
  RAISE NOTICE 'COB06_GATE_STAGING_RESERVA_UNICA_SEM_PIX_ROLLBACK_OK';
+
+ -- RPC read-only para a auditoria GET: so aceita o recibo imutavel exato.
+ IF pg_catalog.has_function_privilege('anon',
+     'public.catalogo_asaas_conferir_vinculo_tentativa_qa_sem_pix(uuid)','EXECUTE')
+ OR pg_catalog.has_function_privilege('authenticated',
+     'public.catalogo_asaas_conferir_vinculo_tentativa_qa_sem_pix(uuid)','EXECUTE')
+ OR NOT pg_catalog.has_function_privilege('service_role',
+     'public.catalogo_asaas_conferir_vinculo_tentativa_qa_sem_pix(uuid)','EXECUTE')
+ THEN RAISE EXCEPTION 'COB06_VINCULO: acesso publico a RPC privada'; END IF;
+ v_vinculo:=public.catalogo_asaas_conferir_vinculo_tentativa_qa_sem_pix(v_id);
+ IF v_vinculo->>'ok'<>'true'
+ OR v_vinculo->>'referencia' IS DISTINCT FROM v_referencia->>'referencia'
+ OR v_vinculo->>'cliente_id' IS DISTINCT FROM v_cliente_obs
+ OR (v_vinculo->>'operacao_id')::uuid IS DISTINCT FROM v_id_operacao
+ OR (v_vinculo->>'valor_centavos')::bigint<>500
+ OR v_vinculo->>'post_executado'<>'false'
+ OR v_vinculo->>'pode_emitir_pix'<>'false'
+ OR v_vinculo->>'pode_quitar'<>'false'
+ OR v_vinculo->>'pode_liberar_motoboy'<>'false'
+ OR v_vinculo->>'hold_obrigatorio'<>'true'
+ THEN RAISE EXCEPTION 'COB06_VINCULO: recibo incorreto: %',v_vinculo; END IF;
+ IF (public.catalogo_asaas_conferir_vinculo_tentativa_qa_sem_pix(v_lote_extra)->>'ok')
+   IS DISTINCT FROM 'false'
+ THEN RAISE EXCEPTION 'COB06_VINCULO: lote diferente autorizado'; END IF;
+ RAISE NOTICE 'COB06_VINCULO_QA_SOMENTE_LEITURA_HOLD_OK';
 
 
  IF pg_catalog.has_function_privilege('authenticated',
@@ -557,6 +586,9 @@ BEGIN
  IF v_obs_repetida->>'ok'<>'true' OR v_obs_repetida->>'ja_observado'<>'true'
  OR (SELECT pg_catalog.count(*) FROM public.catalogo_asaas_acumulo_observacoes)<>1
  THEN RAISE EXCEPTION 'COB06_OBSERVACAO: replay duplicou pagamento'; END IF;
+ v_vinculo:=public.catalogo_asaas_conferir_vinculo_tentativa_qa_sem_pix(v_id);
+ IF v_vinculo->>'ok'<>'false'
+ THEN RAISE EXCEPTION 'COB06_VINCULO: observacao bancaria nao bloqueou novo GET'; END IF;
  v_obs:=public.catalogo_asaas_registrar_observacao_acumulo(
    v_id,'pay_cob06_obs_123456',v_cliente_obs,
    v_referencia->>'referencia',500,'REFUNDED');

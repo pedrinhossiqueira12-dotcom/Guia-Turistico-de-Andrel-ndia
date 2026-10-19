@@ -946,6 +946,17 @@ jobs:
             "SELECT to_regclass('catalogo_private.catalogo_asaas_tentativas_qa_sem_pix') IS NULL" | grep -Fx t
           psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
             -f supabase/staging-only/cob06_gate_tentativa_unica_sem_pix_20261019.sql
+          # A checagem de vinculo e SOMENTE LEITURA; sem instalar em STAGING.
+          if psql -d catalogo_ci -v ON_ERROR_STOP=1 \
+            -f supabase/staging-only/cob06_vinculo_readonly_tentativa_get_20261019.sql \
+            > /tmp/cob06-vinculo-outside-ci.log 2>&1; then
+            echo "ERROR: COB06 vinculo QA instalado fora do clone" >&2
+            exit 1
+          fi
+          grep -F 'COB06_VINCULO_QA_ONLY: banco ou owner inesperado' \
+            /tmp/cob06-vinculo-outside-ci.log
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
+            -f supabase/staging-only/cob06_vinculo_readonly_tentativa_get_20261019.sql
           psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
             -f supabase/tests/isolated/asaas-cob06-acumulo-preview-rollback.sql
           psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
