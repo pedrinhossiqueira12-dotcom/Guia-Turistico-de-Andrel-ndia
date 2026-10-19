@@ -105,7 +105,7 @@ Deno.test("reserva COB-06: gateway pode reescrever pathname sem contornar autent
     emHold(result.body);
     reset(); identidade = INTRUSO;
     const intruso = await chamar(undefined, "jwt-ficticio", "POST", caminho);
-    assert(intruso.status === 403 && rpcCalls === 0, "REWRITE_SEM_AUTH");
+    assert(intruso.status === 403 && Number(rpcCalls) === 0, "REWRITE_SEM_AUTH");
     emHold(intruso.body);
   }
 });
