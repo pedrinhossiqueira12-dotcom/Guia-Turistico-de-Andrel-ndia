@@ -276,6 +276,45 @@ Deno.test("COB06 GET-only: nenhum comando financeiro, webhook ou escrita tem rot
 
 const acaoAuditar = "auditar_duplicidade_acumulo_sandbox_admin";
 
+Deno.test("COB06: POST acima de 8 KiB nao le payload inteiro nem consulta backend", async () => {
+  for (const header of [null, "9500", "100"]) {
+    reset();
+    const headers: Record<string, string> = {
+      authorization: "Bearer jwt-ficticio",
+      "content-type": "application/json",
+    };
+    if (header !== null) headers["content-length"] = header;
+    const req = new Request(ROOT + "/functions/v1/catalogo-asaas-cob06-auditoria", {
+      method: "POST", headers,
+      body: JSON.stringify({
+        acao: acaoAuditar, lote_id: LOTE, preenchimento: "x".repeat(9000),
+      }),
+    });
+    const res = await handler!(req);
+    const body = await res.json() as Record<string, unknown>;
+    assert(res.status === 413 && body.hold_obrigatorio === true &&
+      body.pode_emitir_pix === false && body.pode_quitar === false &&
+      chamadasAuth === 0 && consultasLocal === 0 && iniciosGet === 0 &&
+      consultasListagem === 0 && consultasDetalhe === 0 &&
+      gravacoesEvidenciaGet === 0, "POST_GRANDE_ANTES_DA_AUTORIZACAO_" + header);
+  }
+});
+
+Deno.test("COB06: Content-Length curto divergente recusa antes do banco", async () => {
+  reset();
+  const req = new Request(ROOT + "/functions/v1/catalogo-asaas-cob06-auditoria", {
+    method: "POST", headers: {
+      "content-type": "application/json", "content-length": "5",
+      authorization: "Bearer jwt-ficticio",
+    },
+    body: JSON.stringify({ acao: acaoAuditar, lote_id: LOTE }),
+  });
+  const res = await handler!(req);
+  assert(res.status === 400 && chamadasAuth === 0 && consultasLocal === 0 &&
+    iniciosGet === 0 && consultasListagem === 0,
+    "CONTENT_LENGTH_DIVERGENTE_ACIONOU_OPERACAO");
+});
+
 Deno.test("COB06 GET unico: cobranca encontrada nao dispara segundo GET", async () => {
   reset();
   const r = await chamar(acaoAuditar);
