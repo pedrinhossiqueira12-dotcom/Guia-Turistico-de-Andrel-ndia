@@ -42,3 +42,12 @@ test('funcao invocavel apenas pelo servidor; CI exige clone e rollback', () => {
     'supabase/tests/isolated/asaas-cob06-acumulo-reserva-rollback.sql'), 'utf8');
   assert.match(ensaio, /COB06_GATE_STAGING_RESERVA_UNICA_SEM_PIX_ROLLBACK_OK/);
 });
+
+test('gate consulta quitacoes somente se tabela futura existir no STAGING', () => {
+  assert.match(sql, /pg_catalog\.to_regclass\('public\.catalogo_asaas_acumulo_quitacoes_isoladas'\) IS NOT NULL/);
+  assert.match(sql, /EXECUTE 'SELECT EXISTS\(SELECT 1 FROM public\.catalogo_asaas_acumulo_quitacoes_isoladas WHERE lote_id=\$1\)'/);
+  assert.match(sql, /INTO v_quitacao_existente USING p_lote/);
+  assert.match(sql, /OR v_quitacao_existente/);
+  assert.match(sql, /EXISTS\(SELECT 1 FROM public\.catalogo_asaas_acumulo_observacoes WHERE lote_id=p_lote\)/);
+  assert.match(sql, /EXISTS\(SELECT 1 FROM public\.catalogo_asaas_acumulo_eventos WHERE lote_id=p_lote\)/);
+});

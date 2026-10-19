@@ -72,6 +72,7 @@ DECLARE
  v_competencias bigint;
  v_menores bigint;
  v_total bigint;
+ v_quitacao_existente boolean := false;
 BEGIN
  IF pg_catalog.current_database() NOT IN ('postgres','catalogo_cob06_ci')
  THEN RAISE EXCEPTION 'COB06_QA_ONLY: banco inesperado' USING ERRCODE='42501'; END IF;
@@ -123,9 +124,16 @@ BEGIN
  ) THEN RETURN pg_catalog.jsonb_build_object('ok',false,
    'motivo','alvo_qa_divergente','nova_tentativa',false,
    'pode_emitir_pix',false,'pode_quitar',false,'pode_liberar_motoboy',false); END IF;
+ -- STAGING ainda nao instalou a tabela de quitacoes do candidato futuro.
+ -- Se existir (como na CI), consulta obrigatoria com identificador fixo;
+ -- sem tabela, nenhuma quitacao isolada desse modelo pode existir.
+ IF pg_catalog.to_regclass('public.catalogo_asaas_acumulo_quitacoes_isoladas') IS NOT NULL THEN
+   EXECUTE 'SELECT EXISTS(SELECT 1 FROM public.catalogo_asaas_acumulo_quitacoes_isoladas WHERE lote_id=$1)'
+      INTO v_quitacao_existente USING p_lote;
+ END IF;
  IF EXISTS(SELECT 1 FROM public.catalogo_asaas_acumulo_observacoes WHERE lote_id=p_lote)
  OR EXISTS(SELECT 1 FROM public.catalogo_asaas_acumulo_eventos WHERE lote_id=p_lote)
- OR EXISTS(SELECT 1 FROM public.catalogo_asaas_acumulo_quitacoes_isoladas WHERE lote_id=p_lote)
+ OR v_quitacao_existente
  THEN RETURN pg_catalog.jsonb_build_object('ok',false,
    'motivo','banco_ja_observado','nova_tentativa',false,
    'pode_emitir_pix',false,'pode_quitar',false,'pode_liberar_motoboy',false); END IF;
