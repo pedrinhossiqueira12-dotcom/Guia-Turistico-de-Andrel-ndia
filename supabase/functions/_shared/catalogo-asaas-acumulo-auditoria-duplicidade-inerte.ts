@@ -6,12 +6,14 @@ import {
 } from "./catalogo-asaas-acumulo-get-sandbox-inerte.ts";
 import { conferirPagamentoAcumuloPorGet } from "./catalogo-asaas-acumulo-get-verificado-inerte.ts";
 import type { ExpectativaAcumulo } from "./catalogo-asaas-acumulo-get-verificado-inerte.ts";
+import type { EvidenciaGetNegativa } from "./catalogo-asaas-acumulo-get-sandbox-inerte.ts";
 
 type FetchSeguro = typeof fetch;
 export type AuditoriaDuplicidadeAcumulo = {
   estado: "nenhuma_cobranca_localizada" | "cobranca_existente_verificada";
   paymentId: string | null;
   statusBancario: string | null;
+  evidenciaGetNegativa: EvidenciaGetNegativa | null;
   holdObrigatorio: true;
   podeEmitirPix: false;
   podeQuitar: false;
@@ -31,13 +33,16 @@ export async function auditarDuplicidadeAcumuloSomenteGet(
     throw new Error("COB06_HOLD_IDENTIDADE_INVALIDA");
 
   let paymentId: string;
+  let negativa: EvidenciaGetNegativa | null = null;
   try {
     paymentId = await encontrarIdPagamentoAcumuloSandboxPorReferencia(
-      esperado.referencia, tokenServidor, fetchSeguro);
+      esperado.referencia, tokenServidor, fetchSeguro,
+      (dados) => { negativa = dados; });
   } catch (erro) {
     if (erro instanceof Error && erro.message === "COB06_HOLD_PAGAMENTO_NAO_LOCALIZADO")
       return {
         estado: "nenhuma_cobranca_localizada", paymentId: null, statusBancario: null,
+        evidenciaGetNegativa: negativa,
         holdObrigatorio: true, podeEmitirPix: false, podeQuitar: false,
         podeLiberarMotoboy: false,
       };
@@ -53,7 +58,7 @@ export async function auditarDuplicidadeAcumuloSomenteGet(
   }
   return {
     estado: "cobranca_existente_verificada", paymentId,
-    statusBancario: observacao.p_status,
+    statusBancario: observacao.p_status, evidenciaGetNegativa: null,
     holdObrigatorio: true, podeEmitirPix: false, podeQuitar: false,
     podeLiberarMotoboy: false,
   };
