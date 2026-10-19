@@ -64,6 +64,10 @@ async function buscarJsonSandbox(
     await reader.cancel().catch(() => {});
     reader.releaseLock();
   }
+  // Content-Length incoerente significa resposta ambigua: nunca aceitar
+  // como prova negativa, mesmo quando o JSON recebido parece completo.
+  if (length !== null && total !== Number(length))
+    throw new Error("COB06_HOLD_RESPOSTA_INVALIDA");
   const buffer = new Uint8Array(total);
   let offset = 0;
   for (const chunk of chunks) { buffer.set(chunk, offset); offset += chunk.length; }
