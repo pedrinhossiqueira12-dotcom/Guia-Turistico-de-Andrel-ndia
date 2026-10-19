@@ -122,7 +122,10 @@ export async function encontrarIdPagamentoAcumuloSandboxPorReferencia(
     if (capturarNegativa) {
       if (!corpoLimitado.bytes)
         throw new Error("COB06_HOLD_GET_INCONCLUSIVO");
-      const digest = await crypto.subtle.digest("SHA-256", corpoLimitado.bytes);
+      // Buffer proprio (ArrayBuffer, nao SharedArrayBuffer) para WebCrypto.
+      const entradaDigest = new Uint8Array(corpoLimitado.bytes.byteLength);
+      entradaDigest.set(corpoLimitado.bytes);
+      const digest = await crypto.subtle.digest("SHA-256", entradaDigest.buffer);
       const hash = Array.from(new Uint8Array(digest),
         (n) => n.toString(16).padStart(2, "0")).join("");
       capturarNegativa({
