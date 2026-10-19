@@ -40,6 +40,36 @@ BEGIN
 END;
 $guard$;
 
+-- Marcador atomico PERMANENTE ANTES da rede: a transacao confirma a
+-- intencao de GET uma unica vez por lote, inclusive apos timeout/falha.
+-- Sem rotina automatica de limpeza, renovacao, lease ou segunda consulta.
+CREATE TABLE catalogo_private.catalogo_asaas_inicios_get_qa_sem_pix (
+ lote_id uuid PRIMARY KEY
+  REFERENCES catalogo_private.catalogo_asaas_tentativas_qa_sem_pix(lote_id)
+  ON DELETE RESTRICT,
+ operacao_id uuid NOT NULL UNIQUE,
+ referencia text NOT NULL UNIQUE,
+ cliente_id text NOT NULL,
+ valor_centavos bigint NOT NULL CHECK(valor_centavos BETWEEN 500 AND 2147483647),
+ metodo text NOT NULL DEFAULT 'GET' CHECK(metodo='GET'),
+ ambiente text NOT NULL DEFAULT 'sandbox' CHECK(ambiente='sandbox'),
+ iniciado_em timestamptz NOT NULL DEFAULT pg_catalog.clock_timestamp(),
+ pode_repetir_get boolean NOT NULL DEFAULT false CHECK(pode_repetir_get=false),
+ pode_emitir_pix boolean NOT NULL DEFAULT false CHECK(pode_emitir_pix=false),
+ pode_quitar boolean NOT NULL DEFAULT false CHECK(pode_quitar=false),
+ pode_estornar boolean NOT NULL DEFAULT false CHECK(pode_estornar=false),
+ pode_liberar_motoboy boolean NOT NULL DEFAULT false CHECK(pode_liberar_motoboy=false),
+ CONSTRAINT catalogo_asaas_inicio_get_qa_referencia
+  CHECK(referencia='guia-acumulo-'||lote_id::text)
+);
+ALTER TABLE catalogo_private.catalogo_asaas_inicios_get_qa_sem_pix
+ ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON catalogo_private.catalogo_asaas_inicios_get_qa_sem_pix
+ FROM PUBLIC,anon,authenticated,service_role;
+CREATE TRIGGER catalogo_asaas_inicio_get_qa_imutavel
+ BEFORE UPDATE OR DELETE ON catalogo_private.catalogo_asaas_inicios_get_qa_sem_pix
+ FOR EACH ROW EXECUTE FUNCTION catalogo_private.catalogo_asaas_acumulo_referencia_imutavel();
+
 CREATE TABLE catalogo_private.catalogo_asaas_evidencias_get_qa_sem_pix (
  lote_id uuid PRIMARY KEY
   REFERENCES catalogo_private.catalogo_asaas_tentativas_qa_sem_pix(lote_id)
@@ -80,6 +110,88 @@ CREATE TRIGGER catalogo_asaas_evidencia_get_qa_imutavel
  BEFORE UPDATE OR DELETE ON catalogo_private.catalogo_asaas_evidencias_get_qa_sem_pix
  FOR EACH ROW EXECUTE FUNCTION catalogo_private.catalogo_asaas_acumulo_referencia_imutavel();
 
+-- O ACK desta RPC apenas permite UMA chamada GET; jamais permite POST/PIX.
+-- PostgreSQL serializa concorrentes no lock da loja antes do INSERT unico.
+-- Falha/timeout depois do commit => reconciliacao manual; nunca retry.
+CREATE FUNCTION public.catalogo_asaas_iniciar_get_unico_qa_sem_pix(
+ p_lote uuid
+) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $iniciar$
+DECLARE
+ v_comercio text;
+ v_l public.catalogo_asaas_acumulo_lotes%ROWTYPE;
+ v_t catalogo_private.catalogo_asaas_tentativas_qa_sem_pix%ROWTYPE;
+ v_r public.catalogo_asaas_acumulo_referencias%ROWTYPE;
+ v_inicio catalogo_private.catalogo_asaas_inicios_get_qa_sem_pix%ROWTYPE;
+ v_conferencia jsonb;
+BEGIN
+ IF pg_catalog.current_database() NOT IN ('postgres','catalogo_cob06_ci')
+ OR p_lote IS NULL OR (pg_catalog.current_database()='postgres' AND
+  p_lote IS DISTINCT FROM '583d761a-ecb9-49be-b484-e43f6183971e'::uuid)
+ THEN RETURN pg_catalog.jsonb_build_object('ok',false,
+  'motivo','fora_do_ensaio','pode_consultar_asaas',false,'pode_emitir_pix',false); END IF;
+ SELECT comercio_id INTO v_comercio FROM public.catalogo_asaas_acumulo_lotes
+ WHERE id=p_lote;
+ IF NOT FOUND THEN RETURN pg_catalog.jsonb_build_object('ok',false,
+  'motivo','lote_inexistente','pode_consultar_asaas',false,'pode_emitir_pix',false); END IF;
+ PERFORM pg_catalog.pg_advisory_xact_lock(
+  pg_catalog.hashtextextended('catalogo-fatura:'||v_comercio,0));
+ SELECT * INTO v_l FROM public.catalogo_asaas_acumulo_lotes
+ WHERE id=p_lote FOR UPDATE;
+ SELECT * INTO v_t FROM catalogo_private.catalogo_asaas_tentativas_qa_sem_pix
+ WHERE lote_id=p_lote FOR UPDATE;
+ SELECT * INTO v_r FROM public.catalogo_asaas_acumulo_referencias
+ WHERE lote_id=p_lote FOR UPDATE;
+ IF v_l.id IS NULL OR v_t.lote_id IS NULL OR v_r.lote_id IS NULL
+ OR v_l.comercio_id IS DISTINCT FROM v_comercio
+ OR v_t.comercio_id IS DISTINCT FROM v_comercio
+ OR v_r.comercio_id IS DISTINCT FROM v_comercio
+ OR v_t.operacao_id IS DISTINCT FROM v_r.operacao_id
+ OR v_t.referencia IS DISTINCT FROM v_r.referencia
+ OR v_t.valor_centavos IS DISTINCT FROM v_l.total_centavos
+ OR v_t.valor_centavos IS DISTINCT FROM v_r.valor_centavos
+ OR v_l.estado IS DISTINCT FROM 'preparado'
+ OR v_r.estado IS DISTINCT FROM 'reservado'
+ OR v_r.payment_id IS NOT NULL
+ OR v_t.post_executado IS DISTINCT FROM false
+ OR v_t.pode_emitir_pix IS DISTINCT FROM false
+ OR v_r.pode_emitir_pix IS DISTINCT FROM false
+ THEN RETURN pg_catalog.jsonb_build_object('ok',false,
+  'motivo','vinculo_divergente','pode_consultar_asaas',false,'pode_emitir_pix',false); END IF;
+ v_conferencia:=public.catalogo_asaas_conferir_vinculo_tentativa_qa_sem_pix(p_lote);
+ IF v_conferencia->>'ok' IS DISTINCT FROM 'true'
+ THEN RETURN pg_catalog.jsonb_build_object('ok',false,
+  'motivo','integridade_divergente','pode_consultar_asaas',false,'pode_emitir_pix',false); END IF;
+ SELECT * INTO v_inicio
+ FROM catalogo_private.catalogo_asaas_inicios_get_qa_sem_pix
+ WHERE lote_id=p_lote;
+ IF FOUND THEN RETURN pg_catalog.jsonb_build_object(
+  'ok',false,'lote_id',p_lote,'motivo','get_ja_iniciado',
+  'nova_consulta',false,'pode_consultar_asaas',false,
+  'pode_emitir_pix',false,'pode_quitar',false,'pode_estornar',false,
+  'pode_liberar_motoboy',false,'hold_obrigatorio',true); END IF;
+ IF EXISTS(SELECT 1 FROM catalogo_private.catalogo_asaas_evidencias_get_qa_sem_pix
+   WHERE lote_id=p_lote)
+ THEN RETURN pg_catalog.jsonb_build_object('ok',false,
+  'motivo','evidencia_preexistente','pode_consultar_asaas',false,
+  'pode_emitir_pix',false,'hold_obrigatorio',true); END IF;
+ INSERT INTO catalogo_private.catalogo_asaas_inicios_get_qa_sem_pix (
+  lote_id,operacao_id,referencia,cliente_id,valor_centavos
+ ) VALUES (
+  p_lote,v_t.operacao_id,v_t.referencia,v_t.cliente_id,v_t.valor_centavos
+ );
+ RETURN pg_catalog.jsonb_build_object(
+  'ok',true,'lote_id',p_lote,'operacao_id',v_t.operacao_id,
+  'referencia',v_t.referencia,'nova_consulta',true,'pode_consultar_asaas',true,
+  'pode_repetir_get',false,'pode_emitir_pix',false,'pode_quitar',false,
+  'pode_estornar',false,'pode_liberar_motoboy',false,
+  'hold_obrigatorio',true);
+END;
+$iniciar$;
+REVOKE ALL ON FUNCTION public.catalogo_asaas_iniciar_get_unico_qa_sem_pix(uuid)
+ FROM PUBLIC,anon,authenticated,service_role;
+GRANT EXECUTE ON FUNCTION public.catalogo_asaas_iniciar_get_unico_qa_sem_pix(uuid)
+ TO service_role;
+
 -- service_role pode chamar SOMENTE esta RPC; nao recebe permissao de INSERT
 -- na tabela. O backend precisa validar admin e origem autenticada do GET.
 -- Os parametros de metadata devem ser extraidos da resposta do Asaas, mas
@@ -94,6 +206,7 @@ DECLARE
  v_t catalogo_private.catalogo_asaas_tentativas_qa_sem_pix%ROWTYPE;
  v_r public.catalogo_asaas_acumulo_referencias%ROWTYPE;
  v_anterior catalogo_private.catalogo_asaas_evidencias_get_qa_sem_pix%ROWTYPE;
+ v_inicio catalogo_private.catalogo_asaas_inicios_get_qa_sem_pix%ROWTYPE;
  v_conferencia jsonb;
 BEGIN
  IF pg_catalog.current_database() NOT IN ('postgres','catalogo_cob06_ci')
@@ -145,6 +258,17 @@ BEGIN
  IF v_conferencia->>'ok' IS DISTINCT FROM 'true'
  THEN RETURN pg_catalog.jsonb_build_object('ok',false,
   'motivo','integridade_divergente','pode_emitir_pix',false); END IF;
+
+ -- A evidencia so pode ser ligada a uma intencao de GET ja confirmada.
+ SELECT * INTO v_inicio
+ FROM catalogo_private.catalogo_asaas_inicios_get_qa_sem_pix WHERE lote_id=p_lote;
+ IF v_inicio.lote_id IS NULL OR v_inicio.operacao_id IS DISTINCT FROM v_t.operacao_id
+ OR v_inicio.referencia IS DISTINCT FROM v_t.referencia
+ OR v_inicio.cliente_id IS DISTINCT FROM v_t.cliente_id
+ OR v_inicio.valor_centavos IS DISTINCT FROM v_t.valor_centavos
+ OR v_inicio.pode_repetir_get IS DISTINCT FROM false
+ THEN RETURN pg_catalog.jsonb_build_object('ok',false,
+  'motivo','get_sem_marcacao_previa','pode_emitir_pix',false); END IF;
 
  SELECT * INTO v_anterior
  FROM catalogo_private.catalogo_asaas_evidencias_get_qa_sem_pix
