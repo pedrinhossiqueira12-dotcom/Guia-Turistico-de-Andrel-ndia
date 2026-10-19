@@ -28,6 +28,9 @@ const ADMIN_STAGING = Deno.env.get("ASAAS_COB06_STAGING_ADMIN_UID") || "";
 const SANDBOX = Deno.env.get("ASAAS_ENVIRONMENT") === "sandbox";
 const ATIVO = Deno.env.get("ASAAS_COB06_AUDITORIA_ISOLADA_ENABLED") === "true";
 const GET_ATIVO = Deno.env.get("ASAAS_COB06_GET_ADMIN_READONLY_ENABLED") === "true";
+// Flag NOVA, OFF por padrao. Ainda exige permissao explicita de instalacao
+// SQL, deploy e teste no STAGING. Nenhuma Edge publicada usa esta versao.
+const PERSISTIR_GET_QA = Deno.env.get("ASAAS_COB06_GET_PERSISTENCIA_QA_ENABLED") === "true";
 const HEADERS = {
   "Content-Type": "application/json",
   "Access-Control-Allow-Origin": "*",
@@ -133,18 +136,51 @@ async function conferirLoteNoBanco(lote: string) {
   };
 }
 
-async function auditarDuplicidadeSemEscrita(lote: string) {
+async function auditarDuplicidadeComTrilhaQA(lote: string) {
   // A identidade financeira vem SOMENTE do banco, nao do corpo do request.
   const esperado = await conferirLoteNoBanco(lote);
   const auditoria = await auditarDuplicidadeAcumuloSomenteGet(
     esperado, ASAAS_TOKEN,
   );
+  let evidenciaPersistida = false;
+  let evidenciaNova = false;
+  // So persiste metadados de UM GET negativo conclusivo. O digest e
+  // calculado a partir dos mesmos bytes limitados da resposta autenticada,
+  // sem segunda chamada ao Asaas e sem aceitar campos do navegador.
+  // Uma resposta positiva, ambigua, parcial ou indisponivel nao e gravada.
+  if (PERSISTIR_GET_QA && auditoria.estado === "nenhuma_cobranca_localizada") {
+    const prova = auditoria.evidenciaGetNegativa;
+    if (!prova || prova.httpStatus !== 200 || prova.totalCount !== 0 ||
+        prova.itensCount !== 0 || prova.hasMore !== false ||
+        !/^[0-9a-f]{64}$/.test(prova.respostaSha256)) {
+      return recusar("Metadados GET inconclusivos. HOLD.");
+    }
+    const ack = await rpc("catalogo_asaas_registrar_get_negativo_qa_sem_pix", {
+      p_lote: lote,
+      p_http_status: prova.httpStatus,
+      p_total_count: prova.totalCount,
+      p_itens_count: prova.itensCount,
+      p_has_more: prova.hasMore,
+      p_resposta_sha256: prova.respostaSha256,
+    });
+    // SQL so registra a trilha local; nunca constitui gate para POST.
+    if (ack.ok !== true || ack.evidencia_get_persistida !== true ||
+        (ack.nova_evidencia !== true && ack.nova_evidencia !== false) ||
+        ack.prova_get_externa !== false || ack.pode_emitir_pix !== false ||
+        ack.pode_quitar !== false || ack.pode_estornar !== false ||
+        ack.pode_liberar_motoboy !== false || ack.hold_obrigatorio !== true) {
+      return recusar("Persistencia de auditoria nao confirmada. HOLD.");
+    }
+    evidenciaPersistida = true;
+    evidenciaNova = ack.nova_evidencia === true;
+  }
   return resposta({
     success: true, lote_id: lote, estado: auditoria.estado,
     payment_id: auditoria.paymentId,
     status_bancario: auditoria.statusBancario,
-    reserva_qa_conferida: true, evidencia_get_persistida: false,
-    banco_alterado: false, pix_emitido: false,
+    reserva_qa_conferida: true,
+    evidencia_get_persistida: evidenciaPersistida,
+    banco_alterado: evidenciaNova, pix_emitido: false,
     pode_emitir_pix: false, pode_quitar: false, pode_estornar: false,
     pode_liberar_motoboy: false, hold_obrigatorio: true,
   });
@@ -181,13 +217,14 @@ Deno.serve(async (req: Request) => {
     if (!somenteLeitura) {
       return recusar("Acao financeira indisponivel nesta funcao.", 403);
     }
-    // GET bancario exclusivamente Sandbox e sem rota de observacao/gravacao.
+    // GET bancario exclusivamente Sandbox; trilha GET negativa somente
+    // com flag adicional e RPC privada. Sem rota financeira POST/Pix.
     if (URL_SUPABASE !== STAGING_URL || !ATIVO || !GET_ATIVO ||
         !SANDBOX || !ASAAS_TOKEN) {
       return recusar("Auditoria inativa. HOLD.");
     }
     await exigirAdmin(req);
-    return await auditarDuplicidadeSemEscrita(texto(entrada.lote_id));
+    return await auditarDuplicidadeComTrilhaQA(texto(entrada.lote_id));
   } catch (e) {
     if (e instanceof Hold) return resposta({
       success: false, mensagem: e.message,
