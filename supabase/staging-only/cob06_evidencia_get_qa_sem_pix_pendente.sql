@@ -129,6 +129,17 @@ BEGIN
   p_lote IS DISTINCT FROM '583d761a-ecb9-49be-b484-e43f6183971e'::uuid)
  THEN RETURN pg_catalog.jsonb_build_object('ok',false,
   'motivo','fora_do_ensaio','pode_consultar_asaas',false,'pode_emitir_pix',false); END IF;
+ -- O GET deste lote ja ocorreu em STAGING em 19/10/2026, sem recibo persistido.
+ -- Nunca criar uma marcacao retroativa nem repetir consulta; o relato do
+ -- operador nao constitui prova bancaria. O clone CI testa apenas casos novos.
+ IF pg_catalog.current_database()='postgres'
+  AND p_lote='583d761a-ecb9-49be-b484-e43f6183971e'::uuid
+ THEN RETURN pg_catalog.jsonb_build_object(
+  'ok',false,'lote_id',p_lote,'motivo','get_historico_sem_prova',
+  'nova_consulta',false,'pode_consultar_asaas',false,
+  'pode_emitir_pix',false,'pode_quitar',false,'pode_estornar',false,
+  'pode_liberar_motoboy',false,'hold_obrigatorio',true);
+ END IF;
  SELECT comercio_id INTO v_comercio FROM public.catalogo_asaas_acumulo_lotes
  WHERE id=p_lote;
  IF NOT FOUND THEN RETURN pg_catalog.jsonb_build_object('ok',false,

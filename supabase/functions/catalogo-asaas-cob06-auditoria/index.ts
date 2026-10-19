@@ -157,8 +157,19 @@ async function auditarDuplicidadeComTrilhaQA(lote: string) {
       inicio.hold_obrigatorio !== true) {
     return recusar("GET ja iniciado ou marcacao nao confirmada. HOLD.", 409);
   }
+  // Um unico GET HTTP autorizado por execucao. Se a listagem encontra uma
+  // cobranca, o helper tenta GET de detalhe, mas este adaptador o bloqueia
+  // ANTES da rede, mantendo HOLD ate autorizacao especifica.
+  let consultasAsaas = 0;
+  const buscarUmaVez: typeof fetch = (input, init) => {
+    if (consultasAsaas >= 1) {
+      throw new Error("COB06_HOLD_GET_ADICIONAL_PROIBIDO");
+    }
+    consultasAsaas++;
+    return fetch(input, init);
+  };
   const auditoria = await auditarDuplicidadeAcumuloSomenteGet(
-    esperado, ASAAS_TOKEN,
+    esperado, ASAAS_TOKEN, buscarUmaVez,
   );
   let evidenciaPersistida = false;
   let evidenciaNova = false;

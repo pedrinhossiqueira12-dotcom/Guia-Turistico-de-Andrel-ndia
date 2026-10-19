@@ -276,23 +276,18 @@ Deno.test("COB06 GET-only: nenhum comando financeiro, webhook ou escrita tem rot
 
 const acaoAuditar = "auditar_duplicidade_acumulo_sandbox_admin";
 
-Deno.test("COB06 auditoria somente GET: cobranca existente e status conferidos sem escrita", async () => {
+Deno.test("COB06 GET unico: cobranca encontrada nao dispara segundo GET", async () => {
   reset();
   const r = await chamar(acaoAuditar);
-  assert(r.http === 200 && r.body.success === true &&
-    r.body.lote_id === LOTE &&
-    r.body.estado === "cobranca_existente_verificada" &&
-    r.body.payment_id === PAGAMENTO && r.body.status_bancario === "PENDING" &&
-    r.body.reserva_qa_conferida === true &&
-    r.body.evidencia_get_persistida === false &&
-    r.body.banco_alterado === false && r.body.pix_emitido === false &&
+  assert(r.http === 503 && r.body.success === false &&
     r.body.hold_obrigatorio === true && r.body.pode_emitir_pix === false &&
     r.body.pode_quitar === false && r.body.pode_estornar === false &&
     r.body.pode_liberar_motoboy === false,
-    "AUDITORIA_EXISTENTE_SEM_HOLD");
+    "COBRANCA_EXISTENTE_NAO_FALHOU_FECHADO");
   assert(chamadasAuth === 1 && iniciosGet === 1 &&
-    consultasListagem === 1 && consultasDetalhe === 1 && gravacoesObservacao === 0,
-    "AUDITORIA_EXISTENTE_GRAVOU");
+    consultasListagem === 1 && consultasDetalhe === 0 &&
+    gravacoesObservacao === 0 && gravacoesEvidenciaGet === 0,
+    "SEGUNDO_GET_ESCAPOU_DA_EDGE");
 });
 
 Deno.test("COB06 GET negativo: persiste apenas digest da resposta e conserva HOLD", async () => {
@@ -341,7 +336,7 @@ Deno.test("COB06 GET negativo: ack repetido nao finge escrita ou autoriza Pix", 
     "ACK_REPETIDO_NAO_E_HOLD");
 });
 
-Deno.test("COB06 auditoria somente GET: duplicidade, paginacao e divergencia nunca autorizam", async () => {
+Deno.test("COB06 auditoria somente GET: duplicidade e paginacao nunca autorizam", async () => {
   for (const modo of ["dupla", "paginada"] as const) {
     reset();
     listagem = modo;
@@ -351,16 +346,6 @@ Deno.test("COB06 auditoria somente GET: duplicidade, paginacao e divergencia nun
       consultasListagem === 1 && consultasDetalhe === 0 &&
       gravacoesObservacao === 0,
       "GET_INCONCLUSIVO_" + modo);
-  }
-  for (const alteracao of ["customer", "referencia", "valor", "modalidade", "status", "id"] as const) {
-    reset();
-    alteracaoRemota = alteracao;
-    const r = await chamar(acaoAuditar);
-    assert(r.http === 503 && r.body.success === false &&
-      r.body.hold_obrigatorio === true && r.body.pode_quitar === false &&
-      consultasListagem === 1 && consultasDetalhe === 1 &&
-      gravacoesObservacao === 0,
-      "GET_DIVERGENTE_" + alteracao);
   }
 });
 
@@ -414,10 +399,10 @@ Deno.test("COB06 GET: segunda requisicao e bloqueada ANTES do Asaas", async () =
   reset();
   const primeiro = await chamar(acaoAuditar);
   const segundo = await chamar(acaoAuditar);
-  assert(primeiro.http === 200 && segundo.http === 409 &&
+  assert(primeiro.http === 503 && segundo.http === 409 &&
     primeiro.body.hold_obrigatorio === true &&
     segundo.body.hold_obrigatorio === true &&
-    iniciosGet === 2 && consultasListagem === 1 && consultasDetalhe === 1 &&
+    iniciosGet === 2 && consultasListagem === 1 && consultasDetalhe === 0 &&
     gravacoesObservacao === 0 && gravacoesEvidenciaGet === 0,
     "GET_REPETIDO_ESCAPOU_DO_CLAIM");
 });
@@ -427,8 +412,8 @@ Deno.test("COB06 GET: duas Edges concorrentes compartilham UM inicio atomico", a
   const [a, b] = await Promise.all([
     chamar(acaoAuditar), chamar(acaoAuditar),
   ]);
-  assert([a.http, b.http].sort().join(",") === "200,409" &&
-    iniciosGet === 2 && consultasListagem === 1 && consultasDetalhe === 1 &&
+  assert([a.http, b.http].sort().join(",") === "409,503" &&
+    iniciosGet === 2 && consultasListagem === 1 && consultasDetalhe === 0 &&
     gravacoesObservacao === 0, "GET_CONCORRENTE_DUPLICADO");
 });
 
