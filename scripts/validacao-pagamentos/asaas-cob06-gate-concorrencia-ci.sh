@@ -112,3 +112,65 @@ test "$(psql -X -d catalogo_cob06_ci -Atqc \
    FROM (SELECT catalogo_private.catalogo_asaas_autorizar_post_mock_ci('$lote','guia-acumulo-$lote','cus_cob06_gate_race_123',500,0,true) x) t")" = 'false|false|false'
 
 echo 'COB06_AUTORIZACAO_MOCK_RACE_POSITIVA_UNICA_SEM_POST_OK'
+
+# Mesmo lote ficticio e duas conexoes concorrentes, agora pelo gate STAGING
+# realmente instalavel e SEM nenhum campo de autorizacao de Pix em true.
+timeout 14s psql -X -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -Atq \
+  -c "BEGIN;
+      SELECT (x->>'ok')||'|'||(x->>'nova_tentativa')||'|'||(x->>'pode_emitir_pix')
+      FROM (SELECT public.catalogo_asaas_reservar_tentativa_qa_sem_pix('$lote') x) t;
+      SELECT pg_catalog.pg_sleep(4);
+      COMMIT;" > "$primeiro_log" 2>&1 &
+primeiro_pid=$!
+
+lock_adquirido="false"
+for tentativa in $(seq 1 80); do
+  if [[ "$(psql -X -d catalogo_cob06_ci -Atqc \
+    "SELECT NOT pg_catalog.pg_try_advisory_lock(
+      pg_catalog.hashtextextended('catalogo-fatura:comercio-de-exemplo',0))")" = "t" ]]; then
+    lock_adquirido="true"
+    break
+  fi
+  sleep 0.05
+done
+if [[ "$lock_adquirido" != "true" ]]; then
+  echo 'COB06_QA_GATE_RACE: primeira conexao nao obteve lock' >&2
+  exit 1
+fi
+
+timeout 14s psql -X -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -Atq \
+  -c "SELECT (x->>'ok')||'|'||(x->>'nova_tentativa')||'|'||(x->>'pode_emitir_pix')
+      FROM (SELECT public.catalogo_asaas_reservar_tentativa_qa_sem_pix('$lote') x) t" \
+  > "$segundo_log" 2>&1 &
+segundo_pid=$!
+
+esperou_lock="false"
+for tentativa in $(seq 1 60); do
+  if [[ "$(psql -X -d catalogo_cob06_ci -Atqc \
+    "SELECT EXISTS(SELECT 1 FROM pg_catalog.pg_stat_activity
+      WHERE datname='catalogo_cob06_ci' AND wait_event_type='Lock'
+      AND query LIKE '%catalogo_asaas_reservar_tentativa_qa_sem_pix%')")" = "t" ]]; then
+    esperou_lock="true"
+    break
+  fi
+  sleep 0.05
+done
+if [[ "$esperou_lock" != "true" ]]; then
+  echo 'COB06_QA_GATE_RACE: concorrente nao aguardou lock' >&2
+  exit 1
+fi
+
+wait "$primeiro_pid"
+primeiro_pid=""
+wait "$segundo_pid"
+segundo_pid=""
+grep -Fx 'true|true|false' "$primeiro_log"
+grep -Fx 'false|false|false' "$segundo_log"
+test "$(psql -X -d catalogo_cob06_ci -Atqc \
+  "SELECT count(*)||'|'||bool_and(NOT pode_emitir_pix AND NOT post_executado
+    AND NOT pode_quitar AND NOT pode_liberar_motoboy)
+   FROM catalogo_private.catalogo_asaas_tentativas_qa_sem_pix")" = '1|true'
+test "$(psql -X -d catalogo_cob06_ci -Atqc \
+  "SELECT (x->>'ok')||'|'||(x->>'nova_tentativa')||'|'||(x->>'pode_emitir_pix')
+   FROM (SELECT public.catalogo_asaas_reservar_tentativa_qa_sem_pix('$lote') x) t")" = 'false|false|false'
+echo 'COB06_STAGING_GATE_RACE_UNICO_PERSISTENTE_SEM_PIX_OK'

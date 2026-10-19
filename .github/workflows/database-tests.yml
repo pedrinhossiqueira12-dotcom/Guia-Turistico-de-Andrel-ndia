@@ -928,6 +928,20 @@ jobs:
             "SELECT to_regprocedure('catalogo_private.catalogo_asaas_autorizar_post_mock_ci(uuid,text,text,bigint,integer,boolean)') IS NULL" | grep -Fx t
           psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
             -f supabase/production-candidate/17_cob06_autorizacao_post_mock_somente_ci.sql
+          # Gate operacional QA separado dos SQL13/17 CI-only. O instalador
+          # recusa qualquer outro banco alem do clone ou do alvo QA validado.
+          if psql -d catalogo_ci -v ON_ERROR_STOP=1 \
+            -f supabase/staging-only/cob06_gate_tentativa_unica_sem_pix_20261019.sql \
+            > /tmp/cob06-staging-gate-outside-ci.log 2>&1; then
+            echo "ERROR: COB06 QA gate instalado fora do alvo permitido" >&2
+            exit 1
+          fi
+          grep -F 'COB06_QA_ONLY: owner ou banco inesperado' \
+            /tmp/cob06-staging-gate-outside-ci.log
+          psql -d catalogo_ci -Atqc \
+            "SELECT to_regclass('catalogo_private.catalogo_asaas_tentativas_qa_sem_pix') IS NULL" | grep -Fx t
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
+            -f supabase/staging-only/cob06_gate_tentativa_unica_sem_pix_20261019.sql
           psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
             -f supabase/tests/isolated/asaas-cob06-acumulo-preview-rollback.sql
           psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \

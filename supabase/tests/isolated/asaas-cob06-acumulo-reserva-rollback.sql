@@ -440,6 +440,62 @@ BEGIN
  THEN RAISE EXCEPTION 'COB06_GATE: tentativa imutavel ou HOLD violado'; END IF;
  RAISE NOTICE 'COB06_GATE_TENTATIVA_UNICA_CI_SEM_PIX_ROLLBACK_OK';
 
+ -- Novo gate STAGING SEM PIX: teste real no clone com fontes de duas
+ -- competencias, usando livro privado distinto dos SQL13/17 CI-only.
+ IF pg_catalog.has_function_privilege('anon',
+     'public.catalogo_asaas_reservar_tentativa_qa_sem_pix(uuid)','EXECUTE')
+ OR pg_catalog.has_function_privilege('authenticated',
+     'public.catalogo_asaas_reservar_tentativa_qa_sem_pix(uuid)','EXECUTE')
+ OR NOT pg_catalog.has_function_privilege('service_role',
+     'public.catalogo_asaas_reservar_tentativa_qa_sem_pix(uuid)','EXECUTE')
+ OR pg_catalog.has_table_privilege('service_role',
+     'catalogo_private.catalogo_asaas_tentativas_qa_sem_pix','INSERT')
+ THEN RAISE EXCEPTION 'COB06_QA_GATE: privilegios inseguros'; END IF;
+ v_tentativa:=public.catalogo_asaas_reservar_tentativa_qa_sem_pix(v_lote_extra);
+ IF v_tentativa->>'ok'<>'false'
+   OR v_tentativa->>'nova_tentativa'<>'false'
+   OR v_tentativa->>'pode_emitir_pix'<>'false'
+ THEN RAISE EXCEPTION 'COB06_QA_GATE: lote sem referencia reservado'; END IF;
+ IF EXISTS(SELECT 1 FROM catalogo_private.catalogo_asaas_tentativas_qa_sem_pix)
+ THEN RAISE EXCEPTION 'COB06_QA_GATE: negativa gerou tentativa'; END IF;
+ v_tentativa:=public.catalogo_asaas_reservar_tentativa_qa_sem_pix(v_id);
+ IF v_tentativa->>'ok'<>'true'
+   OR v_tentativa->>'nova_tentativa'<>'true'
+   OR v_tentativa->>'ja_reservado'<>'false'
+   OR v_tentativa->>'prova_get_externa'<>'false'
+   OR v_tentativa->>'autorizacao_externa'<>'false'
+   OR v_tentativa->>'post_executado'<>'false'
+   OR v_tentativa->>'pode_emitir_pix'<>'false'
+   OR v_tentativa->>'pode_quitar'<>'false'
+   OR v_tentativa->>'pode_liberar_motoboy'<>'false'
+   OR (SELECT pg_catalog.count(*) FROM catalogo_private.catalogo_asaas_tentativas_qa_sem_pix)<>1
+ THEN RAISE EXCEPTION 'COB06_QA_GATE: primeira reserva indevida: %',v_tentativa; END IF;
+ v_tentativa2:=public.catalogo_asaas_reservar_tentativa_qa_sem_pix(v_id);
+ IF v_tentativa2->>'ok'<>'false'
+   OR v_tentativa2->>'motivo'<>'tentativa_ja_reservada'
+   OR v_tentativa2->>'nova_tentativa'<>'false'
+   OR v_tentativa2->>'ja_reservado'<>'true'
+   OR v_tentativa2->>'pode_emitir_pix'<>'false'
+   OR (SELECT pg_catalog.count(*) FROM catalogo_private.catalogo_asaas_tentativas_qa_sem_pix)<>1
+ THEN RAISE EXCEPTION 'COB06_QA_GATE: replay gerou segunda tentativa: %',v_tentativa2; END IF;
+ BEGIN
+  UPDATE catalogo_private.catalogo_asaas_tentativas_qa_sem_pix
+    SET valor_centavos=600 WHERE lote_id=v_id;
+  RAISE EXCEPTION 'COB06_QA_GATE: tentativa alteravel';
+ EXCEPTION WHEN SQLSTATE '23514' THEN NULL;
+ END;
+ BEGIN
+  DELETE FROM catalogo_private.catalogo_asaas_tentativas_qa_sem_pix
+    WHERE lote_id=v_id;
+  RAISE EXCEPTION 'COB06_QA_GATE: tentativa apagavel';
+ EXCEPTION WHEN SQLSTATE '23514' THEN NULL;
+ END;
+ IF (SELECT pg_catalog.count(*) FROM catalogo_private.catalogo_asaas_tentativas_qa_sem_pix)<>1
+ OR EXISTS(SELECT 1 FROM catalogo_private.catalogo_asaas_tentativas_qa_sem_pix
+   WHERE pode_emitir_pix OR post_executado OR pode_quitar OR pode_liberar_motoboy)
+ THEN RAISE EXCEPTION 'COB06_QA_GATE: HOLD quebrado'; END IF;
+ RAISE NOTICE 'COB06_GATE_STAGING_RESERVA_UNICA_SEM_PIX_ROLLBACK_OK';
+
 
  IF pg_catalog.has_function_privilege('authenticated',
      'public.catalogo_asaas_registrar_observacao_acumulo(uuid,text,text,text,bigint,text)','EXECUTE')
