@@ -151,7 +151,7 @@ BEGIN
  WHERE lote_id=p_lote;
  IF FOUND THEN
   RETURN pg_catalog.jsonb_build_object(
-   'ok',v_anterior.resposta_sha256=p_resposta_sha256,
+   'ok',v_anterior.resposta_sha256=p_resposta_sha256,'lote_id',p_lote,
    'motivo',CASE WHEN v_anterior.resposta_sha256=p_resposta_sha256
       THEN 'evidencia_ja_registrada' ELSE 'evidencia_divergente' END,
    'evidencia_get_persistida',true,'nova_evidencia',false,
