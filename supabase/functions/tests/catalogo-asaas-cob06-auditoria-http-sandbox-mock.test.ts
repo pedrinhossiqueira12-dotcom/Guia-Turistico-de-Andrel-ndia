@@ -129,8 +129,10 @@ globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
       payload.p_has_more === false &&
       typeof payload.p_resposta_sha256 === "string" &&
       /^[0-9a-f]{64}$/.test(payload.p_resposta_sha256), "METADADOS_NAO_VINDOS_DO_GET");
-    const digest = await crypto.subtle.digest("SHA-256",
-      new TextEncoder().encode(corpoDaUltimaListagem));
+    const textoBytes = new TextEncoder().encode(corpoDaUltimaListagem);
+    const entradaDigest = new Uint8Array(textoBytes.byteLength);
+    entradaDigest.set(textoBytes);
+    const digest = await crypto.subtle.digest("SHA-256", entradaDigest.buffer);
     const esperadoSha = Array.from(new Uint8Array(digest),
       (n) => n.toString(16).padStart(2, "0")).join("");
     assert(payload.p_resposta_sha256 === esperadoSha,
