@@ -34,3 +34,8 @@ verify_jwt = false # Webhook protegido por token; rotas de usuário usam auth.ge
 # Este arquivo nao implanta a funcao; deploy STAGING deve preservar JWT no gateway.
 [functions.catalogo-asaas-cob06-auditoria]
 verify_jwt = true
+
+# COB-06: reserva administrativa de tentativa de QA, sem POST Asaas/Pix.
+# Nao publicar automaticamente: STAGING isolado e flag desligada por padrao.
+[functions.catalogo-cob06-reserva-qa-sem-pix]
+verify_jwt = true
