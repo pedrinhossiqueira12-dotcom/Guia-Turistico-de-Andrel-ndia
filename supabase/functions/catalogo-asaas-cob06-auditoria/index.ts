@@ -49,6 +49,49 @@ function recusar(message: string, status = 503): never {
 function texto(v: unknown): string {
   return typeof v === "string" ? v : "";
 }
+// Limite antes de qualquer Auth/RPC: req.text() leria o corpo inteiro
+// quando Content-Length fosse omitido ou incorreto.
+async function lerPayloadLimitado(req: Request): Promise<string> {
+  const anunciado = req.headers.get("content-length");
+  if (anunciado !== null &&
+      (!/^\d+$/.test(anunciado) || !Number.isSafeInteger(Number(anunciado)) ||
+       Number(anunciado) > 8192)) {
+    return recusar("Payload grande ou tamanho invalido.", 413);
+  }
+  if (!req.body) return "";
+  const leitor = req.body.getReader();
+  const blocos: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await leitor.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > 8192) return recusar("Payload grande.", 413);
+      blocos.push(value);
+    }
+  } catch (e) {
+    if (e instanceof Hold) throw e;
+    return recusar("Falha ao ler payload.", 400);
+  } finally {
+    await leitor.cancel().catch(() => {});
+    leitor.releaseLock();
+  }
+  if (anunciado !== null && total !== Number(anunciado)) {
+    return recusar("Tamanho de payload divergente.", 400);
+  }
+  const buffer = new Uint8Array(total);
+  let posicao = 0;
+  for (const bloco of blocos) {
+    buffer.set(bloco, posicao);
+    posicao += bloco.byteLength;
+  }
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(buffer);
+  } catch {
+    return recusar("Payload invalido.", 400);
+  }
+}
 async function rpc(name: string, params: Record<string, unknown>) {
   const { data, error } = await db.rpc(name, params);
   if (error || data === null || typeof data !== "object" || Array.isArray(data)) {
@@ -232,10 +275,7 @@ Deno.serve(async (req: Request) => {
       });
     }
     if (req.method !== "POST") return resposta({ success: false }, 405);
-    const length = Number(req.headers.get("content-length") || "0");
-    if (!Number.isFinite(length) || length > 8192) return recusar("Payload grande.", 413);
-    const raw = await req.text();
-    if (raw.length > 8192) return recusar("Payload grande.", 413);
+    const raw = await lerPayloadLimitado(req);
     let body: unknown;
     try { body = JSON.parse(raw); } catch { return recusar("JSON invalido.", 400); }
     if (!body || typeof body !== "object" || Array.isArray(body)) {
