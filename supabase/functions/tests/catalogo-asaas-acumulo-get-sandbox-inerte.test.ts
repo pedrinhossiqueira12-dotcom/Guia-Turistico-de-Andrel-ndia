@@ -51,6 +51,39 @@ Deno.test("COB06 GET Sandbox rejeita erros, MIME, excesso e documento malformado
   }
 });
 
+Deno.test("COB06 GET negativo: tamanho HTTP divergente nao produz digest", async () => {
+  const corpo = JSON.stringify({
+    object: "list", data: [], hasMore: false, totalCount: 0, offset: 0,
+  });
+  for (const informado of [corpo.length - 1, corpo.length + 1]) {
+    let chamadas = 0;
+    let capturas = 0;
+    const mock = (async () => {
+      chamadas++;
+      return new Response(corpo, { status: 200, headers: {
+        "content-type": "application/json",
+        "content-length": String(informado),
+      } });
+    }) as typeof fetch;
+    await hold(() => encontrarIdPagamentoAcumuloSandboxPorReferencia(
+      esperado.referencia, "segredo-ci", mock, () => { capturas++; },
+    ), "RESPOSTA_INVALIDA");
+    assert(chamadas === 1 && capturas === 0,
+      "resposta parcial/incoerente nunca registra hash de GET negativo");
+  }
+  let captura: { respostaSha256: string } | null = null;
+  const valido = (async () => new Response(corpo, { status: 200, headers: {
+    "content-type": "application/json",
+    "content-length": String(corpo.length),
+  } })) as typeof fetch;
+  await hold(() => encontrarIdPagamentoAcumuloSandboxPorReferencia(
+    esperado.referencia, "segredo-ci", valido, (dados) => { captura = dados; },
+  ), "PAGAMENTO_NAO_LOCALIZADO");
+  assert(captura !== null &&
+    /^[0-9a-f]{64}$/.test((captura as { respostaSha256: string }).respostaSha256),
+    "Content-Length correto preserva digest sem permitir emissao");
+});
+
 Deno.test("COB06 lista Sandbox: referencia interna, GET sem POST e cardinalidade unica", async () => {
   let consultas = 0;
   const mock = (async (raw: string | URL | Request, init?: RequestInit) => {
