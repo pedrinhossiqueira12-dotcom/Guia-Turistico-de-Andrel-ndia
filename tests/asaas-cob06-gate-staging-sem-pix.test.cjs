@@ -15,6 +15,7 @@ test('gate operacional e distinto dos SQL13/17 e preso ao lote QA no STAGING', (
   assert.match(sql, /asaas-cob02/);
   assert.match(sql, /total_centavos=560/);
   assert.match(sql, /catalogo_cob06_ci/);
+  assert.doesNotMatch(sql, /pg_catalog\.coalesce/i);
   assert.match(sql, /COB06_QA_ONLY: alvo STAGING ficticio nao comprovado/);
   assert.doesNotMatch(sql, /autorizar_post_mock_ci|autorizar_tentativa_emissao_ci/);
   assert.ok(!readdirSync(join(raiz, 'supabase/pending-migrations'))

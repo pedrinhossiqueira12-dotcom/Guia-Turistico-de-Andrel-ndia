@@ -139,7 +139,7 @@ BEGIN
 
  SELECT pg_catalog.count(*),pg_catalog.count(DISTINCT competencia),
    pg_catalog.count(*) FILTER (WHERE valor_centavos<500),
-   pg_catalog.coalesce(pg_catalog.sum(valor_centavos),0)
+   coalesce(pg_catalog.sum(valor_centavos),0)
  INTO v_count,v_competencias,v_menores,v_total
  FROM public.catalogo_asaas_acumulo_fontes WHERE lote_id=p_lote;
  v_preflight:=public.catalogo_asaas_conferir_conciliacao_acumulo(p_lote);
