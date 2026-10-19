@@ -957,6 +957,20 @@ jobs:
             /tmp/cob06-vinculo-outside-ci.log
           psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
             -f supabase/staging-only/cob06_vinculo_readonly_tentativa_get_20261019.sql
+          # Evidencia GET negativa: somente trilha append-only, SEM POST/PIX.
+          # Instalacao no banco comum deve falhar antes de criar objetos.
+          if psql -d catalogo_ci -v ON_ERROR_STOP=1 \
+            -f supabase/staging-only/cob06_evidencia_get_qa_sem_pix_pendente.sql \
+            > /tmp/cob06-get-evidencia-outside-ci.log 2>&1; then
+            echo "ERROR: COB06 evidencia GET instalada fora do clone" >&2
+            exit 1
+          fi
+          grep -F 'COB06_GET_EVIDENCIA_QA_ONLY: owner ou banco inesperado' \
+            /tmp/cob06-get-evidencia-outside-ci.log
+          psql -d catalogo_ci -Atqc \
+            "SELECT to_regclass('catalogo_private.catalogo_asaas_evidencias_get_qa_sem_pix') IS NULL" | grep -Fx t
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
+            -f supabase/staging-only/cob06_evidencia_get_qa_sem_pix_pendente.sql
           psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
             -f supabase/tests/isolated/asaas-cob06-acumulo-preview-rollback.sql
           psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
