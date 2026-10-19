@@ -31,6 +31,7 @@ let consultasListagem = 0;
 let consultasDetalhe = 0;
 let gravacoesObservacao = 0;
 let gravacoesEvidenciaGet = 0;
+let corpoDaUltimaListagem = "";
 let falhaPersistencia: "nenhuma" | "rpc_ausente" | "recusa" |
   "permissao" | "lote_divergente" | "replay" = "nenhuma";
 function reset() {
@@ -41,6 +42,7 @@ function reset() {
   chamadasAuth = 0; consultasLocal = 0; consultasListagem = 0;
   consultasDetalhe = 0; gravacoesObservacao = 0;
   gravacoesEvidenciaGet = 0; falhaPersistencia = "nenhuma";
+  corpoDaUltimaListagem = "";
 }
 function assert(ok: unknown, mensagem: string): asserts ok {
   if (!ok) throw Error("COB06_TESTE_" + mensagem);
@@ -67,8 +69,11 @@ globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
       consultasListagem++;
       const data = listagem === "vazia" ? [] : [{ id: PAGAMENTO }];
       if (listagem === "dupla") data.push({ id: "pay_outro_falso123" });
-      return reply({ object: "list", data, hasMore: listagem === "paginada",
-        totalCount: data.length + (listagem === "paginada" ? 1 : 0), offset: 0 });
+      const bruto = { object: "list", data, hasMore: listagem === "paginada",
+        totalCount: data.length + (listagem === "paginada" ? 1 : 0), offset: 0 };
+      corpoDaUltimaListagem = JSON.stringify(bruto);
+      return new Response(corpoDaUltimaListagem, { status: 200,
+        headers: { "content-type": "application/json" } });
     }
     assert(url.pathname === "/v3/payments/" + PAGAMENTO, "DETALHE_ENDPOINT");
     consultasDetalhe++;
@@ -124,6 +129,12 @@ globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
       payload.p_has_more === false &&
       typeof payload.p_resposta_sha256 === "string" &&
       /^[0-9a-f]{64}$/.test(payload.p_resposta_sha256), "METADADOS_NAO_VINDOS_DO_GET");
+    const digest = await crypto.subtle.digest("SHA-256",
+      new TextEncoder().encode(corpoDaUltimaListagem));
+    const esperadoSha = Array.from(new Uint8Array(digest),
+      (n) => n.toString(16).padStart(2, "0")).join("");
+    assert(payload.p_resposta_sha256 === esperadoSha,
+      "HASH_NAO_CORRESPONDE_AOS_BYTES_GET");
     if (falhaPersistencia === "rpc_ausente") {
       return reply({ code: "PGRST202", message: "RPC ausente no mock" }, 404);
     }
