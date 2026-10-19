@@ -2258,7 +2258,36 @@ Deno.serve(async (request:Request)=>{
   if(pathname.endsWith("/cron-webhooks"))return await executarWorkerWebhooksAsaas(request);
   const user=await auth(request);
   const body=input(await request.json().catch(()=>({})));
-  switch(value(body.acao,60)){
+  const acaoFinanceira=value(body.acao,60);
+  // COB-06: publicar somente COBRANCAS nao pode expor rotas de SAQUE,
+  // carteira ou escrow do projeto ainda nao homologado. A Edge mista
+  // fica em HOLD em producao, independentemente das flags de saque.
+  const acoesSaqueAindaNaoHomologadas=new Set([
+   "consultar_carteira",
+   "solicitar_analise_residual",
+   "solicitar_regularizacao_saida",
+   "listar_analises_residuais_admin",
+   "listar_regularizacoes_saida_admin",
+   "revisar_regularizacao_saida_admin",
+   "preconferir_pagamento_excepcional_admin",
+   "listar_separacoes_congeladas_admin",
+   "diagnosticar_separacao_congelada_admin",
+   "matriz_conciliacao_escrow_admin",
+   "auditar_historico_transferencias_excepcionais_sandbox_admin",
+   "exportar_ancora_dossie_admin",
+   "listar_dossie_escrow_admin",
+   "registrar_dossie_escrow_admin",
+   "consultar_titularidade_pix_sandbox_admin",
+   "observar_transferencia_excepcional_sandbox_admin",
+   "revisar_analise_residual_admin",
+   "solicitar_saque",
+   "auditar_saque_sandbox",
+   "listar_saques_admin",
+   "conciliar_saque_admin"
+  ]);
+  if(ENVIRONMENT==="production" && acoesSaqueAindaNaoHomologadas.has(acaoFinanceira))
+   throw new Failure("Carteira, saques e conciliacao excepcional ainda nao homologados. Nenhuma operacao foi executada.",503);
+  switch(acaoFinanceira){
    case "consultar_termos":return respond({success:true,...await termsStatus(user.id,value(body.papel,15),
      value(body.papel,15)==="comercio"?commerce(body.comercio_id):"",
      value(body.papel,15)==="motoboy")});
