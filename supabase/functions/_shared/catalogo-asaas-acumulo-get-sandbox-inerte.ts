@@ -103,9 +103,9 @@ export async function encontrarIdPagamentoAcumuloSandboxPorReferencia(
   url.searchParams.set("externalReference", referencia);
   url.searchParams.set("limit", "2");
   url.searchParams.set("offset", "0");
-  let corpoLimitado: Uint8Array | null = null;
+  const corpoLimitado: { bytes?: Uint8Array } = {};
   const bruto = await buscarJsonSandbox(url.toString(), tokenServidor, fetchSeguro,
-    capturarNegativa ? (bytes) => { corpoLimitado = bytes; } : undefined);
+    capturarNegativa ? (bytes) => { corpoLimitado.bytes = bytes; } : undefined);
   if (!bruto || typeof bruto !== "object" || Array.isArray(bruto))
     throw new Error("COB06_HOLD_LISTAGEM_INVALIDA");
   const lista = bruto as Record<string, unknown>;
@@ -120,9 +120,9 @@ export async function encontrarIdPagamentoAcumuloSandboxPorReferencia(
   if (lista.data.length === 0 && lista.hasMore === false &&
     lista.totalCount === 0) {
     if (capturarNegativa) {
-      if (corpoLimitado === null)
+      if (!corpoLimitado.bytes)
         throw new Error("COB06_HOLD_GET_INCONCLUSIVO");
-      const digest = await crypto.subtle.digest("SHA-256", corpoLimitado);
+      const digest = await crypto.subtle.digest("SHA-256", corpoLimitado.bytes);
       const hash = Array.from(new Uint8Array(digest),
         (n) => n.toString(16).padStart(2, "0")).join("");
       capturarNegativa({
