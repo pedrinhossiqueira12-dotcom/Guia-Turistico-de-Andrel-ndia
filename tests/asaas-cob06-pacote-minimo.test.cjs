@@ -104,3 +104,36 @@ test("COB-06: Edge mista exige dupla aprovação para cobrar e proíbe POST Pix 
  assert.ok(withdrawal.indexOf('if(ENVIRONMENT!=="sandbox")') <
    withdrawal.indexOf('enabled("payouts")'));
 });
+
+
+test("COB-06: producao billing-only nega carteira, saques e escrow antes do despacho",()=>{
+ const code=read("supabase/functions/catalogo-asaas-financeiro/index.ts");
+ const pos=code.indexOf("const acaoFinanceira=value(body.acao,60);");
+ const start=code.indexOf("const acoesSaqueAindaNaoHomologadas=new Set([",pos);
+ const end=code.indexOf("switch(acaoFinanceira)",start);
+ assert.ok(pos>0&&start>pos&&end>start,"gate no despachante");
+ const guard=code.slice(start,end);
+ for(const action of [
+  "consultar_carteira","solicitar_analise_residual",
+  "solicitar_regularizacao_saida","listar_analises_residuais_admin",
+  "listar_regularizacoes_saida_admin","revisar_regularizacao_saida_admin",
+  "preconferir_pagamento_excepcional_admin","listar_separacoes_congeladas_admin",
+  "diagnosticar_separacao_congelada_admin","matriz_conciliacao_escrow_admin",
+  "auditar_historico_transferencias_excepcionais_sandbox_admin",
+  "exportar_ancora_dossie_admin","listar_dossie_escrow_admin",
+  "registrar_dossie_escrow_admin","consultar_titularidade_pix_sandbox_admin",
+  "observar_transferencia_excepcional_sandbox_admin",
+  "revisar_analise_residual_admin","solicitar_saque",
+  "auditar_saque_sandbox","listar_saques_admin","conciliar_saque_admin"
+ ]) {
+  assert.ok(guard.includes('"'+action+'"'),"falta bloqueio de "+action);
+  assert.ok(code.includes('case "'+action+'":'),"acao de saque mudou");
+ }
+ assert.match(guard,/ENVIRONMENT==="production" && acoesSaqueAindaNaoHomologadas\.has\(acaoFinanceira\)/);
+ assert.match(guard,/throw new Failure\([^\n]*503\)/);
+ const billing=["obter_fatura","criar_cobranca","consultar_cobranca"];
+ for(const action of billing) {
+  assert.ok(!guard.includes('"'+action+'"'),"cobranca bloqueada no corte minimo");
+  assert.ok(code.includes('case "'+action+'":'),"cobranca desapareceu");
+ }
+});
