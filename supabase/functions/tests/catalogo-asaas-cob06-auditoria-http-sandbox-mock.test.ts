@@ -31,6 +31,9 @@ let consultasListagem = 0;
 let consultasDetalhe = 0;
 let gravacoesObservacao = 0;
 let gravacoesEvidenciaGet = 0;
+let iniciosGet = 0;
+let inicioJaGravado = false;
+let falhaInicio: "nenhuma" | "rpc_ausente" | "recusa" | "lote" | "permissao" = "nenhuma";
 let corpoDaUltimaListagem = "";
 let falhaPersistencia: "nenhuma" | "rpc_ausente" | "recusa" |
   "permissao" | "lote_divergente" | "replay" = "nenhuma";
@@ -42,6 +45,7 @@ function reset() {
   chamadasAuth = 0; consultasLocal = 0; consultasListagem = 0;
   consultasDetalhe = 0; gravacoesObservacao = 0;
   gravacoesEvidenciaGet = 0; falhaPersistencia = "nenhuma";
+  iniciosGet = 0; inicioJaGravado = false; falhaInicio = "nenhuma";
   corpoDaUltimaListagem = "";
 }
 function assert(ok: unknown, mensagem: string): asserts ok {
@@ -58,6 +62,7 @@ globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     : input instanceof URL ? input.href : input.url);
   const method = init?.method || (input instanceof Request ? input.method : "GET");
   if (url.origin === ASAAS) {
+    assert(iniciosGet >= 1 && inicioJaGravado, "ASAAS_GET_ANTES_DA_MARCACAO");
     assert(method === "GET", "ASAAS_NAO_GET");
     assert((init?.headers as Record<string, string>)?.access_token ===
       "token-ficticio-exclusivo-ci", "TOKEN_ASAAS_NAO_FICTICIO");
@@ -119,6 +124,30 @@ globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
       post_executado: vinculoInvalido === "post", pode_emitir_pix: false,
       pode_quitar: false, pode_liberar_motoboy: false,
       hold_obrigatorio: vinculoInvalido !== "hold" });
+  }
+  if (url.pathname === "/rest/v1/rpc/catalogo_asaas_iniciar_get_unico_qa_sem_pix") {
+    assert(method === "POST", "INICIO_GET_RPC_NAO_POST_INTERNO");
+    const payload = JSON.parse(String(init?.body || "")) as Record<string, unknown>;
+    assert(payload.p_lote === LOTE, "MARCACAO_PARA_LOTE_INCORRETO");
+    iniciosGet++;
+    if (falhaInicio === "rpc_ausente") {
+      return reply({ code: "PGRST202", message: "RPC mock ausente" }, 404);
+    }
+    if (inicioJaGravado || falhaInicio === "recusa") {
+      return reply({ ok: false, lote_id: LOTE, motivo: "get_ja_iniciado",
+        nova_consulta: false, pode_consultar_asaas: false,
+        pode_emitir_pix: false, hold_obrigatorio: true });
+    }
+    inicioJaGravado = true;
+    return reply({
+      ok: true, lote_id: falhaInicio === "lote" ? OUTRO_LOTE : LOTE,
+      operacao_id: OPERACAO, referencia: REFERENCIA,
+      nova_consulta: true, pode_consultar_asaas: true,
+      pode_repetir_get: false,
+      pode_emitir_pix: falhaInicio === "permissao",
+      pode_quitar: false, pode_estornar: false, pode_liberar_motoboy: false,
+      hold_obrigatorio: true,
+    });
   }
   if (url.pathname === "/rest/v1/rpc/catalogo_asaas_registrar_get_negativo_qa_sem_pix") {
     gravacoesEvidenciaGet++;
@@ -261,8 +290,8 @@ Deno.test("COB06 auditoria somente GET: cobranca existente e status conferidos s
     r.body.pode_quitar === false && r.body.pode_estornar === false &&
     r.body.pode_liberar_motoboy === false,
     "AUDITORIA_EXISTENTE_SEM_HOLD");
-  assert(chamadasAuth === 1 && consultasListagem === 1 &&
-    consultasDetalhe === 1 && gravacoesObservacao === 0,
+  assert(chamadasAuth === 1 && iniciosGet === 1 &&
+    consultasListagem === 1 && consultasDetalhe === 1 && gravacoesObservacao === 0,
     "AUDITORIA_EXISTENTE_GRAVOU");
 });
 
@@ -278,7 +307,7 @@ Deno.test("COB06 GET negativo: persiste apenas digest da resposta e conserva HOL
     r.body.pode_quitar === false && r.body.pode_estornar === false &&
     r.body.pode_liberar_motoboy === false && r.body.pix_emitido === false,
     "GET_NEGATIVO_NAO_E_AUTORIZACAO");
-  assert(consultasListagem === 1 && consultasDetalhe === 0 &&
+  assert(iniciosGet === 1 && consultasListagem === 1 && consultasDetalhe === 0 &&
     gravacoesEvidenciaGet === 1 && gravacoesObservacao === 0,
     "GET_NEGATIVO_NAO_PERSISTIU_UMA_TRILHA");
 });
@@ -381,15 +410,39 @@ Deno.test("COB06 GET: sem vinculo exato da tentativa QA nao consulta o Asaas", a
     gravacoesObservacao === 0, "RPC_AUSENTE_NAO_BLOQUEOU_GET");
 });
 
-Deno.test("COB06 GET-only: repeticao nunca cria observacao ou pagamento", async () => {
+Deno.test("COB06 GET: segunda requisicao e bloqueada ANTES do Asaas", async () => {
   reset();
   const primeiro = await chamar(acaoAuditar);
   const segundo = await chamar(acaoAuditar);
-  assert(primeiro.http === 200 && segundo.http === 200 &&
+  assert(primeiro.http === 200 && segundo.http === 409 &&
     primeiro.body.hold_obrigatorio === true &&
     segundo.body.hold_obrigatorio === true &&
-    consultasListagem === 2 && consultasDetalhe === 2 &&
-    gravacoesObservacao === 0, "GET_REPETIDO_GRAVOU");
+    iniciosGet === 2 && consultasListagem === 1 && consultasDetalhe === 1 &&
+    gravacoesObservacao === 0 && gravacoesEvidenciaGet === 0,
+    "GET_REPETIDO_ESCAPOU_DO_CLAIM");
+});
+
+Deno.test("COB06 GET: duas Edges concorrentes compartilham UM inicio atomico", async () => {
+  reset();
+  const [a, b] = await Promise.all([
+    chamar(acaoAuditar), chamar(acaoAuditar),
+  ]);
+  assert([a.http, b.http].sort().join(",") === "200,409" &&
+    iniciosGet === 2 && consultasListagem === 1 && consultasDetalhe === 1 &&
+    gravacoesObservacao === 0, "GET_CONCORRENTE_DUPLICADO");
+});
+
+Deno.test("COB06 GET: claim ausente, negado ou inseguro proibe consulta remota", async () => {
+  for (const modo of ["rpc_ausente", "recusa", "lote", "permissao"] as const) {
+    reset();
+    falhaInicio = modo;
+    const r = await chamar(acaoAuditar);
+    assert((modo === "rpc_ausente" ? r.http === 503 : r.http === 409) &&
+      r.body.success === false && r.body.hold_obrigatorio === true &&
+      iniciosGet === 1 && consultasListagem === 0 && consultasDetalhe === 0 &&
+      gravacoesEvidenciaGet === 0 && gravacoesObservacao === 0,
+      "GET_SEM_CLAIM_" + modo);
+  }
 });
 
 Deno.test("COB06 GET-only: contrato fonte proibe observar, gravar e faturar", async () => {
