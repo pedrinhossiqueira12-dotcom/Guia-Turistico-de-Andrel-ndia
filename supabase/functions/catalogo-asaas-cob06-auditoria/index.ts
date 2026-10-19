@@ -164,7 +164,8 @@ async function auditarDuplicidadeComTrilhaQA(lote: string) {
       p_resposta_sha256: prova.respostaSha256,
     });
     // SQL so registra a trilha local; nunca constitui gate para POST.
-    if (ack.ok !== true || ack.evidencia_get_persistida !== true ||
+    if (ack.ok !== true || ack.lote_id !== lote ||
+        ack.evidencia_get_persistida !== true ||
         (ack.nova_evidencia !== true && ack.nova_evidencia !== false) ||
         ack.prova_get_externa !== false || ack.pode_emitir_pix !== false ||
         ack.pode_quitar !== false || ack.pode_estornar !== false ||
