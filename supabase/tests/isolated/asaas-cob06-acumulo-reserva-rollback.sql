@@ -564,6 +564,61 @@ BEGIN
  OR EXISTS(SELECT 1 FROM catalogo_private.catalogo_asaas_evidencias_get_qa_sem_pix)
  THEN RAISE EXCEPTION 'COB06_GET_EVIDENCIA: hash invalido persistido'; END IF;
 
+ -- Antes da marcacao de rede, nenhum digest pode ser persistido.
+ v_outro:=public.catalogo_asaas_registrar_get_negativo_qa_sem_pix(
+   v_id,200,0,0,false,pg_catalog.repeat('a',64));
+ IF v_outro->>'ok'<>'false'
+ OR v_outro->>'motivo'<>'get_sem_marcacao_previa'
+ THEN RAISE EXCEPTION 'COB06_GET_UNICO: evidencia sem claim aceita'; END IF;
+
+ -- Marcacao SQL atomica, uma vez por lote; clone nao tem GET externo.
+ IF pg_catalog.has_function_privilege('anon',
+   'public.catalogo_asaas_iniciar_get_unico_qa_sem_pix(uuid)','EXECUTE')
+ OR pg_catalog.has_function_privilege('authenticated',
+   'public.catalogo_asaas_iniciar_get_unico_qa_sem_pix(uuid)','EXECUTE')
+ OR NOT pg_catalog.has_function_privilege('service_role',
+   'public.catalogo_asaas_iniciar_get_unico_qa_sem_pix(uuid)','EXECUTE')
+ OR pg_catalog.has_table_privilege('service_role',
+   'catalogo_private.catalogo_asaas_inicios_get_qa_sem_pix','INSERT')
+ THEN RAISE EXCEPTION 'COB06_GET_UNICO: acesso indevido'; END IF;
+ v_outro:=public.catalogo_asaas_iniciar_get_unico_qa_sem_pix(v_lote_extra);
+ IF v_outro->>'ok'<>'false'
+ THEN RAISE EXCEPTION 'COB06_GET_UNICO: sem reserva ganhou GET'; END IF;
+ v_outro:=public.catalogo_asaas_iniciar_get_unico_qa_sem_pix(v_id);
+ IF v_outro->>'ok'<>'true'
+ OR v_outro->>'operacao_id' IS DISTINCT FROM v_id_operacao::text
+ OR v_outro->>'referencia' IS DISTINCT FROM v_referencia->>'referencia'
+ OR v_outro->>'nova_consulta'<>'true'
+ OR v_outro->>'pode_consultar_asaas'<>'true'
+ OR v_outro->>'pode_repetir_get'<>'false'
+ OR v_outro->>'pode_emitir_pix'<>'false'
+ OR v_outro->>'pode_quitar'<>'false'
+ OR v_outro->>'pode_estornar'<>'false'
+ OR v_outro->>'pode_liberar_motoboy'<>'false'
+ OR v_outro->>'hold_obrigatorio'<>'true'
+ THEN RAISE EXCEPTION 'COB06_GET_UNICO: primeiro claim incorreto: %',v_outro; END IF;
+ v_outro:=public.catalogo_asaas_iniciar_get_unico_qa_sem_pix(v_id);
+ IF v_outro->>'ok'<>'false'
+ OR v_outro->>'motivo'<>'get_ja_iniciado'
+ OR v_outro->>'nova_consulta'<>'false'
+ OR v_outro->>'pode_consultar_asaas'<>'false'
+ OR (SELECT pg_catalog.count(*) FROM
+   catalogo_private.catalogo_asaas_inicios_get_qa_sem_pix)<>1
+ THEN RAISE EXCEPTION 'COB06_GET_UNICO: replay abriu segunda consulta: %',v_outro; END IF;
+ BEGIN
+  UPDATE catalogo_private.catalogo_asaas_inicios_get_qa_sem_pix
+    SET iniciado_em=pg_catalog.clock_timestamp() WHERE lote_id=v_id;
+  RAISE EXCEPTION 'COB06_GET_UNICO: update do claim permitido';
+ EXCEPTION WHEN SQLSTATE '23514' THEN NULL;
+ END;
+ BEGIN
+  DELETE FROM catalogo_private.catalogo_asaas_inicios_get_qa_sem_pix
+    WHERE lote_id=v_id;
+  RAISE EXCEPTION 'COB06_GET_UNICO: delete do claim permitido';
+ EXCEPTION WHEN SQLSTATE '23514' THEN NULL;
+ END;
+ RAISE NOTICE 'COB06_GET_UNICO_TRANSACIONAL_ANTES_DA_REDE_CI_OK';
+
  v_outro:=public.catalogo_asaas_registrar_get_negativo_qa_sem_pix(
    v_id,200,0,0,false,pg_catalog.repeat('a',64));
  IF v_outro->>'ok'<>'true'
