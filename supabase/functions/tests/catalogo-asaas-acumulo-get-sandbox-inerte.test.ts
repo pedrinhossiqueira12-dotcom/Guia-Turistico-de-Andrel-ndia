@@ -389,8 +389,72 @@ Deno.test("COB06 pre-POST: GET vazio permite somente claim CI, nunca POST nem cr
   assert(r.estado === "tentativa_ci_reservada" && r.paymentId === null &&
     r.holdObrigatorio === true && r.podeEmitirPix === false &&
     r.podeQuitar === false && r.podeLiberarMotoboy === false &&
-    claims === 1 && rede.join(",") === "GET /v3/payments",
-    "gate CI nao libera emissao externa");
+    claims === 1 && rede.join(",") ===
+    "GET /v3/payments,GET /v3/payments",
+    "gate CI reconsulta depois da reserva, mas nao libera emissao externa");
+});
+
+Deno.test("COB06 pre-POST: cobranca surgida entre GET e claim e detectada apos reserva", async () => {
+  const rede: string[] = [];
+  let claims = 0;
+  let listagens = 0;
+  const mock = (async (raw: string | URL | Request, init?: RequestInit) => {
+    const url = new URL(String(raw));
+    rede.push((init?.method || "") + " " + url.pathname);
+    assert(init?.method === "GET" &&
+      url.origin === "https://api-sandbox.asaas.com" &&
+      (init.headers as Record<string, string>).access_token === "segredo-ci",
+      "consulta de corrida so usa GET Sandbox autenticado");
+    if (url.pathname === "/v3/payments") listagens++;
+    const dados = url.pathname === "/v3/payments"
+      ? listagemFicticia(listagens === 1 ? "vazia" : "unica")
+      : remoto;
+    return new Response(JSON.stringify(dados), {
+      status: 200, headers: { "content-type": "application/json" },
+    });
+  }) as typeof fetch;
+  const r = await conciliarAntesDePixAcumuloCandidatoSomenteCi(
+    esperado, "segredo-ci", async () => {
+      claims++; return gateCi;
+    }, mock);
+  assert(claims === 1 && listagens === 2 &&
+    rede.join(",") ===
+    "GET /v3/payments,GET /v3/payments,GET /v3/payments/" + id &&
+    r.estado === "cobranca_existente_apos_reserva_ci" &&
+    r.paymentId === id && r.statusBancario === "PENDING" &&
+    r.holdObrigatorio && !r.podeEmitirPix && !r.podeQuitar &&
+    !r.podeLiberarMotoboy,
+    "corrida externa nao gera POST, baixa ou segunda tentativa");
+});
+
+Deno.test("COB06 pre-POST: GET inconclusivo apos claim mantem tentativa em HOLD", async () => {
+  for (const modo of ["timeout", "duplicada", "divergente"] as const) {
+    let claims = 0;
+    let listagens = 0;
+    const metodos: string[] = [];
+    const mock = (async (raw: string | URL | Request, init?: RequestInit) => {
+      const url = new URL(String(raw));
+      metodos.push(init?.method || "");
+      assert(url.origin === "https://api-sandbox.asaas.com" &&
+        init?.method === "GET", "nenhum POST no caso inconclusivo");
+      if (url.pathname === "/v3/payments") listagens++;
+      if (modo === "timeout" && listagens === 2) throw Error("rede indisponivel");
+      const dados = url.pathname !== "/v3/payments"
+        ? { ...remoto, value: 6 }
+        : listagens === 1 ? listagemFicticia("vazia")
+        : listagemFicticia(modo === "duplicada" ? "duplicada" : "unica");
+      return new Response(JSON.stringify(dados), {
+        status: 200, headers: { "content-type": "application/json" },
+      });
+    }) as typeof fetch;
+    await hold(() => conciliarAntesDePixAcumuloCandidatoSomenteCi(
+      esperado, "segredo-ci", async () => {
+        claims++; return gateCi;
+      }, mock), "GET_APOS_RESERVA_INCONCLUSIVO");
+    assert(claims === 1 && listagens === 2 &&
+      metodos.every(x => x === "GET"),
+      "depois do claim jamais se cria outra tentativa: " + modo);
+  }
 });
 
 Deno.test("COB06 pre-POST: GET vazio com tentativa anterior exige reconciliacao manual", async () => {

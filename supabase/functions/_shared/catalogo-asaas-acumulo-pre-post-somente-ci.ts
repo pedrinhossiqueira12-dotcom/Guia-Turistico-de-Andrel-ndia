@@ -15,7 +15,8 @@ type FetchSeguro = typeof fetch;
 type ReservarTentativaCi = (loteId: string) => Promise<unknown>;
 export type DecisaoPrePostCi = {
   estado: "cobranca_existente_verificada" | "tentativa_ci_reservada" |
-    "tentativa_anterior_reconciliar_manualmente";
+    "tentativa_anterior_reconciliar_manualmente" |
+    "cobranca_existente_apos_reserva_ci";
   loteId: string;
   paymentId: string | null;
   statusBancario: string | null;
@@ -51,7 +52,10 @@ function base(estado: DecisaoPrePostCi["estado"], loteId: string):
 // Ordem critica: (1) GET externo com identidade exata, (2) claim duravel CI.
 // Se GET falha ou a listagem e ambigua, NAO registrar nova intencao.
 // Se ja existe pagamento, nao criar claim e nao repetir POST.
-// Um GET vazio so permite a reserva CI; falta autorizacao externa para POST.
+// Depois do claim, uma segunda consulta reduz a janela em que uma cobranca
+// externa pode surgir entre o primeiro GET e a reserva. Resultado inconclusivo
+// neste ponto mantem a tentativa ja reservada em HOLD (sem novo claim/POST).
+// Mesmo duas listagens vazias NAO autorizam POST, pela consistencia eventual.
 export async function conciliarAntesDePixAcumuloCandidatoSomenteCi(
   esperado: ExpectativaAcumulo,
   tokenServidor: string,
@@ -111,5 +115,34 @@ export async function conciliarAntesDePixAcumuloCandidatoSomenteCi(
     gate.pode_quitar === false &&
     gate.pode_liberar_motoboy === false,
     "GATE_INVALIDO");
+
+  // A reserva CI foi confirmada. Nunca refaze-la se o GET de conferencia
+  // falhar: timeout, duplicidade ou lista parcial exigem conciliacao manual.
+  let encontradoAposReserva: string | null = null;
+  try {
+    encontradoAposReserva = await encontrarIdPagamentoAcumuloSandboxPorReferencia(
+      esperado.referencia, tokenServidor, fetchSeguro);
+  } catch (e) {
+    if (!(e instanceof Error &&
+      e.message === "COB06_HOLD_PAGAMENTO_NAO_LOCALIZADO")) {
+      throw new Error("COB06_HOLD_GET_APOS_RESERVA_INCONCLUSIVO");
+    }
+  }
+  if (encontradoAposReserva !== null) {
+    try {
+      const observacao = await conferirPagamentoAcumuloPorGet(
+        esperado, encontradoAposReserva,
+        (id) => consultarPagamentoAcumuloSandboxGet(
+          id, tokenServidor, fetchSeguro),
+      );
+      return {
+        ...base("cobranca_existente_apos_reserva_ci", esperado.loteId),
+        paymentId: encontradoAposReserva,
+        statusBancario: observacao.p_status,
+      };
+    } catch {
+      throw new Error("COB06_HOLD_GET_APOS_RESERVA_INCONCLUSIVO");
+    }
+  }
   return base("tentativa_ci_reservada", esperado.loteId);
 }
