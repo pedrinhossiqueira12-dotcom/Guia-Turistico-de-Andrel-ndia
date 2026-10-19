@@ -1,5 +1,5 @@
-// COB-06 / PR #39: candidato de rota administrativa para UMA reserva de QA.
-// NAO IMPLANTAR ainda. Nenhum POST Asaas, Pix, baixa, estorno ou saque.
+// COB-06 / PR #39: rota administrativa STAGING para UMA reserva de QA.
+// Nenhum POST Asaas, Pix, baixa, estorno ou saque.
 // A RPC de STAGING grava apenas tentativa irreversivel e conserva HOLD.
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 
@@ -43,10 +43,9 @@ function flagsHold() {
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: HEADERS });
   try {
-    if (new URL(req.url).pathname.replace(/\/$/, "") !==
-        "/functions/v1/catalogo-cob06-reserva-qa-sem-pix") {
-      return responder({ success: false, ...flagsHold() }, 404);
-    }
+    // O gateway seleciona esta funcao pelo slug; o pathname entregue pelo
+    // runtime pode vir reescrito. Nao usar a URL interna como autenticacao.
+    // Metodo, flag STAGING, JWT administrativo, acao e lote seguem obrigatorios.
     if (req.method !== "POST") return responder({ success: false, ...flagsHold() }, 405);
 
     if (!RESERVA_ATIVA || !SANDBOX || URL_SUPABASE !== STAGING_URL ||

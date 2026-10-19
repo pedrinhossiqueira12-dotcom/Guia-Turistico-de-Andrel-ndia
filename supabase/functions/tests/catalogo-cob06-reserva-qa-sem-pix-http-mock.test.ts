@@ -66,9 +66,10 @@ try {
 }
 assert(handler, "HANDLER_AUSENTE");
 async function chamar(body: unknown = { acao: ACAO, lote_id: LOTE },
-  bearer = "jwt-ficticio", method = "POST") {
+  bearer = "jwt-ficticio", method = "POST",
+  caminho = "/functions/v1/catalogo-cob06-reserva-qa-sem-pix") {
   const res = await handler!(new Request(
-    ROOT + "/functions/v1/catalogo-cob06-reserva-qa-sem-pix", {
+    ROOT + caminho, {
       method, headers: { "Content-Type": "application/json",
         ...(bearer ? { Authorization: "Bearer " + bearer } : {}) },
       ...(method === "POST" ? { body: JSON.stringify(body) } : {}),
@@ -91,6 +92,22 @@ Deno.test("reserva COB-06: operacao unica valida retorna HOLD, sem pagamento", a
     result.body.reconciliar_manualmente === true &&
     authCalls === 1 && rpcCalls === 1, "SUCESSO_CONTROLADO");
   emHold(result.body);
+});
+
+Deno.test("reserva COB-06: gateway pode reescrever pathname sem contornar autenticacao", async () => {
+  for (const caminho of ["/", "/catalogo-cob06-reserva-qa-sem-pix",
+    "/functions/v1/catalogo-cob06-reserva-qa-sem-pix"]) {
+    reset();
+    const result = await chamar(undefined, "jwt-ficticio", "POST", caminho);
+    assert(result.status === 200 && result.body.success === true &&
+      result.body.post_executado === false && authCalls === 1 && rpcCalls === 1,
+      "GATEWAY_PATH_REWRITE");
+    emHold(result.body);
+    reset(); identidade = INTRUSO;
+    const intruso = await chamar(undefined, "jwt-ficticio", "POST", caminho);
+    assert(intruso.status === 403 && rpcCalls === 0, "REWRITE_SEM_AUTH");
+    emHold(intruso.body);
+  }
 });
 
 Deno.test("reserva COB-06: reserva repetida nao cria nova tentativa", async () => {

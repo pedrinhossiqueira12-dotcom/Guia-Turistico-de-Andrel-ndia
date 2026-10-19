@@ -20,6 +20,7 @@ test('COB06: a nova funcao e separada da auditoria GET e exige JWT do gateway', 
   assert.match(source, /db\.auth\.getUser\(/);
   assert.match(source, /identidade\.user\.id !== ADMIN_STAGING/);
   assert.match(source, /entrada\.lote_id !== QA_LOTE/);
+  assert.doesNotMatch(source, /new URL\(req\.url\)\.pathname/);
   assert.match(audit, /const somenteLeitura = entrada\.acao ===/);
   assert.doesNotMatch(audit, /reservar_tentativa_qa_sem_pix/);
 });
@@ -38,4 +39,6 @@ test('COB06: rota de reserva sem transporte Asaas, escrita de baixa ou saque', (
   assert.match(mock, /INTRUSO/);
   assert.match(mock, /tentativa_ja_reservada/);
   assert.match(mock, /insegura/);
+  assert.match(mock, /GATEWAY_PATH_REWRITE/);
+  assert.match(mock, /REWRITE_SEM_AUTH/);
 });
