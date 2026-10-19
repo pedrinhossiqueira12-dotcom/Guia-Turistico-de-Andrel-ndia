@@ -44,7 +44,12 @@ test('Edge bloqueia GET externo sem RPC de vinculo QA aprovada', () => {
   assert.ok(checagem > 0 && auditoria > checagem);
   assert.match(edge, /vinculo\.operacao_id !== ref\.operacao_id/);
   assert.match(edge, /vinculo\.post_executado !== false/);
-  assert.match(edge, /reserva_qa_conferida: true, evidencia_get_persistida: false/);
+  assert.match(edge, /reserva_qa_conferida: true/);
+  assert.match(edge, /const PERSISTIR_GET_QA = Deno\.env\.get\("ASAAS_COB06_GET_PERSISTENCIA_QA_ENABLED"\) === "true"/);
+  assert.match(edge, /if \(PERSISTIR_GET_QA && auditoria\.estado === "nenhuma_cobranca_localizada"\)/);
+  assert.match(edge, /evidencia_get_persistida: evidenciaPersistida/);
+  assert.match(edge, /ack\.pode_emitir_pix !== false/);
+  assert.match(edge, /pix_emitido: false/);
   assert.doesNotMatch(edge, /catalogo_asaas_registrar_observacao_acumulo/);
   assert.doesNotMatch(edge, /catalogo-asaas-acumulo-post-sandbox-candidato/);
 });
