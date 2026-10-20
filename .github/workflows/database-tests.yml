@@ -41,6 +41,21 @@ jobs:
           node --test tests/asaas-cob06-billing-only-lock.test.cjs
           node --test tests/asaas-cob06-webhook-prod-ready.test.cjs
           node --test tests/asaas-cob06-storage-export-local.test.cjs
+      - name: Build and verify frozen COB06 billing-only review ZIP (no deployment)
+        run: |
+          test -z "${SUPABASE_ACCESS_TOKEN:-}"
+          test -z "${DATABASE_URL:-}"
+          python3 scripts/validacao-pagamentos/asaas-cob06-empacotar-release-offline.py --check
+          python3 -m unittest discover -s tests -p 'test_asaas_cob06_release_bundle.py'
+          python3 scripts/validacao-pagamentos/asaas-cob06-empacotar-release-offline.py --build "$RUNNER_TEMP/asaas-cob06-billing-only-review.zip"
+          python3 scripts/validacao-pagamentos/asaas-cob06-empacotar-release-offline.py --verify "$RUNNER_TEMP/asaas-cob06-billing-only-review.zip"
+      - name: Retain the review-only COB06 ZIP for human inspection
+        uses: actions/upload-artifact@v4
+        with:
+          name: cob06-billing-only-review-${{ github.run_id }}
+          path: ${{ runner.temp }}/asaas-cob06-billing-only-review.zip
+          retention-days: 7
+          if-no-files-found: error
       - name: Parse PowerShell 5.1 compatible Storage export without executing it
         shell: pwsh
         run: |
