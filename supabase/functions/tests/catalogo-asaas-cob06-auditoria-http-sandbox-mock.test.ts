@@ -33,6 +33,8 @@ let gravacoesObservacao = 0;
 let gravacoesEvidenciaGet = 0;
 let iniciosGet = 0;
 let inicioJaGravado = false;
+let consultaEstadoQa: "historico" | "com_prova" | "inconsistente" | "rpc_ausente" = "historico";
+let consultasEstadoQa = 0;
 let falhaInicio: "nenhuma" | "rpc_ausente" | "recusa" | "lote" | "permissao" = "nenhuma";
 let corpoDaUltimaListagem = "";
 let falhaPersistencia: "nenhuma" | "rpc_ausente" | "recusa" |
@@ -46,6 +48,7 @@ function reset() {
   consultasDetalhe = 0; gravacoesObservacao = 0;
   gravacoesEvidenciaGet = 0; falhaPersistencia = "nenhuma";
   iniciosGet = 0; inicioJaGravado = false; falhaInicio = "nenhuma";
+  consultaEstadoQa = "historico"; consultasEstadoQa = 0;
   corpoDaUltimaListagem = "";
 }
 function assert(ok: unknown, mensagem: string): asserts ok {
@@ -124,6 +127,28 @@ globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
       post_executado: vinculoInvalido === "post", pode_emitir_pix: false,
       pode_quitar: false, pode_liberar_motoboy: false,
       hold_obrigatorio: vinculoInvalido !== "hold" });
+  }
+  if (url.pathname === "/rest/v1/rpc/catalogo_asaas_consultar_estado_get_qa_sem_pix") {
+    assert(method === "POST", "ESTADO_QA_RPC_NAO_POST_INTERNO");
+    const payload = JSON.parse(String(init?.body || "")) as Record<string, unknown>;
+    assert(payload.p_lote === LOTE, "ESTADO_QA_OUTRO_LOTE");
+    consultasEstadoQa++;
+    if (consultaEstadoQa === "rpc_ausente")
+      return reply({ code: "PGRST202", message: "RPC ausente no mock" }, 404);
+    const historico = consultaEstadoQa === "historico";
+    const comProva = consultaEstadoQa === "com_prova";
+    return reply({
+      ok: true, lote_id: LOTE,
+      estado: historico ? "get_historico_sem_prova" :
+        comProva ? "evidencia_local_registrada" : "sem_get_registrado",
+      get_iniciado: comProva, evidencia_get_persistida: comProva,
+      get_historico_sem_prova: historico,
+      prova_get_externa: false, pode_consultar_asaas: false,
+      pode_repetir_get: false, post_executado: false,
+      pode_emitir_pix: consultaEstadoQa === "inconsistente",
+      pode_quitar: false, pode_estornar: false,
+      pode_liberar_motoboy: false, hold_obrigatorio: true,
+    });
   }
   if (url.pathname === "/rest/v1/rpc/catalogo_asaas_iniciar_get_unico_qa_sem_pix") {
     assert(method === "POST", "INICIO_GET_RPC_NAO_POST_INTERNO");
@@ -272,6 +297,59 @@ Deno.test("COB06 GET-only: nenhum comando financeiro, webhook ou escrita tem rot
   assert(chamadasAuth === 0 && consultasLocal === 0 &&
     consultasListagem === 0 && gravacoesObservacao === 0,
     "COMANDO_FINANCEIRO_ACIONOU_REDE");
+});
+
+
+const acaoEstado = "consultar_estado_get_qa_sem_pix_admin";
+
+Deno.test("COB06 estado QA: historico sem comprovante, sem Asaas e sem repeticao", async () => {
+  reset();
+  const r = await chamar(acaoEstado);
+  assert(r.http === 200 && r.body.success === true &&
+    r.body.estado === "get_historico_sem_prova" &&
+    r.body.get_historico_sem_prova === true &&
+    r.body.get_iniciado === false && r.body.evidencia_get_persistida === false &&
+    r.body.asaas_consultado === false && r.body.banco_consultado === true &&
+    r.body.pode_consultar_asaas === false &&
+    r.body.pode_repetir_get === false && r.body.pode_emitir_pix === false &&
+    r.body.pode_quitar === false && r.body.pode_estornar === false &&
+    r.body.pode_liberar_motoboy === false && r.body.hold_obrigatorio === true,
+    "GET_HISTORICO_NAO_PODE_SER_REFEITO");
+  assert(consultasEstadoQa === 1 && chamadasAuth === 1 &&
+    iniciosGet === 0 && consultasListagem === 0 && consultasDetalhe === 0 &&
+    gravacoesEvidenciaGet === 0 && gravacoesObservacao === 0,
+    "ESTADO_QA_EXECUTOU_OPERACAO_BANCARIA");
+});
+
+Deno.test("COB06 estado QA: evidencia local registrada nao habilita POST", async () => {
+  reset();
+  consultaEstadoQa = "com_prova";
+  const r = await chamar(acaoEstado);
+  assert(r.http === 200 && r.body.estado === "evidencia_local_registrada" &&
+    r.body.evidencia_get_persistida === true && r.body.get_iniciado === true &&
+    r.body.pode_emitir_pix === false && r.body.pode_quitar === false &&
+    r.body.pode_repetir_get === false && r.body.asaas_consultado === false,
+    "EVIDENCIA_LOCAL_LIBEROU_COBRANCA");
+  assert(iniciosGet === 0 && consultasListagem === 0 &&
+    gravacoesEvidenciaGet === 0, "CONSULTA_DE_ESTADO_REFEZ_GET");
+});
+
+Deno.test("COB06 estado QA: sessao alheia e falhas nao alcancam banco ou Asaas", async () => {
+  reset(); identidade = INTRUSO;
+  const negado = await chamar(acaoEstado);
+  assert(negado.http === 403 && consultasEstadoQa === 0 &&
+    iniciosGet === 0 && consultasListagem === 0,
+    "STATUS_ADM_ACESSIVEL_A_INTRUSO");
+  reset(); consultaEstadoQa = "rpc_ausente";
+  const ausente = await chamar(acaoEstado);
+  assert(ausente.http === 503 && consultasEstadoQa === 1 &&
+    consultasListagem === 0 && gravacoesEvidenciaGet === 0 &&
+    ausente.body.hold_obrigatorio === true, "RPC_AUSENTE_NAO_FALHOU_FECHADO");
+  reset(); consultaEstadoQa = "inconsistente";
+  const inconsistente = await chamar(acaoEstado);
+  assert(inconsistente.http === 409 &&
+    inconsistente.body.pode_emitir_pix === false &&
+    consultasListagem === 0, "RESPOSTA_SQL_INSEGURA_ACEITA");
 });
 
 const acaoAuditar = "auditar_duplicidade_acumulo_sandbox_admin";
