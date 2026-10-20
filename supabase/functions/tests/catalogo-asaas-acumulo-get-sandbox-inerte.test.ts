@@ -227,6 +227,17 @@ const autorizacaoFicticiaSomenteCi = {
   pode_liberar_motoboy: false,
 } as const;
 
+// Marco somente mockado para os testes legados deste transporte. O teste
+// PostgreSQL separado comprova a unicidade duravel, inclusive apos reinicio.
+const marcarInicioMockCi = async (lote: string, operacao: string) => ({
+  ok: true, simulacao_ci: true, marco_persistido: true,
+  lote_id: lote, operacao_id: operacao,
+  referencia: esperado.referencia, cliente_id: esperado.clienteId,
+  valor_centavos: esperado.valorCentavos, pode_enviar_post_mock: true,
+  pode_repetir_post: false, pode_quitar: false,
+  pode_liberar_motoboy: false, reconciliar_por_get: true,
+});
+
 Deno.test("COB06 POST candidato: corpo de Pix agregado, unica tentativa e GET verificado em HOLD", async () => {
   let posts = 0;
   let gets = 0;
@@ -257,7 +268,7 @@ Deno.test("COB06 POST candidato: corpo de Pix agregado, unica tentativa e GET ve
       headers: { "content-type": "application/json" } });
   }) as typeof fetch;
   const r = await postarPixAcumuloSandboxCandidatoSomenteCi(
-    esperado, "2099-01-06", "segredo-ficticio-ci", autorizacaoFicticiaSomenteCi, mock);
+    esperado, "2099-01-06", "segredo-ficticio-ci", autorizacaoFicticiaSomenteCi, marcarInicioMockCi, mock);
   assert(posts === 1 && gets === 1 && r.paymentId === id &&
     r.observacao.p_status === "PENDING" && r.holdObrigatorio === true &&
     r.podeQuitar === false && r.podeLiberarMotoboy === false,
@@ -277,7 +288,7 @@ Deno.test("COB06 POST candidato: argumentos invalidos bloqueados antes da rede",
   ] as const;
   for (const [dados, vencimento, token, motivo] of invalidos) {
     await hold(() => postarPixAcumuloSandboxCandidatoSomenteCi(
-      dados, vencimento, token, autorizacaoFicticiaSomenteCi, mock), motivo);
+      dados, vencimento, token, autorizacaoFicticiaSomenteCi, marcarInicioMockCi, mock), motivo);
   }
   assert(chamadas === 0, "nenhuma tentativa remota com dado invalido");
 });
@@ -304,7 +315,7 @@ Deno.test("COB06 POST candidato: falhas ambiguas sao HOLD sem retry automatico",
     const erro = modo === "rede" || modo === "503" ? "POST_INCONCLUSIVO"
       : modo === "id" ? "POST_ID_INVALIDO" : "POST_RESPOSTA_INVALIDA";
     await hold(() => postarPixAcumuloSandboxCandidatoSomenteCi(
-      esperado, "2099-01-06", "segredo-ficticio-ci", autorizacaoFicticiaSomenteCi, mock), erro);
+      esperado, "2099-01-06", "segredo-ficticio-ci", autorizacaoFicticiaSomenteCi, marcarInicioMockCi, mock), erro);
     assert(posts === 1 && gets === 0, "sem repetir POST apos falha " + modo);
   }
 });
@@ -323,7 +334,7 @@ Deno.test("COB06 POST candidato: divergencia no GET impede aceitar resposta do P
       headers: { "content-type": "application/json" } });
   }) as typeof fetch;
   await hold(() => postarPixAcumuloSandboxCandidatoSomenteCi(
-    esperado, "2099-01-06", "segredo-ficticio-ci", autorizacaoFicticiaSomenteCi, mock), "VALOR_DIVERGENTE");
+    esperado, "2099-01-06", "segredo-ficticio-ci", autorizacaoFicticiaSomenteCi, marcarInicioMockCi, mock), "VALOR_DIVERGENTE");
   assert(posts === 1 && gets === 1, "GET divergente sem outra emissao");
 });
 
@@ -345,11 +356,12 @@ Deno.test("COB06 POST candidato: so aceita recibo positivo ficticio e fetch inje
     { ...autorizacaoFicticiaSomenteCi, operacao_id: "nao-uuid" },
   ]) {
     await hold(() => postarPixAcumuloSandboxCandidatoSomenteCi(
-      esperado, "2099-01-06", "segredo-ficticio-ci", invalido, mock),
+      esperado, "2099-01-06", "segredo-ficticio-ci", invalido, marcarInicioMockCi, mock),
       "AUTORIZACAO_SQL_AUSENTE");
   }
   await hold(() => postarPixAcumuloSandboxCandidatoSomenteCi(
-    esperado, "2099-01-06", "segredo-ficticio-ci", autorizacaoFicticiaSomenteCi),
+    esperado, "2099-01-06", "segredo-ficticio-ci",
+    autorizacaoFicticiaSomenteCi, marcarInicioMockCi),
     "CI_ONLY_REDE_REAL_BLOQUEADA");
   assert(chamadas === 0, "sem POST quando gate invalido ou fetch nativo");
 });
