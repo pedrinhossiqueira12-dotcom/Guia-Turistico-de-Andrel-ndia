@@ -12,6 +12,8 @@ import type {
 const URL_PAGAMENTOS = "https://api-sandbox.asaas.com/v3/payments";
 const MAX_BYTES = 65536;
 type FetchSeguro = typeof fetch;
+// A marca de inicio deve ser COMMITADA no banco antes do transporte HTTP.
+type MarcarInicioPostCi = (loteId: string, operacaoId: string) => Promise<unknown>;
 export type CobrancaCandidata = {
   paymentId: string;
   observacao: ObservacaoRemota;
@@ -132,6 +134,7 @@ export async function postarPixAcumuloSandboxCandidatoSomenteCi(
   vencimento: string,
   tokenServidor: string,
   recibo: unknown,
+  marcarInicioPostCi: MarcarInicioPostCi,
   fetchSeguro: FetchSeguro = fetch,
 ): Promise<CobrancaCandidata> {
   validarEntrada(esperado, vencimento, tokenServidor);
@@ -139,6 +142,27 @@ export async function postarPixAcumuloSandboxCandidatoSomenteCi(
   // venha a ser positivo: nenhuma Edge pode importar e emitir por acidente.
   exige(fetchSeguro !== fetch, "CI_ONLY_REDE_REAL_BLOQUEADA");
   validarRecibo(esperado, recibo);
+  exige(typeof marcarInicioPostCi === "function", "MARCO_INICIO_AUSENTE");
+  const operacaoId = (recibo as AutorizacaoEmissaoSandbox).operacao_id;
+  let marco: unknown;
+  try {
+    // Commit duravel e retorno de identidade devem ocorrer ANTES de um POST.
+    marco = await marcarInicioPostCi(esperado.loteId, operacaoId);
+  } catch {
+    throw new Error("COB06_HOLD_MARCO_INICIO_INCONCLUSIVO");
+  }
+  exige(marco !== null && typeof marco === "object" && !Array.isArray(marco),
+    "MARCO_INICIO_INVALIDO");
+  const m = marco as Record<string, unknown>;
+  exige(m.ok === true && m.simulacao_ci === true && m.marco_persistido === true &&
+    m.lote_id === esperado.loteId && m.operacao_id === operacaoId &&
+    m.referencia === esperado.referencia &&
+    m.cliente_id === esperado.clienteId &&
+    m.valor_centavos === esperado.valorCentavos &&
+    m.pode_enviar_post_mock === true && m.pode_repetir_post === false &&
+    m.pode_quitar === false && m.pode_liberar_motoboy === false &&
+    m.reconciliar_por_get === true,
+    "MARCO_INICIO_INVALIDO");
   const corpo = {
     customer: esperado.clienteId,
     billingType: "PIX" as const,
