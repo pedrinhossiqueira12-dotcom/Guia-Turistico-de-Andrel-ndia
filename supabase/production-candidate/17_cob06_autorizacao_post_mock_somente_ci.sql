@@ -239,7 +239,8 @@ BEGIN
     OR v_get.itens_count IS DISTINCT FROM 0
     OR v_get.has_more IS DISTINCT FROM false
     OR v_get.evidencia_mockada IS DISTINCT FROM true
-    OR v_get.resposta_sha256 !~ '^[0-9a-f]{64}
+    OR pg_catalog.length(v_get.resposta_sha256) <> 64
+    OR v_get.resposta_sha256 ~ '[^0-9a-f]'
 
     OR v_get.registrada_em > pg_catalog.clock_timestamp()
     OR v_get.registrada_em < pg_catalog.clock_timestamp() - INTERVAL '5 minutes'
