@@ -480,6 +480,36 @@
     return competencia;
   }
 
+  let consultaFaturaSeq = 0;
+  // Preflight somente leitura: uma fatura abaixo de R$ 5 nao deve induzir
+  // uma tentativa de POST, nem dar a entender que Pix acumulado ja existe.
+  async function atualizarPreflightFatura(){
+    const competencia=$("competenciaOffline")?.value||"";
+    const botao=$("gerarPixFatura");
+    const numero=++consultaFaturaSeq;
+    if(!botao)return;
+    if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(competencia)){
+      botao.disabled=false;
+      return;
+    }
+    botao.disabled=true;
+    try{
+      const dado=await chamarFaturaPix({acao:"obter_fatura",competencia});
+      if(numero!==consultaFaturaSeq||$("competenciaOffline")?.value!==competencia)return;
+      const pequena=dado.fatura_abaixo_minimo_asaas===true;
+      botao.disabled=pequena;
+      if(pequena)renderizarPixFatura(dado);
+      else if(!dado.fatura){
+        $("faturaPixResultado").textContent="Ainda nao ha fatura fechada neste mes.";
+      }
+    }catch(erro){
+      if(numero!==consultaFaturaSeq||$("competenciaOffline")?.value!==competencia)return;
+      // Sem preflight validado nao induzir emissao bancaria por um botao
+      // desatualizado. A consulta pode ser repetida ao trocar o mes.
+      $("faturaPixResultado").textContent=erro.message||"Nao foi possivel verificar o limite da fatura.";
+    }
+  }
+
   function renderizarPixFatura(data,containerId="faturaPixResultado") {
     const container=$(containerId);
     if (!container) return;
@@ -495,6 +525,10 @@
       `<p><strong>Situação:</strong> ${escapar(traducaoCobranca(situacao))}${fatura.vencimento_em ? ` · vencimento ${escapar(fatura.vencimento_em)}` : ""}</p>`,
     ];
     if (data.mensagem) partes.push(`<p class="form-feedback">${escapar(data.mensagem)}</p>`);
+    if (data.fatura_abaixo_minimo_asaas===true && data.pendencias_pequenas_estimadas){
+      const resumo=data.pendencias_pequenas_estimadas;
+      partes.push(`<p class="form-feedback">Pendências de faturas pequenas ainda sem cobrança individual: ${escapar(reais(resumo.total_centavos))} em ${escapar(resumo.quantidade)} competência(s). Valor estimado, sujeito a conciliação; não é um Pix disponível.</p>`);
+    }
     if (pix.code && !cobrancaNaoPagavel) {
       // Somente bytes codificados como Base64 PNG podem compor o src do QR.
       // Nunca interpolar imagem livre no HTML: aspas/atributos de um retorno
@@ -580,6 +614,7 @@
     const month = new Date().toISOString().slice(0, 7);
     if (!$("competenciaOffline").value) $("competenciaOffline").value = month;
     await carregarPedidosOffline();
+    await atualizarPreflightFatura();
   }
 
   function renderizarCategorias() {
@@ -927,6 +962,7 @@
     $("catalogoTermsDialog")?.addEventListener("cancel",event=>event.preventDefault());
     $("gerarFaturaBloqueada")?.addEventListener("click",()=>regularizarFaturaBloqueada("criar_cobranca"));
     $("consultarFaturaBloqueada")?.addEventListener("click",()=>regularizarFaturaBloqueada("consultar_cobranca"));
+    $("competenciaOffline")?.addEventListener("change", atualizarPreflightFatura);
     $("gerarPixFatura").addEventListener("click", gerarPixFatura);
     $("consultarPixFatura").addEventListener("click", consultarPixFatura);
     $("cancelamentoForm").addEventListener("submit", confirmarCancelamento);
