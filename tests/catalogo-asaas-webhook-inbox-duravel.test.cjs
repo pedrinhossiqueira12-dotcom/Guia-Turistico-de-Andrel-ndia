@@ -17,10 +17,12 @@ const source=edge.slice(a,b)
  .replace(/\(globalThis as typeof globalThis & \{\s*EdgeRuntime\?:\{waitUntil:\(p:Promise<unknown>\)=>void\}\s*\}\)\.EdgeRuntime/g,"globalThis.EdgeRuntime")
  .replace(/\(e as Error\)\.name/g,"e.name");
 
-function fake({storedOk=true,duplicate=false,worker=null}={}){
+function fake({storedOk=true,duplicate=false,worker=null,environment="sandbox",billingOn=true}={}){
  const calls=[],background=[];
  const context={
   WEBHOOK_TOKEN:"secret-valid-token-of-at-least-32-bytes",
+  ENVIRONMENT:environment,
+  enabled:()=>{if(!billingOn)throw Object.assign(new Error("Billing OFF"),{status:503});},
   equalSecret:async(t,e)=>t===e,
   Failure:class Failure extends Error{constructor(msg,status){super(msg);this.status=status;}},
   value:(x,max=200)=>typeof x==="string"?x.trim().slice(0,max):"",
@@ -46,6 +48,28 @@ function fake({storedOk=true,duplicate=false,worker=null}={}){
 const event={
  id:"evt_test_1",event:"PAYMENT_RECEIVED",payment:{id:"pay_test_1",externalReference:"fatura-ci"}
 };
+
+test("COB-06: webhook billing-only recusa transferencia em producao sem gravar",async()=>{
+ const f=fake({environment:"production"});
+ const transfer={id:"evt_transfer_ci",event:"TRANSFER_CREATED",
+   transfer:{id:"transferencia-ficticia-ci"}};
+ await assert.rejects(f.webhook(f.request(transfer)),e=>e.status===503 && /HOLD/.test(e.message));
+ assert.equal(f.calls.length,0);
+ assert.equal(f.background.length,0);
+});
+
+test("COB-06: cobranca produtiva exige liberacao, mas PAYMENT continua normal quando aprovado",async()=>{
+ const desativado=fake({environment:"production",billingOn:false});
+ await assert.rejects(desativado.webhook(desativado.request(event)),e=>e.status===503);
+ assert.equal(desativado.calls.length,0);
+ assert.equal(desativado.background.length,0);
+ const aprovado=fake({environment:"production"});
+ const r=await aprovado.webhook(aprovado.request(event));
+ assert.equal(r.status,200);
+ assert.equal(r.body.recebido,true);
+ assert.equal(aprovado.calls.length,1);
+ await Promise.all(aprovado.background);
+});
 
 test("autentica webhook antes de persistir; token errado nao grava",async()=>{
  const f=fake();
