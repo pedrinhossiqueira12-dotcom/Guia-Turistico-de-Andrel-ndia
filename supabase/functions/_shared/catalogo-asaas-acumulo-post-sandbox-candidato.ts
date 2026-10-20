@@ -111,6 +111,10 @@ async function respostaLimitada(response: Response): Promise<unknown> {
     await reader.cancel().catch(() => {});
     reader.releaseLock();
   }
+  // O HTTP pode informar um Content-Length falso ou truncado. Mesmo
+  // um JSON sintaticamente valido nao e prova de emissao se os bytes divergem.
+  // O resultado fica em HOLD, sem reenvio automatico do POST.
+  exige(length === null || total === Number(length), "POST_RESPOSTA_INVALIDA");
   const bytes = new Uint8Array(total);
   let offset = 0;
   for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
