@@ -68,8 +68,18 @@ Exigir (-not (Test-Path -LiteralPath (Join-Path $HOME '.supabase\access-token') 
 
 Exigir ([bool](Get-Command supabase -ErrorAction SilentlyContinue)) 'CLI_NAO_INSTALADA'
 # A CLI deve suportar download remoto e os flags da referencia oficial.
-$helpText=(& supabase storage cp --help 2>&1 | Out-String)
-Exigir ($LASTEXITCODE -eq 0) 'CLI_STORAGE_CP_FALHOU'
+# Windows PowerShell 5.1 converte avisos escritos em stderr por executaveis
+# nativos em NativeCommandError quando ErrorActionPreference=Stop.
+# Aceitar avisos, mas manter a verificacao obrigatoria do codigo de saida.
+$PreferenciaCli=$ErrorActionPreference
+try {
+ $ErrorActionPreference='Continue'
+ $helpText=(& supabase storage cp --help 2>&1 | Out-String)
+ $CodigoAjudaCli=$LASTEXITCODE
+} finally {
+ $ErrorActionPreference=$PreferenciaCli
+}
+Exigir ($CodigoAjudaCli -eq 0) 'CLI_STORAGE_CP_FALHOU'
 Exigir ($helpText -match '(?i)recursive' -and $helpText -match '(?i)linked' -and
  $helpText -match '(?i)experimental') 'CLI_INCOMPATIVEL'
 $MetaCount=0
@@ -118,8 +128,17 @@ try {
   # Sem "mv", "rm" ou transferencia no sentido inverso.
   $args=@('storage','cp','--experimental','--linked','--recursive',
    ('ss:///'+$Bucket),$Local)
-  & supabase @args *> (Join-Path $Raiz ('download-'+$Bucket+'.log'))
-  Exigir ($LASTEXITCODE -eq 0) ('DOWNLOAD_FALHOU_'+$Bucket)
+  # A CLI pode anunciar atualizacao via stderr mesmo em comando valido.
+  # A saida continua restrita ao arquivo cifrado; falha real = exit code != 0.
+  $PreferenciaCli=$ErrorActionPreference
+  try {
+   $ErrorActionPreference='Continue'
+   & supabase @args *> (Join-Path $Raiz ('download-'+$Bucket+'.log'))
+   $CodigoDownloadCli=$LASTEXITCODE
+  } finally {
+   $ErrorActionPreference=$PreferenciaCli
+  }
+  Exigir ($CodigoDownloadCli -eq 0) ('DOWNLOAD_FALHOU_'+$Bucket)
   $Objetos=@(Get-ChildItem -LiteralPath $Local -Recurse -File -Force)
   Exigir ($Objetos.Count -eq [int]$Entrada.quantidade) ('CONTAGEM_DIVERGENTE_'+$Bucket)
   $Bytes=[long](($Objetos|Measure-Object -Property Length -Sum).Sum)
