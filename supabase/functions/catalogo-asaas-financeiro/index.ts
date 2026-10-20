@@ -2105,6 +2105,8 @@ async function processarEventoAsaasPendente(row:AsaasWebhookPendente){
   return;
  }
  if(row.evento.startsWith("TRANSFER_")){
+  if(ENVIRONMENT==="production")
+   throw new Failure("TRANSFER em fila requer conciliacao humana apos habilitacao de saques. HOLD.",503);
   const {data:saque,error}=await db.from("catalogo_asaas_saques")
    .select("id").eq("transferencia_id",row.recurso_id).maybeSingle();
   if(error)throw new Failure("Falha ao localizar saque do Webhook.",503);
@@ -2147,6 +2149,9 @@ async function processarWebhooksAsaasPendentes(limit=5){
  return {concluido,falhou};
 }
 async function webhook(request:Request){
+ // No rollout billing-only, nem o webhook deve aceitar eventos antes
+ // da liberacao das cobrancas e da instalacao de seu inbox.
+ if(ENVIRONMENT==="production")enabled("billing");
  if(!WEBHOOK_TOKEN || WEBHOOK_TOKEN.length<32)
   throw new Failure("Webhook não configurado.",503);
  const token=request.headers.get("asaas-access-token")||"";
@@ -2195,6 +2200,10 @@ async function webhook(request:Request){
  if(!id||!event||!resourceId)throw new Failure("Evento inválido.",400);
  if(!event.startsWith("PAYMENT_")&&!event.startsWith("TRANSFER_"))
   return respond({success:true,ignorado:true});
+ // Saque nao homologado em producao: nao confirmar nem descartar um
+ // TRANSFER_* como evento de fatura; devolve erro para revisao segura.
+ if(ENVIRONMENT==="production"&&event.startsWith("TRANSFER_"))
+  throw new Failure("Evento de transferencia exige homologacao financeira separada. HOLD.",503);
  // Persistir ANTES de responder 200 (modelo at-least-once da Asaas).
  const stored=await rpc("catalogo_asaas_webhook_receber",{
   p_id:id,p_evento:event,p_recurso:resourceId,
@@ -2259,34 +2268,24 @@ Deno.serve(async (request:Request)=>{
   const user=await auth(request);
   const body=input(await request.json().catch(()=>({})));
   const acaoFinanceira=value(body.acao,60);
-  // COB-06: publicar somente COBRANCAS nao pode expor rotas de SAQUE,
-  // carteira ou escrow do projeto ainda nao homologado. A Edge mista
-  // fica em HOLD em producao, independentemente das flags de saque.
-  const acoesSaqueAindaNaoHomologadas=new Set([
-   "consultar_carteira",
-   "solicitar_analise_residual",
-   "solicitar_regularizacao_saida",
-   "listar_analises_residuais_admin",
-   "listar_regularizacoes_saida_admin",
-   "revisar_regularizacao_saida_admin",
-   "preconferir_pagamento_excepcional_admin",
-   "listar_separacoes_congeladas_admin",
-   "diagnosticar_separacao_congelada_admin",
-   "matriz_conciliacao_escrow_admin",
-   "auditar_historico_transferencias_excepcionais_sandbox_admin",
-   "exportar_ancora_dossie_admin",
-   "listar_dossie_escrow_admin",
-   "registrar_dossie_escrow_admin",
-   "consultar_titularidade_pix_sandbox_admin",
-   "observar_transferencia_excepcional_sandbox_admin",
-   "revisar_analise_residual_admin",
-   "solicitar_saque",
-   "auditar_saque_sandbox",
-   "listar_saques_admin",
-   "conciliar_saque_admin"
+  // COB-06 billing-only: em producao, toda acao nao explicitamente
+  // listada e recusada ANTES de acessar banco ou provedor. Acao nova
+  // fica bloqueada automaticamente; saques e QA exigem release proprio.
+  const acoesPermitidasCobrancaProducao=new Set([
+   "consultar_termos",
+   "aceitar_termos",
+   "solicitar_encerramento",
+   "consultar_encerramento",
+   "listar_encerramentos_admin",
+   "finalizar_encerramento_admin",
+   "diagnosticar_webhooks_asaas_admin",
+   "reprocessar_webhooks_asaas_admin",
+   "obter_fatura",
+   "criar_cobranca",
+   "consultar_cobranca"
   ]);
-  if(ENVIRONMENT==="production" && acoesSaqueAindaNaoHomologadas.has(acaoFinanceira))
-   throw new Failure("Carteira, saques e conciliacao excepcional ainda nao homologados. Nenhuma operacao foi executada.",503);
+  if(ENVIRONMENT==="production" && !acoesPermitidasCobrancaProducao.has(acaoFinanceira))
+   throw new Failure("Funcao nao habilitada no lancamento de cobrancas. Nenhuma operacao executada.",503);
   switch(acaoFinanceira){
    case "consultar_termos":return respond({success:true,...await termsStatus(user.id,value(body.papel,15),
      value(body.papel,15)==="comercio"?commerce(body.comercio_id):"",
