@@ -5,7 +5,7 @@ const fs=require("node:fs");
 const vm=require("node:vm");
 const edge=fs.readFileSync("supabase/functions/catalogo-asaas-financeiro/index.ts","utf8");
 const start=edge.indexOf("async function loadOrCreateCustomer(");
-const end=edge.indexOf("async function showInvoice(",start);
+const end=edge.indexOf("async function resumoPendenciasAbaixoMinimo(",start);
 assert.ok(start>=0&&end>start,"helper bancario nao localizado");
 const real=edge.slice(start,end)
  .replace(/async function loadOrCreateCustomer\(\s*store:string,body:Record<string,unknown>,email:string,expectedCustomerId\?:string\s*\)/,
