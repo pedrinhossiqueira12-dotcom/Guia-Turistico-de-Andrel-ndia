@@ -107,8 +107,7 @@ $Dados=Join-Path $Raiz 'files'
 # mesmo que o destino seja fisicamente criptografado.
 $cursor=Get-Item -LiteralPath $DestinoSeguro
 while ($null -ne $cursor) {
- Exigir (-not (Test-Path -LiteralPath (Join-Path $cursor.FullName '.git')))
-  'DESTINO_SOB_REPOSITORIO_GIT'
+ Exigir (-not (Test-Path -LiteralPath (Join-Path $cursor.FullName '.git'))) 'DESTINO_SOB_REPOSITORIO_GIT'
  $cursor=$cursor.Parent
 }
 Exigir (-not (Test-Path -LiteralPath $Raiz)) 'DESTINO_EXISTENTE'
