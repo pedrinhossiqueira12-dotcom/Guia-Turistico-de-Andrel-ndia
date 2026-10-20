@@ -712,16 +712,62 @@ async function loadOrCreateCustomer(
  }
  return customerId;
 }
+// Consulta apenas fechamentos pequenos SEM cobranca ou reserva individual.
+// E uma estimativa de pendencias, nao uma autorizacao de agrupamento:
+// o lote, os snapshots e a conciliacao ainda exigem homologacao propria.
+async function resumoPendenciasAbaixoMinimo(store:string){
+ const {data:rows,error}=await db.from("catalogo_fechamentos_offline")
+  .select("id,competencia,total_comissao_centavos")
+  .eq("comercio_id",store)
+  .in("status",["faturado","vencido","bloqueado"])
+  .gt("total_comissao_centavos",0)
+  .lt("total_comissao_centavos",ASAAS_COBRANCA_MINIMA_CENTAVOS)
+  .order("competencia",{ascending:true}).limit(121);
+ if(error||!Array.isArray(rows)||rows.length>120)
+  throw new Failure("Nao foi possivel conferir as pendencias pequenas. Nenhum Pix foi gerado.",503);
+ if(rows.length===0)return {quantidade:0,total_centavos:0};
+ const ids=rows.map(x=>x.id);
+ if(ids.some(x=>typeof x!=="string"||!x))
+  throw new Failure("Fechamentos de origem invalidos. Nenhum Pix foi gerado.",503);
+ const [cobrancas,reservas]=await Promise.all([
+  db.from("catalogo_fatura_cobrancas").select("fechamento_id").in("fechamento_id",ids),
+  db.from("catalogo_asaas_emissoes").select("fechamento_id").in("fechamento_id",ids)
+ ]);
+ if(cobrancas.error||reservas.error||!Array.isArray(cobrancas.data)||!Array.isArray(reservas.data))
+  throw new Failure("Nao foi possivel excluir cobrancas e reservas existentes.",503);
+ const ocupados=new Set([...cobrancas.data,...reservas.data].map(x=>x.fechamento_id));
+ let total=0,quantidade=0;
+ for(const row of rows){
+  const centavos=Number(row.total_comissao_centavos);
+  if(!Number.isSafeInteger(centavos)||centavos<=0||
+     centavos>=ASAAS_COBRANCA_MINIMA_CENTAVOS)
+   throw new Failure("Valor financeiro incoerente. Conferencia manual necessaria.",503);
+  if(ocupados.has(row.id))continue;
+  total+=centavos;
+  quantidade++;
+ }
+ return {quantidade,total_centavos:total};
+}
 async function showInvoice(uid:string,body:Record<string,unknown>){
- const {f,charge,emissao}=await invoice(uid,body);
+ const {f,charge,emissao,store}=await invoice(uid,body);
+ const total=Number(f?.total_comissao_centavos||0);
+ const abaixoMinimo=Boolean(f&&!charge&&!emissao &&
+  ["faturado","vencido","bloqueado"].includes(String(f.status))&&
+  Number.isSafeInteger(total)&&total>0&&total<ASAAS_COBRANCA_MINIMA_CENTAVOS);
+ const pequenas=abaixoMinimo?await resumoPendenciasAbaixoMinimo(store):null;
  return respond({success:true,fatura:f,
   cobranca_status:charge?.status||(emissao?"emissao_reservada":null),
   metodo_cobranca:"pix_manual",pix_automatico_disponivel:false,
   valor_centavos:f?.total_comissao_centavos||0,provedor:charge?.gateway||"asaas",
+  fatura_abaixo_minimo_asaas:abaixoMinimo,
+  pendencias_pequenas_estimadas:pequenas,
+  pix_acumulado_disponivel:false,
   mensagem:charge?.gateway==="mercadopago"?
     "Existe uma fatura do Mercado Pago. Ela não será migrada ou cobrada duas vezes.":
     !charge&&emissao?
-    "A emissão Pix já foi reservada. Aguarde a conciliação ou solicite suporte; não gere uma segunda cobrança.":undefined});
+    "A emissão Pix já foi reservada. Aguarde a conciliação ou solicite suporte; não gere uma segunda cobrança.":
+    abaixoMinimo?
+    "Esta fatura abaixo de R$ 5,00 permanece devida. O agrupamento com outros meses ainda aguarda homologacao; nao existe Pix disponivel para este saldo.":undefined});
 }
 async function reconcileInvoice(uid:string,body:Record<string,unknown>){
  const {f,charge,emissao,store,month}=await invoice(uid,body);
