@@ -363,6 +363,30 @@ BEGIN
  OR EXISTS(SELECT 1 FROM public.catalogo_asaas_acumulo_tentativas_emissao_ci)
  THEN RAISE EXCEPTION 'COB06_MOCK_POST_CI: identidade errada reservou banco'; END IF;
 
+ -- Agora os argumentos simulados NAO autorizam o POST mock sozinho:
+ -- sem evidencia local persistente, nao ha reserva nem permissao.
+ v_tentativa:=catalogo_private.catalogo_asaas_autorizar_post_mock_ci(
+    v_id,v_referencia->>'referencia',v_cliente_obs,500,0,true);
+ IF v_tentativa->>'ok'<>'false'
+    OR v_tentativa->>'motivo'<>'evidencia_get_mock_ci_ausente_ou_divergente'
+    OR v_tentativa->>'pode_emitir_pix'<>'false'
+    OR EXISTS(SELECT 1 FROM public.catalogo_asaas_acumulo_tentativas_emissao_ci)
+ THEN RAISE EXCEPTION 'COB06_MOCK_POST_CI: sem prova persistida gerou tentativa'; END IF;
+
+ -- Fixture GET completamente sintetica, mesma identidade do livro e SHA
+ -- artificial. Nao consultar Asaas nem interpretar isto como prova externa.
+ INSERT INTO catalogo_private.catalogo_asaas_get_negativo_post_mock_ci(
+   lote_id,operacao_id,referencia,cliente_id,valor_centavos,
+   http_status,total_count,itens_count,has_more,resposta_sha256
+ ) VALUES (
+   v_id,v_id_operacao,v_referencia->>'referencia',v_cliente_obs,500,
+   200,0,0,false,pg_catalog.repeat('a',64)
+ );
+ IF (SELECT pg_catalog.count(*)
+     FROM catalogo_private.catalogo_asaas_get_negativo_post_mock_ci
+     WHERE lote_id=v_id AND referencia=v_referencia->>'referencia')<>1
+ THEN RAISE EXCEPTION 'COB06_MOCK_POST_CI: evidencia GET mock nao persistida'; END IF;
+
  -- Executa o caminho positivo de uma unica tentativa EM SUBTRANSACAO.
  -- Excecao sentinela reverte a tentativa antes de prosseguir com SQL13.
  BEGIN
