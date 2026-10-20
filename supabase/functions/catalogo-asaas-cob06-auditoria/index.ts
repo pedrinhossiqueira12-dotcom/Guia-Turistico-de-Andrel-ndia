@@ -3,6 +3,9 @@
 // Desligada por padrao e sem alterar a Edge financeira existente.
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import {
+  validarPlanoNovoQa, conferirSnapshotNovoQa,
+} from "../_shared/catalogo-cob06-novo-lote-qa-preflight.ts";
+import {
   auditarDuplicidadeAcumuloSomenteGet,
 } from "../_shared/catalogo-asaas-acumulo-auditoria-duplicidade-inerte.ts";
 
@@ -31,6 +34,8 @@ const GET_ATIVO = Deno.env.get("ASAAS_COB06_GET_ADMIN_READONLY_ENABLED") === "tr
 // Flag NOVA, OFF por padrao. Ainda exige permissao explicita de instalacao
 // SQL, deploy e teste no STAGING. Nenhuma Edge publicada usa esta versao.
 const PERSISTIR_GET_QA = Deno.env.get("ASAAS_COB06_GET_PERSISTENCIA_QA_ENABLED") === "true";
+// Preflight de um SEGUNDO ensaio independente, nunca habilita GET bancario.
+const PREFLIGHT_NOVO_QA = Deno.env.get("ASAAS_COB06_NOVO_QA_PREFLIGHT_ENABLED") === "true";
 const HEADERS = {
   "Content-Type": "application/json",
   "Access-Control-Allow-Origin": "*",
@@ -259,6 +264,41 @@ async function auditarDuplicidadeComTrilhaQA(lote: string) {
   });
 }
 
+// Checagem local de novo caso QA, sem operacoes bancarias nem mutacoes.
+// A existencia de referencia local nao comprova inexistencia de pagamento remoto.
+async function preflightNovoQaSomenteLeitura(lote: string) {
+  const plano = validarPlanoNovoQa({
+    loteId: Deno.env.get("ASAAS_COB06_NOVO_LOTE_QA_ID") || "",
+    comercioId: Deno.env.get("ASAAS_COB06_NOVO_COMERCIO_QA_ID") || "",
+    competenciaCorte: Deno.env.get("ASAAS_COB06_NOVO_CORTE_QA") || "",
+    valorCentavos: Deno.env.get("ASAAS_COB06_NOVO_VALOR_QA_CENTAVOS") || "",
+  });
+  if (lote !== plano.loteId) return recusar("Lote fora do novo ensaio QA. HOLD.", 403);
+  const [l, r, cliente] = await Promise.all([
+    db.from("catalogo_asaas_acumulo_lotes")
+      .select("id,comercio_id,competencia_corte,total_centavos,estado")
+      .eq("id", lote).maybeSingle(),
+    db.from("catalogo_asaas_acumulo_referencias")
+      .select("lote_id,operacao_id,comercio_id,referencia,valor_centavos,estado,payment_id,pode_emitir_pix")
+      .eq("lote_id", lote).maybeSingle(),
+    db.from("catalogo_asaas_clientes")
+      .select("cliente_id").eq("comercio_id", plano.comercioId).maybeSingle(),
+  ]);
+  if (l.error || r.error || cliente.error || !l.data || !r.data || !cliente.data)
+    return recusar("Documentos locais do novo lote ausentes. HOLD.", 409);
+  const conferencia = await rpc("catalogo_asaas_conferir_conciliacao_acumulo",
+    { p_lote: lote });
+  const resultado = conferirSnapshotNovoQa(plano, {
+    lote: l.data, referencia: r.data, cliente: cliente.data,
+    conciliacao: conferencia,
+  });
+  return resposta({
+    success: true, ...resultado, asaas_consultado: false,
+    banco_alterado: false, pix_emitido: false,
+    requer_nova_reserva_get_persistente: true,
+  });
+}
+
 // Status administrativo: somente banco local, sem Asaas ou novo GET.
 // A ausencia de inicio local NUNCA libera o GET historico de 19/10.
 async function consultarEstadoGetQa(lote: string) {
@@ -316,6 +356,15 @@ Deno.serve(async (req: Request) => {
       return recusar("Payload invalido.", 400);
     }
     const entrada = body as Record<string, unknown>;
+    if (entrada.acao === "preflight_novo_lote_qa_sem_rede_admin") {
+      // Flag independente: NENHUM caminho desta rota usa fetch bancario.
+      if (URL_SUPABASE !== STAGING_URL || !ATIVO ||
+          !SANDBOX || !PREFLIGHT_NOVO_QA) {
+        return recusar("Preflight de novo lote QA desabilitado. HOLD.", 503);
+      }
+      await exigirAdmin(req);
+      return await preflightNovoQaSomenteLeitura(texto(entrada.lote_id));
+    }
     if (entrada.acao === "consultar_estado_get_qa_sem_pix_admin") {
       // Nao exige flags de GET/persistencia: esta acao nao abre rede bancaria.
       if (URL_SUPABASE !== STAGING_URL || !ATIVO || !SANDBOX) {
