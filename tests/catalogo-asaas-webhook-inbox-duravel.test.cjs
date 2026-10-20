@@ -140,6 +140,39 @@ test("webhook recusa Content-Length acima de 64 KiB mesmo com corpo pequeno",asy
  await assert.rejects(f.webhook(req),e=>e.status===413);
  assert.equal(f.calls.length,0);
 });
+test("COB-06: webhook com Content-Length menor ou maior que os bytes nao recebe ACK",async()=>{
+ const raw=JSON.stringify(event),real=Buffer.byteLength(raw,"utf8");
+ for(const length of [real-1,real+1,0]){
+  const f=fake({environment:"production"});
+  const req=new Request("https://example.invalid/webhook",{
+   method:"POST",
+   headers:{"asaas-access-token":"secret-valid-token-of-at-least-32-bytes",
+    "content-length":String(length)},
+   body:raw
+  });
+  await assert.rejects(f.webhook(req),
+   e=>e.status===400&&/Tamanho de Webhook divergente/.test(e.message));
+  assert.equal(f.calls.length,0,"nao pode persistir resposta HTTP ambigua");
+  assert.equal(f.background.length,0,"nao pode iniciar conciliacao");
+ }
+});
+
+test("COB-06: Webhook com tamanho HTTP correto e sem header permanece funcional",async()=>{
+ const raw=JSON.stringify(event),size=Buffer.byteLength(raw,"utf8");
+ for(const contentLength of [String(size),null]){
+  const f=fake({environment:"production"});
+  const headers={"asaas-access-token":"secret-valid-token-of-at-least-32-bytes"};
+  if(contentLength!==null)headers["content-length"]=contentLength;
+  const req=new Request("https://example.invalid/webhook",
+   {method:"POST",headers,body:raw});
+  const r=await f.webhook(req);
+  assert.equal(r.status,200);
+  assert.equal(r.body.recebido,true);
+  assert.equal(f.calls.length,1);
+  await Promise.all(f.background);
+ }
+});
+
 test("recuperacao apos falha tem fila duravel, SKIP LOCKED e token de tentativa",()=>{
  for(const marker of [
   "ALTER TABLE public.catalogo_asaas_webhook_eventos",
