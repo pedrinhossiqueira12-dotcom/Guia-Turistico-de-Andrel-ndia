@@ -39,6 +39,7 @@ jobs:
         run: |
           node scripts/validacao-pagamentos/asaas-cob06-validar-billing-only.cjs
           node --test tests/asaas-cob06-billing-only-lock.test.cjs
+          node --test tests/asaas-cob06-webhook-prod-ready.test.cjs
       - name: Prepare disposable offline migration plan only
         run: |
           set -euo pipefail
