@@ -2238,6 +2238,8 @@ async function executarWorkerWebhooksAsaas(request:Request){
 }
 async function reprocessarWebhooksAsaasAdmin(uid:string){
  if(uid!==ADMIN_USER_ID)throw new Failure("Acesso restrito à administração.",403);
+ // O caminho manual tambem deve respeitar as travas do lancamento produtivo.
+ if(ENVIRONMENT==="production")enabled("billing");
  const resultado=await processarWebhooksAsaasPendentes(10);
  return respond({success:true,...resultado,
   mensagem:"Conferência realizada. Eventos falhos permanecem na fila para retentativa."});
