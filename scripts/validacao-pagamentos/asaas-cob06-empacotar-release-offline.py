@@ -104,10 +104,16 @@ def check_edge_security() -> None:
         'if(ENVIRONMENT==="production")enabled("billing");',
         'if(ENVIRONMENT==="production"&&event.startsWith("TRANSFER_"))',
         'if(ENVIRONMENT==="production")\n   throw new Failure("TRANSFER em fila',
-        'if(ENVIRONMENT!=="sandbox")\n    throw new Failure("Transferência Pix de produção',
+        'throw new Failure("Transferência Pix de produção não está liberada.",503);',
     )
     if any(fragment not in text for fragment in required):
         raise Blocked("COB06_PACOTE_INVALIDO: roteador nao garante faturamento sem saques")
+    if not re.search(
+        r'if\(ENVIRONMENT!=="sandbox"\)\s*'
+        r'throw new Failure\("Transferência Pix de produção não está liberada\."',
+        text,
+    ):
+        raise Blocked("COB06_PACOTE_INVALIDO: bloqueio POST /transfers ausente")
     start = text.find("const acoesPermitidasCobrancaProducao=new Set([")
     end = text.find("]);", start)
     if start < 0 or end < 0:
