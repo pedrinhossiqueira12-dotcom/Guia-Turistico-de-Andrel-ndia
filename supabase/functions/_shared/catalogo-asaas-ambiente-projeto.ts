@@ -17,7 +17,8 @@ export function ambienteAsaasCompativelComProjeto(
     return false;
   }
   // Bloquear credenciais, proxy e URL inesperada, sem depender da flag financeira.
-  if (url.username || url.password || url.search || url.hash) return false;
+  if (url.username || url.password || url.search || url.hash ||
+    url.pathname !== "/") return false;
   const host = url.hostname.toLowerCase();
   if (host === PRODUCAO_SUPABASE)
     return url.protocol === "https:" && !url.port && ambienteDeclarado === "production";
