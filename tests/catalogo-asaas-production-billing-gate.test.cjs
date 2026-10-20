@@ -9,13 +9,15 @@ const extracted=edge.match(/function enabled\(kind:"billing"\|"payouts"\)\{([\s\
 assert.ok(extracted,"contrato de acesso Asaas deve existir");
 
 function checkGate({environment="sandbox",key="sandbox-test-key",billing=true,
-                    payouts=false,approval=false,kind="billing"}={}){
+                    payouts=false,approval=false,kind="billing",
+                    workerOn=true,workerToken="x".repeat(48),webhookToken="w".repeat(32)}={}){
  const context={
   ASAAS_TOKEN:key,
   BILLING_ON:billing,
   PAYOUTS_ON:payouts,
   ENVIRONMENT:environment,
   PRODUCTION_BILLING_APPROVED:approval,
+  WEBHOOK_WORKER_ON:workerOn,WEBHOOK_WORKER_TOKEN:workerToken,WEBHOOK_TOKEN:webhookToken,
   Failure:class Failure extends Error {
    constructor(message,status){super(message);this.status=status;}
   },
@@ -49,4 +51,34 @@ test("payout Pix real fica com bloqueio independente mesmo com billing aprovado"
  assert.match(edge,/if\(ENVIRONMENT!=="sandbox" \|\| !WITHDRAWAL_AUTH_ON/);
  assert.match(edge,/const API_BASE = ENVIRONMENT === "production" \? "https:\/\/api\.asaas\.com\/v3" : "https:\/\/api-sandbox\.asaas\.com\/v3"/);
  assert.equal(checkGate({environment:"sandbox",kind:"payouts",payouts:false}).allowed,false);
+});
+
+test("COB-06: billing de producao so libera com recuperacao de webhook pronta",()=>{
+ const base={environment:"production",approval:true,billing:true,key:"prod-ficticia"};
+ assert.equal(checkGate(base).allowed,true);
+ const cenarios=[
+  {...base,workerOn:false},
+  {...base,workerToken:""},
+  {...base,workerToken:"x".repeat(47)},
+  {...base,webhookToken:""},
+  {...base,webhookToken:"w".repeat(31)},
+ ];
+ for(const options of cenarios){
+  const result=checkGate(options);
+  assert.equal(result.allowed,false);
+  assert.equal(result.status,503);
+  assert.match(result.message,/Recupera.+webhooks Asaas/i);
+ }
+ assert.equal(checkGate({environment:"sandbox",workerOn:false,
+  workerToken:"",webhookToken:""}).allowed,true);
+});
+
+test("COB-06: o gate obriga worker no faturamento mas nao libera saques",()=>{
+ const gate=edge.match(/function enabled\(kind:"billing"\|"payouts"\)\{([\s\S]*?)\n\}/)?.[1];
+ assert.ok(gate);
+ assert.match(gate,/WEBHOOK_WORKER_ON/);
+ assert.match(gate,/WEBHOOK_WORKER_TOKEN.length<48/);
+ assert.match(gate,/WEBHOOK_TOKEN.length<32/);
+ assert.equal(checkGate({environment:"production",approval:true,
+  kind:"payouts",payouts:false}).allowed,false);
 });
