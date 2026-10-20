@@ -244,3 +244,40 @@ test "$(psql -X -d catalogo_cob06_ci -Atqc \
   "SELECT (x->>'ok')||'|'||(x->>'nova_tentativa')||'|'||(x->>'pode_emitir_pix')
    FROM (SELECT public.catalogo_asaas_reservar_tentativa_qa_sem_pix('$lote') x) t")" = 'false|false|false'
 echo 'COB06_STAGING_GATE_RACE_UNICO_PERSISTENTE_SEM_PIX_OK'
+
+# Consulta ADMIN SOMENTE LEITURA do estado QA: sem reexecutar GET Asaas.
+# O clone nao representa o GET historico STAGING, mas comprova transicoes
+# pre-GET -> marco persistente -> evidencia mock local -> HOLD sem novo GET.
+status_get_qa() {
+  psql -X -d catalogo_cob06_ci -Atqc \
+    "SELECT (e->>'estado')||'|'||(e->>'get_iniciado')||'|'||
+            (e->>'evidencia_get_persistida')||'|'||
+            (e->>'pode_consultar_asaas')||'|'||(e->>'pode_emitir_pix')
+     FROM (SELECT public.catalogo_asaas_consultar_estado_get_qa_sem_pix(
+      '$lote'::uuid) e) z"
+}
+test "$(status_get_qa)" = 'sem_get_registrado|false|false|false|false'
+test "$(psql -X -d catalogo_cob06_ci -Atqc \
+  "SELECT (e->>'ok')||'|'||(e->>'nova_consulta')||'|'||
+          (e->>'pode_emitir_pix')
+   FROM (SELECT public.catalogo_asaas_iniciar_get_unico_qa_sem_pix(
+      '$lote'::uuid) e) z")" = 'true|true|false'
+test "$(status_get_qa)" = 'get_iniciado_sem_evidencia|true|false|false|false'
+test "$(psql -X -d catalogo_cob06_ci -Atqc \
+  "SELECT (e->>'ok')||'|'||(e->>'nova_evidencia')||'|'||
+          (e->>'pode_emitir_pix')
+   FROM (SELECT public.catalogo_asaas_registrar_get_negativo_qa_sem_pix(
+     '$lote'::uuid,200,0,0,false,repeat('a',64)) e) z")" = 'true|true|false'
+test "$(status_get_qa)" = 'evidencia_local_registrada|true|true|false|false'
+test "$(psql -X -d catalogo_cob06_ci -Atqc \
+  "SELECT (e->>'nova_consulta')||'|'||(e->>'pode_consultar_asaas')
+   FROM (SELECT public.catalogo_asaas_iniciar_get_unico_qa_sem_pix(
+     '$lote'::uuid) e) z")" = 'false|false'
+test "$(psql -X -d catalogo_cob06_ci -Atqc \
+  "SELECT count(*) FROM catalogo_private.catalogo_asaas_inicios_get_qa_sem_pix
+   WHERE lote_id='$lote'::uuid")" = 1
+test "$(psql -X -d catalogo_cob06_ci -Atqc \
+  "SELECT count(*) FROM catalogo_private.catalogo_asaas_evidencias_get_qa_sem_pix
+   WHERE lote_id='$lote'::uuid")" = 1
+echo 'COB06_ESTADO_GET_QA_READONLY_HOLD_EM_TODAS_TRANSICOES_OK'
+
