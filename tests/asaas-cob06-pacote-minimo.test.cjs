@@ -113,7 +113,9 @@ test("COB-06: producao admite somente a lista exata de operacoes de cobranca e e
  const end=code.indexOf("switch(acaoFinanceira)",start);
  assert.ok(start>0&&end>start);
  const guard=code.slice(start,end);
- const permitidas=[...guard.matchAll(/"([a-z_]+)"/g)].map(x=>x[1]);
+ const setFim=guard.indexOf("]);");
+ assert.ok(setFim>0,"lista de producao deve estar fechada");
+ const permitidas=[...guard.slice(0,setFim).matchAll(/"([a-z_]+)"/g)].map(x=>x[1]);
  const esperado=["consultar_termos","aceitar_termos","solicitar_encerramento","consultar_encerramento","listar_encerramentos_admin","finalizar_encerramento_admin","diagnosticar_webhooks_asaas_admin","reprocessar_webhooks_asaas_admin","obter_fatura","criar_cobranca","consultar_cobranca"];
  assert.deepEqual(permitidas.sort(),esperado.sort());
  assert.match(guard,/ENVIRONMENT==="production" && !acoesPermitidasCobrancaProducao\.has\(acaoFinanceira\)/);
