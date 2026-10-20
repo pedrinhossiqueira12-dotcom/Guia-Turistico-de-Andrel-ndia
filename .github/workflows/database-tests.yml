@@ -41,6 +41,21 @@ jobs:
           node --test tests/asaas-cob06-billing-only-lock.test.cjs
           node --test tests/asaas-cob06-webhook-prod-ready.test.cjs
           node --test tests/asaas-cob06-storage-export-local.test.cjs
+      - name: Parse PowerShell 5.1 compatible Storage export without executing it
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $parseErrors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            "scripts/validacao-pagamentos/asaas-cob06-exportar-storage-producao.ps1",
+            [ref]$tokens,
+            [ref]$parseErrors
+          ) | Out-Null
+          if ($parseErrors.Count -gt 0) {
+            $parseErrors | ForEach-Object { Write-Error $_.Message }
+            exit 1
+          }
+          Write-Host "COB06_STORAGE_PS_PARSE_OK: not executed"
       - name: Prepare disposable offline migration plan only
         run: |
           set -euo pipefail
