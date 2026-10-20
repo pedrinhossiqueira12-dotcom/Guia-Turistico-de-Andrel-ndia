@@ -72,8 +72,12 @@ $helpText=(& supabase storage cp --help 2>&1 | Out-String)
 Exigir ($LASTEXITCODE -eq 0) 'CLI_STORAGE_CP_FALHOU'
 Exigir ($helpText -match '(?i)recursive' -and $helpText -match '(?i)linked' -and
  $helpText -match '(?i)experimental') 'CLI_INCOMPATIVEL'
-$MetaCount=[int](($Inventario|Measure-Object -Property quantidade -Sum).Sum)
-$MetaBytes=[long](($Inventario|Measure-Object -Property bytes -Sum).Sum)
+$MetaCount=0
+$MetaBytes=[long]0
+foreach($BucketInventario in $Inventario) {
+ $MetaCount+=[int]$BucketInventario.quantidade
+ $MetaBytes+=[long]$BucketInventario.bytes
+}
 Exigir ($MetaCount -eq 128 -and $MetaBytes -eq 133855024) 'INVENTARIO_NAO_CONFERIDO'
 
 if ($Modo -eq 'Verificar') {
