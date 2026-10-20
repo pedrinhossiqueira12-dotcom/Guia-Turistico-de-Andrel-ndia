@@ -106,34 +106,38 @@ test("COB-06: Edge mista exige dupla aprovação para cobrar e proíbe POST Pix 
 });
 
 
-test("COB-06: producao billing-only nega carteira, saques e escrow antes do despacho",()=>{
+
+test("COB-06: producao admite somente a lista exata de operacoes de cobranca e encerramento",()=>{
  const code=read("supabase/functions/catalogo-asaas-financeiro/index.ts");
- const pos=code.indexOf("const acaoFinanceira=value(body.acao,60);");
- const start=code.indexOf("const acoesSaqueAindaNaoHomologadas=new Set([",pos);
+ const start=code.indexOf("const acoesPermitidasCobrancaProducao=new Set([");
  const end=code.indexOf("switch(acaoFinanceira)",start);
- assert.ok(pos>0&&start>pos&&end>start,"gate no despachante");
+ assert.ok(start>0&&end>start);
  const guard=code.slice(start,end);
- for(const action of [
-  "consultar_carteira","solicitar_analise_residual",
-  "solicitar_regularizacao_saida","listar_analises_residuais_admin",
-  "listar_regularizacoes_saida_admin","revisar_regularizacao_saida_admin",
-  "preconferir_pagamento_excepcional_admin","listar_separacoes_congeladas_admin",
-  "diagnosticar_separacao_congelada_admin","matriz_conciliacao_escrow_admin",
-  "auditar_historico_transferencias_excepcionais_sandbox_admin",
-  "exportar_ancora_dossie_admin","listar_dossie_escrow_admin",
-  "registrar_dossie_escrow_admin","consultar_titularidade_pix_sandbox_admin",
-  "observar_transferencia_excepcional_sandbox_admin",
-  "revisar_analise_residual_admin","solicitar_saque",
-  "auditar_saque_sandbox","listar_saques_admin","conciliar_saque_admin"
- ]) {
-  assert.ok(guard.includes('"'+action+'"'),"falta bloqueio de "+action);
-  assert.ok(code.includes('case "'+action+'":'),"acao de saque mudou");
- }
- assert.match(guard,/ENVIRONMENT==="production" && acoesSaqueAindaNaoHomologadas\.has\(acaoFinanceira\)/);
+ const permitidas=[...guard.matchAll(/"([a-z_]+)"/g)].map(x=>x[1]);
+ const esperado=["consultar_termos","aceitar_termos","solicitar_encerramento","consultar_encerramento","listar_encerramentos_admin","finalizar_encerramento_admin","diagnosticar_webhooks_asaas_admin","reprocessar_webhooks_asaas_admin","obter_fatura","criar_cobranca","consultar_cobranca"];
+ assert.deepEqual(permitidas.sort(),esperado.sort());
+ assert.match(guard,/ENVIRONMENT==="production" && !acoesPermitidasCobrancaProducao\.has\(acaoFinanceira\)/);
  assert.match(guard,/throw new Failure\([^\n]*503\)/);
- const billing=["obter_fatura","criar_cobranca","consultar_cobranca"];
- for(const action of billing) {
-  assert.ok(!guard.includes('"'+action+'"'),"cobranca bloqueada no corte minimo");
-  assert.ok(code.includes('case "'+action+'":'),"cobranca desapareceu");
- }
+ const todas=[...code.slice(end).matchAll(/case "([a-z_]+)":/g)].map(x=>x[1]);
+ for(const item of esperado)assert.ok(todas.includes(item),"rota ausente "+item);
+ for(const item of todas.filter(x=>!esperado.includes(x)))
+  assert.ok(!permitidas.includes(item),"rota indevida em producao: "+item);
+ assert.ok(todas.length>esperado.length,"deve proteger as acoes extras");
+});
+
+test("COB-06: webhook produtivo so recebe PAYMENT com faturamento aprovado",()=>{
+ const code=read("supabase/functions/catalogo-asaas-financeiro/index.ts");
+ const pos=code.indexOf("async function webhook(request:Request)");
+ const end=code.indexOf("async function executarWorkerWebhooksAsaas(",pos);
+ assert.ok(pos>0&&end>pos);
+ const body=code.slice(pos,end);
+ const gate=body.indexOf('if(ENVIRONMENT==="production")enabled("billing");');
+ const token=body.indexOf('if(!WEBHOOK_TOKEN');
+ assert.ok(gate>0&&gate<token,"billing desabilitado deve recusar webhook antes de ler payload");
+ const transfer=body.indexOf('if(ENVIRONMENT==="production"&&event.startsWith("TRANSFER_"))');
+ const persist=body.indexOf('const stored=await rpc("catalogo_asaas_webhook_receber"');
+ assert.ok(transfer>0&&persist>transfer,"TRANSFER deve ser recusado antes de ACK/persistencia");
+ assert.match(body,/throw new Failure\([^\n]*HOLD\.",503\)/);
+ const processor=code.slice(code.indexOf("async function processarEventoAsaasPendente("),pos);
+ assert.match(processor,/if\(ENVIRONMENT==="production"\)\s+throw new Failure\("TRANSFER em fila/);
 });
