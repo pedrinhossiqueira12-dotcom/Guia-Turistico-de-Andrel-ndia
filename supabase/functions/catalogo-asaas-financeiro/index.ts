@@ -1,6 +1,7 @@
 // Cobranças mensais e saques Asaas, isolados dos checkouts de pedidos Mercado Pago.
 // DESLIGADO por padrão. Chaves somente em Supabase Secrets, nunca no navegador.
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
+import { ambienteAsaasCompativelComProjeto } from "../_shared/catalogo-asaas-ambiente-projeto.ts";
 import { decryptCourierPix } from "../_shared/catalogo-entregas-crypto-v2.ts";
 import { conferirPagamentoAcumuloPorGet } from "../_shared/catalogo-asaas-acumulo-get-verificado-inerte.ts";
 import { consultarPagamentoAcumuloSandboxGet } from "../_shared/catalogo-asaas-acumulo-get-sandbox-inerte.ts";
@@ -38,7 +39,8 @@ const COB06_DUPLICIDADE_ADMIN_ON = Deno.env.get("ASAAS_COB06_DUPLICIDADE_ADMIN_E
 // Relatorio multi-competencias somente leitura, independente de todas as flags de Pix.
 const COB06_BAIXA_AUDITORIA_ADMIN_ON = Deno.env.get("ASAAS_COB06_BAIXA_AUDITORIA_ADMIN_ENABLED") === "true";
 const PAYOUTS_ON = Deno.env.get("ASAAS_PAYOUTS_ENABLED") === "true";
-const ENVIRONMENT = Deno.env.get("ASAAS_ENVIRONMENT") === "production" ? "production" : "sandbox";
+const ASAAS_ENVIRONMENT_DECLARADO = Deno.env.get("ASAAS_ENVIRONMENT");
+const ENVIRONMENT = ASAAS_ENVIRONMENT_DECLARADO === "production" ? "production" : "sandbox";
 const API_BASE = ENVIRONMENT === "production" ? "https://api.asaas.com/v3" : "https://api-sandbox.asaas.com/v3";
 const JSON_HEADERS = {"Content-Type":"application/json; charset=utf-8","Access-Control-Allow-Origin":"*",
   "Access-Control-Allow-Headers":"authorization,apikey,content-type,x-client-info",
@@ -2309,6 +2311,10 @@ Deno.serve(async (request:Request)=>{
  if(request.method==="OPTIONS")return new Response("ok",{headers:JSON_HEADERS});
  if(request.method!=="POST")return respond({success:false,mensagem:"Use POST"},405);
  try {
+  // Aplica-se inclusive a webhook/worker/saques, ANTES de qualquer RPC/fetch.
+  // Sem ambiente explicitamente coerente, nenhuma operacao financeira ocorre.
+  if(!ambienteAsaasCompativelComProjeto(SUPABASE_URL,ASAAS_ENVIRONMENT_DECLARADO))
+   throw new Failure("Ambiente Asaas incompatível com o projeto Supabase. Operações financeiras em HOLD.",503);
   const pathname=new URL(request.url).pathname;
   if(pathname.endsWith("/saque-autorizacao"))return await authorizeWithdrawal(request);
   if(pathname.endsWith("/webhook"))return await webhook(request);
