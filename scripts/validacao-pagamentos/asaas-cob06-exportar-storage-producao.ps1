@@ -56,6 +56,12 @@ Exigir (Test-Path -LiteralPath $DestinoSeguro -PathType Container) 'DESTINO_AUSE
 Exigir (-not [IO.Path]::GetFullPath($DestinoSeguro).StartsWith(
   ([IO.Path]::GetFullPath($Workspace).TrimEnd('\')+'\'),
   [StringComparison]::OrdinalIgnoreCase)) 'DESTINO_DENTRO_WORKSPACE'
+# O Supabase CLI interpreta um destino absoluto D:\\... como esquema URL "d".
+# Um destino relativo evita o erro "Unsupported operation" no Windows.
+# Exigir workspace irmao do destino permite calcular esse relativo sem escapar
+# da arvore privada criptografada (e sem usar C:).
+$PaiWorkspace=[IO.Directory]::GetParent($Workspace.TrimEnd('\')).FullName
+Exigir ($PaiWorkspace.TrimEnd('\') -ieq $DestinoSeguro.TrimEnd('\')) 'WORKSPACE_DEVE_SER_IRMAO_DO_DESTINO'
 $RefFile=Join-Path $Workspace 'supabase\.temp\project-ref'
 $ConfigFile=Join-Path $Workspace 'supabase\config.toml'
 Exigir (Test-Path -LiteralPath $RefFile -PathType Leaf) 'PROJETO_NAO_VINCULADO'
@@ -123,16 +129,19 @@ try {
   $Bucket=[string]$Entrada.bucket
   $Local=Join-Path $Dados $Bucket
   New-Item -ItemType Directory -Path $Local -Force | Out-Null
-  # CLI somente DOWNLOADER: fonte sempre ss:///bucket, destino local absoluto.
+  # CLI somente DOWNLOADER: fonte sempre ss:///bucket, destino local relativo.
   # Sem "mv", "rm" ou transferencia no sentido inverso.
-  $args=@('storage','cp','--experimental','--linked','--recursive',
-   ('ss:///'+$Bucket),$Local)
+  # Origem remota + destino LOCAL relativo ao workspace vinculado.
+  # cp -r aninha basename(bucket) sob files/, preservando files/<bucket>/...
+  $DestinoCli='..\'+$Nome+'\files'
+  $CliArgs=@('storage','cp','--experimental','--linked','--recursive',
+   ('ss:///'+$Bucket),$DestinoCli)
   # A CLI pode anunciar atualizacao via stderr mesmo em comando valido.
   # A saida continua restrita ao arquivo cifrado; falha real = exit code != 0.
   $PreferenciaCli=$ErrorActionPreference
   try {
    $ErrorActionPreference='Continue'
-   & supabase @args *> (Join-Path $Raiz ('download-'+$Bucket+'.log'))
+   & supabase @CliArgs *> (Join-Path $Raiz ('download-'+$Bucket+'.log'))
    $CodigoDownloadCli=$LASTEXITCODE
   } finally {
    $ErrorActionPreference=$PreferenciaCli
