@@ -316,4 +316,110 @@ REVOKE ALL ON FUNCTION
 GRANT EXECUTE ON FUNCTION
  public.catalogo_asaas_registrar_get_negativo_qa_sem_pix(uuid,integer,integer,integer,boolean,text)
  TO service_role;
+
+-- Estado administrativo SOMENTE LEITURA: nao marca um GET, nao cria
+-- evidencia retroativa e nao autoriza nova consulta ao Asaas. Tambem
+-- identifica explicitamente o caso historico sem digest de 19/10.
+CREATE FUNCTION public.catalogo_asaas_consultar_estado_get_qa_sem_pix(
+ p_lote uuid
+) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $estado$
+DECLARE
+ v_l public.catalogo_asaas_acumulo_lotes%ROWTYPE;
+ v_t catalogo_private.catalogo_asaas_tentativas_qa_sem_pix%ROWTYPE;
+ v_r public.catalogo_asaas_acumulo_referencias%ROWTYPE;
+ v_inicio catalogo_private.catalogo_asaas_inicios_get_qa_sem_pix%ROWTYPE;
+ v_evidencia catalogo_private.catalogo_asaas_evidencias_get_qa_sem_pix%ROWTYPE;
+ v_historico boolean;
+ v_inicio_ok boolean;
+ v_evidencia_ok boolean;
+ v_estado text;
+BEGIN
+ IF pg_catalog.current_database() NOT IN ('postgres','catalogo_cob06_ci')
+ OR p_lote IS NULL
+ OR (pg_catalog.current_database()='postgres'
+  AND p_lote IS DISTINCT FROM '583d761a-ecb9-49be-b484-e43f6183971e'::uuid)
+ THEN RETURN pg_catalog.jsonb_build_object(
+   'ok',false,'motivo','fora_do_ensaio','hold_obrigatorio',true,
+   'pode_consultar_asaas',false,'pode_emitir_pix',false); END IF;
+
+ SELECT * INTO v_l FROM public.catalogo_asaas_acumulo_lotes WHERE id=p_lote;
+ SELECT * INTO v_t FROM catalogo_private.catalogo_asaas_tentativas_qa_sem_pix
+ WHERE lote_id=p_lote;
+ SELECT * INTO v_r FROM public.catalogo_asaas_acumulo_referencias
+ WHERE lote_id=p_lote;
+ IF v_l.id IS NULL OR v_t.lote_id IS NULL OR v_r.lote_id IS NULL
+ OR v_l.estado IS DISTINCT FROM 'preparado'
+ OR v_t.comercio_id IS DISTINCT FROM v_l.comercio_id
+ OR v_r.comercio_id IS DISTINCT FROM v_l.comercio_id
+ OR v_t.operacao_id IS DISTINCT FROM v_r.operacao_id
+ OR v_t.referencia IS DISTINCT FROM v_r.referencia
+ OR v_r.referencia IS DISTINCT FROM 'guia-acumulo-'||p_lote::text
+ OR v_t.valor_centavos IS DISTINCT FROM v_l.total_centavos
+ OR v_t.valor_centavos IS DISTINCT FROM v_r.valor_centavos
+ OR v_t.post_executado IS DISTINCT FROM false
+ OR v_t.pode_emitir_pix IS DISTINCT FROM false
+ OR v_r.pode_emitir_pix IS DISTINCT FROM false
+ OR v_r.payment_id IS NOT NULL
+ THEN RETURN pg_catalog.jsonb_build_object(
+  'ok',false,'motivo','vinculo_qa_inconsistente','hold_obrigatorio',true,
+  'pode_consultar_asaas',false,'pode_emitir_pix',false); END IF;
+
+ SELECT * INTO v_inicio
+ FROM catalogo_private.catalogo_asaas_inicios_get_qa_sem_pix
+ WHERE lote_id=p_lote;
+ SELECT * INTO v_evidencia
+ FROM catalogo_private.catalogo_asaas_evidencias_get_qa_sem_pix
+ WHERE lote_id=p_lote;
+ v_inicio_ok := v_inicio.lote_id IS NOT NULL;
+ v_evidencia_ok := v_evidencia.lote_id IS NOT NULL;
+ IF (v_inicio_ok AND (
+    v_inicio.operacao_id IS DISTINCT FROM v_t.operacao_id
+    OR v_inicio.referencia IS DISTINCT FROM v_t.referencia
+    OR v_inicio.cliente_id IS DISTINCT FROM v_t.cliente_id
+    OR v_inicio.valor_centavos IS DISTINCT FROM v_t.valor_centavos
+    OR v_inicio.pode_repetir_get IS DISTINCT FROM false
+    OR v_inicio.pode_emitir_pix IS DISTINCT FROM false))
+ OR (v_evidencia_ok AND (
+    NOT v_inicio_ok
+    OR v_evidencia.operacao_id IS DISTINCT FROM v_t.operacao_id
+    OR v_evidencia.referencia IS DISTINCT FROM v_t.referencia
+    OR v_evidencia.cliente_id IS DISTINCT FROM v_t.cliente_id
+    OR v_evidencia.valor_centavos IS DISTINCT FROM v_t.valor_centavos
+    OR v_evidencia.http_status IS DISTINCT FROM 200
+    OR v_evidencia.total_count IS DISTINCT FROM 0
+    OR v_evidencia.itens_count IS DISTINCT FROM 0
+    OR v_evidencia.has_more IS DISTINCT FROM false
+    OR v_evidencia.prova_bancaria_suficiente IS DISTINCT FROM false
+    OR v_evidencia.pode_emitir_pix IS DISTINCT FROM false))
+ THEN RETURN pg_catalog.jsonb_build_object(
+  'ok',false,'motivo','trilha_qa_inconsistente',
+  'hold_obrigatorio',true,'pode_consultar_asaas',false,
+  'pode_emitir_pix',false); END IF;
+
+ v_historico := pg_catalog.current_database()='postgres'
+  AND p_lote='583d761a-ecb9-49be-b484-e43f6183971e'::uuid;
+ v_estado:=CASE
+  WHEN v_historico AND NOT v_evidencia_ok THEN 'get_historico_sem_prova'
+  WHEN v_evidencia_ok THEN 'evidencia_local_registrada'
+  WHEN v_inicio_ok THEN 'get_iniciado_sem_evidencia'
+  ELSE 'sem_get_registrado'
+ END;
+ RETURN pg_catalog.jsonb_build_object(
+  'ok',true,'lote_id',p_lote,'estado',v_estado,
+  'get_iniciado',v_inicio_ok,
+  'evidencia_get_persistida',v_evidencia_ok,
+  'get_historico_sem_prova',v_historico AND NOT v_evidencia_ok,
+  'prova_get_externa',false,
+  'pode_consultar_asaas',false,'pode_repetir_get',false,
+  'post_executado',false,'pode_emitir_pix',false,
+  'pode_quitar',false,'pode_estornar',false,
+  'pode_liberar_motoboy',false,'hold_obrigatorio',true);
+END;
+$estado$;
+REVOKE ALL ON FUNCTION
+ public.catalogo_asaas_consultar_estado_get_qa_sem_pix(uuid)
+ FROM PUBLIC,anon,authenticated,service_role;
+GRANT EXECUTE ON FUNCTION
+ public.catalogo_asaas_consultar_estado_get_qa_sem_pix(uuid)
+ TO service_role;
 COMMIT;
