@@ -36,6 +36,39 @@ lote="$(psql -X -d catalogo_cob06_ci -Atqc \
    WHERE comercio_id='comercio-de-exemplo' AND competencia_corte='2040-04-01'")"
 [[ "$lote" =~ ^[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}$ ]]
 
+# Sem prova GET mockada persistida: nem o modo POSITIVO CI autoriza POST.
+test "$(psql -X -d catalogo_cob06_ci -Atqc \
+  "SELECT (x->>'ok')||'|'||(x->>'nova_tentativa')||'|'||(x->>'pode_emitir_pix')
+   FROM (SELECT catalogo_private.catalogo_asaas_autorizar_post_mock_ci('$lote',
+    'guia-acumulo-$lote','cus_cob06_gate_race_123',500,0,true) x) t")" = 'false|false|false'
+test "$(psql -X -d catalogo_cob06_ci -Atqc \
+  "SELECT COUNT(*) FROM public.catalogo_asaas_acumulo_tentativas_emissao_ci")" = 0
+
+# Digest e metadados sinteticos: nao constitui prova de Asaas real.
+psql -X -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -Atqc \
+  "INSERT INTO catalogo_private.catalogo_asaas_get_negativo_post_mock_ci
+    (lote_id,operacao_id,referencia,cliente_id,valor_centavos,http_status,
+     total_count,itens_count,has_more,resposta_sha256)
+   SELECT r.lote_id,r.operacao_id,r.referencia,
+    'cus_cob06_gate_race_123',r.valor_centavos,200,0,0,false,
+    repeat('a',64)
+   FROM public.catalogo_asaas_acumulo_referencias r
+   WHERE r.lote_id='$lote'::uuid"
+test "$(psql -X -d catalogo_cob06_ci -Atqc \
+  "SELECT COUNT(*) FROM catalogo_private.catalogo_asaas_get_negativo_post_mock_ci
+   WHERE lote_id='$lote'::uuid AND evidencia_mockada=true")" = 1
+
+# Mesmo owner nao pode reescrever a trilha depois de confirmada.
+if psql -X -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -Atqc \
+  "UPDATE catalogo_private.catalogo_asaas_get_negativo_post_mock_ci
+   SET resposta_sha256=repeat('b',64) WHERE lote_id='$lote'::uuid" \
+  >/dev/null 2>&1; then
+  echo 'COB06_POST_MOCK: evidencia GET mutavel' >&2
+  exit 1
+fi
+
+
+
 # A registra a primeira autorizacao POSITIVA MOCKADA em CI e mantem o lock.
 timeout 14s psql -X -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -Atq \
   -c "BEGIN;
