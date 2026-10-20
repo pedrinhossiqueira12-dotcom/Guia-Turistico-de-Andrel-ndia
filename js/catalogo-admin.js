@@ -496,7 +496,14 @@
     ];
     if (data.mensagem) partes.push(`<p class="form-feedback">${escapar(data.mensagem)}</p>`);
     if (pix.code && !cobrancaNaoPagavel) {
-      if (pix.imageBase64) partes.push(`<img class="pix-qr" alt="QR Code Pix da fatura" src="data:image/png;base64,${pix.imageBase64}">`);
+      // Somente bytes codificados como Base64 PNG podem compor o src do QR.
+      // Nunca interpolar imagem livre no HTML: aspas/atributos de um retorno
+      // inesperado do provedor poderiam alterar a estrutura do documento.
+      const imagemValida = typeof pix.imageBase64 === "string" &&
+        pix.imageBase64.length > 0 && pix.imageBase64.length <= 160000 &&
+        pix.imageBase64.length % 4 === 0 &&
+        /^[A-Za-z0-9+/]+={0,2}$/.test(pix.imageBase64);
+      if (imagemValida) partes.push(`<img class="pix-qr" alt="QR Code Pix da fatura" src="data:image/png;base64,${pix.imageBase64}">`);
       partes.push(`<label class="pix-copy">Pix copia e cola<textarea readonly rows="3">${escapar(pix.code)}</textarea></label>`);
       partes.push('<button id="copiarPixFatura" class="small-button" type="button">Copiar código Pix</button>');
       if (/^https:\/\//.test(pix.ticketUrl || "")) partes.push(`<p><a class="button button-secondary" href="${escapar(pix.ticketUrl)}" target="_blank" rel="noopener">Abrir cobrança no provedor</a></p>`);
