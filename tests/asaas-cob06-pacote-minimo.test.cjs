@@ -140,4 +140,10 @@ test("COB-06: webhook produtivo so recebe PAYMENT com faturamento aprovado",()=>
  assert.match(body,/throw new Failure\([^\n]*HOLD\.",503\)/);
  const processor=code.slice(code.indexOf("async function processarEventoAsaasPendente("),pos);
  assert.match(processor,/if\(ENVIRONMENT==="production"\)\s+throw new Failure\("TRANSFER em fila/);
+ const worker=code.slice(code.indexOf("async function reprocessarWebhooksAsaasAdmin("),
+   code.indexOf("async function diagnosticarWebhooksAsaasAdmin("));
+ assert.ok(worker.indexOf('if(ENVIRONMENT==="production")enabled("billing");')>
+   worker.indexOf('if(uid!==ADMIN_USER_ID)'));
+ assert.ok(worker.indexOf('if(ENVIRONMENT==="production")enabled("billing");')<
+   worker.indexOf("await processarWebhooksAsaasPendentes("));
 });
