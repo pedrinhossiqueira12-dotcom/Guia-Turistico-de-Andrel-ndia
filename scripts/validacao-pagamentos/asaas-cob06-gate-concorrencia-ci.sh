@@ -125,6 +125,43 @@ segundo_pid=""
 grep -Fx 'true|true|true' "$primeiro_log"
 grep -Fx 'false|false|false' "$segundo_log"
 
+# Novo marco irreversivel, anterior a qualquer POST MOCK: a autorizacao
+# positiva acima NAO pode ser reutilizada por outra invocacao ou reinicio.
+operacao="$(psql -X -d catalogo_cob06_ci -Atqc \
+  "SELECT operacao_id FROM public.catalogo_asaas_acumulo_tentativas_emissao_ci
+   WHERE lote_id='$lote'::uuid")"
+[[ "$operacao" =~ ^[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}$ ]]
+marcar_inicio() {
+  psql -X -d catalogo_cob06_ci -Atqc \
+    "SELECT (x->>'ok')||'|'||(x->>'marco_persistido')||'|'||
+            (x->>'pode_enviar_post_mock')
+     FROM (SELECT catalogo_private.catalogo_asaas_marcar_inicio_post_mock_ci(
+       '$lote'::uuid,'$operacao'::uuid) x) t"
+}
+test "$(psql -X -d catalogo_cob06_ci -Atqc \
+  "SELECT (x->>'ok')||'|'||(x->>'marco_persistido')||'|'||
+          (x->>'pode_enviar_post_mock')
+   FROM (SELECT catalogo_private.catalogo_asaas_marcar_inicio_post_mock_ci(
+     '$lote'::uuid,'00000000-0000-4000-8000-000000000008'::uuid) x) t")" = 'false|false|false'
+test "$(marcar_inicio)" = 'true|true|true'
+test "$(marcar_inicio)" = 'false|false|false'
+test "$(psql -X -d catalogo_cob06_ci -Atqc \
+  "SELECT COUNT(*) FROM catalogo_private.catalogo_asaas_inicio_post_mock_ci
+   WHERE lote_id='$lote'::uuid AND operacao_id='$operacao'::uuid")" = 1
+if psql -X -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -Atqc \
+  "UPDATE catalogo_private.catalogo_asaas_inicio_post_mock_ci
+    SET valor_centavos=501 WHERE lote_id='$lote'::uuid" >/dev/null 2>&1; then
+  echo 'COB06_POST_MOCK: marco de inicio mutavel' >&2
+  exit 1
+fi
+if psql -X -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -Atqc \
+  "DELETE FROM catalogo_private.catalogo_asaas_inicio_post_mock_ci
+   WHERE lote_id='$lote'::uuid" >/dev/null 2>&1; then
+  echo 'COB06_POST_MOCK: marco de inicio apagavel' >&2
+  exit 1
+fi
+echo 'COB06_INICIO_POST_MOCK_PERSISTENTE_SEM_REPLAY_OK'
+
 test "$(psql -X -d catalogo_cob06_ci -Atqc \
   "SELECT count(*)||'|'||bool_and(pode_repetir_post=false)||'|'||
           bool_and(post_externo_comprovado=false)
