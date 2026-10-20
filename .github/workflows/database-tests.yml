@@ -144,6 +144,7 @@ jobs:
           deno check --node-modules-dir=auto supabase/functions/catalogo-cob06-qa/index.ts
           deno check --node-modules-dir=auto supabase/functions/catalogo-asaas-cob06-auditoria/index.ts
           deno check supabase/functions/tests/catalogo-cob06-novo-lote-qa-preflight.test.ts
+          deno check --node-modules-dir=auto supabase/functions/tests/catalogo-cob06-novo-lote-qa-http-mock.test.ts
           deno check --node-modules-dir=auto supabase/functions/catalogo-cob06-reserva-qa-sem-pix/index.ts
           deno check --node-modules-dir=auto supabase/functions/tests/catalogo-cob06-reserva-qa-sem-pix-http-mock.test.ts
           deno check --node-modules-dir=auto supabase/functions/tests/catalogo-asaas-cob06-auditoria-http-inerte.test.ts
@@ -194,6 +195,8 @@ jobs:
         run: deno test --no-check --node-modules-dir=auto --allow-env --allow-read=supabase/functions supabase/functions/tests/catalogo-asaas-acumulo-registro-http-inerte.test.ts
       - name: Test COB06 new isolated QA lot identity preflight without bank network
         run: deno test --no-check supabase/functions/tests/catalogo-cob06-novo-lote-qa-preflight.test.ts
+      - name: Test COB06 new QA preflight HTTP against mock Supabase and zero banking access
+        run: deno test --no-check --node-modules-dir=auto --allow-env --allow-read=supabase/functions supabase/functions/tests/catalogo-cob06-novo-lote-qa-http-mock.test.ts
       - name: Test COB06 isolated audit Edge fail-closed with no network
         run: deno test --no-check --node-modules-dir=auto --allow-env --allow-read=supabase/functions supabase/functions/tests/catalogo-asaas-cob06-auditoria-http-inerte.test.ts
       - name: Test COB06 isolated audit Edge enabled only with fully mocked Sandbox and Supabase
