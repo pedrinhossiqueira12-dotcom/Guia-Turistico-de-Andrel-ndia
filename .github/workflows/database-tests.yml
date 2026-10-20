@@ -133,6 +133,7 @@ jobs:
           deno check supabase/functions/tests/catalogo-asaas-acumulo-auditoria-baixa-inerte.test.ts
           deno check supabase/functions/_shared/catalogo-asaas-acumulo-retomada-inerte.ts
           deno check supabase/functions/tests/catalogo-asaas-acumulo-get-verificado-inerte.test.ts
+          deno check supabase/functions/tests/catalogo-asaas-ambiente-projeto.test.ts
           deno check supabase/functions/tests/catalogo-asaas-acumulo-get-sandbox-inerte.test.ts
           deno check supabase/functions/tests/catalogo-asaas-acumulo-post-sandbox-candidato.test.ts
           deno check supabase/functions/tests/catalogo-asaas-acumulo-liquidacao-get-postgres-ci.test.ts
@@ -161,6 +162,8 @@ jobs:
       - name: Test financial snapshots without database access
         run: deno test --no-check --allow-read=supabase/functions supabase/functions/tests/catalogo-asaas-acumulo-get-verificado-inerte.test.ts supabase/functions/tests/catalogo-financeiro.test.ts supabase/functions/tests/catalogo-checkouts-contract.test.ts supabase/functions/tests/catalogo-seguranca-pagamentos.test.ts supabase/functions/tests/catalogo-webhook-identificacao.test.ts supabase/functions/tests/catalogo-fatura-provedor.test.ts supabase/functions/tests/catalogo-asaas-stepup-documental-ensaio.test.ts supabase/functions/tests/catalogo-asaas-gotrue-mfa-transporte-inerte.test.ts supabase/functions/tests/catalogo-asaas-jwt-sessao-assinada-ensaio.test.ts supabase/functions/tests/catalogo-asaas-gotrue-jwt-assinado-integracao-inerte.test.ts supabase/functions/tests/catalogo-asaas-mfa-orquestrador-prechallenge-inerte.test.ts supabase/functions/tests/catalogo-asaas-livro-owner-sql-inerte.test.ts supabase/functions/tests/catalogo-asaas-livro-ponte-nologin-inerte.test.ts supabase/functions/tests/catalogo-asaas-ponte-orquestrador-integracao-inerte.test.ts
 
+      - name: Test binding Asaas environment to Supabase project before any billing
+        run: deno test --no-check supabase/functions/tests/catalogo-asaas-ambiente-projeto.test.ts
       - name: Test COB06 Sandbox GET and interrupted preparation recovery without network
         run: deno test --no-check supabase/functions/tests/catalogo-asaas-acumulo-get-sandbox-inerte.test.ts supabase/functions/tests/catalogo-asaas-acumulo-retomada-inerte.test.ts supabase/functions/tests/catalogo-asaas-acumulo-auditoria-baixa-inerte.test.ts
       - name: Test COB06 single simulated aggregate POST then independent GET with network denied
