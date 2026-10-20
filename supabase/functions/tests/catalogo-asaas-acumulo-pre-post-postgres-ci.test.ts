@@ -113,7 +113,8 @@ Deno.test("COB06 integracao real: GET mock + gate PostgreSQL persistido nunca li
   let erroAutorizacao = "";
   try {
     await postarPixAcumuloSandboxCandidatoSomenteCi(
-      livro, "2099-01-06", "token-ficticio-ci", reciboReal, mockSemRede);
+      livro, "2099-01-06", "token-ficticio-ci", reciboReal,
+      async () => { throw Error("nao deve executar"); }, mockSemRede);
   } catch (erro) {
     erroAutorizacao = String(erro);
   }
