@@ -35,6 +35,10 @@ jobs:
       - name: Validate the audited migration mapping and fail-closed scenarios
         run: |
           python3 scripts/validacao-pagamentos/test-release-migrations.py
+      - name: Validate frozen COB06 billing-only SQL package without database
+        run: |
+          node scripts/validacao-pagamentos/asaas-cob06-validar-billing-only.cjs
+          node --test tests/asaas-cob06-billing-only-lock.test.cjs
       - name: Prepare disposable offline migration plan only
         run: |
           set -euo pipefail
