@@ -24,7 +24,9 @@ test("COB06: cobrancas produtivas dependem de worker ativo, chave e token dedica
 });
 
 test("COB06: leitura de readiness nao executa cron, DML, HTTP ou le segredos",()=>{
- const body=check.replace(/--[^\n]*/g,"").replace(/'(?:[^']|'')*'/g,"''");
+ const body=check
+  .replace(/\$worker_esperado\$[\s\S]*?\$worker_esperado\$/g,"''")
+  .replace(/--[^\n]*/g,"").replace(/'(?:[^']|'')*'/g,"''");
  assert.doesNotMatch(body,/\b(?:INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|TRUNCATE|GRANT|REVOKE|CALL)\b/i);
  assert.doesNotMatch(body,/\bcron\.schedule|net\.http_post|decrypted_secret\b/i);
  assert.match(check,/COUNT|count\(\*\)/);
@@ -58,4 +60,24 @@ test("COB06: cron candidato nao entra automaticamente no pacote SQL de 9 arquivo
  assert.equal(lock.files.length,9);
  assert.ok(!lock.files.some(x=>x.path.includes("worker_webhook_producao")));
  assert.ok(!lock.files.some(x=>x.path.includes("cron_worker")));
+});
+
+test("COB06: readiness do Cron exige igualdade integral com comando autorizado",()=>{
+ const origem=cron.match(/\$worker_prod\$([\s\S]*?)\$worker_prod\$/);
+ const preflight=check.match(/\$worker_esperado\$([\s\S]*?)\$worker_esperado\$/);
+ assert.ok(origem&&preflight,"comandos SQL completos presentes");
+ assert.equal(origem[1].trim(),preflight[1].trim(),
+  "fonte e preflight nao podem divergir nem por um detalhe do worker");
+ assert.match(check,/pg_catalog\.btrim\(command\)=pg_catalog\.btrim\(\$worker_esperado\$/);
+ assert.match(check,/j\.cadastrados=1 AND j\.comandos_aprovados=1/);
+ assert.match(check,/AND worker_cron_pronto AND worker_comando_aprovado/);
+ assert.ok(!preflight[1].includes("ASAAS_API_KEY"));
+ const alterado=origem[1].replace("timeout_milliseconds := 12000",
+  "timeout_milliseconds := 18000");
+ assert.notEqual(alterado.trim(),preflight[1].trim(),
+  "mudanca de operacao deve reprovar o comando, ainda que o job tenha o nome certo");
+ const troca=origem[1].replace("x-guia-asaas-worker-token",
+  "x-guia-token-outro");
+ assert.notEqual(troca.trim(),preflight[1].trim(),
+  "trocar header de autenticacao nao pode passar na auditoria");
 });
