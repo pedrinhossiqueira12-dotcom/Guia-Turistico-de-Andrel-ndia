@@ -46,7 +46,7 @@ test("COB06: worker candidato PROD nao replica URL ou segredo STAGING",()=>{
  assert.match(cron,/timeout_milliseconds := 12000/);
  assert.match(cron,/WHERE jobname='guia-asaas-reconciliar-webhook'/);
  assert.match(cron,/RAISE EXCEPTION 'COB06_WORKER_PROD: agendamento existente/);
- assert.match(cron,/R[AISE EXCEPTION\s\S]*?registros Vault ausentes/);
+ assert.match(cron,/RAISE EXCEPTION[\s\S]*?registros Vault ausentes/);
  assert.doesNotMatch(cron,/\bASAAS_API_KEY\b|\bASAAS_WEBHOOK_TOKEN\b|\bSUPABASE_SERVICE_ROLE_KEY\b/);
  assert.doesNotMatch(cron,/\/transfers|\/payments\/[^']*\/receive/);
  assert.ok(cron.indexOf("$preflight_prod_worker$;") < cron.indexOf("SELECT cron.schedule("));
