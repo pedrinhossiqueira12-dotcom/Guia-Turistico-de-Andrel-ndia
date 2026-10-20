@@ -259,6 +259,40 @@ async function auditarDuplicidadeComTrilhaQA(lote: string) {
   });
 }
 
+// Status administrativo: somente banco local, sem Asaas ou novo GET.
+// A ausencia de inicio local NUNCA libera o GET historico de 19/10.
+async function consultarEstadoGetQa(lote: string) {
+  const esperado = await conferirLoteNoBanco(lote);
+  const estado = await rpc("catalogo_asaas_consultar_estado_get_qa_sem_pix",
+    { p_lote: lote });
+  if (estado.ok !== true || estado.lote_id !== lote ||
+      !["get_historico_sem_prova", "evidencia_local_registrada",
+        "get_iniciado_sem_evidencia", "sem_get_registrado"].includes(texto(estado.estado)) ||
+      typeof estado.get_iniciado !== "boolean" ||
+      typeof estado.evidencia_get_persistida !== "boolean" ||
+      typeof estado.get_historico_sem_prova !== "boolean" ||
+      estado.prova_get_externa !== false ||
+      estado.pode_consultar_asaas !== false ||
+      estado.pode_repetir_get !== false || estado.post_executado !== false ||
+      estado.pode_emitir_pix !== false || estado.pode_quitar !== false ||
+      estado.pode_estornar !== false ||
+      estado.pode_liberar_motoboy !== false ||
+      estado.hold_obrigatorio !== true ||
+      esperado.loteId !== lote) {
+    return recusar("Estado de auditoria indisponivel ou inconsistente. HOLD.", 409);
+  }
+  return resposta({
+    success: true, lote_id: lote, estado: estado.estado,
+    get_iniciado: estado.get_iniciado,
+    evidencia_get_persistida: estado.evidencia_get_persistida,
+    get_historico_sem_prova: estado.get_historico_sem_prova,
+    banco_consultado: true, asaas_consultado: false, pix_emitido: false,
+    pode_consultar_asaas: false, pode_repetir_get: false,
+    pode_emitir_pix: false, pode_quitar: false, pode_estornar: false,
+    pode_liberar_motoboy: false, hold_obrigatorio: true,
+  });
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: HEADERS });
   try {
@@ -282,6 +316,14 @@ Deno.serve(async (req: Request) => {
       return recusar("Payload invalido.", 400);
     }
     const entrada = body as Record<string, unknown>;
+    if (entrada.acao === "consultar_estado_get_qa_sem_pix_admin") {
+      // Nao exige flags de GET/persistencia: esta acao nao abre rede bancaria.
+      if (URL_SUPABASE !== STAGING_URL || !ATIVO || !SANDBOX) {
+        return recusar("Consulta QA inativa. HOLD.");
+      }
+      await exigirAdmin(req);
+      return await consultarEstadoGetQa(texto(entrada.lote_id));
+    }
     const somenteLeitura = entrada.acao ===
       "auditar_duplicidade_acumulo_sandbox_admin";
     if (!somenteLeitura) {
