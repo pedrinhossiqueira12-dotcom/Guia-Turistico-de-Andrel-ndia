@@ -2234,6 +2234,11 @@ async function webhook(request:Request){
   if(!finished)await reader.cancel().catch(()=>{});
   reader.releaseLock();
  }
+ // Divergencia entre bytes recebidos e Content-Length torna o evento
+ // ambiguo: nao persistir nem confirmar o recebimento ao Asaas.
+ // Se o header estiver ausente (chunked), o limite de 64 KiB ainda vale.
+ if(lengthHeader!==null && received!==Number(lengthHeader))
+  throw new Failure("Tamanho de Webhook divergente; entrega nao confirmada.",400);
  const bytes=new Uint8Array(received);
  let offset=0;
  for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.byteLength;}
