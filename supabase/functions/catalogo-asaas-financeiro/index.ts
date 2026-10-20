@@ -75,6 +75,13 @@ function enabled(kind:"billing"|"payouts"){
    throw new Failure("Integração Asaas ainda não ativada. Nenhum dinheiro foi movimentado.",503);
  if(ENVIRONMENT==="production" && kind==="billing" && !PRODUCTION_BILLING_APPROVED)
    throw new Failure("Cobranças reais ainda não autorizadas. Produção permanece bloqueada.",503);
+ // A inbox responde ACK 200 antes de conciliar. Sem token/worker
+ // independente, eventos podem ficar pendentes sem reconciliação posterior.
+ // Nao habilitar Pix produtivo se o caminho de recuperacao nao estiver pronto.
+ if(ENVIRONMENT==="production" && kind==="billing" &&
+    (!WEBHOOK_WORKER_ON || WEBHOOK_WORKER_TOKEN.length<48 ||
+     WEBHOOK_TOKEN.length<32))
+   throw new Failure("Recuperação de webhooks Asaas não configurada em produção. Cobranças bloqueadas.",503);
 }
 function check(ok:unknown,msg:string,status=409):asserts ok {if(!ok)throw new Failure(msg,status);}
 async function auth(req:Request){
