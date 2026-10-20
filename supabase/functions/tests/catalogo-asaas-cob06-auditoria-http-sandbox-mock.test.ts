@@ -342,7 +342,7 @@ Deno.test("COB06 estado QA: sessao alheia e falhas nao alcancam banco ou Asaas",
     "STATUS_ADM_ACESSIVEL_A_INTRUSO");
   reset(); consultaEstadoQa = "rpc_ausente";
   const ausente = await chamar(acaoEstado);
-  assert(ausente.http === 503 && consultasEstadoQa === 1 &&
+  assert(ausente.http === 503 && Number(consultasEstadoQa) === 1 &&
     consultasListagem === 0 && gravacoesEvidenciaGet === 0 &&
     ausente.body.hold_obrigatorio === true, "RPC_AUSENTE_NAO_FALHOU_FECHADO");
   reset(); consultaEstadoQa = "inconsistente";
