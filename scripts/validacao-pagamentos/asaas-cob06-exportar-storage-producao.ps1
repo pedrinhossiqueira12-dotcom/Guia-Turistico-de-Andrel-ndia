@@ -61,8 +61,9 @@ $ConfigFile=Join-Path $Workspace 'supabase\config.toml'
 Exigir (Test-Path -LiteralPath $RefFile -PathType Leaf) 'PROJETO_NAO_VINCULADO'
 Exigir (Test-Path -LiteralPath $ConfigFile -PathType Leaf) 'PROJETO_SEM_CONFIGURACAO'
 Exigir ((Get-Content -LiteralPath $RefFile -Raw).Trim() -ceq $ProjectRef) 'PROJETO_INCORRETO'
-Exigir ([bool](Select-String -LiteralPath $ConfigFile
- -Pattern ('^project_id\s*=\s*"' + $ProjectRef + '"\s*$') -Quiet)) 'CONFIG_NAO_PRODUCAO'
+# O project_id no config.toml e nome do projeto LOCAL; a identidade
+# remota efetiva da CLI vinculada e .temp/project-ref, validada acima.
+# Nao exigir que project_id (apelido local) seja igual ao ref remoto.
 Exigir (-not (Test-Path -LiteralPath (Join-Path $HOME '.supabase\access-token') -PathType Leaf)) 'TOKEN_TEXTO_CLARO'
 
 Exigir ([bool](Get-Command supabase -ErrorAction SilentlyContinue)) 'CLI_NAO_INSTALADA'
@@ -88,6 +89,14 @@ $Nome='storage-cob06-'+(Get-Date).ToUniversalTime().ToString('yyyyMMddTHHmmssZ')
  '-'+[guid]::NewGuid().ToString('N').Substring(0,8)
 $Raiz=Join-Path $DestinoSeguro $Nome
 $Dados=Join-Path $Raiz 'files'
+# Dados pessoais jamais podem ser gravados dentro de repositorio Git,
+# mesmo que o destino seja fisicamente criptografado.
+$cursor=Get-Item -LiteralPath $DestinoSeguro
+while ($null -ne $cursor) {
+ Exigir (-not (Test-Path -LiteralPath (Join-Path $cursor.FullName '.git')))
+  'DESTINO_SOB_REPOSITORIO_GIT'
+ $cursor=$cursor.Parent
+}
 Exigir (-not (Test-Path -LiteralPath $Raiz)) 'DESTINO_EXISTENTE'
 New-Item -ItemType Directory -Path $Dados -Force | Out-Null
 Set-Content -LiteralPath (Join-Path $Raiz 'ESTADO_INCOMPLETO.txt') -Value @(
@@ -132,7 +141,6 @@ try {
  Exigir ($Resultado.Count -eq 128) 'CONTAGEM_FINAL_DIVERGENTE'
  $Resultado|Export-Csv -LiteralPath (Join-Path $Raiz 'sha256-storage.csv') -Encoding UTF8 -NoTypeInformation
  # Selo de sucesso e criado somente quando todos os bytes do snapshot batem.
- Remove-Item -LiteralPath (Join-Path $Raiz 'ESTADO_INCOMPLETO.txt') -Force
  Set-Content -LiteralPath (Join-Path $Raiz 'EXPORTACAO_STORAGE_CONFERIDA.txt') -Value @(
   'Projeto conferido: xdmbkflufsfqziixzpxc',
   'Snapshot de metadados em: 2026-10-20',
@@ -140,6 +148,7 @@ try {
   'Hashes individuais: sha256-storage.csv',
   'LIMITE: nao comprova copia externa, restore, segredo, Edge ou consistencia atomica.'
  ) -Encoding UTF8
+ Remove-Item -LiteralPath (Join-Path $Raiz 'ESTADO_INCOMPLETO.txt') -Force
  Write-Host 'COB06_STORAGE_LOCAL_CONFERIDO: 5 buckets, 128 arquivos; SHA256 local registrado.'
  Write-Host 'ARQUIVOS PRIVADOS NA UNIDADE CRIPTOGRAFADA. Nao enviar ao GitHub nem chat.'
  Write-Host 'Ainda falta copia externa independente e teste de recuperacao.'
