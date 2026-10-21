@@ -8,7 +8,10 @@ async function ae(e, a, administrador) {
   // Somente o administrador sincroniza GitHub; nao impedir que o dono
   // solicite encerramento, pois essa operacao nao escreve na vitrine.
   if (administrador) {
-    try { cob06DestinoGitHub(); } catch {
+    try {
+      cob06DestinoGitHub();
+      if (!I) throw new Error("Credencial GitHub nao configurada.");
+    } catch {
       return t({sucesso:false,arquivado:false,
         erro:"Destino GitHub nao autorizado para este ambiente. HOLD."},503);
     }
