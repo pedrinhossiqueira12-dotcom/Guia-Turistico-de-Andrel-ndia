@@ -79,7 +79,7 @@ function cenario(opts={}){
    throw Error("Unexpected RPC: "+name);
   }
  };
- const ctx={g:db,R:admin,crypto:webcrypto,TextEncoder,TextDecoder,
+ const ctx={g:db,R:admin,I:opts.missingGithubToken?"":"token-mock-inerte",crypto:webcrypto,TextEncoder,TextDecoder,
  cob06DestinoGitHub:()=>{if(opts.invalidGithubTarget)throw Error("Destino GitHub invalido");return "qa/fixture";},
  Deno:{env:{get:n=>n==="WHATSAPP_APP_SECRET"?(opts.appSecret||""):""}},T:{"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"authorization,content-type"},
  F:"token-de-verificacao-local",Request,Response,URL,console:{log(){},error(){}},
@@ -128,6 +128,20 @@ function cenario(opts={}){
   setFailConfirmedRead(v){opts.failConfirmedRead=v}};
 }
 const noWrites=c=>assert.equal(c.calls.filter(x=>x==="github:put").length,0);
+test("HTTP real: sem token GitHub, admin nao arquiva nem modifica vitrine",async()=>{
+ const admin=cenario({missingGithubToken:true,debtClear:true});
+ const r=await admin.call("excluir_comercio","admin-jwt");
+ assert.equal(r.status,503);
+ assert.equal(r.data.sucesso,false);
+ assert.equal(admin.calls.filter(v=>v.startsWith("db.rpc:")).length,0);
+ noWrites(admin);
+ const dono=cenario({missingGithubToken:true});
+ const pedido=await dono.call("excluir_meu_comercio","owner-jwt");
+ assert.equal(pedido.status,200);
+ assert.ok(dono.calls.includes("db.rpc:catalogo_solicitar_encerramento_financeiro"));
+ noWrites(dono);
+});
+
 test("HTTP real: GitHub indevido so bloqueia finalizacao admin, antes da RPC",async()=>{
  const dono=cenario({invalidGithubTarget:true});
  const pedido=await dono.call("excluir_meu_comercio","owner-jwt");
