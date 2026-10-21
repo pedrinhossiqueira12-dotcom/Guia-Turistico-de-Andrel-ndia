@@ -874,12 +874,12 @@ async function cadastrarUsuario() {
    */
 
   if (
-    senha.length < 6
+    senha.length < 12
   ) {
 
     mostrarErroAuth(
       erro,
-      "A senha precisa ter pelo menos 6 caracteres."
+      "Para criar uma conta, use uma senha de pelo menos 12 caracteres."
     );
 
     senhaInput.focus();
