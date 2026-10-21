@@ -481,32 +481,39 @@
   }
 
   let consultaFaturaSeq = 0;
-  // Preflight somente leitura: uma fatura abaixo de R$ 5 nao deve induzir
-  // uma tentativa de POST, nem dar a entender que Pix acumulado ja existe.
+  let faturaAptaParaEmissao = false;
+  let emissaoFaturaEmAndamento = false;
+  // Preflight read-only antes de qualquer emissao: nao criar Pix se a
+  // competencia nao possui fatura elegivel ou se existe cobranca/reserva.
   async function atualizarPreflightFatura(){
     const competencia=$("competenciaOffline")?.value||"";
     const botao=$("gerarPixFatura");
     const numero=++consultaFaturaSeq;
+    faturaAptaParaEmissao=false;
     if(!botao)return;
-    if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(competencia)){
-      botao.disabled=false;
-      return;
-    }
     botao.disabled=true;
+    if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(competencia))return;
     try{
       const dado=await chamarFaturaPix({acao:"obter_fatura",competencia});
       if(numero!==consultaFaturaSeq||$("competenciaOffline")?.value!==competencia)return;
-      const pequena=dado.fatura_abaixo_minimo_asaas===true;
-      botao.disabled=pequena;
-      if(pequena)renderizarPixFatura(dado);
-      else if(!dado.fatura){
-        $("faturaPixResultado").textContent="Ainda nao ha fatura fechada neste mes.";
-      }
+      const fatura=dado.fatura;
+      const total=Number(fatura?.total_comissao_centavos);
+      faturaAptaParaEmissao=Boolean(fatura&&
+        ["faturado","vencido","bloqueado"].includes(String(fatura.status))&&
+        Number.isSafeInteger(total)&&total>=500&&
+        dado.fatura_abaixo_minimo_asaas!==true&&
+        !dado.cobranca_status&&dado.provedor!=="mercadopago");
+      botao.disabled=!faturaAptaParaEmissao||emissaoFaturaEmAndamento;
+      if(dado.fatura_abaixo_minimo_asaas===true||dado.cobranca_status||
+         dado.provedor==="mercadopago")renderizarPixFatura(dado);
+      else if(!fatura)$("faturaPixResultado").textContent=
+        "Ainda nao ha fatura fechada neste mes.";
     }catch(erro){
       if(numero!==consultaFaturaSeq||$("competenciaOffline")?.value!==competencia)return;
-      // Sem preflight validado nao induzir emissao bancaria por um botao
-      // desatualizado. A consulta pode ser repetida ao trocar o mes.
-      $("faturaPixResultado").textContent=erro.message||"Nao foi possivel verificar o limite da fatura.";
+      faturaAptaParaEmissao=false;
+      botao.disabled=true;
+      $("faturaPixResultado").textContent=
+        erro.message||"Nao foi possivel verificar a fatura. Nenhum Pix foi solicitado.";
     }
   }
 
@@ -551,9 +558,32 @@
   }
 
   async function gerarPixFatura() {
-    $("faturaPixResultado").innerHTML = '<p class="form-feedback">Solicitando o Pix da fatura…</p>';
-    try { renderizarPixFatura(await chamarFaturaPix({ acao: "criar_cobranca", competencia: competenciaDaFatura(), nome_pagador: $("faturaAsaasNomePagador")?.value || "", documento: $("faturaAsaasDocumento")?.value || "" })); }
-    catch (error) { $("faturaPixResultado").innerHTML = `<p class="form-feedback">${escapar(error.message || "Não foi possível gerar o Pix da fatura.")}</p>`; }
+    if(emissaoFaturaEmAndamento)return;
+    if(!faturaAptaParaEmissao){
+      $("faturaPixResultado").textContent=
+        "Consulte uma fatura fechada e elegivel antes de gerar Pix.";
+      return;
+    }
+    const competencia=competenciaDaFatura();
+    emissaoFaturaEmAndamento=true;
+    faturaAptaParaEmissao=false;
+    $("gerarPixFatura").disabled=true;
+    $("faturaPixResultado").textContent="Solicitando o Pix da fatura…";
+    try {
+      renderizarPixFatura(await chamarFaturaPix({
+        acao:"criar_cobranca",competencia,
+        nome_pagador:$("faturaAsaasNomePagador")?.value||"",
+        documento:$("faturaAsaasDocumento")?.value||""
+      }));
+    } catch(error) {
+      $("faturaPixResultado").textContent=
+        error.message||"Nao foi possivel gerar o Pix da fatura.";
+    } finally {
+      emissaoFaturaEmAndamento=false;
+      // Exigir nova leitura do banco inclusive apos timeout ou resposta incerta.
+      // A API garante a idempotencia; o painel nunca tenta POST automatico.
+      await atualizarPreflightFatura();
+    }
   }
 
   async function consultarPixFatura() {
@@ -579,21 +609,36 @@
     }finally{if(botao)botao.disabled=false;}
   }
   async function regularizarFaturaBloqueada(acao){
+    // Um unico POST de emissao por painel, incluindo a tela de loja bloqueada.
+    if(acao==="criar_cobranca"&&emissaoFaturaEmAndamento)return;
     const competencia=$("competenciaFaturaBloqueada")?.value||"";
     if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(competencia)){
-      $("resultadoFaturaBloqueada").textContent="Escolha o mês da fatura pendente.";
+      $("resultadoFaturaBloqueada").textContent="Escolha o mes da fatura pendente.";
       return;
     }
-    $("resultadoFaturaBloqueada").textContent="Consultando cobrança…";
+    const emitir=acao==="criar_cobranca";
+    const botao=$("gerarFaturaBloqueada");
+    if(emitir){
+      emissaoFaturaEmAndamento=true;
+      if(botao)botao.disabled=true;
+    }
+    $("resultadoFaturaBloqueada").textContent="Consultando cobranca…";
     try{
       const dados=await chamarFaturaPix({acao,competencia,
         nome_pagador:$("nomeFaturaBloqueada")?.value||"",
         documento:$("documentoFaturaBloqueada")?.value||""});
       renderizarPixFatura(dados,"resultadoFaturaBloqueada");
       if(dados.cobranca_status==="pago")await entrarPainel();
-    }catch(erro){$("resultadoFaturaBloqueada").textContent=erro.message||"Não foi possível consultar a fatura.";}
+    }catch(erro){
+      $("resultadoFaturaBloqueada").textContent=
+        erro.message||"Nao foi possivel consultar a fatura.";
+    }finally{
+      if(emitir){
+        emissaoFaturaEmAndamento=false;
+        if(botao)botao.disabled=false;
+      }
+    }
   }
-
   async function carregarDadosPainel() {
     const supabase = getClient();
     const [{ data: cfg, error: erroCfg }, { data: cats, error: erroCats }, { data: prods, error: erroProds }] = await Promise.all([
