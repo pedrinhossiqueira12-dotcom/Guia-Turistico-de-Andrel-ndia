@@ -2,7 +2,100 @@
 
 **Atualização efetiva: 21/10/2026.** Os sete dumps SQL originais e os 128 objetos físicos Storage já foram exportados e conferidos pelo operador; o pacote `.7z` com criptografia AES-256 no disco E: foi testado mediante extração em D: criptografado. **143/143 arquivos** extraídos conferidos por SHA-256 com seus originais, com **128 objetos e 133855024 bytes de Storage**. O disco E: é um segundo disco físico. **Em 21/10/2026, o operador declarou: `Backup guardado fora do computador`.** Essa declaração é registrada como confirmação operacional de guarda externa **sob a condição de que a mídia que contém o `.7z` esteja de fato fisicamente fora do computador** (não apenas em E: ainda conectado). A confirmação é declaratória: não houve verificação física independente, nem confirmação sobre guarda separada da senha. Foi efetuado ensaio anterior do SQL no clone isolado com rollback, mas **não** uma restauração integral de serviços externos/Edge/configurações. PR #39 Draft e COB-06 HOLD. Evidência detalhada em [ASAAS_COB06_EVIDENCIA_RECUPERACAO_ARQUIVOS_20261021.md](ASAAS_COB06_EVIDENCIA_RECUPERACAO_ARQUIVOS_20261021.md).
 
-## Preflight do ensaio funcional — preparado, NÃO EXECUTADO (21/10/2026)
+## Ensaio de isolamento sintético autorizado — APROVADO NO ESCOPO (21/10/2026)
+
+Autorização expressa do proprietário nesta sessão: criar e testar somente recursos
+Docker novos e dados sintéticos, sem rede externa, portas publicadas, downloads,
+backups ou restauração real. Git conferido, fetch/fast-forward seguro sem mudanças:
+HEAD de partida `f9b169fdcec4bb154dd9a009586a110b485f3eae`, árvore limpa; PR #39
+aberta/Draft, [CI desse HEAD 39691862706 success](https://github.com/pedrinhossiqueira12-dotcom/Guia-Turistico-de-Andrel-ndia/actions/runs/39691862706).
+Essa autorização supera apenas o gate sintético do preflight abaixo; **não libera
+entrada de dados reais, restauração, downloads nem operações remotas**.
+
+Runner local: `scripts/validacao-pagamentos/asaas-cob06-isolamento-sintetico-local.cjs`.
+Exige argumento explícito `--execute-synthetic`; não executar novamente por
+iniciativa própria, pois cria novos recursos. Usa IDs SHA-256 já locais,
+`--pull=never`, nomes exclusivos e labels do ensaio, nenhum bind mount, nenhuma
+remoção ou chamada Supabase. O PG usa `initdb`/`postgres` diretamente como usuário
+`postgres`, sem entrypoint de bootstrap Supabase e com preload vazio desde o boot.
+Os auxiliares compartilham somente o namespace `none` do PG novo.
+
+### Evidência positiva final
+
+Execução `cob06-sint-20261021232651130-2d81f7`: **35/35 verificações PASS**, zero
+falha no conjunto final. [Evidência técnica sanitizada e IDs completos](COB06_ISOLAMENTO_SINTETICO_20261021.json)
+inclui as quatro tentativas, configurações finais, imagens, rotas e resultados.
+
+| Controle/serviço | Resultado comprovado |
+| --- | --- |
+| Rede | Única interface `lo`, apenas `127.0.0.1` e `::1`; tabela IPv4 sem rotas. IPv6 contém loopback e entradas de rejeição em `lo`, sem interface/rota externa utilizável. Nenhum teste contra endereço ou serviço real. |
+| Restrições Docker | PG `network=none`; auxiliares `container:<ID-PG-novo>`. Todos sem portas publicadas, `privileged=false`, `restart=no`, capabilities removidas, `no-new-privileges` e rootfs somente leitura. Só PGDATA novo montado, mais tmpfs local; nenhum backup/socket Docker/perfil do host. |
+| Listeners internos | PostgreSQL 5432, GoTrue 9999, Mailpit 8025/1025 somente em `127.0.0.1`; zero listener IPv6. Sem conexão ao host ou ponte de rede. |
+| PostgreSQL 17.11 | `shared_preload_libraries` vazio; zero extensões e workers Cron/pg_net; tabela fictícia criada e um registro gravado/lido. TCP entre o helper novo e PG respondeu no loopback compartilhado. Não há dados ou funções financeiras nesse banco. |
+| GoTrue v2.197.0 | `/health` válido; duas contas fictícias distintas, signup 200/200, login 200, refresh 200, logout 204. Claims JWT locais conferidas; não é teste de conta real, MFA, paridade Auth histórica ou validade de JWT após logout. |
+| Mailpit v1.31.3 | API interna HTTP 200. Porta SMTP 1025 observada em loopback; não foi enviada mensagem real nem comprovado envio SMTP ponta a ponta. Version check desabilitado. |
+| Storage/PostgREST/Edge | **Não executados**: PostgREST e runtime Edge ausentes no cache. A imagem Storage API foi usada somente como runtime Node do helper, com entrypoint substituído; isso não comprova funcionamento do serviço Storage. Nenhum download ou alternativa insegura. |
+
+### VHDX e recursos preservados
+
+Confirmados sem alteração: `CustomWslDistroDir=D:\DockerDesktopWSL`, registro WSL
+`docker-desktop` em `D:\DockerDesktopWSL\main`, arquivos Docker
+`D:\DockerDesktopWSL\disk\docker_data.vhdx` (8176795648 bytes na leitura) e
+`D:\DockerDesktopWSL\main\ext4.vhdx` (117440512 bytes). D: permanece BitLocker
+FullyEncrypted/On/100%. Prova por configurações, registro e metadados de arquivos;
+nenhum VHDX foi montado ou teve conteúdo lido. Não foi alterado Docker Desktop.
+
+Conjunto final, **todos parados ao término**:
+
+| Nome (prefixo `cob06-sint-20261021232651130-2d81f7-`) | ID curto | Papel |
+| --- | --- | --- |
+| `pg` | `cdb5eae6f37b` | Banco novo, volume `cob06-sint-20261021232651130-2d81f7-pgdata` |
+| `probe` | `e6d7e8bb6dee` | Harness Node, sem mounts |
+| `mail` | `3cc7f5783c78` | Capturador SMTP local, sem mounts |
+| `auth` | `ac9b2f265fba` | GoTrue com configuração e contas sintéticas, sem mounts |
+
+No total foram criados **12 contêineres e 4 volumes nomeados novos**, contando
+diagnóstico e tentativas intermediárias. Todos preservados, sem remoção; nenhum
+está running/restarting/paused (um helper não iniciado ficou `created`). Nenhuma
+rede Docker foi criada. Grupos anteriores: `cob06-sint-20261021232236578-02acae`,
+`cob06-sint-20261021232349683-552053` e `cob06-sint-20261021232417847-466023`.
+Seus IDs, volumes e estados constam no JSON; não foram usados recursos históricos.
+O helper final terminou com exit 137 após o timeout controlado de parada; os três
+serviços terminaram com exit 0. A evidência de funcionamento foi coletada antes
+da parada; não confundir esse exit do helper com falha de serviço ou OOM.
+
+### Falhas intermediárias e limites
+
+- Primeira verificação `postgres_ready` falhou porque psql procurava outro socket;
+  logs sintéticos confirmaram PG pronto em `/tmp` e `127.0.0.1`. Checker corrigido
+  para TCP explícito, sem reduzir isolamento.
+- Segunda verificação comparava namespace por nome; Docker armazena `container:`
+  seguido do ID. Comparação corrigida para o ID exato do PG novo.
+- GoTrue inicialmente recusou migração com 42501 em `public`. Bootstrap passou
+  a definir `search_path=auth,public` no papel Auth novo, proprietário de `auth`;
+  não foi concedido CREATE em `public` nem privilégio de superusuário.
+- Uma retomada apenas dos recursos sintéticos daquela tentativa foi interrompida
+  porque o comando repetia initdb sobre PGDATA existente. Corrigido para inicializar
+  apenas diretório novo; conjunto final criado separado. Nenhum dado real envolvido.
+- Após a coleta, o runner ganhou recusa explícita de colisão de nome de volume e
+  SIGTERM no helper; são guardas adicionais, não uma nova execução dos serviços.
+  Sintaxe Node e diff conferidos. Não houve nova suíte financeira: código produtivo,
+  SQLs congelados e locks não mudaram. Nenhum teste/hashes histórico foi repetido.
+
+**Próximos bloqueios:** faltam imagens/dependências PostgREST e runtime Edge,
+compatibilidade dos schemas Auth/Storage com o snapshot real, mapeamento de bytes
+Storage e equivalência das fontes/configurações publicadas. A prova de rede vale
+para esta composição sintética; novos serviços ou mounts exigem nova conferência.
+Não iniciar as imagens ausentes nem transferir backups para os volumes deste teste.
+
+**Parada obrigatória antes dos backups:** próxima autorização proposta é somente
+revisar em leitura as cópias locais de trabalho SQL em D: que o operador indicar,
+para fechar o plano de entrada/compatibilidade, sem restaurar nem reconectar E:.
+A restauração real e eventual aquisição de imagens exigem liberações próprias.
+**COB-06 permanece aberta/HOLD.** Nenhum Supabase remoto, banco/provedor financeiro,
+Secret/flag remoto, deploy, merge ou backup privado foi acessado.
+
+## Preflight anterior — plano preparado em 21/10/2026, antes do ensaio sintético
 
 Esta seção é a orientação atual para o próximo ensaio. Registros datados abaixo
 permanecem históricos; não reabrem os 143 hashes, o ensaio dos nove SQLs ou a

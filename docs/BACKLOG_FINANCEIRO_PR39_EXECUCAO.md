@@ -226,6 +226,25 @@ Este documento é a **única fila operacional** do trabalho financeiro do PR #39
 
 ### [ ] COB-06 — Preparar implantação **mínima e segura** no banco/site de produção
 
+**21/10/2026 — ISOLAMENTO SINTÉTICO LOCAL AUTORIZADO E COMPROVADO:** branch
+sincronizada em `f9b169f`, árvore inicialmente limpa e PR #39 Draft. Somente
+imagens locais por IDs SHA-256/`--pull=never`, contêineres/volumes novos, sem
+backups ou restauração. Conjunto final `cob06-sint-20261021232651130-2d81f7`:
+**35/35 PASS**, PG17.11 sem preload/Cron/pg_net e SQL fictício, loopback somente,
+sem rota IPv4 ou rota IPv6 externa utilizável, sem portas publicadas/bind mounts,
+Mailpit HTTP 200, GoTrue com duas contas fictícias, login/refresh/logout válidos.
+Storage API/PostgREST/Edge não foram homologados: faltam imagens, sem downloads.
+VHDX Docker identificado em D: por configuração/registro/metadados, com BitLocker
+On/100%, sem montar arquivos. Ao todo 12 contêineres e quatro volumes novos
+preservados, todos sem execução após coleta; nenhum recurso anterior alterado.
+[Resultados, falhas intermediárias e limites no runbook](ASAAS_COB06_BACKUP_RESTAURACAO_RETOMADA_SEGURA_20261012.md)
+e [IDs completos/evidências sanitizadas](COB06_ISOLAMENTO_SINTETICO_20261021.json).
+Runner local e guardas registrados; sintaxe Node/diff aprovados. Nenhum SQL/hash
+financeiro alterado ou prova histórica repetida. **Parar antes dos backups**:
+próxima fase requer autorização específica para revisão em leitura das cópias
+locais indicadas pelo operador; restauração real e imagens ausentes seguem sem
+autorização. **COB-06 HOLD; COB-07/08/SAQ não iniciadas.**
+
 **21/10/2026 — PREFLIGHT DE RECUPERAÇÃO FUNCIONAL, SEM EXECUÇÃO:** sincronizado
 por fast-forward até `c61daee`, árvore limpa, PR #39 Draft e CI desse HEAD
 `39691216165` success. Inspeção local apenas de metadados confirmou Docker Desktop
