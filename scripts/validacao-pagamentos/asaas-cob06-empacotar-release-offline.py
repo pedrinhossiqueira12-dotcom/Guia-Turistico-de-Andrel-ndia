@@ -18,6 +18,12 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[2]
 LOCK = ROOT / "scripts/validacao-pagamentos/asaas-cob06-billing-only.lock.json"
+AUDIT_LOCK = "scripts/validacao-pagamentos/asaas-cob06-auditoria-review.lock.json"
+AUDIT_SQL = tuple("supabase/production-candidate/cob06-auditoria-" + name + ".sql" for name in (
+    "01-pendencias", "02-emissao", "03-inadimplencia", "04-vitrine", "05-andamento"))
+AUDIT_EDGES = ("supabase/functions/catalogo-fatura-pix/index.ts",
+               "supabase/functions/catalogo-pedidos-offline-admin/index.ts")
+AUDIT_DOC = "docs/COB06_CORTE_SELETIVO_14_SQL_20261021.md"
 SQL = (
     "supabase/production-candidate/01_asaas_cobrancas_inbox_sem_saques.sql",
     "supabase/production-candidate/02_termos_encerramento_sem_saques.sql",
@@ -83,9 +89,9 @@ def read_lock() -> list[str]:
     return list(SQL)
 
 
-def edge_dependencies() -> list[str]:
-    all_paths = {EDGE, WHATSAPP_EDGE}
-    pending = [EDGE, WHATSAPP_EDGE]
+def edge_dependencies(audit: bool = False) -> list[str]:
+    all_paths = {EDGE, WHATSAPP_EDGE, *(AUDIT_EDGES if audit else ())}
+    pending = list(all_paths)
     while pending:
         source = pending.pop()
         text = get(source).decode("utf-8")
@@ -94,7 +100,8 @@ def edge_dependencies() -> list[str]:
             shared_ok = dep.startswith("supabase/functions/_shared/") and \
                         dep.endswith((".ts", ".js", ".mjs"))
             whatsapp_ok = source == WHATSAPP_EDGE and dep == WHATSAPP_HELPER
-            if not (shared_ok or whatsapp_ok):
+            mp_ok = audit and source == AUDIT_EDGES[0] and dep == "supabase/functions/catalogo-fatura-pix/fatura-utils.mjs"
+            if not (shared_ok or whatsapp_ok or mp_ok):
                 raise Blocked(f"COB06_PACOTE_INVALIDO: dependencia Edge nao autorizada {dep}")
             if dep not in all_paths:
                 all_paths.add(dep)
@@ -182,11 +189,29 @@ def check_billing_only_admin_ui() -> None:
         raise Blocked("COB06_PACOTE_INVALIDO: UI administrativa deve sincronizar GitHub e ocultar saques")
 
 
-def inventory() -> dict[str, bytes]:
+def read_audit_lock() -> list[str]:
+    lock = json.loads(get(AUDIT_LOCK))
+    if lock.get("contract") != "COB-06-audit-14-review" or \
+       lock.get("status") != "candidate-never-auto-deploy" or \
+       lock.get("base_lock_sha256") != hashlib.sha256(LOCK.read_bytes()).hexdigest() or \
+       len(lock.get("files", [])) != 5:
+        raise Blocked("COB06_PACOTE_INVALIDO: lock da auditoria incorreto")
+    for entry, expected in zip(lock["files"], AUDIT_SQL):
+        if set(entry) != {"path", "blob_sha1"} or entry["path"] != expected or \
+           gitblob(get(expected)) != entry["blob_sha1"]:
+            raise Blocked("COB06_PACOTE_INVALIDO: hash/ordem candidato auditoria")
+    return list(AUDIT_SQL)
+
+
+def inventory(audit: bool = False) -> dict[str, bytes]:
     paths = read_lock()
+    if audit:
+        paths += read_audit_lock()
+        paths += [AUDIT_LOCK, str(LOCK.relative_to(ROOT)).replace("\\", "/"), AUDIT_DOC,
+                  "docs/COB06_AUDITORIA_CORRECOES_20261021.md"]
     check_edge_security()
     check_whatsapp_security()
-    paths += edge_dependencies()
+    paths += edge_dependencies(audit)
     check_billing_only_admin_ui()
     # A vitrine e o link direto precisam respeitar o tombstone financeiro;
     # o aceite do comerciante precisa dos documentos efetivamente exibidos.
@@ -203,12 +228,12 @@ def inventory() -> dict[str, bytes]:
     return result
 
 
-def document(contents: dict[str, bytes]) -> dict:
+def document(contents: dict[str, bytes], audit: bool = False) -> dict:
     return {
-        "contract": "COB-06-billing-only-review",
+        "contract": "COB-06-audit-14-review" if audit else "COB-06-billing-only-review",
         "status": "CANDIDATE_NEVER_AUTO_DEPLOY",
-        "sql_count": 9,
-        "sql_execution_order": list(SQL),
+        "sql_count": 14 if audit else 9,
+        "sql_execution_order": list(SQL) + (list(AUDIT_SQL) if audit else []),
         "financial_scope": "monthly invoice billing only; transfers, escrow and payouts HOLD",
         "ui_review_groups": {
             "billing_and_closure": list(UI),
@@ -216,7 +241,8 @@ def document(contents: dict[str, bytes]) -> dict:
             "merchant_terms_and_privacy": list(LEGAL_UI),
         },
         "warnings": [
-            "POST-AUDIT HOLD: runtime sources depend on five separate cob06-auditoria SQL candidates, deliberately NOT in the frozen nine-SQL cut; explicit review of a new cut is mandatory",
+            ("AUDIT-14 HOLD: five forward-only candidates included for review after nine immutable SQL; compare real definitions/signatures/ACL before any separately authorized installation; never reapply wrappers"
+             if audit else "POST-AUDIT HOLD: runtime sources depend on five separate cob06-auditoria SQL candidates, deliberately NOT in the frozen nine-SQL cut; explicit review of a new cut is mandatory"),
             "EDGE SOURCE IS MIXED: payout functions exist but MUST remain unreachable in production",
             "UI FILES ARE FULL SOURCE FOR REVIEW; no automatic website overwrite",
             "Public listing and direct-link sources must preserve archived-store filtering through catalogo_status_publicacao",
@@ -237,9 +263,9 @@ def document(contents: dict[str, bytes]) -> dict:
     }
 
 
-def archive_bytes() -> bytes:
-    contents = inventory()
-    manifest = document(contents)
+def archive_bytes(audit: bool = False) -> bytes:
+    contents = inventory(audit)
+    manifest = document(contents, audit)
     serialized = json.dumps(manifest, indent=2, ensure_ascii=False).encode() + b"\n"
     contents["RELEASE-REVIEW-MANIFEST.json"] = serialized
     instructions = (
@@ -256,6 +282,12 @@ def archive_bytes() -> bytes:
         "are REVIEW materials only and cannot enable any Cron or billing.\n"
         "STAGING QA, experimental aggregate-Pix SQL and withdrawals excluded.\n"
     ).encode()
+    if audit:
+        instructions = ("COB-06 AUDIT-14 REVIEW / HOLD - DO NOT DEPLOY\n"
+                        "9 immutable original SQL followed by 5 forward-only candidates.\n"
+                        "Read " + AUDIT_DOC + ". Never reapply renamed wrappers.\n"
+                        "Additional MP and order-admin entrypoints are review sources only.\n"
+                        "No remote SQL, provider call, QA replay or financial operation authorized.\n").encode() + instructions.replace(b"Contains 9 SQL sources in order", b"Contains 14 SQL sources in order")
     contents["REVIEW-FIRST.txt"] = instructions
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as zipf:
@@ -267,8 +299,8 @@ def archive_bytes() -> bytes:
     return buffer.getvalue()
 
 
-def verify_archive(path: Path) -> None:
-    expected = inventory()
+def verify_archive(path: Path, audit: bool = False) -> None:
+    expected = inventory(audit)
     with zipfile.ZipFile(path, "r") as z:
         if z.testzip():
             raise Blocked("COB06_PACOTE_INVALIDO: ZIP corrompido")
@@ -277,31 +309,34 @@ def verify_archive(path: Path) -> None:
            set(all_names) != set(expected) | {"RELEASE-REVIEW-MANIFEST.json", "REVIEW-FIRST.txt"}:
             raise Blocked("COB06_PACOTE_INVALIDO: arquivos extras ou ausentes")
         manifest = json.loads(z.read("RELEASE-REVIEW-MANIFEST.json"))
-        if manifest != document(expected):
+        if manifest != document(expected, audit):
             raise Blocked("COB06_PACOTE_INVALIDO: manifesto inconsistente")
         for name, data in expected.items():
             if z.read(name) != data:
                 raise Blocked(f"COB06_PACOTE_INVALIDO: hash de {name}")
-    print(f"COB06_PACOTE_REVIEW_OK: 9 SQL, {len(expected) - 9} fontes extras, nenhum deploy")
+    count = 14 if audit else 9
+    print(f"COB06_PACOTE_REVIEW_OK: {count} SQL, {len(expected) - count} fontes extras, nenhum deploy")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--profile", choices=("original-9", "audit-14"), default="original-9")
     choice = parser.add_mutually_exclusive_group(required=True)
     choice.add_argument("--check", action="store_true")
     choice.add_argument("--build", type=Path)
     choice.add_argument("--verify", type=Path)
     args = parser.parse_args()
+    audit = args.profile == "audit-14"
     if args.check:
-        result = inventory()
-        print(f"COB06_PACOTE_CANDIDATO_OK: 9 SQL congelados, {len(result) - 9} fontes; SEM DEPLOY")
+        result = inventory(audit)
+        print(f"COB06_PACOTE_CANDIDATO_OK: {'14 SQL (9 congelados + 5 candidatos)' if audit else '9 SQL congelados'}, {len(result) - (14 if audit else 9)} fontes; SEM DEPLOY")
     elif args.build:
-        blob = archive_bytes()
+        blob = archive_bytes(audit)
         args.build.parent.mkdir(parents=True, exist_ok=True)
         args.build.write_bytes(blob)
         print("COB06_PACOTE_GERADO_OFFLINE sha256=" + hashlib.sha256(blob).hexdigest())
     else:
-        verify_archive(args.verify)
+        verify_archive(args.verify, audit)
 
 
 if __name__ == "__main__":

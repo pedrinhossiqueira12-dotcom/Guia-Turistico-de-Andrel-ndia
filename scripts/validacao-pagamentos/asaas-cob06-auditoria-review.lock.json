@@ -1,0 +1,27 @@
+{
+  "contract": "COB-06-audit-14-review",
+  "status": "candidate-never-auto-deploy",
+  "base_lock_sha256": "7c3870f28c525ed2409da0146068e0d5915f954d13767c4c54c9393dab90fe79",
+  "files": [
+    {
+      "path": "supabase/production-candidate/cob06-auditoria-01-pendencias.sql",
+      "blob_sha1": "72a8933aed2e7acb2f19bfdd034d368df85d647b"
+    },
+    {
+      "path": "supabase/production-candidate/cob06-auditoria-02-emissao.sql",
+      "blob_sha1": "97305bffb22c184b10d2cfeaa250dfae76e6c502"
+    },
+    {
+      "path": "supabase/production-candidate/cob06-auditoria-03-inadimplencia.sql",
+      "blob_sha1": "a8941d476ba6602c2503fda8dc2ca0d00c70e6c9"
+    },
+    {
+      "path": "supabase/production-candidate/cob06-auditoria-04-vitrine.sql",
+      "blob_sha1": "194a687d7eff72626aec71e6dc037aa5fa985dc0"
+    },
+    {
+      "path": "supabase/production-candidate/cob06-auditoria-05-andamento.sql",
+      "blob_sha1": "640a984670482e8cc04d654947c2cfd7e7929332"
+    }
+  ]
+}
