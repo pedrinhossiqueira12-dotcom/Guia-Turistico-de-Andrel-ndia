@@ -57,16 +57,18 @@ function cenario(op={}){
 }
 const semGithub=c=>assert.equal(c.chamadas.filter(x=>x.startsWith("github:")).length,0);
 
-test("COB-06: destino GitHub invalido impede RPC de encerramento e de arquivamento",async()=>{
- for(const tipo of ["dono","admin"]){
-  const c=cenario({alvoGitHubInvalido:true});
-  const r=tipo==="dono"?await c.Oe({user:c.uid},{comercio_id:"loja-teste"}):
-    await c.we({admin:c.uid},{comercio_id:"loja-teste"});
-  assert.equal(r.status,503);
-  assert.equal(r.body.sucesso,false);
-  assert.equal(c.chamadas.filter(x=>x.startsWith("rpc:")).length,0);
-  semGithub(c);
- }
+test("COB-06: GitHub indevido bloqueia somente arquivamento administrativo",async()=>{
+ const dono=cenario({alvoGitHubInvalido:true});
+ const pedido=await dono.Oe({user:dono.uid},{comercio_id:"loja-teste"});
+ assert.equal(pedido.status,200,"dono apenas solicita; nao publica vitrine");
+ assert.ok(dono.chamadas.includes("rpc:catalogo_solicitar_encerramento_financeiro"));
+ semGithub(dono);
+ const admin=cenario({alvoGitHubInvalido:true});
+ const fim=await admin.we({admin:admin.uid},{comercio_id:"loja-teste"});
+ assert.equal(fim.status,503);
+ assert.equal(fim.body.sucesso,false);
+ assert.equal(admin.chamadas.filter(x=>x.startsWith("rpc:")).length,0);
+ semGithub(admin);
 });
 
 test("COB-06: dono apenas solicita encerramento de loja devedora, sem retirar fotos",async()=>{
