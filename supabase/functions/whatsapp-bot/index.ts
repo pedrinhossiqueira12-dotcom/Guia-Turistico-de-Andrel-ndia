@@ -5,10 +5,13 @@ import{createClient as se}from"npm:@supabase/supabase-js@2";import{parseStorageO
 // Proprietario somente solicita encerramento; admin somente conclui via RPC no banco.
 // O banco deve ter as migracoes seletivas de cobranca e as guardas transacionais.
 async function ae(e, a, administrador) {
-  // Conferir destino antes de qualquer RPC que possa arquivar no banco.
-  try { cob06DestinoGitHub(); } catch {
-    return t({sucesso:false,arquivado:false,
-      erro:"Destino GitHub nao autorizado para este ambiente. HOLD."},503);
+  // Somente o administrador sincroniza GitHub; nao impedir que o dono
+  // solicite encerramento, pois essa operacao nao escreve na vitrine.
+  if (administrador) {
+    try { cob06DestinoGitHub(); } catch {
+      return t({sucesso:false,arquivado:false,
+        erro:"Destino GitHub nao autorizado para este ambiente. HOLD."},503);
+    }
   }
   const busca = await Y(e);
   if (busca.erro) return t({sucesso:false,erro:"Falha ao verificar titularidade."},503);
