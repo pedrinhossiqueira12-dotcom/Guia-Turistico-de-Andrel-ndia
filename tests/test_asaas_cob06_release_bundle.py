@@ -71,6 +71,7 @@ class ReleaseBundleTest(unittest.TestCase):
         self.assertIn("guia-asaas-reconciliar-webhook", worker)
         self.assertIn("[functions.catalogo-asaas-financeiro]", config)
         self.assertRegex(config, r"(?s)\[functions\.catalogo-asaas-financeiro\]\s*verify_jwt\s*=\s*false")
+        self.assertRegex(config, r"(?s)\[functions\.whatsapp-bot\]\s*verify_jwt\s*=\s*false")
         self.assertNotIn("SELECT cron.schedule(", worker)
         self.assertNotIn("CREATE TABLE", worker)
 
