@@ -17,7 +17,7 @@
 
 1. Isso valida **extração de arquivos cifrados e igualdade com os originais locais**, não uma reconstrução funcional do Supabase/serviço inteiro, nem a autenticidade externa do conteúdo.
 2. O backup SQL de 13/10 e o snapshot Storage de 20/10 não são uma captura transacional única; ainda é necessário projetar consistência e janela de recuperação.
-3. A unidade E: é um segundo **disco físico com barramento SATA segundo enumeração**, distinto do D:. Isso **não comprova se o E: é interno ou removível** nem se foi guardado *fora do computador*. O próprio E: não é criptografado, embora o arquivo `.7z` tenha sido configurado com AES-256. Comprovar que a senha funciona no destino externo e guardá-la separadamente antes de declarar redundância off-host.
+3. A unidade E: é um segundo **disco físico com barramento SATA segundo enumeração**, distinto do D:. **Em 21/10/2026, o operador informou que consegue desconectar fisicamente esse HD.** Isso confirma a possibilidade de guarda separada, mas **ainda não comprova que ele já foi desconectado e guardado fora do computador**. O próprio E: não é criptografado, embora o arquivo `.7z` tenha sido configurado com AES-256. Comprovar que a senha funciona no destino externo e guardá-la separadamente antes de declarar redundância off-host.
 4. Recuperação de Edge Functions publicadas, configurações, integrações, webhooks e segredos continua fora do pacote SQL/Storage; revisar sem exportar segredos para logs ou GitHub.
 5. Manter bloqueadas publicação financeira produtiva, saques Pix, Pix Automático e merge integral da PR #39 até gates específicos COB-06/COB-07.
 
