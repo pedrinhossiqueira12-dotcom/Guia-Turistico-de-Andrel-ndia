@@ -23,7 +23,8 @@ test("COB06: origem e somente PROD explicitamente vinculado",()=>{
  assert.match(ps,/CLI_INCOMPATIVEL/);
  assert.match(ps,/\('ss:\/\/\/'\+\$Bucket\),\$DestinoCli/);
  assert.match(ps,/\$CliArgs=@\('storage','cp','--experimental','--linked','--recursive'/);
- assert.doesNotMatch(ps,/\$args=@\('storage','(?:rm|mv)'/);
+ assert.doesNotMatch(ps,/\$CliArgs=@\('storage','(?:rm|mv)'/);
+ assert.match(ps,/& supabase @CliArgs/);
 });
 
 test("COB06: snapshots por bucket cobrem os 128 objetos e bytes observados",()=>{
