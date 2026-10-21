@@ -9,7 +9,7 @@
 | Produção | `xdmbkflufsfqziixzpxc` | 17.6 | **29**; última `20261008120906` |
 | Staging | `jbttwihctuibchhcyqtl` | diferente histórico | **42**; última `20261012162056` |
 
-A produção **não** tem as seis tabelas de cobrança/termos listadas no gate COB-06, nem os quatro gatilhos de encerramento. Não há Edge `catalogo-asaas-financeiro` produtiva. **Não** copiar histórico de migrações do STAGING para produção, nem executar SQL genérico de `pending-migrations` em lote. A Edge legada `whatsapp-bot` v90 está implantada e sua origem GitHub exata ainda não foi recuperada para revisão.
+Na última leitura remota documentada, a produção **não** tem as seis tabelas de cobrança/termos listadas no gate COB-06, nem os quatro gatilhos de encerramento. Não há Edge `catalogo-asaas-financeiro` produtiva. **Não** copiar histórico de migrações do STAGING para produção, nem executar SQL genérico de `pending-migrations` em lote. A fonte da Edge legada `whatsapp-bot` v90 foi recuperada em 14/10 e incorporada à PR com correções candidatas posteriores; a fonte da branch diverge da versão publicada. A recuperação da fonte está comprovada, mas não equivale a aprovação para substituí-la em produção. Não houve nova consulta remota nesta revisão documental.
 
 ## Alerta comprovado: restauração física pode disparar jobs produtivos
 
@@ -59,14 +59,19 @@ No job `All financial migrations except remote scheduling (disposable PostgreSQL
 
 ## Itens para aceite da COB-06
 
-- [x] Plano e teste de dump/recover de **clone sintético** no GitHub Actions; o workflow [38295567490](https://github.com/pedrinhossiqueira12-dotcom/Guia-Turistico-de-Andrel-ndia/actions/runs/38295567490) terminou **success (12/12 jobs)**, incluindo a etapa COB-06 de snapshot e restauração em banco descartável.
-- [x] Manifesto seletivo e gates read-only no STAGING / diagnóstico PROD.
-- [x] Teste em clone sintético com fatura antiga MP e bloqueio de exclusão de devedor.
-- [ ] Confirmar backup **real** de produção / retenção / PITR com operador e ensaiar restauração em isolamento aprovado.
-- [ ] Aprovar equivalência e adaptar o pacote seletivo ao esquema efetivo de produção.
-- [ ] Auditar e versionar fonte da Edge `whatsapp-bot` v90 para compatibilidade; testar HTTP e edição de JSON com dados fictícios.
-- [ ] Auditar demais rotas da Edge financeira mista e privilégios; preparar pacote de UI limitado à cobrança.
-- [ ] Definir critérios de operação, intervenção e monitoramento, com aprovação explícita futura COB-07.
+**Checklist reconciliado em 21/10/2026 com as evidências posteriores deste documento e da backlog.** Itens marcados comprovam somente o escopo indicado; não encerram a COB-06. A [CI do HEAD `65d7583`, run 39644316130](https://github.com/pedrinhossiqueira12-dotcom/Guia-Turistico-de-Andrel-ndia/actions/runs/39644316130), foi conferida com **12/12 jobs aprovados**, sem necessidade de reexecução.
+
+- [x] Plano e teste de dump/recover de **clone sintético** no GitHub Actions, com cobrança MP preservada e ausência de estruturas de saque no pacote seletivo.
+- [x] Aplicação e reversão das nove fontes no **clone do dump real**, incluindo guardas funcionais e arquivamento sem catálogo; evidências aceitas de 15/10. Não repetir o ensaio do operador.
+- [x] Recuperação dos arquivos SQL/Storage criptografados: 143/143 SHA-256; comparação offline de 128 objetos com metadata do clone. Snapshots SQL e Storage não são atômicos.
+- [x] Fonte `whatsapp-bot` recuperada/versionada e testes HTTP com Auth, banco e GitHub fictícios, incluindo dívida, autorização, assinatura e recuperação de falha de sincronização. Não são chamadas ao serviço publicado.
+- [x] Pacote de revisão de cobrança com nove SQL, guardas de rotas produtivas, privilégios, painéis, filtros da vitrine, termos e privacidade; CI cobre o ZIP e adulterações. Isto não substitui revisão independente nem validação jurídica.
+- [ ] Comprovar guarda off-host da cópia externa criptografada e recuperação funcional completa de Auth/Storage/Edge/configurações. Não solicitar repetição dos hashes, extração ou restore SQL já aprovados; não acessar backups privados automaticamente.
+- [ ] Aprovar em revisão independente o corte seletivo, assinaturas/privilégios, diferenças frente às versões publicadas e requisitos de configuração do ambiente. A compatibilidade SQL local aceita não prova equivalência integral dos serviços.
+- [ ] Homologar operacionalmente a cobrança acumulada em cenário legítimo independente, com prova bancária e conciliação, sob autorização específica. O lote QA histórico permanece bloqueado; CI simulada não substitui esse gate.
+- [ ] Aprovar responsáveis, janela, monitoramento, contingência, condições comerciais/cadastrais e revisão jurídica; somente então obter autorização específica COB-07. Implantação, Secrets/flags e primeira fatura real continuam fora da autorização atual.
+
+**Resultado da revisão local:** nenhuma nova falha de código ou lacuna de teste executável foi identificada nos itens acima. Encerrar esta rodada após registrar a reconciliação documental; os itens abertos exigem revisão independente, participação do operador ou homologação/autorização operacional. Os inventários remotos datados abaixo são históricos e não foram reconsultados.
 
 **Nenhuma alteração realizada no Supabase de produção como parte deste procedimento.**
 
