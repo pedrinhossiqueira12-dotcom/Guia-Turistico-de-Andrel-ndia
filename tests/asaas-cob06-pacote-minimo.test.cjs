@@ -61,7 +61,8 @@ test("COB-06: gate complementar é somente leitura e monitora privilégios e gua
  for(const need of ["has_table_privilege","has_function_privilege",
   "catalogo_historico_guard_delete","catalogo_publicacao_sem_divida_guard",
   "catalogo_encerramento_sem_reabertura","catalogo_encerramento_sem_republicacao",
-  "catalogo_asaas_webhook_receber","catalogo_finalizar_encerramento_financeiro"])
+  "catalogo_asaas_webhook_receber","catalogo_finalizar_encerramento_financeiro",
+  "catalogo_arquivar_sem_catalogo_admin"])
   assert.ok(gate.includes(need),need);
  assert.match(gate,/to_regprocedure\('public\.'/);
  assert.match(gate,/rpcs_sobrecargas_inesperadas/);
