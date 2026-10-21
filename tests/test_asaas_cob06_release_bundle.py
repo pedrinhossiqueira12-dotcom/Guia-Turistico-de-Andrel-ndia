@@ -1,5 +1,6 @@
 """COB-06: prove candidate archive is content-addressed and not a deploy."""
 import pathlib
+import json
 import subprocess
 import sys
 import tempfile
@@ -45,6 +46,14 @@ class ReleaseBundleTest(unittest.TestCase):
                 self.assertIn("supabase/functions/whatsapp-bot/storage-path-utils.mjs", names)
                 self.assertIn("pages/admin-encerramentos.html", names)
                 self.assertIn("js/admin-encerramentos.js", names)
+                for dependency in ("js/index.js", "js/local.js",
+                                   "pages/termos-comercios.html", "pages/politica-privacidade.html"):
+                    self.assertIn(dependency, names)
+                manifest = json.loads(z.read("RELEASE-REVIEW-MANIFEST.json"))
+                groups = manifest["ui_review_groups"]
+                self.assertEqual(groups["publication_and_direct_link"], ["js/index.js", "js/local.js"])
+                self.assertEqual(groups["merchant_terms_and_privacy"],
+                                 ["pages/termos-comercios.html", "pages/politica-privacidade.html"])
                 self.assertIn("supabase/config.toml", names)
                 self.assertIn("scripts/validacao-pagamentos/asaas-cob06-worker-producao-readonly.sql", names)
                 self.assertNotIn("supabase/production-candidate/cob06_worker_webhook_producao_nao_implantar.sql", names)
@@ -119,6 +128,28 @@ class ReleaseBundleTest(unittest.TestCase):
             check = run("--verify", str(bad))
             self.assertNotEqual(check.returncode, 0)
             self.assertIn("extras ou ausentes", check.stderr)
+
+    def test_publication_and_legal_dependencies_cannot_be_removed_or_tampered(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            good = pathlib.Path(tmp) / "good.zip"
+            self.assertEqual(run("--build", str(good)).returncode, 0)
+            for dependency in ("js/index.js", "js/local.js",
+                               "pages/termos-comercios.html", "pages/politica-privacidade.html"):
+                for omit in (False, True):
+                    with self.subTest(dependency=dependency, omit=omit):
+                        bad = pathlib.Path(tmp) / "bad.zip"
+                        with zipfile.ZipFile(good) as original, zipfile.ZipFile(bad, "w") as altered:
+                            for info in original.infolist():
+                                if omit and info.filename == dependency:
+                                    continue
+                                content = original.read(info.filename)
+                                if info.filename == dependency:
+                                    content += b"\nmodified\n"
+                                altered.writestr(info, content)
+                        checked = run("--verify", str(bad))
+                        self.assertNotEqual(checked.returncode, 0)
+                        self.assertIn("extras ou ausentes" if omit else "hash de " + dependency,
+                                      checked.stderr)
 
 
 if __name__ == "__main__":

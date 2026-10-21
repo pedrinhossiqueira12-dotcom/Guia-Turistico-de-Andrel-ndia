@@ -34,6 +34,8 @@ WHATSAPP_EDGE = "supabase/functions/whatsapp-bot/index.ts"
 WHATSAPP_HELPER = "supabase/functions/whatsapp-bot/storage-path-utils.mjs"
 UI = ("pages/catalogo-admin.html", "js/catalogo-admin.js",
       "pages/admin-encerramentos.html", "js/admin-encerramentos.js")
+PUBLICATION_UI = ("js/index.js", "js/local.js")
+LEGAL_UI = ("pages/termos-comercios.html", "pages/politica-privacidade.html")
 # Does not include any staging-only migrations, QA routes or payout modules as entrypoints.
 DOCUMENTATION = (
     "docs/ASAAS_COB06_PACOTE_MINIMO_CANDIDATO_20261012.md",
@@ -186,7 +188,10 @@ def inventory() -> dict[str, bytes]:
     check_whatsapp_security()
     paths += edge_dependencies()
     check_billing_only_admin_ui()
-    paths += list(UI) + list(DOCUMENTATION)
+    # A vitrine e o link direto precisam respeitar o tombstone financeiro;
+    # o aceite do comerciante precisa dos documentos efetivamente exibidos.
+    # Fontes completas para revisao, nunca uma instrucao de sobrescrever o site.
+    paths += list(UI) + list(PUBLICATION_UI) + list(LEGAL_UI) + list(DOCUMENTATION)
     if len(paths) != len(set(paths)):
         raise Blocked("COB06_PACOTE_INVALIDO: arquivo duplicado")
     result = {p: get(p) for p in paths}
@@ -205,9 +210,16 @@ def document(contents: dict[str, bytes]) -> dict:
         "sql_count": 9,
         "sql_execution_order": list(SQL),
         "financial_scope": "monthly invoice billing only; transfers, escrow and payouts HOLD",
+        "ui_review_groups": {
+            "billing_and_closure": list(UI),
+            "publication_and_direct_link": list(PUBLICATION_UI),
+            "merchant_terms_and_privacy": list(LEGAL_UI),
+        },
         "warnings": [
             "EDGE SOURCE IS MIXED: payout functions exist but MUST remain unreachable in production",
             "UI FILES ARE FULL SOURCE FOR REVIEW; no automatic website overwrite",
+            "Public listing and direct-link sources must preserve archived-store filtering through catalogo_status_publicacao",
+            "Merchant terms and privacy are review documents; inclusion does not constitute legal approval",
             "Administrative closures must use whatsapp-bot GitHub synchronization, never direct billing RPC",
             "NO real aggregate Pix: multi-competence billing still HOLD",
             "Do not deploy without real backup/restore, credentials, approval and environment review",
@@ -233,7 +245,9 @@ def archive_bytes() -> bytes:
         "COB-06 BILLING-ONLY / REVIEW CANDIDATE - DO NOT DEPLOY\n"
         "Contains 9 SQL sources in order, mixed Edge source with production\n"
         "billing-only dispatcher, its imports, candidate whatsapp-bot and\n"
-        "companion Storage helper, plus the catalog owner UI.\n"
+        "companion Storage helper, plus the catalog owner UI, archived-store\n"
+        "listing/direct-link sources and merchant terms/privacy documents.\n"
+        "Full public-page sources are for review only, never bulk replacement.\n"
         "This is NOT a ready-to-run migration or an approval to move money.\n"
         "Review the manifest, SQL schema/security, backup/restore, all runtime\n"
         "secrets and the effect on existing production pages independently.\n"

@@ -2,6 +2,14 @@
 
 Data: 12/10/2026. PR #39: **Draft e sem merge**. Status: **preparação e análise concluída parcialmente; sem aceite de release**.
 
+## Corte de revisão da UI atualizado em 21/10/2026
+
+O ZIP de revisão inclui agora, além dos painéis de cobrança e encerramento, `js/index.js` e `js/local.js`: são as fontes existentes que filtram estabelecimentos arquivados via `catalogo_status_publicacao`, inclusive acesso por link direto. Inclui também `pages/termos-comercios.html` e `pages/politica-privacidade.html`, documentos já vinculados ao formulário de aceite. Antes essas quatro dependências não constavam do inventário do artefato, embora fossem necessárias para revisar o comportamento completo de encerramento e aceite.
+
+O manifesto identifica os grupos `billing_and_closure`, `publication_and_direct_link` e `merchant_terms_and_privacy`, com hashes SHA-256 dos arquivos completos. A verificação rejeita remoção ou adulteração dessas fontes. **O ZIP continua material de revisão, não um site autossuficiente nem roteiro de deploy**: recursos compartilhados já existentes no site não são promovidos automaticamente e fontes completas de vitrine exigem comparação seletiva com a versão publicada. Inclusão das minutas não significa aprovação jurídica. As nove fontes SQL congeladas não mudaram; páginas de motoboy, saques e QA não foram adicionadas ao corte.
+
+Correção local do painel no commit `5074ece`: elegibilidade vinculada à competência e descarte de respostas atrasadas impedem exibir Pix antigo sobre outro mês ou sobre consulta mais recente paga. Testes Node completos: **967/967 PASS**; isto não comprova E2E bancário. A suíte Python do ZIP requer validação no job isolado de CI porque Python não está instalado neste Windows. Continuam pendentes a revisão independente final, recuperação funcional completa, homologação do acúmulo e autorização específica COB-07. **Sem deploy, merge, SQL remoto ou operação financeira.**
+
 ## Escopo decidido
 
 Lançar futuramente apenas faturamento mensal Asaas, Pix manual de fatura, recebimento durável de webhooks, aceite de Termos/Privacidade e proteção contra exclusão de loja devedora. Preservar cobranças históricas Mercado Pago, estados de pedidos e repasses. **NÃO** ativar transferências Pix a motoboys, saques, escrow, MFA/step-up experimental nem Pix Automático. Não implantar nenhuma peça deste pacote sem restauração de backup testada em clone e autorização explícita futura.
