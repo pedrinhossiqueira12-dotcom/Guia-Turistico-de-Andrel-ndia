@@ -32,7 +32,8 @@ SQL = (
 EDGE = "supabase/functions/catalogo-asaas-financeiro/index.ts"
 WHATSAPP_EDGE = "supabase/functions/whatsapp-bot/index.ts"
 WHATSAPP_HELPER = "supabase/functions/whatsapp-bot/storage-path-utils.mjs"
-UI = ("pages/catalogo-admin.html", "js/catalogo-admin.js")
+UI = ("pages/catalogo-admin.html", "js/catalogo-admin.js",
+      "pages/admin-encerramentos.html", "js/admin-encerramentos.js")
 # Does not include any staging-only migrations, QA routes or payout modules as entrypoints.
 DOCUMENTATION = (
     "docs/ASAAS_COB06_PACOTE_MINIMO_CANDIDATO_20261012.md",
@@ -128,7 +129,7 @@ def check_edge_security() -> None:
     allowed = {
         "consultar_termos", "aceitar_termos", "solicitar_encerramento",
         "consultar_encerramento", "listar_encerramentos_admin",
-        "finalizar_encerramento_admin", "diagnosticar_webhooks_asaas_admin",
+        "diagnosticar_webhooks_asaas_admin",
         "reprocessar_webhooks_asaas_admin", "obter_fatura",
         "criar_cobranca", "consultar_cobranca",
     }
@@ -165,11 +166,25 @@ def check_whatsapp_security() -> None:
         raise Blocked("COB06_PACOTE_INVALIDO: arquivamento sem preflight GitHub")
 
 
+def check_billing_only_admin_ui() -> None:
+    js = get("js/admin-encerramentos.js").decode("utf-8")
+    html = get("pages/admin-encerramentos.html").decode("utf-8")
+    if ('const BILLING_ONLY_RELEASE=true;' not in js or
+        'client.functions.invoke("whatsapp-bot"' not in js or
+        'acao:"excluir_comercio"' not in js or
+        'data?.sucesso!==true||data?.arquivado!==true' not in js or
+        'if(BILLING_ONLY_RELEASE){' not in js or
+        'finalizar_encerramento_admin' in js or
+        '<div id="saquesAdminArea" hidden aria-hidden="true">' not in html):
+        raise Blocked("COB06_PACOTE_INVALIDO: UI administrativa deve sincronizar GitHub e ocultar saques")
+
+
 def inventory() -> dict[str, bytes]:
     paths = read_lock()
     check_edge_security()
     check_whatsapp_security()
     paths += edge_dependencies()
+    check_billing_only_admin_ui()
     paths += list(UI) + list(DOCUMENTATION)
     if len(paths) != len(set(paths)):
         raise Blocked("COB06_PACOTE_INVALIDO: arquivo duplicado")
@@ -192,6 +207,7 @@ def document(contents: dict[str, bytes]) -> dict:
         "warnings": [
             "EDGE SOURCE IS MIXED: payout functions exist but MUST remain unreachable in production",
             "UI FILES ARE FULL SOURCE FOR REVIEW; no automatic website overwrite",
+            "Administrative closures must use whatsapp-bot GitHub synchronization, never direct billing RPC",
             "NO real aggregate Pix: multi-competence billing still HOLD",
             "Do not deploy without real backup/restore, credentials, approval and environment review",
             "Includes whatsapp-bot CANDIDATE for review; live PROD v90 differs and must not be overwritten blindly",
