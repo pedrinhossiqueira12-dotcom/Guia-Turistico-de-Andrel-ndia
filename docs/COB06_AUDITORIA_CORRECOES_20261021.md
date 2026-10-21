@@ -28,8 +28,19 @@ exigem revisao explicita antes de compor outro pacote ou serem instalados.
   9/9 testes com regressao de integracao passaram. Ensaio de duas conexoes
   PostgreSQL integrado a CI; resultado ainda pendente. Nove fontes preservadas.
 
+## P3 — bloqueio enquanto houver obrigacoes vencidas
+
+- Reproducao: pagar uma de duas faturas vencidas desbloqueava a loja.
+- Candidato 03 envolve a funcao ja instalada, preserva sua logica contabil,
+  serializa conciliacoes por loja antes de bloquear cobrancas e reapura faturas
+  vencidas e comissoes vencidas fora do snapshot. Preserva motivos administrativos
+  e de encerramento; recebimento atrasado nao reativa estorno/contestacao.
+- Teste SQL comportamental aprovado: valor parcial, quitacao de uma e depois
+  ambas, estorno, replay e motivos nao financeiros. Corrida de duas conexoes
+  quitacao versus estorno incluida na CI, resultado ainda por verificar.
+
 ## Estado
 
-P3–P5 em execucao sequencial. Concorrencia real de multiplas conexoes requer
+P4–P5 em execucao sequencial. Concorrencia real de multiplas conexoes requer
 PostgreSQL descartavel na CI; PGlite sozinho nao comprova essa propriedade.
 COB-06 continua HOLD; nenhum candidato autoriza implantacao ou dinheiro.

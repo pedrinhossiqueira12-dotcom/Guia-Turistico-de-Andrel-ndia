@@ -44,3 +44,41 @@ wait "$pid"
 test "$(sql -Atqc "SELECT catalogo_reservar_emissao_mp_fatura('00000000-0000-4000-8000-000000000081',700)->>'ok'")" = false
 test "$(sql -Atqc 'SELECT count(*) FROM catalogo_asaas_emissoes')" = 1
 echo COB06_AUDITORIA_P2_RESERVA_COMUM_DUAS_CONEXOES_OK
+sql -f supabase/production-candidate/cob06-auditoria-03-inadimplencia.sql
+sql <<'SQL'
+UPDATE catalogo_fechamentos_offline SET status='vencido',vencimento_em='2020-01-01'
+ WHERE id='00000000-0000-4000-8000-000000000081';
+SELECT catalogo_asaas_registrar_fatura('00000000-0000-4000-8000-000000000081','pay_audit_race_a',700,NULL,NULL,NULL,NULL);
+INSERT INTO public.catalogo_fechamentos_offline(id,comercio_id,competencia,total_pedidos,total_comissao_centavos,status,vencimento_em)
+VALUES('00000000-0000-4000-8000-000000000082','comercio-de-exemplo','2045-02-01',1,700,'vencido','2020-01-01');
+SELECT catalogo_reservar_emissao_mp_fatura('00000000-0000-4000-8000-000000000082',700);
+SELECT catalogo_registrar_cobranca_fatura('00000000-0000-4000-8000-000000000082','mp_audit_race_b',700,NULL,NULL,NULL,NULL,'fixture');
+UPDATE catalogos SET bloqueado=true,motivo_bloqueio='Comissão de pagamentos presenciais vencida.' WHERE comercio_id='comercio-de-exemplo';
+SELECT catalogo_confirmar_cobranca_fatura('pay_audit_race_a','pago','proof-a',700,'fixture');
+SQL
+test "$(sql -Atqc "SELECT bloqueado FROM catalogos WHERE comercio_id='comercio-de-exemplo'")" = t
+sql > "$tmp/refund.log" 2>&1 <<'SQL' &
+BEGIN;
+SELECT catalogo_confirmar_cobranca_fatura('pay_audit_race_a','estornado','proof-a',700,'fixture');
+\echo ESTORNO_RETIDO
+SELECT pg_sleep(3);
+COMMIT;
+SQL
+pid=$!
+for i in {1..100}; do
+ if grep -q ESTORNO_RETIDO "$tmp/refund.log"; then break; fi
+ sleep 0.02
+done
+grep -q ESTORNO_RETIDO "$tmp/refund.log"
+if sql > "$tmp/payment.log" 2>&1 <<'SQL'
+\set VERBOSITY verbose
+SET lock_timeout='200ms';
+SELECT catalogo_confirmar_cobranca_fatura('mp_audit_race_b','pago','proof-b',700,'fixture');
+SQL
+then echo 'ERRO: quitacao nao esperou pelo estorno da mesma loja' >&2; exit 1; fi
+grep -q 55P03 "$tmp/payment.log"
+wait "$pid"
+sql -c "SELECT catalogo_confirmar_cobranca_fatura('mp_audit_race_b','pago','proof-b',700,'fixture')"
+test "$(sql -Atqc "SELECT bloqueado FROM catalogos WHERE comercio_id='comercio-de-exemplo'")" = t
+test "$(sql -Atqc "SELECT catalogo_confirmar_cobranca_fatura('pay_audit_race_a','pago','late-proof',700,'fixture')->>'ok'")" = false
+echo COB06_AUDITORIA_P3_QUITACAO_ESTORNO_SERIALIZADOS_OK
