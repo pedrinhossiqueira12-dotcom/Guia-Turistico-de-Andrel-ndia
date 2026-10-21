@@ -26,7 +26,7 @@ function Rodar-Docker([string[]]$ArgsDocker) {
     $ErrorActionPreference=$antiga
   }
   Exigir ($codigo -eq 0) 'DOCKER_FALHOU'
-  return ,$saida
+  return $saida
 }
 function De-Hex([string]$Texto) {
   Exigir (($Texto.Length % 2) -eq 0 -and $Texto -cmatch '^[a-fA-F0-9]*$') 'METADADO_HEX_INVALIDO'
@@ -59,7 +59,7 @@ Sem-Reparse $marcador
 foreach($dir in @(Get-ChildItem -LiteralPath $dados -Recurse -Directory -Force)) {
   Exigir (($dir.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0) 'PASTA_STORAGE_REDIRECIONADA'
 }
-$ins=Rodar-Docker @('inspect',$Container)
+$ins=@(Rodar-Docker @('inspect',$Container))
 Exigir ($ins.Count -gt 0) 'CONTAINER_NAO_ENCONTRADO'
 $raw=$ins -join "`n"
 try { $containerInfo=@($raw|ConvertFrom-Json) } catch { throw 'COB06_METADATA_STORAGE_HOLD: DOCKER_INSPECT_INVALIDO' }
@@ -82,14 +82,14 @@ SELECT encode(convert_to(bucket_id,'UTF8'),'hex') || '|' ||
   FROM storage.objects
  ORDER BY bucket_id,name;
 '@
-$linhas=Rodar-Docker @('exec',$Container,'psql','-X','-U','postgres','-d','postgres',
-  '-At','-v','ON_ERROR_STOP=1','-c',$sql)
+$linhas=@(Rodar-Docker @('exec',$Container,'psql','-X','-U','postgres','-d','postgres',
+  '-At','-v','ON_ERROR_STOP=1','-c',$sql))
 Exigir ($linhas.Count -eq 128) 'QUANTIDADE_METADATA_DIFERENTE_128'
 $permitidos=@('cadastros','catalogos','mural-imagens','noticias-eventos','perfil-fotos')
 $metadados=New-Object 'System.Collections.Generic.Dictionary[string,long]' ([StringComparer]::Ordinal)
 $sizeVistos=0
 foreach($linha in $linhas) {
-  $campos=@([string]$linha -split '\\|')
+  $campos=@([string]$linha -split '\|')
   Exigir ($campos.Count -eq 3) 'LINHA_SQL_INVALIDA'
   $bucket=De-Hex $campos[0]
   $nome=De-Hex $campos[1]
