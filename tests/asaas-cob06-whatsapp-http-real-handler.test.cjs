@@ -319,6 +319,26 @@ test("HTTP real: excecao inesperada nao revela detalhes internos ao solicitante"
   noWrites(c);
 });
 
+test("HTTP seguranca: falha interna do Supabase nao vaza detalhes SQL no erro 500",async()=>{
+ const c=cenario({dbUnavailable:"cadastros_comercios"});
+ const response=await c.call("excluir_meu_comercio","owner-jwt");
+ assert.equal(response.status,500);
+ assert.equal(response.data.sucesso,false);
+ assert.equal(response.data.erro,"Falha temporaria. Tente novamente ou contate o suporte.");
+ assert.equal(Object.hasOwn(response.data,"detalhe"),false);
+ assert.ok(!JSON.stringify(response.data).includes("Mock database failure"));
+ noWrites(c);
+});
+test("HTTP seguranca: sanitizacao 503 nao apaga marcadores de arquivamento e retry",async()=>{
+ const c=cenario({debtClear:true,githubFailure:true});
+ const response=await c.call("excluir_comercio","admin-jwt");
+ assert.equal(response.status,503);
+ assert.equal(response.data.arquivado,true);
+ assert.equal(response.data.pendente_sincronizacao,true);
+ assert.equal(response.data.erro,"Falha temporaria. Tente novamente ou contate o suporte.");
+ assert.equal(Object.hasOwn(response.data,"detalhe"),false);
+ assert.ok(!JSON.stringify(response.data).includes("GitHub PUT offline"));
+});
 test("HTTP recuperação: falha GitHub GET depois de RPC confirmada permite repetição",async()=>{
  const c=cenario({debtClear:true,githubGetFailure:true});
  const first=await c.call("excluir_comercio","admin-jwt");
