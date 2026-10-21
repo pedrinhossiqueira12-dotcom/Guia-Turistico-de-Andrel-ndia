@@ -117,7 +117,7 @@ test("COB-06: producao admite somente a lista exata de operacoes de cobranca e e
  const setFim=guard.indexOf("]);");
  assert.ok(setFim>0,"lista de producao deve estar fechada");
  const permitidas=[...guard.slice(0,setFim).matchAll(/"([a-z_]+)"/g)].map(x=>x[1]);
- const esperado=["consultar_termos","aceitar_termos","solicitar_encerramento","consultar_encerramento","listar_encerramentos_admin","finalizar_encerramento_admin","diagnosticar_webhooks_asaas_admin","reprocessar_webhooks_asaas_admin","obter_fatura","criar_cobranca","consultar_cobranca"];
+ const esperado=["consultar_termos","aceitar_termos","solicitar_encerramento","consultar_encerramento","listar_encerramentos_admin","diagnosticar_webhooks_asaas_admin","reprocessar_webhooks_asaas_admin","obter_fatura","criar_cobranca","consultar_cobranca"];
  assert.deepEqual(permitidas.sort(),esperado.sort());
  assert.match(guard,/ENVIRONMENT==="production" && !acoesPermitidasCobrancaProducao\.has\(acaoFinanceira\)/);
  assert.match(guard,/throw new Failure\([^\n]*503\)/);
@@ -126,6 +126,8 @@ test("COB-06: producao admite somente a lista exata de operacoes de cobranca e e
  for(const item of todas.filter(x=>!esperado.includes(x)))
   assert.ok(!permitidas.includes(item),"rota indevida em producao: "+item);
  assert.ok(todas.length>esperado.length,"deve proteger as acoes extras");
+ assert.ok(todas.includes("finalizar_encerramento_admin"));
+ assert.ok(!permitidas.includes("finalizar_encerramento_admin"),"finalizacao sem sincronizar GitHub deve ficar bloqueada em PROD");
 });
 
 test("COB-06: webhook produtivo so recebe PAYMENT com faturamento aprovado",()=>{
