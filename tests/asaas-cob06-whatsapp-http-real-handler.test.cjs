@@ -253,6 +253,45 @@ test("HTTP WhatsApp: bytes assinados aceitos, alteração de um byte recusada",a
  assert.equal(c.calls.filter(x=>x==="whatsapp:accepted").length,1);
  noWrites(c);
 });
+test("HTTP limite WhatsApp: rejeita comprimento invalido, acima do teto ou divergente antes de qualquer efeito",async()=>{
+ const c=cenario({appSecret:"segredo-local-de-teste"});
+ const url="https://edge.local/functions/v1/whatsapp-bot";
+ for(const [contentLength,expected] of [["invalido",400],["262145",413],["42",400]]){
+  const response=await c.raw(new Request(url,{method:"POST",body:"{}",headers:{"Content-Type":"application/json","Content-Length":contentLength}}));
+  assert.equal(response.status,expected,"Content-Length "+contentLength);
+  const payload=await response.json();
+  assert.equal(payload.sucesso,false);
+ }
+ assert.equal(c.calls.length,0);
+ noWrites(c);
+});
+
+test("HTTP limite WhatsApp: corpo sem Content-Length com mais de 256 KiB nunca dispara webhook nem banco",async()=>{
+ const c=cenario({appSecret:"segredo-local-de-teste"});
+ const body=JSON.stringify({object:"whatsapp_business_account",entry:[],pad:"á".repeat(131100)});
+ const signature="sha256="+createHmac("sha256","segredo-local-de-teste").update(Buffer.from(body)).digest("hex");
+ const response=await c.raw(new Request("https://edge.local/functions/v1/whatsapp-bot",{
+  method:"POST",headers:{"Content-Type":"application/json","X-Hub-Signature-256":signature},body
+ }));
+ assert.equal(response.status,413);
+ assert.equal(c.calls.length,0);
+ noWrites(c);
+});
+
+test("HTTP limite WhatsApp: corpo HMAC exatamente no teto de bytes continua valido",async()=>{
+ const secret="segredo-local-de-teste",c=cenario({appSecret:secret});
+ const base=JSON.stringify({object:"whatsapp_business_account",entry:[],pad:""});
+ const body=JSON.stringify({object:"whatsapp_business_account",entry:[],pad:"x".repeat(256*1024-Buffer.byteLength(base))});
+ assert.equal(Buffer.byteLength(body),256*1024);
+ const signature="sha256="+createHmac("sha256",secret).update(Buffer.from(body)).digest("hex");
+ const response=await c.raw(new Request("https://edge.local/functions/v1/whatsapp-bot",{
+  method:"POST",headers:{"Content-Type":"application/json","X-Hub-Signature-256":signature},body
+ }));
+ assert.equal(response.status,200);
+ assert.equal(c.calls.filter(x=>x==="whatsapp:accepted").length,1);
+ noWrites(c);
+});
+
 test("HTTP WhatsApp: GET de verificacao exige token; payload nao eh registrado nos logs",async()=>{
  const c=cenario();
  const url="https://edge.local/functions/v1/whatsapp-bot?";
