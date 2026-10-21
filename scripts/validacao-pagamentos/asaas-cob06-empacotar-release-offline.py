@@ -108,6 +108,7 @@ def check_edge_security() -> None:
         'ambienteAsaasCompativelComProjeto(SUPABASE_URL,ASAAS_ENVIRONMENT_DECLARADO)',
         'const acoesPermitidasCobrancaProducao=new Set([',
         'ENVIRONMENT==="production" && !acoesPermitidasCobrancaProducao.has(acaoFinanceira)',
+        'if(ENVIRONMENT==="production")throw new Failure("Arquivamento produtivo exige sincronizacao da vitrine GitHub.",503);',
         'if(ENVIRONMENT==="production")enabled("billing");',
         'if(ENVIRONMENT==="production"&&event.startsWith("TRANSFER_"))',
         'if(ENVIRONMENT==="production")\n   throw new Failure("TRANSFER em fila',
