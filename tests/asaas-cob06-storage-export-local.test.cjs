@@ -21,7 +21,7 @@ test("COB06: origem e somente PROD explicitamente vinculado",()=>{
  assert.match(ps,/PROJETO_NAO_VINCULADO/);
  assert.match(ps,/PROJETO_SEM_CONFIGURACAO/);
  assert.match(ps,/CLI_INCOMPATIVEL/);
- assert.match(ps,/\('ss:\/\/\/'\+\$Bucket\),\$Local/);
+ assert.match(ps,/\('ss:\/\/\/'\+\$Bucket\),\$DestinoCli/);
  assert.match(ps,/\$args=@\('storage','cp','--experimental','--linked','--recursive'/);
  assert.doesNotMatch(ps,/\$args=@\('storage','(?:rm|mv)'/);
 });
