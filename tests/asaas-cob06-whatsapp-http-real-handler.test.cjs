@@ -80,6 +80,7 @@ function cenario(opts={}){
   }
  };
  const ctx={g:db,R:admin,crypto:webcrypto,TextEncoder,TextDecoder,
+ cob06DestinoGitHub:()=>{if(opts.invalidGithubTarget)throw Error("Destino GitHub invalido");return "qa/fixture";},
  Deno:{env:{get:n=>n==="WHATSAPP_APP_SECRET"?(opts.appSecret||""):""}},T:{"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"authorization,content-type"},
  F:"token-de-verificacao-local",Request,Response,URL,console:{log(){},error(){}},
  u:v=>v==null?"":String(v).trim(),
@@ -127,6 +128,17 @@ function cenario(opts={}){
   setFailConfirmedRead(v){opts.failConfirmedRead=v}};
 }
 const noWrites=c=>assert.equal(c.calls.filter(x=>x==="github:put").length,0);
+test("HTTP real: destino GitHub indevido recusa encerramento antes das RPCs",async()=>{
+ const c=cenario({invalidGithubTarget:true,debtClear:true});
+ for(const [acao,token] of [["excluir_meu_comercio","owner-jwt"],["excluir_comercio","admin-jwt"]]){
+  const r=await c.call(acao,token);
+  assert.equal(r.status,503);
+  assert.equal(r.data.sucesso,false);
+ }
+ assert.equal(c.calls.filter(x=>x.startsWith("db.rpc:")).length,0);
+ assert.equal(c.calls.filter(x=>x.startsWith("github:")).length,0);
+});
+
 test("HTTP real: rejeita dono anonimo e token invalido; nao toca banco financeiro",async()=>{
  const c=cenario();
  for(const token of [undefined,"token-invalido"]){
