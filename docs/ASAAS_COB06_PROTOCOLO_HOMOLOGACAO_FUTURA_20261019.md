@@ -2,6 +2,10 @@
 
 **Situação:** proposta de procedimento, somente documentação na PR #39 (Draft). **Não constitui autorização operacional.**
 
+## Rechecagem de estruturas 21/10/2026 (somente leitura)
+
+O STAGING `jbttwihctuibchhcyqtl` já possui `catalogo_asaas_acumulo_lotes`, `catalogo_asaas_acumulo_referencias`, `catalogo_asaas_acumulo_observacoes` e `catalogo_asaas_acumulo_eventos`, todos com RLS habilitado; `catalogo_asaas_acumulo_quitacoes_isoladas` está ausente. Os seis RPCs de acumulação inventariados não concedem EXECUTE a `anon` ou `authenticated`. Contagens agregadas atuais: **1 lote, 1 referência, 0 observações, 0 eventos**. O histórico de migrações identifica instalação de observação 03–07 em 16/10 e gate QA de quitações opcionais em 19/10. Estes dados substituem inventários mais antigos que registravam ausência das estruturas; **não repetir migrations já aplicadas** nem presumir que ausência da tabela isolada constitui falha. A existência das estruturas não é homologação bancária nem prova positiva de GET persistido; mantém-se a regra do lote histórico e o HOLD. Nenhuma operação de alteração ou requisição Asaas foi feita nessa leitura.
+
 ## Base já comprovada
 - Lote histórico `583d761a-ecb9-49be-b484-e43f6183971e`: um GET Asaas Sandbox foi autorizado e executado em 19/10; resposta relatada: `nenhuma_cobranca_localizada`, `payment_id=null`, `evidencia_get_persistida=false`.
 - Resultado negativo não é prova de ausência global de cobrança nem permissão de emissão de Pix.
