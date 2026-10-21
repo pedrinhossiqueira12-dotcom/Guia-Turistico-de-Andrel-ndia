@@ -36,5 +36,7 @@ test('auditoria P4: journal SQL nasce com arquivamento e somente ACK idempotente
   assert.equal((await rpc(db,'catalogo_confirmar_vitrine_admin',['loja-a',IDS.admin])).ok,true);
   await rpc(db,'catalogo_finalizar_encerramento_financeiro',['loja-a',IDS.admin]);
   assert.equal((await list()).length,0,'Retry nao reabre fila ja confirmada');
+  assert.equal((await db.query(`SELECT has_table_privilege('service_role','catalogo_private.catalogo_vitrine_reconciliacoes','INSERT') p`)).rows[0].p,false);
+  assert.equal((await db.query(`SELECT has_function_privilege('authenticated','public.catalogo_confirmar_vitrine_admin(text,uuid)','EXECUTE') p`)).rows[0].p,false);
  }finally{await db.close();}
 });

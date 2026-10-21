@@ -24,6 +24,8 @@ test('auditoria P2: MP nao substitui cobranca Asaas; reserva e compartilhada e d
   await assert.rejects(rpc(db,'catalogo_asaas_registrar_fatura',[f2,'pay_invasor',700,null,null,null,null]));
   await assert.rejects(db.query('UPDATE catalogo_fechamentos_offline SET total_comissao_centavos=701 WHERE id=$1',[f2]));
   await assert.rejects(db.query(`UPDATE catalogo_asaas_emissoes SET gateway='asaas' WHERE fechamento_id=$1`,[f2]));
+  assert.equal((await db.query(`SELECT has_function_privilege('anon','public.catalogo_reservar_emissao_mp_fatura(uuid,integer)','EXECUTE') p`)).rows[0].p,false);
+  assert.equal((await db.query(`SELECT has_function_privilege('service_role','public.catalogo_registrar_cobranca_fatura_pre_auditoria(uuid,text,integer,text,text,text,timestamptz,text)','EXECUTE') p`)).rows[0].p,false);
  }finally{await db.close();}
 });
 

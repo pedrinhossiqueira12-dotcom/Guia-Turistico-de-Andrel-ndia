@@ -29,5 +29,6 @@ test('auditoria P3: quitar uma de duas faturas vencidas nao desbloqueia; estorno
    await settle('mp-b');
    assert.deepEqual(await read(),{bloqueado:true,motivo_bloqueio:m});
   }
+  assert.equal((await db.query(`SELECT has_function_privilege('service_role','public.catalogo_confirmar_cobranca_fatura_pre_auditoria(text,text,text,integer,text)','EXECUTE') p`)).rows[0].p,false);
  }finally{await db.close();}
 });

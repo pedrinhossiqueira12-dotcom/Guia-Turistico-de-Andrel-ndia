@@ -88,6 +88,20 @@ candidatos no clone. Regressao local apos consulta MP: **981/981 PASS**.
 As protecoes adicionais de snapshot/ordem de locks/entrypoints exigem a proxima
 CI; a primeira nao as valida retroativamente.
 
+## Cobertura final adicionada
+
+Os 12 testes de auditoria/historico passaram localmente. Consultas reais de ACL
+no PostgreSQL confirmam que funcoes pre-auditoria nao continuam acessiveis a
+service_role e que anon/authenticated nao recebem os novos privilegios internos.
+Entrega por motoboy apos suspensao foi executada pelas RPCs reais: outro entregador
+e recusado e a remuneracao continua retida/sem financiamento antes da fatura.
+
+Commits por prioridade: P1 `66904e1`, P2 `4355c7d`, P3 `fdfd982`, P4 `2638573`,
+P5 `e2cfc9e`; complementos `b01ff61` (historico MP) e `043f32c` (locks e legado).
+O proximo commit acrescenta apenas cobertura/evidencias. Nenhuma alteracao remota
+ou no manifesto/hash dos nove SQLs. Suspensoes historicas sem marco e aprovacao
+do novo corte permanecem bloqueios explicitos, sem datas/provas inventadas.
+
 Cinco correcoes locais implementadas; regressao e CI em andamento. Concorrencia real de multiplas conexoes requer
 PostgreSQL descartavel na CI; PGlite sozinho nao comprova essa propriedade.
 COB-06 continua HOLD; nenhum candidato autoriza implantacao ou dinheiro.

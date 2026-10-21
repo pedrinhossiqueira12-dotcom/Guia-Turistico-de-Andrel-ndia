@@ -2,7 +2,7 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),vm=require('node:vm');
 const {stripTypeScriptTypes}=require('node:module');
-const {createDb,order,operate,rpc,IDS,HASH,BAD_HASH}=require('./helpers/catalogo-v2-db.cjs');
+const {createDb,order,operate,rpc,ready,act,confirm,IDS,HASH,BAD_HASH}=require('./helpers/catalogo-v2-db.cjs');
 test('auditoria P5: pedido aceito antes da suspensao termina; novo aceite e titular alheio sao recusados',async()=>{
  const db=await createDb();
  try{
@@ -28,6 +28,22 @@ test('auditoria P5: pedido aceito antes da suspensao termina; novo aceite e titu
   const p=(await db.query('SELECT status,status_pagamento,codigo_entrega_usado_em FROM catalogo_pedidos WHERE id=$1',[o.id])).rows[0];
   assert.equal(p.status,'entregue');assert.equal(p.status_pagamento,'aprovado');assert.ok(p.codigo_entrega_usado_em);
   assert.equal((await db.query(`SELECT bloqueado FROM catalogos WHERE comercio_id='loja-a'`)).rows[0].bloqueado,true);
+ }finally{await db.close();}
+});
+
+test('auditoria P5: motoboy conclui entrega anterior sem liberar credito ainda nao financiado',async()=>{
+ const db=await createDb();
+ try{
+  await db.exec(fs.readFileSync('supabase/production-candidate/cob06-auditoria-05-andamento.sql','utf8'));
+  const o=await order(db);
+  await ready(db,o);
+  await db.exec(`UPDATE catalogos SET bloqueado=true,motivo_bloqueio='Encerramento solicitado pelo proprietário' WHERE comercio_id='loja-a'`);
+  for(const acao of ['aceitar_entrega','coletar','em_entrega'])assert.equal((await act(db,IDS.rider,acao,o.id)).ok,true);
+  assert.equal((await confirm(db,o,IDS.rider2)).ok,false,'Outro entregador nao conclui');
+  assert.equal((await confirm(db,o)).ok,true);
+  const r=(await db.query('SELECT status,financiamento_comprovado FROM catalogo_remuneracoes_v2 WHERE pedido_id=$1',[o.id])).rows[0];
+  assert.equal(r.status,'retido');assert.equal(r.financiamento_comprovado,false);
+  assert.equal((await db.query(`SELECT has_function_privilege('service_role','public.catalogo_operar_pedido_pre_suspensao(uuid,text,uuid,text,uuid,text)','EXECUTE') p`)).rows[0].p,false);
  }finally{await db.close();}
 });
 
