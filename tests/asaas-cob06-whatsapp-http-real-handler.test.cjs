@@ -319,10 +319,10 @@ test("HTTP real: excecao inesperada nao revela detalhes internos ao solicitante"
   noWrites(c);
 });
 
-test("HTTP seguranca: falha interna do Supabase nao vaza detalhes SQL no erro 500",async()=>{
+test("HTTP seguranca: falha interna do Supabase nao vaza detalhes SQL no erro 503",async()=>{
  const c=cenario({dbUnavailable:"cadastros_comercios"});
  const response=await c.call("excluir_meu_comercio","owner-jwt");
- assert.equal(response.status,500);
+ assert.equal(response.status,503);
  assert.equal(response.data.sucesso,false);
  assert.equal(response.data.erro,"Falha temporaria. Tente novamente ou contate o suporte.");
  assert.equal(Object.hasOwn(response.data,"detalhe"),false);
