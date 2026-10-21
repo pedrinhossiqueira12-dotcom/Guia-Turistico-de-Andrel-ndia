@@ -15,4 +15,5 @@
 
 - Node: `npm test` (dependências fixadas em `package-lock.json`). Testes específicos em `tests/` e Deno em `supabase/functions/tests/`.
 - Consulte `.github/workflows/database-tests.yml` para os comandos isolados e requisitos de cada suíte; não execute comandos remotos de implantação.
+- Preserve os bytes versionados conforme `.gitattributes`: conversão automática CRLF no Windows invalida hashes de SQL e extração de código pelos harnesses. Não atualize hashes para acomodar conversão de checkout.
 - Ao retomar, confira pasta, branch, HEAD, estado Git, PR e CI. Ao encerrar, registre alterações, testes, commits, bloqueios e próxima ação sem declarar homologação produtiva por testes simulados.
