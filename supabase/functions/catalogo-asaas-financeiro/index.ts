@@ -2343,7 +2343,8 @@ Deno.serve(async (request:Request)=>{
    "solicitar_encerramento",
    "consultar_encerramento",
    "listar_encerramentos_admin",
-   "finalizar_encerramento_admin",
+   // O encerramento administrativo final deve sincronizar o JSON GitHub via
+   // whatsapp-bot; a RPC isolada desta Edge deixaria a vitrine publicada.
    "diagnosticar_webhooks_asaas_admin",
    "reprocessar_webhooks_asaas_admin",
    "obter_fatura",
