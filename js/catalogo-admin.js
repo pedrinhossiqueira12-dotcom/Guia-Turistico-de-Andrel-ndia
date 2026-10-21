@@ -480,8 +480,20 @@
   }
 
   async function chamarFaturaPix(body) {
-    const { data, error } = await getClient().functions.invoke("catalogo-asaas-financeiro", { body: { ...body, comercio_id: comercioId } });
+    let endpoint="catalogo-asaas-financeiro";
+    // A rota antiga continua sendo a autoridade das faturas MP. Identificar por
+    // leitura autenticada, nunca por erro textual nem por escolha do navegador.
+    if(body.acao==="consultar_cobranca"){
+      const leitura=await getClient().functions.invoke("catalogo-asaas-financeiro",{
+        body:{acao:"obter_fatura",competencia:body.competencia,comercio_id:comercioId}
+      });
+      if(leitura.error||leitura.data?.success!==true||!["asaas","mercadopago"].includes(leitura.data.provedor))
+        throw new Error("Não foi possível identificar o provedor da fatura. Nenhuma emissão foi solicitada.");
+      if(leitura.data.provedor==="mercadopago")endpoint="catalogo-fatura-pix";
+    }
+    const { data, error } = await getClient().functions.invoke(endpoint, { body: { ...body, comercio_id: comercioId } });
     if (error || !data?.success) throw new Error(data?.mensagem || error?.message || "Não foi possível processar o pagamento da fatura.");
+    if(endpoint==="catalogo-fatura-pix")return {...data,fatura:data.fechamento,provedor:"mercadopago"};
     return data;
   }
 

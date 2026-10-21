@@ -66,6 +66,16 @@ exigem revisao explicita antes de compor outro pacote ou serem instalados.
 
 ## Estado
 
+Investigacao adicional reproduziu a consulta MP enviada indevidamente a Edge Asaas.
+O painel agora identifica o gateway por leitura autenticada e delega **somente a
+consulta/conciliacao** ao endpoint MP original, normalizando a resposta. Nunca ha
+fallback de emissao. Testes verificam falha de identificacao, Asaas preservado e
+consulta de legado MP com emissao desligada, usando somente GET ficticio.
+O congelamento do snapshot apos reserva trata corrida emissao/fechamento; eventos
+financeiros por loja sao serializados e recebimento tardio nao desfaz estorno.
+O ZIP antigo continua com nove SQLs; agora alerta que o runtime candidato depende
+das cinco correcoes externas ao corte, que exigem revisao explicita separada.
+
 Cinco correcoes locais implementadas; regressao e CI em andamento. Concorrencia real de multiplas conexoes requer
 PostgreSQL descartavel na CI; PGlite sozinho nao comprova essa propriedade.
 COB-06 continua HOLD; nenhum candidato autoriza implantacao ou dinheiro.

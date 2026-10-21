@@ -2,6 +2,20 @@
 
 Data: 12/10/2026. PR #39: **Draft e sem merge**. Status: **preparação e análise concluída parcialmente; sem aceite de release**.
 
+## Bloqueio posterior ao corte — auditoria independente de 21/10/2026
+
+Os cinco defeitos fornecidos pelo proprietário motivaram candidatos forward-only separados
+`supabase/production-candidate/cob06-auditoria-01-pendencias.sql` a
+`cob06-auditoria-05-andamento.sql`, detalhados em
+[COB06_AUDITORIA_CORRECOES_20261021.md](COB06_AUDITORIA_CORRECOES_20261021.md).
+**As nove fontes, sua ordem e seus hashes permanecem intactos.** Os cinco candidatos
+não foram adicionados silenciosamente ao pacote congelado. As fontes atuais de Edge/UI
+dependem dessas correções: **não são compatíveis para implantação apenas com os nove SQLs antigos**.
+O manifesto do ZIP de revisão sinaliza expressamente essa dependência/HOLD.
+O próximo corte exige revisão explícita das cinco correções, ordem de instalação,
+permissões, integração e evidências; validação do ZIP antigo não aprova esse novo corte.
+Não executar os candidatos em STAGING/PROD. CI e testes deste relatório são isolados.
+
 ## Corte de revisão da UI atualizado em 21/10/2026
 
 **Validação final do código:** commit `3deed5bd7ee8c9881efc998cfd629275617b5223`, [CI 39643590365](https://github.com/pedrinhossiqueira12-dotcom/Guia-Turistico-de-Andrel-ndia/actions/runs/39643590365), **12/12 jobs PASS**. O ZIP passou oito testes Python, foi gerado e verificado com nove fontes SQL e 23 fontes adicionais. SHA-256 do artefato desse run: `b7900b4c50d48ce9ac43c272bffe13bcbf0dbb58f4fc1183a097f623bce481f6`. Atualizações documentais posteriores mudam os bytes do próximo ZIP; o hash identifica somente o artefato desse run. Nenhum desses resultados libera produção.

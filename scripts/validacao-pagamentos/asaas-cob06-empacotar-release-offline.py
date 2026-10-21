@@ -216,6 +216,7 @@ def document(contents: dict[str, bytes]) -> dict:
             "merchant_terms_and_privacy": list(LEGAL_UI),
         },
         "warnings": [
+            "POST-AUDIT HOLD: runtime sources depend on five separate cob06-auditoria SQL candidates, deliberately NOT in the frozen nine-SQL cut; explicit review of a new cut is mandatory",
             "EDGE SOURCE IS MIXED: payout functions exist but MUST remain unreachable in production",
             "UI FILES ARE FULL SOURCE FOR REVIEW; no automatic website overwrite",
             "Public listing and direct-link sources must preserve archived-store filtering through catalogo_status_publicacao",
