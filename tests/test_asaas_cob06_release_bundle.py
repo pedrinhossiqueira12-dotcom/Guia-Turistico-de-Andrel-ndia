@@ -43,6 +43,9 @@ class ReleaseBundleTest(unittest.TestCase):
                 self.assertIn("REVIEW-FIRST.txt", names)
                 self.assertIn("supabase/functions/whatsapp-bot/index.ts", names)
                 self.assertIn("supabase/functions/whatsapp-bot/storage-path-utils.mjs", names)
+                self.assertIn("supabase/config.toml", names)
+                self.assertIn("scripts/validacao-pagamentos/asaas-cob06-worker-producao-readonly.sql", names)
+                self.assertNotIn("supabase/production-candidate/cob06_worker_webhook_producao_nao_implantar.sql", names)
                 self.assertNotIn("supabase/functions/catalogo-asaas-financeiro/.env", names)
 
     def test_tampered_source_is_rejected(self):
@@ -59,6 +62,17 @@ class ReleaseBundleTest(unittest.TestCase):
             check = run("--verify", str(bad))
             self.assertNotEqual(check.returncode, 0)
             self.assertIn("hash de pages/catalogo-admin.html", check.stderr)
+
+    def test_worker_readiness_is_read_only_and_runtime_config_reviewable(self):
+        worker = (ROOT / "scripts/validacao-pagamentos/asaas-cob06-worker-producao-readonly.sql").read_text()
+        config = (ROOT / "supabase/config.toml").read_text()
+        self.assertIn("false AS producao_autorizada", worker)
+        self.assertIn("false AS pagamentos_ativados_por_esta_consulta", worker)
+        self.assertIn("guia-asaas-reconciliar-webhook", worker)
+        self.assertIn("[functions.catalogo-asaas-financeiro]", config)
+        self.assertRegex(config, r"(?s)\\[functions\\.catalogo-asaas-financeiro\\]\\s*verify_jwt\\s*=\\s*false")
+        self.assertNotIn("SELECT cron.schedule(", worker)
+        self.assertNotIn("CREATE TABLE", worker)
 
     def test_whatsapp_candidate_tampering_is_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
