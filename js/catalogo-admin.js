@@ -486,6 +486,17 @@
   let competenciaAptaParaEmissao = "";
   let faturaAptaParaEmissao = false;
   let emissaoFaturaEmAndamento = false;
+  function aplicarElegibilidadeFatura(dado,competencia){
+    const fatura=dado.fatura;
+    const total=Number(fatura?.total_comissao_centavos);
+    faturaAptaParaEmissao=Boolean(fatura&&
+      ["faturado","vencido","bloqueado"].includes(String(fatura.status))&&
+      Number.isSafeInteger(total)&&total>=500&&
+      dado.fatura_abaixo_minimo_asaas!==true&&
+      !dado.cobranca_status&&dado.provedor!=="mercadopago");
+    competenciaAptaParaEmissao=faturaAptaParaEmissao?competencia:"";
+    $("gerarPixFatura").disabled=!faturaAptaParaEmissao||emissaoFaturaEmAndamento;
+  }
   // Preflight read-only antes de qualquer emissao: nao criar Pix se a
   // competencia nao possui fatura elegivel ou se existe cobranca/reserva.
   async function atualizarPreflightFatura(opcoes={}){
@@ -504,14 +515,7 @@
       const dado=await chamarFaturaPix({acao:"obter_fatura",competencia});
       if(numero!==consultaFaturaSeq||visualizacao!==visualizacaoFaturaSeq||$("competenciaOffline")?.value!==competencia)return;
       const fatura=dado.fatura;
-      const total=Number(fatura?.total_comissao_centavos);
-      faturaAptaParaEmissao=Boolean(fatura&&
-        ["faturado","vencido","bloqueado"].includes(String(fatura.status))&&
-        Number.isSafeInteger(total)&&total>=500&&
-        dado.fatura_abaixo_minimo_asaas!==true&&
-        !dado.cobranca_status&&dado.provedor!=="mercadopago");
-      if(faturaAptaParaEmissao)competenciaAptaParaEmissao=competencia;
-      botao.disabled=!faturaAptaParaEmissao||emissaoFaturaEmAndamento;
+      aplicarElegibilidadeFatura(dado,competencia);
       if(!preservarResultado&&(dado.fatura_abaixo_minimo_asaas===true||
          dado.cobranca_status||dado.provedor==="mercadopago"))
         renderizarPixFatura(dado);
@@ -617,7 +621,10 @@
     }
     try {
       const dados=await chamarFaturaPix({ acao: "consultar_cobranca", competencia });
-      if(atual())renderizarPixFatura(dados);
+      if(atual()){
+        aplicarElegibilidadeFatura(dados,competencia);
+        renderizarPixFatura(dados);
+      }
     }catch(error){
       if(atual())$("faturaPixResultado").textContent=error.message||"Não foi possível verificar o pagamento da fatura.";
     }

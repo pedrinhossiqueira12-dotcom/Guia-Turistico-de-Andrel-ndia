@@ -240,3 +240,13 @@ test("COB-06 UI: fim de emissao antiga preserva consulta paga mais recente",asyn
  assert.equal(acoes(c).filter(x=>x==="obter_fatura").length,1,
   "Finalizacao antiga nao inicia nova leitura sobre a consulta recente");
 });
+
+test("COB-06 UI: consulta sem cobranca permite emissao apenas do mes conferido",async()=>{
+ const c=cenario(async body=>body.acao==="criar_cobranca"?
+  {...fatura(750),pix:{code:"PIX-VALIDO"}}:fatura(750));
+ await c.api.consultarPixFatura();
+ assert.equal(c.$("gerarPixFatura").disabled,false);
+ assert.deepEqual(acoes(c),["consultar_cobranca"],"Nao repete a consulta ao banco");
+ await c.api.gerarPixFatura();
+ assert.equal(acoes(c).filter(x=>x==="criar_cobranca").length,1);
+});
