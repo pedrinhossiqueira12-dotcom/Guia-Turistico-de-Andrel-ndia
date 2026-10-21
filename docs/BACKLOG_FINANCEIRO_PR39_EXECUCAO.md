@@ -237,6 +237,10 @@ cliente (42501), journal sem escrita direta e fluxo SQL autorizado de encerramen
 até ACK sintético. **998/998 testes Node locais PASS**, lock original aprovado;
 nenhum SQL/hash/lock modificado. Matriz, escopo e limites em
 [revisão adicional do corte](COB06_CORTE_SELETIVO_14_SQL_20261021.md).
+Código/teste enviado no commit `a311100b8167d6bd55b099337bb065b039336727`;
+[CI própria 39684585836](https://github.com/pedrinhossiqueira12-dotcom/Guia-Turistico-de-Andrel-ndia/actions/runs/39684585836)
+**12/12 jobs success**, conferidos individualmente. Registro posterior apenas
+documental, sem atribuir a essa prova homologação de configuração remota.
 **Próximo gate:** equivalência das definições/ACL e fontes publicadas em janela
 especificamente autorizada; recuperação funcional/off-host e configuração real
 de Auth/MFA, hosting e webhook continuam externas. Não repetir testes aceitos

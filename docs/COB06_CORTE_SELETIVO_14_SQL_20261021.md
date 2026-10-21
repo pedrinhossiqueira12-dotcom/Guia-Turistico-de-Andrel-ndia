@@ -160,3 +160,10 @@ cabeçalhos de hospedagem, configuração efetiva dos webhooks/worker e homologa
 financeira delimitada. Não pedir repetição das provas SQL/Storage já aceitas.
 Nenhuma consulta PROD/STAGING, GET bancário, deploy, flag/Secret, Pix ou merge foi
 executado. Lote histórico intocado; COB-06 continua aberta/HOLD.
+
+**CI desta revisão:** commit `a311100b8167d6bd55b099337bb065b039336727`,
+[Actions 39684585836](https://github.com/pedrinhossiqueira12-dotcom/Guia-Turistico-de-Andrel-ndia/actions/runs/39684585836),
+**12/12 jobs success**, conferidos individualmente após o push normal.
+Inclui a nova regressão Node, PostgreSQL descartável, Supabase local/pgTAP,
+Deno sem banco/provedor remoto e pacote offline. Este acréscimo posterior
+é documental; não altera o código testado nem valida o ambiente publicado.
