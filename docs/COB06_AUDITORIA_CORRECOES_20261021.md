@@ -6,6 +6,51 @@ PROD/STAGING, provedor real ou Sandbox. SQLs `cob06-auditoria-*` sao candidatos
 forward-only separados: nao alteram as nove fontes/hashes do corte auditado e
 exigem revisao explicita antes de compor outro pacote ou serem instalados.
 
+## Resultado final do codigo — 21/10/2026
+
+**Cinco prioridades corrigidas localmente, COB-06 ainda HOLD.** Codigo final
+`077e2bccff6007c082dfaf8f2e86eb033f48d93e`:
+[CI 39655179890](https://github.com/pedrinhossiqueira12-dotcom/Guia-Turistico-de-Andrel-ndia/actions/runs/39655179890),
+**12/12 jobs PASS**, conferidos individualmente. Regressao local: **983/983 PASS**.
+Nenhuma migration historica, fonte SQL congelada ou hash do lock foi alterado;
+verificador original novamente aprovado. Nenhum acesso SQL remoto, deploy,
+Secret/flag, operacao Asaas real/Sandbox, Pix, transferencia ou merge.
+
+| Prioridade | Commit principal | Evidencia comportamental |
+| --- | --- | --- |
+| P1 | `66904e1` | Comissao tardia 700 antes ignorada, cobertura parcial, snapshot pago intacto |
+| P2 | `4355c7d` | RPC MP nao troca ID Asaas, uma tentativa POST, disputa de duas conexoes e snapshot congelado |
+| P3 | `fdfd982` | Pagamento parcial, duas dividas, estorno/quitacao concorrentes, motivos preservados |
+| P4 | `2638573` | Arquivo continua na fila ate ACK, falhas GitHub/ACK e retry idempotente |
+| P5 | `e2cfc9e` | Pedido antes aceito conclui; novo aceite/pedido, outro titular/motoboy e codigo errado recusados |
+
+Complementos: `b01ff61` (consulta MP historica sem emissao), `043f32c` (ordem de
+locks e entrypoints), `a38f72b` (ACL e credito retido), `077e2bc` (sessao na UI).
+Todas as reproducoes principais falharam antes das respectivas correcoes e
+passaram depois. Provedores sao falsos; PostgreSQL/PGlite usa dados sinteticos.
+
+O log financeiro final confirma os marcadores `COB06_AUDITORIA_P2_RESERVA_COMUM_DUAS_CONEXOES_OK`,
+`COB06_AUDITORIA_P2_SNAPSHOT_RESERVADO_CONGELADO_OK`,
+`COB06_AUDITORIA_P3_QUITACAO_ESTORNO_SERIALIZADOS_OK`,
+`COB06_AUDITORIA_REGISTRO_CONCILIACAO_SEM_CICLO_DE_LOCK_OK` e
+`COB06_AUDITORIA_CINCO_CANDIDATOS_FORWARD_ONLY_INSTALADOS_NO_CLONE_OK`.
+
+### Pendencias efetivas
+
+1. Revisao explicita de um NOVO corte com os cinco candidatos e dependencias;
+   o ZIP de nove SQLs permanece apenas revisao e nao instala estas correcoes.
+2. Comparar assinaturas/definicoes/ACL reais antes de qualquer instalacao futura
+   autorizada. Os wrappers preservam funcoes existentes e restringem seus nomes
+   internos; nao instalar/reaplicar indiscriminadamente ou atualizar hashes antigos.
+3. Suspensoes historicas sem data comprovavel exigem revisao por operador; nao
+   inventar data retroativa. Bloqueios administrativos continuam fechados.
+4. Homologacao operacional e revisao independente, recuperacao funcional/off-host
+   e autorizacao especifica de COB-07/08. Os testes nao comprovam Asaas/MP reais,
+   secrets, elegibilidade comercial nem equivalencia integral de PROD/STAGING.
+
+Nao repetir GET/reserva no lote QA historico. SAQ continua fora da fase atual.
+O registro documental posterior a este resultado nao modifica o codigo validado.
+
 ## P1 — divida fora do snapshot
 
 - Reproducao PostgreSQL embarcado PGlite com migrations reais: comissao tardia
