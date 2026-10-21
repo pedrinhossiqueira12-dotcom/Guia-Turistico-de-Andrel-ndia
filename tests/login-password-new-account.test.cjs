@@ -67,3 +67,18 @@ test("A politica do novo cadastro nao altera o login dos usuarios existentes",()
   "Nunca aplicar requisito de cadastro a autenticação de conta existente");
  assert.ok(cadastro.includes("senha.length < 12"));
 });
+
+test("Mensagem de senha do Supabase respeita o mínimo real do servidor",()=>{
+ const inicio=source.indexOf("function traduzirErroAuth(");
+ const fim=source.indexOf("\r\n}\r\n",inicio);
+ assert.ok(inicio>=0&&fim>inicio);
+ const traduzir=vm.runInNewContext("("+source.slice(inicio,fim+4)+")",{});
+ assert.equal(traduzir({message:"Password should be at least 12 characters"}),
+   "A senha precisa ter pelo menos 12 caracteres.");
+ assert.equal(traduzir({message:"Password should be at least 15 characters"}),
+   "A senha precisa ter pelo menos 15 caracteres.");
+ assert.equal(traduzir({message:"Password should be at least X characters"}),
+   "A senha não atende ao tamanho mínimo exigido.");
+ assert.equal(traduzir({message:"Invalid login credentials"}),
+   "E-mail ou senha incorretos.");
+});
