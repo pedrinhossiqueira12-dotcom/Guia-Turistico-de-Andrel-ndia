@@ -499,9 +499,10 @@
       const li=document.createElement("li");li.className="item";
       const title=document.createElement("strong");title.textContent=String(item.comercio_id||"Comércio");
       const detail=document.createElement("p");detail.className="muted";
-      const status=item.situacao==="aguardando_quitacao"?"Aguardando quitação":"Pendente de arquivamento";
+      const reconciliar=item.situacao==="arquivado"&&item.sincronizacao_pendente===true;
+      const status=reconciliar?"Arquivado no banco; vitrine pendente":item.situacao==="aguardando_quitacao"?"Aguardando quitação":"Pendente de arquivamento";
       detail.textContent=status+" · Dívida apurada na solicitação: "+money(item.divida_apurada_centavos);
-      const btn=document.createElement("button");btn.type="button";btn.textContent="Conferir e arquivar";
+      const btn=document.createElement("button");btn.type="button";btn.textContent=reconciliar?"Reconciliar vitrine":"Conferir e arquivar";
       btn.addEventListener("click",async()=>{
         if(!window.confirm("Conferir agora todas as faturas e pedidos deste comércio e arquivar somente se tudo estiver quitado?"))return;
         btn.disabled=true;aviso("Revalidando pendências no servidor…");

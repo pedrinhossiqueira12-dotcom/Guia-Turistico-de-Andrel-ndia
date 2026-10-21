@@ -99,6 +99,12 @@ async function ae(e, a, administrador) {
     return t({sucesso:false,arquivado:true,pendente_sincronizacao:true,
       erro:"Arquivamento financeiro registrado; falha ao atualizar a vitrine publica. Repetir sincronizacao."},503);
   }
+  // Somente apos confirmar GitHub. Falha de ACK mantem a fila para retry,
+  // sem desfazer a decisao financeira e sem repetir pagamento.
+  const sincronizado=await g.rpc("catalogo_confirmar_vitrine_admin",{p_comercio:id,p_admin:a});
+  if(sincronizado.error||sincronizado.data?.ok!==true)
+    return t({sucesso:false,arquivado:true,pendente_sincronizacao:true,
+      erro:"Vitrine atualizada; confirmacao local pendente. Repetir sincronizacao."},503);
   // As referencias originais permanecem no cadastro/Storage. A limpeza fisica
   // dependera de uma rotina independente que comprove propriedade dos objetos.
   return t({sucesso:true,arquivado:true,mensagem:"Comercio arquivado com historico preservado."});

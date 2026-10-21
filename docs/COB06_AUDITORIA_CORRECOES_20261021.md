@@ -39,8 +39,18 @@ exigem revisao explicita antes de compor outro pacote ou serem instalados.
   ambas, estorno, replay e motivos nao financeiros. Corrida de duas conexoes
   quitacao versus estorno incluida na CI, resultado ainda por verificar.
 
+## P4 — reconciliacao da vitrine depois de arquivar
+
+- Reproducao: a listagem removia todo `arquivado`, inclusive sem GitHub confirmado.
+- Candidato 04 cria journal privado, preenchido na mesma transacao do arquivo
+  (com e sem catalogo). Fila inclui arquivos sem ACK; somente a Edge administrativa
+  confirma apos sucesso GitHub. Perda do ACK permanece reconciliavel; retry nao
+  reabre arquivo nem faz PUT redundante. UI identifica a reconciliacao pendente.
+- 25/25 testes SQL/HTTP direcionados passaram: perda da fila, RPC financeira real,
+  autorizacao, idempotencia, GitHub/ACK falhos e arquivo preservado.
+
 ## Estado
 
-P4–P5 em execucao sequencial. Concorrencia real de multiplas conexoes requer
+P5 em execucao sequencial. Concorrencia real de multiplas conexoes requer
 PostgreSQL descartavel na CI; PGlite sozinho nao comprova essa propriedade.
 COB-06 continua HOLD; nenhum candidato autoriza implantacao ou dinheiro.

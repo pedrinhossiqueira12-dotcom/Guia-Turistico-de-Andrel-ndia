@@ -67,6 +67,7 @@ function cenario(opts={}){
   async rpc(name){
    calls.push("db.rpc:"+name);
    if(opts.rpcFailure)return {data:null,error:{message:"Mock RPC failure"}};
+   if(name==="catalogo_confirmar_vitrine_admin")return {data:{ok:!opts.syncAckFailure},error:null};
    if(name==="catalogo_solicitar_encerramento_financeiro")
     return {data:opts.debtClear?{ok:true,situacao:"pendente_arquivamento",divida_centavos:0,pedidos_em_andamento:0}:
       {ok:true,situacao:"aguardando_quitacao",divida_centavos:500,faturas_pendentes:1},error:null};
@@ -326,6 +327,14 @@ test("HTTP recuperação: vitrine já sincronizada retorna 200 sem PUT redundant
  assert.equal(c.putCount,0);
  assert.equal(c.calls.filter(x=>x==="github:get").length,1);
 });
+test("HTTP recuperação: falha de ACK apos GitHub mantem pendencia financeira arquivada",async()=>{
+ const c=cenario({alreadyArchived:true,alreadySynced:true,syncAckFailure:true});
+ const r=await c.call("excluir_comercio","admin-jwt");
+ assert.equal(r.status,503);
+ assert.equal(r.data.arquivado,true);
+ assert.equal(r.data.pendente_sincronizacao,true);
+});
+
 test("HTTP recuperação: arquivo sem comércio nunca cria cadastro substituto",async()=>{
  const c=cenario({debtClear:true,githubMissing:true});
  const r=await c.call("excluir_comercio","admin-jwt");

@@ -38,6 +38,7 @@ function cenario(op={}){
        return {data:op.finalizacao||{ok:false,mensagem:"Divida em aberto"},error:null};
      if(nome==="catalogo_arquivar_sem_catalogo_admin")
        return {data:op.recusaSemCatalogo||{ok:true,situacao:"arquivado",sem_catalogo:true},error:null};
+     if(nome==="catalogo_confirmar_vitrine_admin")return {data:{ok:true},error:null};
      throw Error("RPC inesperada");
    }
  };

@@ -1060,10 +1060,8 @@ async function consultarEncerramento(uid:string,body:Record<string,unknown>){
 }
 async function listarEncerramentosAdmin(uid:string){
  if(uid!==ADMIN_USER_ID)throw new Failure("Acesso exclusivo do administrador.",403);
- const {data,error}=await db.from("catalogo_encerramentos_comercio")
-  .select("comercio_id,situacao,divida_apurada_centavos,solicitado_em,atualizado_em")
-  .neq("situacao","arquivado").order("solicitado_em",{ascending:true}).limit(100);
- if(error)throw new Failure("Não foi possível listar encerramentos.",503);
+ const data=await rpc("catalogo_listar_encerramentos_admin",{p_admin:uid});
+ if(!Array.isArray(data))throw new Failure("Não foi possível listar encerramentos.",503);
  return respond({success:true,encerramentos:data||[]});
 }
 async function finalizarEncerramentoAdmin(uid:string,body:Record<string,unknown>){
