@@ -6,6 +6,9 @@
   const $=id=>document.getElementById(id);
   const client=window.supabaseLoginClient||window.supabase?.createClient(URL_SUPABASE,CHAVE_PUBLICA);
   const money=n=>new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(Number(n||0)/100);
+  // COB-06: ate COB-08 este painel produtivo trata somente encerramentos.
+  // Saques e as demais revisoes de entregadores pertencem a Fase B (HOLD).
+  const BILLING_ONLY_RELEASE=true;
   function aviso(message,erro=false){
     $("mensagem").textContent=message;
     $("mensagem").style.color=erro?"#a4332a":"";
@@ -14,6 +17,20 @@
     if(!client)throw new Error("Serviço de autenticação indisponível.");
     const {data,error}=await client.functions.invoke("catalogo-asaas-financeiro",{body});
     if(error||data?.success!==true)throw new Error(data?.mensagem||error?.message||"Operação não autorizada.");
+    return data;
+  }
+  // Finalizacao administrativa exige reconciliar a vitrine publicada.
+  // A Edge financeira faz apenas a transacao SQL e NAO e uma rota de arquivo.
+  async function arquivarComVitrine(comercioId){
+    if(!client)throw new Error("Servico de autenticacao indisponivel.");
+    const {data,error}=await client.functions.invoke("whatsapp-bot",{
+      body:{acao:"excluir_comercio",comercio_id:comercioId}
+    });
+    if(error||data?.sucesso!==true||data?.arquivado!==true){
+      if(data?.pendente_sincronizacao===true)
+        throw new Error("Banco arquivado, mas vitrine pendente de sincronizacao. Reconciliar no GitHub antes de confirmar.");
+      throw new Error(data?.erro||error?.message||"Arquivamento nao confirmado no banco e na vitrine.");
+    }
     return data;
   }
   async function preconferirPagamento(tipo,item){
@@ -489,14 +506,17 @@
         if(!window.confirm("Conferir agora todas as faturas e pedidos deste comércio e arquivar somente se tudo estiver quitado?"))return;
         btn.disabled=true;aviso("Revalidando pendências no servidor…");
         try{
-          const result=await api({acao:"finalizar_encerramento_admin",
-            comercio_id:String(item.comercio_id||""),confirmacao:true});
-          aviso(result.mensagem||"Arquivamento confirmado.");
+          const result=await arquivarComVitrine(String(item.comercio_id||""));
+          aviso(result.mensagem||"Comercio arquivado e vitrine sincronizada.");
           await atualizar();
         }catch(error){aviso(error.message||"Arquivamento recusado.",true);}
         finally{btn.disabled=false;}
       });
       li.append(title,detail,btn);lista.appendChild(li);
+    }
+    if(BILLING_ONLY_RELEASE){
+      aviso(solicitacoes.length+" encerramento(s). Revisoes de saque continuam em HOLD.");
+      return;
     }
     const analises=await listarAnalisesResiduais();
     const saidas=await listarRegularizacoesSaida();
