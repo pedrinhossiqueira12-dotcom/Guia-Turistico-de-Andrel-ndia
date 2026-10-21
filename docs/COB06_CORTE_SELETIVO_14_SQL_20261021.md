@@ -108,3 +108,55 @@ Permanecem pendentes revisão independente, equivalência com definições reais
 recuperação funcional/off-host e homologação operacional delimitada. O lote QA
 histórico não recebe novo GET/reserva nem prova reconstruída. Acúmulo, saques e
 Pix Automático continuam HOLD. COB-06 não encerrada; COB-07/08 não autorizadas.
+
+## Revisão local adicional do corte completo — 21/10/2026
+
+Retomada sincronizada por fast-forward em `82286e0e1c0203209d9dcdef56136949fa1a0a7b`,
+árvore limpa; PR #39 aberta/Draft. A CI desse HEAD, [run 39682624521](https://github.com/pedrinhossiqueira12-dotcom/Guia-Turistico-de-Andrel-ndia/actions/runs/39682624521),
+teve **12/12 jobs success**, conferidos individualmente. Revisados os cinco SQLs
+forward-only, os dois locks, o empacotador e a montagem do clone no workflow.
+Não houve novo defeito de runtime demonstrado nesta revisão. Nenhum dos 14 SQLs
+ou dos dois locks foi modificado. Esta revisão técnica local não substitui a
+comparação com definições publicadas nem constitui aprovação operacional externa.
+
+| Fronteira | Dependência efetiva e conclusão da leitura |
+| --- | --- |
+| Passos 1–9 | Permanecem na ordem do lock original. Fornecem journal Asaas, aceites/encerramento, proteção de dívida, status público e conciliação por componentes. O passo 9 é a implementação que o passo 12 renomeia. |
+| Passo 10 / P1 | Lê fechamentos, comissões, pedidos e componentes V2 do baseline; substitui helper privado utilizado pelas guardas de encerramento. Não necessita tabelas de acúmulo nem reescreve snapshot pago. |
+| Passo 11 / P2 | Depende do journal do passo 1 e do registrador MP anterior; triggers compartilham reserva e congelam identidade/snapshot. O runtime MP deve reservar antes do POST e conservar consulta do gateway histórico. Reserva permanente não recebe retry automático. |
+| Passo 12 / P3 | Chama a implementação do passo 9 por nome interno revogado; serializa loja → fechamento → cobrança, reconta obrigações e conserva bloqueios administrativos. A prova concorrente já existente continua no PostgreSQL descartável da CI. |
+| Passo 13 / P4 | Envolve finalizadores do passo 3; journal privado é gravado na mesma transação. Edge autenticada confirma ACK somente após GitHub. A fila não autoriza pagamento nem permite escrita direta no journal. |
+| Passo 14 / P5 | Envolve três RPCs do baseline V2; trigger protege novos pedidos/aceites. Continuidade exige aceite anterior ao marco confiável e preserva verificações de titular, motoboy e código nas implementações internas. Histórico sem marco permanece HOLD. |
+| Rate limit da Edge | `catalogo_offline_consumir_limite(text,integer,integer)` pertence ao baseline (`20261005130000_catalogo_offline_rate_limit.sql`), não é criada pelos 14 SQLs. Verificar sua presença/ACL no destino antes de publicar a Edge; ausência deve continuar falhando fechada. |
+| Runtime e serviços | Imports locais do ZIP são resolvidos pelo empacotador; versões npm continuam declaradas nas fontes. GitHub, Auth, webhook/worker, Secrets e hospedagem não são instalados pelo ZIP. SQLs de baixa/acúmulo CI-only e entrypoints de saques continuam excluídos. |
+
+**Cobertura integrada nova:** `tests/cob06-audit14-seguranca-integrada.test.cjs`
+usa o harness PGlite existente, sem filesystem de banco, rede ou credenciais.
+Aplica os **14 arquivos exatos dos locks**, sobre migrations reais do harness e
+tabela sintética de publicação, com cobrança MP paga preexistente de 700 centavos.
+Confere preservação de todas as colunas dessa cobrança antes/depois, ausência de
+tabelas de saque/acúmulo, sete nomes internos sem EXECUTE de clientes/backend e
+recusa efetiva **SQLSTATE 42501** de dez RPCs para cada papel `anon`/`authenticated`,
+mesmo passando o UUID administrativo fictício. Como `service_role`, nega chamada
+interna e INSERT no journal, recusa administrador/titular alheios e executa
+solicitação → arquivamento → fila pendente → ACK pela API SQL autorizada.
+O ACK é sintético: não representa escrita real no GitHub.
+
+**Resultado local:** teste integrado PASS; suíte `npm.cmd test` **998/998 PASS**;
+verificador das nove fontes `COB06_BILLING_ONLY_LOCK_OK`; diff sem erro de espaços.
+O uso de `npm.cmd` evita a política local que bloqueia o wrapper `npm.ps1`, sem
+alterar essa política. Python não está instalado neste Windows (somente aliases
+WindowsApps); os testes/ZIP Python dependem do job existente da CI.
+PGlite não comprova corrida de conexões, Auth/JWT real, PostgREST, Storage ou
+paridade com o banco publicado. Não foi repetido o ensaio aceito do operador.
+
+**Próxima etapa operacional, ainda não autorizada:** confrontar este corte com
+assinaturas, definições, owners, search_path, ACL e objetos reais, detectar
+instalação parcial e comparar fontes Edge/UI antes de elaborar a instalação
+específica do destino. Os gates antigos de readiness/segurança cobrem o corte
+original; passar neles sozinho não aprova os cinco candidatos adicionais.
+Permanecem abertos recuperação funcional/off-host, política Auth/MFA administrativa,
+cabeçalhos de hospedagem, configuração efetiva dos webhooks/worker e homologação
+financeira delimitada. Não pedir repetição das provas SQL/Storage já aceitas.
+Nenhuma consulta PROD/STAGING, GET bancário, deploy, flag/Secret, Pix ou merge foi
+executado. Lote histórico intocado; COB-06 continua aberta/HOLD.

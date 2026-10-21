@@ -226,6 +226,23 @@ Este documento é a **única fila operacional** do trabalho financeiro do PR #39
 
 ### [ ] COB-06 — Preparar implantação **mínima e segura** no banco/site de produção
 
+**21/10/2026 — REVISÃO LOCAL DO CORTE 14 E PROVA INTEGRADA DE PAPÉIS:** retomada
+com árvore limpa; fetch e fast-forward de `c263783` até `82286e0`, HEAD da PR #39
+aberta/Draft. [CI desse HEAD 39682624521](https://github.com/pedrinhossiqueira12-dotcom/Guia-Turistico-de-Andrel-ndia/actions/runs/39682624521)
+**12/12 success**, jobs conferidos. Revisados cinco candidatos, locks, empacotador
+e dependências reais do baseline, sem novo defeito de runtime demonstrado.
+Acrescentado teste com os 14 SQLs exatos em PGlite: MP histórico pago preservado,
+sete nomes internos revogados, dez RPCs negadas efetivamente para cada papel de
+cliente (42501), journal sem escrita direta e fluxo SQL autorizado de encerramento
+até ACK sintético. **998/998 testes Node locais PASS**, lock original aprovado;
+nenhum SQL/hash/lock modificado. Matriz, escopo e limites em
+[revisão adicional do corte](COB06_CORTE_SELETIVO_14_SQL_20261021.md).
+**Próximo gate:** equivalência das definições/ACL e fontes publicadas em janela
+especificamente autorizada; recuperação funcional/off-host e configuração real
+de Auth/MFA, hosting e webhook continuam externas. Não repetir testes aceitos
+do operador. Sem acesso PROD/STAGING, provedor, backup privado, deploy, flags,
+Secrets, Pix, saque ou merge. **COB-06 HOLD; COB-07/08 e SAQ não iniciadas.**
+
 #### Segurança indispensável do corte financeiro — checklist filtrado do PDF do proprietário (21/10/2026)
 
 **Este checklist integra COB-06/07/08, não cria etapa, frente de trabalho nem autorização remota.** Baseline: PR #39 HEAD de referência `7824b28`; a CI 12/12 e os testes locais não comprovam configuração dos serviços publicados. Executar primeiro revisão offline e correções mínimas reproduzíveis; inspeções em PROD/STAGING, alteração de Secrets/hosting e homologação externa exigem autorização própria na etapa adequada. Não alterar os 14 SQLs/locks sem justificativa técnica, novo corte e evidências.
