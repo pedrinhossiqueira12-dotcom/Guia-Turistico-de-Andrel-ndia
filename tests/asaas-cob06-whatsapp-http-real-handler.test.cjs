@@ -67,6 +67,11 @@ function cenario(opts={}){
   async rpc(name){
    calls.push("db.rpc:"+name);
    if(opts.rpcFailure)return {data:null,error:{message:"Mock RPC failure"}};
+   if(name==="catalogo_offline_consumir_limite"){
+     return opts.limiterUnavailable?
+       {data:null,error:{message:"Mock limiter DB exception"}}:
+       {data:!opts.limiterReject,error:null};
+   }
    if(name==="catalogo_confirmar_vitrine_admin")return {data:{ok:!opts.syncAckFailure},error:null};
    if(name==="catalogo_solicitar_encerramento_financeiro")
     return {data:opts.debtClear?{ok:true,situacao:"pendente_arquivamento",divida_centavos:0,pedidos_em_andamento:0}:
@@ -108,6 +113,9 @@ function cenario(opts={}){
   ctx[n]=async()=>{throw Error("Unexpected handler "+n)};
  }
  ctx.Te=async()=>{calls.push("whatsapp:accepted");return ctx.t({sucesso:true});};
+ if(opts.muralSuccess)ctx.be=async()=>{calls.push("mural:created");return ctx.t({sucesso:true});};
+ if(opts.editMuralSuccess)ctx.Ee=async()=>{calls.push("mural:edited");return ctx.t({sucesso:true});};
+ if(opts.editComercioSuccess)ctx.ze=async()=>{calls.push("commerce:edited");return ctx.t({sucesso:true});};
  vm.createContext(ctx);
  vm.runInContext(functions+";globalThis.http=je;globalThis.safeHttp=cob06HandlerSeguro;",ctx);
  function request(acao,token,method="POST"){
@@ -292,6 +300,43 @@ test("HTTP limite WhatsApp: corpo HMAC exatamente no teto de bytes continua vali
  noWrites(c);
 });
 
+test("HTTP rate limit publico: login validado, chave SHA256 por usuario/acao e fluxo permitido",async()=>{
+ const c=cenario({muralSuccess:true,editMuralSuccess:true,editComercioSuccess:true});
+ for(const acao of ["criar_mural","editar_meu_mural","editar_meu_comercio"]){
+  const r=await c.call(acao,"owner-jwt");
+  assert.equal(r.status,200,acao);
+ }
+ assert.equal(c.calls.filter(x=>x==="db.rpc:catalogo_offline_consumir_limite").length,3);
+ assert.equal(c.calls.filter(x=>x==="mural:created").length,1);
+ assert.equal(c.calls.filter(x=>x==="mural:edited").length,1);
+ assert.equal(c.calls.filter(x=>x==="commerce:edited").length,1);
+ noWrites(c);
+});
+
+test("HTTP rate limit publico: sem login e sem quota nao altera cadastro nem perfil",async()=>{
+ const anon=cenario({muralSuccess:true});
+ for(const token of [undefined,"token-invalido"]){
+  const resposta=await anon.call("criar_mural",token);
+  assert.equal(resposta.status,401);
+ }
+ assert.equal(anon.calls.filter(x=>x==="db.rpc:catalogo_offline_consumir_limite").length,0);
+ assert.equal(anon.calls.filter(x=>x==="mural:created").length,0);
+ const c=cenario({muralSuccess:true,limiterReject:true});
+ const bloqueado=await c.call("criar_mural","owner-jwt");
+ assert.equal(bloqueado.status,429);
+ assert.equal(c.calls.filter(x=>x==="mural:created").length,0);
+ noWrites(c);
+});
+
+test("HTTP rate limit publico: erro no limitador falha fechado e nao divulga erro SQL",async()=>{
+ const c=cenario({muralSuccess:true,limiterUnavailable:true});
+ const r=await c.call("criar_mural","owner-jwt");
+ assert.equal(r.status,503);
+ assert.equal(r.data.erro,"Falha temporaria. Tente novamente ou contate o suporte.");
+ assert.ok(!JSON.stringify(r.data).includes("Mock limiter DB exception"));
+ assert.equal(c.calls.filter(x=>x==="mural:created").length,0);
+ noWrites(c);
+});
 test("HTTP WhatsApp: GET de verificacao exige token; payload nao eh registrado nos logs",async()=>{
  const c=cenario();
  const url="https://edge.local/functions/v1/whatsapp-bot?";
