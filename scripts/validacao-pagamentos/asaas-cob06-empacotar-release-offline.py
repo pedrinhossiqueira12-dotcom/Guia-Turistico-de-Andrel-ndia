@@ -30,6 +30,8 @@ SQL = (
     "supabase/pending-migrations/20261012163000_cob04_pagamento_somente_componentes_da_fatura.sql",
 )
 EDGE = "supabase/functions/catalogo-asaas-financeiro/index.ts"
+WHATSAPP_EDGE = "supabase/functions/whatsapp-bot/index.ts"
+WHATSAPP_HELPER = "supabase/functions/whatsapp-bot/storage-path-utils.mjs"
 UI = ("pages/catalogo-admin.html", "js/catalogo-admin.js")
 # Does not include any staging-only migrations, QA routes or payout modules as entrypoints.
 DOCUMENTATION = (
@@ -77,15 +79,17 @@ def read_lock() -> list[str]:
 
 
 def edge_dependencies() -> list[str]:
-    all_paths = {EDGE}
-    pending = [EDGE]
+    all_paths = {EDGE, WHATSAPP_EDGE}
+    pending = [EDGE, WHATSAPP_EDGE]
     while pending:
         source = pending.pop()
         text = get(source).decode("utf-8")
         for rel in SOURCE_IMPORT.findall(text):
             dep = posixpath.normpath(posixpath.join(posixpath.dirname(source), rel))
-            if not dep.startswith("supabase/functions/_shared/") or \
-               not dep.endswith((".ts", ".js", ".mjs")):
+            shared_ok = dep.startswith("supabase/functions/_shared/") and \
+                        dep.endswith((".ts", ".js", ".mjs"))
+            whatsapp_ok = source == WHATSAPP_EDGE and dep == WHATSAPP_HELPER
+            if not (shared_ok or whatsapp_ok):
                 raise Blocked(f"COB06_PACOTE_INVALIDO: dependencia Edge nao autorizada {dep}")
             if dep not in all_paths:
                 all_paths.add(dep)
@@ -134,9 +138,35 @@ def check_edge_security() -> None:
         raise Blocked("COB06_PACOTE_INVALIDO: webhook de saque sem trava")
 
 
+def check_whatsapp_security() -> None:
+    text = get(WHATSAPP_EDGE).decode("utf-8")
+    required = (
+        "function cob06DestinoGitHub()",
+        'B!=="main"&&te!=="https://jbttwihctuibchhcyqtl.supabase.co"',
+        'B==="main"&&(te!=="https://xdmbkflufsfqziixzpxc.supabase.co"',
+        "catalogo_solicitar_encerramento_financeiro",
+        "catalogo_finalizar_encerramento_financeiro",
+        "catalogo_arquivar_sem_catalogo_admin",
+        "cob06VerificarAssinaturaWhatsapp",
+        'if (!I) throw new Error("Credencial GitHub nao configurada.");',
+    )
+    if any(fragment not in text for fragment in required):
+        raise Blocked("COB06_PACOTE_INVALIDO: candidato whatsapp-bot sem guardas")
+    start = text.find("async function ae(")
+    end = text.find("async function _e(", start)
+    if start < 0 or end <= start:
+        raise Blocked("COB06_PACOTE_INVALIDO: handler de encerramento ausente")
+    handler = text[start:end]
+    if not (0 <= handler.find("cob06DestinoGitHub();") <
+            handler.find("const busca = await Y(e);")) or \
+       "if (administrador)" not in handler:
+        raise Blocked("COB06_PACOTE_INVALIDO: arquivamento sem preflight GitHub")
+
+
 def inventory() -> dict[str, bytes]:
     paths = read_lock()
     check_edge_security()
+    check_whatsapp_security()
     paths += edge_dependencies()
     paths += list(UI) + list(DOCUMENTATION)
     if len(paths) != len(set(paths)):
@@ -162,7 +192,7 @@ def document(contents: dict[str, bytes]) -> dict:
             "UI FILES ARE FULL SOURCE FOR REVIEW; no automatic website overwrite",
             "NO real aggregate Pix: multi-competence billing still HOLD",
             "Do not deploy without real backup/restore, credentials, approval and environment review",
-            "whatsapp-bot currently deployed in PROD is NOT part of this archive",
+            "Includes whatsapp-bot CANDIDATE for review; live PROD v90 differs and must not be overwritten blindly",
             "This archive does not contain secrets, deploy commands or environment flags",
         ],
         "files": [
@@ -181,7 +211,8 @@ def archive_bytes() -> bytes:
     instructions = (
         "COB-06 BILLING-ONLY / REVIEW CANDIDATE - DO NOT DEPLOY\n"
         "Contains 9 SQL sources in order, mixed Edge source with production\n"
-        "billing-only dispatcher, its local imports and the catalog owner UI.\n"
+        "billing-only dispatcher, its imports, candidate whatsapp-bot and\n"
+        "companion Storage helper, plus the catalog owner UI.\n"
         "This is NOT a ready-to-run migration or an approval to move money.\n"
         "Review the manifest, SQL schema/security, backup/restore, all runtime\n"
         "secrets and the effect on existing production pages independently.\n"
