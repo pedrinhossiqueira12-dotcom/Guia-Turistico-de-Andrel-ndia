@@ -50,6 +50,15 @@ test("COB-06: producao sem liberacao especifica nao escreve no main",async()=>{
   assert.equal(c.chamadas.length,0);
 });
 
+test("COB-06: branch QA e recusada em producao e em origem desconhecida",async()=>{
+  for(const url of [producao,"https://ambiente-invalido.example"]){
+    const c=cenario({branch:"qa/cob06-isolado",url,autorizacao:"AUTORIZADO_PARA_PRODUCAO"});
+    await assert.rejects(c.K("DATA/comercios.json"),/Branch QA permitida somente no STAGING/);
+    await assert.rejects(c.b("DATA/comercios.json","[]","sha","teste"),/Branch QA permitida somente no STAGING/);
+    assert.equal(c.chamadas.length,0,"Destino QA indevido nao gera rede");
+  }
+});
+
 test("COB-06: leitura e escrita QA apontam apenas para branch isolada",async()=>{
   const c=cenario({branch:"qa/cob06-isolado"});
   const lido=await c.K("DATA/comercios.json");
