@@ -128,7 +128,7 @@ function cenario(opts={}){
   const response=await ctx.http(request(acao,token,method));
   return {status:response.status,data:await response.json()};
  }
- return {call,request,raw:ctx.http,safe:ctx.safeHttp,calls,owner,admin,
+ return {call,request,raw:ctx.http,safe:ctx.safeHttp,formatError:ctx.t,calls,owner,admin,
   get putCount(){return putCount},get jsonState(){return jsonState},
   get jsonImage(){return jsonImagem},get jsonImages(){return [...jsonImagens]},
   get shaVersao(){return shaVersao},
@@ -384,6 +384,36 @@ test("HTTP seguranca: sanitizacao 503 nao apaga marcadores de arquivamento e ret
  assert.equal(Object.hasOwn(response.data,"detalhe"),false);
  assert.ok(!JSON.stringify(response.data).includes("GitHub PUT offline"));
 });
+test("HTTP 5xx: serializador real omite comercio, pessoa, cadastro e detalhe interno",async()=>{
+ const c=cenario();
+ const sensivel="SEGREDO_INTERNO_NUNCA_EXIBIR";
+ const r=c.formatError({
+  sucesso:false,erro:"SQL failure "+sensivel,detalhe:"stack "+sensivel,
+  comercio:{email:sensivel,cnpj:sensivel},
+  cadastro:{telefone:sensivel},pessoa:{documento:sensivel},
+  informacoes:{token:sensivel},detalhes:[sensivel],
+  publicado:true,arquivado:true,pendente_sincronizacao:true
+ },503);
+ assert.equal(r.status,503);
+ const dados=await r.json();
+ assert.deepEqual(Object.keys(dados).sort(),
+  ["arquivado","erro","pendente_sincronizacao","publicado","sucesso"].sort());
+ assert.equal(dados.publicado,true);
+ assert.equal(dados.arquivado,true);
+ assert.equal(dados.pendente_sincronizacao,true);
+ assert.equal(dados.erro,"Falha temporaria. Tente novamente ou contate o suporte.");
+ assert.ok(!JSON.stringify(dados).includes(sensivel));
+ noWrites(c);
+});
+
+test("HTTP 4xx: erro de validacao e sua estrutura seguem intactos",async()=>{
+ const c=cenario();
+ const r=c.formatError({sucesso:false,erro:"Dados invalidos.",campo:"nome"},400);
+ assert.equal(r.status,400);
+ assert.equal((await r.json()).campo,"nome");
+ noWrites(c);
+});
+
 test("HTTP recuperação: falha GitHub GET depois de RPC confirmada permite repetição",async()=>{
  const c=cenario({debtClear:true,githubGetFailure:true});
  const first=await c.call("excluir_comercio","admin-jwt");
