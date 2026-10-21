@@ -37,6 +37,8 @@ small,.muted{color:#64736b}.item strong{overflow-wrap:anywhere}#listaEncerrament
 <div class="row"><h2>Solicitações pendentes</h2><div><button type="button" class="secondary" id="atualizar">Atualizar</button> <button type="button" class="secondary" id="sair">Sair</button></div></div>
 <p class="muted">A dívida exibida é a estimativa registrada na solicitação. O servidor recalcula todas as obrigações no momento do arquivamento.</p>
 <ul id="listaEncerramentos"></ul>
+<!-- COB-06 billing-only: interfaces de saques so podem voltar na Fase B. -->
+<div id="saquesAdminArea" hidden aria-hidden="true">
 <hr>
 <h2>Solicitações de saldo residual dos entregadores</h2>
 <p class="muted">Pedidos de revisão abaixo de R$ 100. Uma análise pode ser marcada como em andamento ou recusada com justificativa. <strong>Este painel não envia Pix, não dá baixa em créditos e não permite marcar pagamentos como concluídos.</strong> A recusa da análise não extingue o saldo devido.</p>
@@ -49,6 +51,7 @@ small,.muted{color:#64736b}.item strong{overflow-wrap:anywhere}#listaEncerrament
 <h2>Créditos congelados para conciliação excepcional</h2>
 <p class="muted">Lista de separações contábeis, inclusive de pedidos administrativos já recusados. Os créditos <strong>não foram pagos</strong>. O diagnóstico mostra divergências, estornos e evidências bancárias observadas, mas <strong>não autoriza desbloqueio, quitação ou Pix</strong>. A regularização definitiva exige comprovação bancária e revisão independente.</p>
 <ul id="listaSeparacoesExcepcionais" aria-label="Reservas contábeis de créditos excepcionalmente congelados"></ul>
+</div>
 </section>
 <p role="status" id="mensagem"></p>
 </main>
