@@ -1067,6 +1067,9 @@ async function listarEncerramentosAdmin(uid:string){
  return respond({success:true,encerramentos:data||[]});
 }
 async function finalizarEncerramentoAdmin(uid:string,body:Record<string,unknown>){
+ // Segunda trava: nunca arquivar por esta Edge em producao, mesmo que a
+ // allowlist do dispatcher seja alterada no futuro. So whatsapp-bot sincroniza GitHub.
+ if(ENVIRONMENT==="production")throw new Failure("Arquivamento produtivo exige sincronizacao da vitrine GitHub.",503);
  if(uid!==ADMIN_USER_ID)throw new Failure("Acesso exclusivo do administrador.",403);
  check(body.confirmacao===true,"Confirme que conferiu as faturas e os pedidos.",400);
  const store=commerce(body.comercio_id);
