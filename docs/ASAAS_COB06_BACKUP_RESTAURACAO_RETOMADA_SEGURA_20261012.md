@@ -57,6 +57,18 @@ No job `All financial migrations except remote scheduling (disposable PostgreSQL
 - **Incidente grave / corrupção de banco:** decisão humana documentada, janela e restauração para novo projeto ou PITR conforme ferramenta de backup contratada, comparação de eventos externos Asaas/MP e replay seguro somente depois de identificar discrepâncias. Não executar restore destrutivo sem autorização específica e plano de corte.
 - **Saques:** permanecem fora do escopo, desativados mesmo em eventual lançamento de cobranças.
 
+## Próxima ação do operador: comprovação física de guarda fora do computador
+
+**PENDENTE — não assinar aceite com base apenas na existência do E:.**
+Já foram aprovados AES-256/extração e 143/143 hashes; não repetir checksums, dumps ou ensaios SQL. Em 21/10/2026 a cópia cifrada `E:\\GuiaAndrelandia-Backup-20261020.7z` estava em um segundo disco SATA, não em armazenamento off-host comprovado.
+
+1. **Antes de remover o HD:** confirmar fisicamente qual dispositivo é o E:, se contém outros dados/serviços necessários e se há escritas em andamento. Se for um HD SATA interno, encerrar programas e **desligar totalmente o Windows** antes de desconectar seus cabos. Não desconectar o SATA com o computador ligado. Se o disco atender a serviços ativos ou a identificação for incerta, **não o desconectar**; transferir uma cópia do arquivo `.7z` para outra mídia removível confiável, com o computador ligado, e ejetá-la pelo sistema depois da cópia.
+2. Guardar a mídia desconectada em local separado do computador, preferivelmente fora do imóvel. O arquivo `.7z` deve permanecer cifrado; nenhum SQL, documento ou objeto Storage em claro deve ser copiado para a mídia off-host. Guardar a senha em meio independente e recuperável, sem registrá-la no GitHub, chat ou backup ao qual ela abre acesso. Não apagar os originais criptografados no D: até comprovar procedimento completo.
+3. **Evidência mínima sem exposição de dados:** o operador confirma apenas `MIDIA_OFF_HOST_GUARDADA=SIM`, `SENHA_DISPONIVEL_SEPARADAMENTE=SIM`, tipo da mídia e data de guarda. Não enviar fotografia contendo etiqueta, serial, partições, nomes pessoais ou qualquer senha. Registrar `PENDENTE` até essa confirmação; confirmação verbal não comprova ensaio funcional de recuperação.
+4. A cópia congelada em 20/10 é **ponto de recuperação histórico**, não backup contínuo para novos pedidos; antes do go-live estabelecer rotina de novos backups SQL + Storage com retenção/off-host, consistência temporal e validações periódicas sem expor dados no CI.
+
+**Gate independente ainda aberto:** restauração funcional de DB/Auth/Storage/Edge/configurações em destino sem acesso a rede, jobs ou provedores reais, conforme condições de segurança já documentadas. O ensaio SQL anterior e a contagem dos arquivos não substituem esse teste. Nunca usar clone físico do Supabase que possa iniciar Cron/Vault antes do isolamento. Qualquer execução real dessa restauração requer autorização operacional própria e plano de isolamento aprovado.
+
 ## Itens para aceite da COB-06
 
 **Checklist reconciliado em 21/10/2026 com as evidências posteriores deste documento e da backlog.** Itens marcados comprovam somente o escopo indicado; não encerram a COB-06. A [CI do HEAD `65d7583`, run 39644316130](https://github.com/pedrinhossiqueira12-dotcom/Guia-Turistico-de-Andrel-ndia/actions/runs/39644316130), foi conferida com **12/12 jobs aprovados**, sem necessidade de reexecução.
