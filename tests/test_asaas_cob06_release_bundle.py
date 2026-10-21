@@ -43,6 +43,8 @@ class ReleaseBundleTest(unittest.TestCase):
                 self.assertIn("REVIEW-FIRST.txt", names)
                 self.assertIn("supabase/functions/whatsapp-bot/index.ts", names)
                 self.assertIn("supabase/functions/whatsapp-bot/storage-path-utils.mjs", names)
+                self.assertIn("pages/admin-encerramentos.html", names)
+                self.assertIn("js/admin-encerramentos.js", names)
                 self.assertIn("supabase/config.toml", names)
                 self.assertIn("scripts/validacao-pagamentos/asaas-cob06-worker-producao-readonly.sql", names)
                 self.assertNotIn("supabase/production-candidate/cob06_worker_webhook_producao_nao_implantar.sql", names)
@@ -62,6 +64,21 @@ class ReleaseBundleTest(unittest.TestCase):
             check = run("--verify", str(bad))
             self.assertNotEqual(check.returncode, 0)
             self.assertIn("hash de pages/catalogo-admin.html", check.stderr)
+
+    def test_financial_admin_view_must_be_reviewed_and_tamper_evident(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            original = pathlib.Path(tmp) / "review-original.zip"
+            tampered = pathlib.Path(tmp) / "review-admin-tampered.zip"
+            self.assertEqual(run("--build", str(original)).returncode, 0)
+            with zipfile.ZipFile(original) as source, zipfile.ZipFile(tampered, "w") as dest:
+                for item in source.infolist():
+                    data = source.read(item.filename)
+                    if item.filename == "js/admin-encerramentos.js":
+                        data += b"// tampered admin\n"
+                    dest.writestr(item, data)
+            result = run("--verify", str(tampered))
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("hash de js/admin-encerramentos.js", result.stderr)
 
     def test_worker_readiness_is_read_only_and_runtime_config_reviewable(self):
         worker = (ROOT / "scripts/validacao-pagamentos/asaas-cob06-worker-producao-readonly.sql").read_text()
