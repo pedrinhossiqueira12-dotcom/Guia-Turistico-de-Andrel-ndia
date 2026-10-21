@@ -32,7 +32,8 @@ WITH expected_tables(name) AS (
  ('catalogo_asaas_webhook_claim','catalogo_asaas_webhook_claim(integer)'),
  ('catalogo_asaas_webhook_finalizar','catalogo_asaas_webhook_finalizar(text,uuid,boolean)'),
  ('catalogo_solicitar_encerramento_financeiro','catalogo_solicitar_encerramento_financeiro(text,uuid)'),
- ('catalogo_finalizar_encerramento_financeiro','catalogo_finalizar_encerramento_financeiro(text,uuid)')
+ ('catalogo_finalizar_encerramento_financeiro','catalogo_finalizar_encerramento_financeiro(text,uuid)'),
+ ('catalogo_arquivar_sem_catalogo_admin','catalogo_arquivar_sem_catalogo_admin(text,uuid)')
 ), f AS (
  SELECT e.name,e.assinatura,p.oid,
   CASE WHEN p.oid IS NOT NULL THEN
