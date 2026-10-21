@@ -38,6 +38,8 @@ DOCUMENTATION = (
     "docs/ASAAS_COB06_PACOTE_MINIMO_CANDIDATO_20261012.md",
     "scripts/validacao-pagamentos/asaas-cob06-seguranca-readonly.sql",
     "scripts/validacao-pagamentos/asaas-producao-readiness-readonly.sql",
+    "scripts/validacao-pagamentos/asaas-cob06-worker-producao-readonly.sql",
+    "supabase/config.toml",
 )
 SOURCE_IMPORT = re.compile(r'\bfrom\s*["\'](\.[^"\']+)["\']')
 
@@ -193,6 +195,8 @@ def document(contents: dict[str, bytes]) -> dict:
             "NO real aggregate Pix: multi-competence billing still HOLD",
             "Do not deploy without real backup/restore, credentials, approval and environment review",
             "Includes whatsapp-bot CANDIDATE for review; live PROD v90 differs and must not be overwritten blindly",
+            "Worker Cron/Vault readiness SQL is read-only; production worker is NOT installed by this archive",
+            "Review verify_jwt and webhook authentication in included supabase/config.toml",
             "This archive does not contain secrets, deploy commands or environment flags",
         ],
         "files": [
@@ -216,6 +220,8 @@ def archive_bytes() -> bytes:
         "This is NOT a ready-to-run migration or an approval to move money.\n"
         "Review the manifest, SQL schema/security, backup/restore, all runtime\n"
         "secrets and the effect on existing production pages independently.\n"
+        "Inspect the included worker-readiness SELECT and config.toml; they\n"
+        "are REVIEW materials only and cannot enable any Cron or billing.\n"
         "STAGING QA, experimental aggregate-Pix SQL and withdrawals excluded.\n"
     ).encode()
     contents["REVIEW-FIRST.txt"] = instructions
