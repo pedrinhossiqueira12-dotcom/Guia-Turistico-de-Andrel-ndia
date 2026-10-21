@@ -1,6 +1,6 @@
 # COB-06 — backup, restauração e retorno seguro sem perda financeira
 
-**Atualização:** 13/10/2026. **Estado:** usuário executou o primeiro **backup lógico SQL real de produção no plano Free**, exportando sete arquivos e manifesto SHA-256 para **D: protegido por BitLocker** (`20261013T212912Z-34019e86`); terminal retornou `EXPORTACAO_CONCLUIDA`. **Verificação independente dos hashes ainda não realizada pelo operador; backup não restaurado, não abrange bytes físicos do Storage, Edge Functions, segredos nem assegura consistência transacional entre dumps.** Restore em ambiente isolado permanece HOLD; PR #39 continua Draft. Nenhuma migração, alteração de banco, cobrança ou saque real autorizados.
+**Atualização efetiva: 21/10/2026.** Os sete dumps SQL originais e os 128 objetos físicos Storage já foram exportados e conferidos pelo operador; o pacote `.7z` com criptografia AES-256 no disco E: foi testado mediante extração em D: criptografado. **143/143 arquivos** extraídos conferidos por SHA-256 com seus originais, com **128 objetos e 133855024 bytes de Storage**. O disco E: é um segundo disco físico que o operador confirma poder desconectar, mas ainda **não houve confirmação de desconexão e guarda em local distinto**. Foi efetuado ensaio anterior do SQL no clone isolado com rollback, mas **não** uma restauração integral de serviços externos/Edge/configurações. PR #39 Draft e COB-06 HOLD. Evidência detalhada em [ASAAS_COB06_EVIDENCIA_RECUPERACAO_ARQUIVOS_20261021.md](ASAAS_COB06_EVIDENCIA_RECUPERACAO_ARQUIVOS_20261021.md).
 
 ## Inventário real consultado (somente leitura)
 
@@ -76,3 +76,41 @@ No job `All financial migrations except remote scheduling (disposable PostgreSQL
 - **15/10/2026 — COB-06: PACOTE MÍNIMO DE 9 SQL APROVADO NO CLONE DO DUMP REAL, COM ROLLBACK.** Operador executou `asaas-cob06-ensaio-clone-offline.ps1` na versão do commit `cfff9cc3a93aed59e842b9d13079e445ecf43965`, usando somente o container isolado `guia-postgres-offline-20261014` (`--network none`). Saída: preflight `38|3|128|29|ausente`, **9/9 fontes validadas**, `Codigo de saida SQL: 0`, **5 avisos NOTICE** não fatais, marcadores de auditoria e `ROLLBACK` conferidos pelo script, e pós-rollback `38|3|128|29|ausente`. Verificação cobriu a aplicação SQL das estruturas/RLS/RPCs/triggers exigidos e ausência de componentes de saque nessa transação. Logs completos apenas no D: local, não publicados. **Escopo da prova:** DDL do pacote aplicável à cópia real e reversão confirmada; NÃO é implantação produtiva, não comprova execução de operações comerciais HTTP, concorrência, emissão Asaas real, nem integridade de bytes Storage ou backup independente. Etapa COB-06 **permanece aberta/HOLD** por guardas funcionais no clone real e demais gates de segurança, revisão da Edge legada e backup off-host criptografado. **Nenhum deploy, merge ou alteração no Supabase hospedado.**
 
 **A pendência de comprovar que os 9 SQL podem ser aplicados e revertidos sobre o esquema restaurado foi satisfeita.** As pendências de recuperação integral/segunda mídia e decisão de go-live continuam abertas. Não confundir esta prova com um teste de recuperação integral de objetos Storage, credenciais, serviços e pipelines externos.
+
+
+## 21/10/2026 — inventário de Edge Functions para plano de recuperação (somente leitura)
+
+**Projeto PRODUÇÃO:** `xdmbkflufsfqziixzpxc`. Leitura dos metadados publicados via Supabase e verificação das pastas no GitHub, exclusivamente na branch Draft `feat/asaas-faturas-saques-seguros`. Resultado: **14 funções ACTIVE e 14/14 caminhos `index.ts` presentes no repositório da PR**. Isto **NÃO** prova equivalência do código publicado ao código da branch, tampouco restauração de variáveis de ambiente, bindings, permissões, import maps ou serviços externos.
+
+| Função PROD | Versão ativa | verify_jwt (gateway) | Fonte candidata encontrada na PR #39 |
+|---|---:|---|---|
+| `whatsapp-bot` | 90 | `false` | `supabase/functions/whatsapp-bot/index.ts` |
+| `storage-cleanup` | 50 | `false` | `supabase/functions/storage-cleanup/index.ts` |
+| `catalogo-admin` | 52 | `false` | `supabase/functions/catalogo-admin/index.ts` |
+| `noticias-admin` | 50 | `true` | `supabase/functions/noticias-admin/index.ts` |
+| `catalogo-pix-sandbox` | 45 | `false` | `supabase/functions/catalogo-pix-sandbox/index.ts` |
+| `catalogo-pix-producao` | 52 | `false` | `supabase/functions/catalogo-pix-producao/index.ts` |
+| `conta-usuario` | 32 | `true` | `supabase/functions/conta-usuario/index.ts` |
+| `mercadopago-oauth-callback` | 36 | `false` | `supabase/functions/mercadopago-oauth-callback/index.ts` |
+| `catalogo-pedido-pix` | 34 | `false` | `supabase/functions/catalogo-pedido-pix/index.ts` |
+| `mercadopago-marketplace-webhook` | 36 | `false` | `supabase/functions/mercadopago-marketplace-webhook/index.ts` |
+| `catalogo-pedidos-offline-admin` | 31 | `false` | `supabase/functions/catalogo-pedidos-offline-admin/index.ts` |
+| `catalogo-pedido-offline` | 44 | `false` | `supabase/functions/catalogo-pedido-offline/index.ts` |
+| `catalogo-entregas` | 8 | `false` | `supabase/functions/catalogo-entregas/index.ts` |
+| `catalogo-fatura-pix` | 9 | `false` | `supabase/functions/catalogo-fatura-pix/index.ts` |
+
+**Atenção:** `verify_jwt=false` reflete somente a configuração de gateway e **não conclui** que a rota é pública sem proteção de aplicação; checar token próprio/HMAC/autorização para cada handler antes de reconstruir. A `whatsapp-bot` da branch já incorpora endurecimentos candidatos e **não é cópia binária da v90 efetivamente publicada**. O `ezbr_sha256` retornado pelo Supabase refere-se ao bundle implantado, não ao texto isolado de `index.ts`; não tentar equiparar estes hashes diretamente. Em caso de incidente, recuperar a versão efetivamente publicada antes de substituir qualquer endpoint.
+
+**Projeto STAGING:** `jbttwihctuibchhcyqtl`, com 12 funções ACTIVE no momento da leitura, incluindo `catalogo-asaas-financeiro` **v89** e `catalogo-asaas-cob06-auditoria` **v48**. **Nenhuma** função `catalogo-asaas-financeiro` encontra-se publicada na PRODUÇÃO. Não copiar funções, segredos ou banco do STAGING sobre a produção.
+
+**Cron PROD (leitura SQL somente de `jobname` e `active` em 21/10):** 3 jobs ativos: `andrelandia-fechamento-offline-diario`, `andrelandia-storage-retention-dry-run`, `catalogo-entregas-v2-monitor`. Os comandos desses jobs, URL/tokens do Vault e secrets **não foram lidos nem versionados**. Impedir qualquer execução acidental desses jobs e requisições externas durante a restauração de um clone.
+
+### Separação objetiva dos itens de recuperação
+
+- **Comprovado:** backup físico SQL/Storage, extração do `.7z`, comparação SHA-256 de **143 arquivos**, presença de fontes de **14/14** funções no branch da PR e metadados publicados (nome, versão, `verify_jwt`); ensaio SQL anterior em Postgres local isolado sem rede com rollback.
+- **Pendente off-host:** operador efetivamente desconectar e guardar E: em local fisicamente separado, com senha recuperável guardada por via independente. Não marcar como feito apenas porque o disco é removível.
+- **Pendente clone funcional:** em ambiente sem rede e sem cron executável, reconstruir Auth/storage/RLS/grants e executar testes representativos de rotas, jobs simulados e consistência de pedidos/faturas, incluindo vínculo temporal entre dump SQL 13/10 e export Storage 20/10. Não transformar ensaio de arquivo em promessa de restabelecimento total.
+- **Pendente configurações operacionais:** registrar **somente nomes, presença e responsáveis**, sem conteúdo dos Secrets, para Edge/Vault e integrações Asaas/MP/WhatsApp, Auth, SMTP, domínios, DNS, webhooks, cron e regras de deploy. Credenciais têm de ser reconfiguradas pelo proprietário em projeto isolado quando autorizado.
+- **Pendente equivalência de deploy:** obter de forma autenticada os bundles/fontes implantados, confirmar dependências e mapear divergências frente à branch. **Não** fazer deploy da PR #39 para substituir funções PROD como forma de recuperação.
+
+**Resultado:** inventário de recuperação de Edge e Cron registrado sem tocar produção; COB-06 permanece HOLD e nenhuma autorização de cobrança, saque ou merge é inferida.
