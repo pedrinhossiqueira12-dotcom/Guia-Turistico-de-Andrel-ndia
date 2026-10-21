@@ -1138,6 +1138,9 @@ jobs:
           dropdb --if-exists --force catalogo_cob06_ci
           trap - EXIT
           echo "PASS: COB-06 selective billing and pre-Asaas dump/restore verified with paid MP intact, no payouts"
+      - name: Audit COB06 common provider reservation with two local PostgreSQL connections
+        run: bash scripts/validacao-pagamentos/cob06-auditoria-concorrencia-ci.sh
+
       - name: Apply staged Asaas migration to disposable clone only
         run: |
           set -euo pipefail
