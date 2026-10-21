@@ -115,6 +115,9 @@ No job `All financial migrations except remote scheduling (disposable PostgreSQL
 
 **Resultado:** inventário de recuperação de Edge e Cron registrado sem tocar produção; COB-06 permanece HOLD e nenhuma autorização de cobrança, saque ou merge é inferida.
 
+**21/10/2026 — inventário de nomes de variáveis por função preparado:** a inspeção do código `index.ts` das 14 funções PROD na branch, mais das Edge Asaas candidatas do STAGING, gerou [inventário de nomes de configurações não sensíveis](ASAAS_COB06_INVENTARIO_VARIAVEIS_EDGE_20261021.md), commit `9016a76e9726fff5ddfa17b6ebc38e63296aa79d`. O inventário não contém valores nem indica presença dos Secrets no runtime; não substitui verificação do código realmente implantado, do Dashboard de cada projeto, nem ensaio de restauração funcional. Nenhuma configuração remota foi alterada.
+
+
 
 ### Comparação metadata SQL x bytes Storage restaurados — APROVADA no clone offline (21/10)
 
