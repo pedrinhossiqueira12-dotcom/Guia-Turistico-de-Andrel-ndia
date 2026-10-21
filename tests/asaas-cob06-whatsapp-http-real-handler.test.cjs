@@ -128,15 +128,18 @@ function cenario(opts={}){
   setFailConfirmedRead(v){opts.failConfirmedRead=v}};
 }
 const noWrites=c=>assert.equal(c.calls.filter(x=>x==="github:put").length,0);
-test("HTTP real: destino GitHub indevido recusa encerramento antes das RPCs",async()=>{
- const c=cenario({invalidGithubTarget:true,debtClear:true});
- for(const [acao,token] of [["excluir_meu_comercio","owner-jwt"],["excluir_comercio","admin-jwt"]]){
-  const r=await c.call(acao,token);
-  assert.equal(r.status,503);
-  assert.equal(r.data.sucesso,false);
- }
- assert.equal(c.calls.filter(x=>x.startsWith("db.rpc:")).length,0);
- assert.equal(c.calls.filter(x=>x.startsWith("github:")).length,0);
+test("HTTP real: GitHub indevido so bloqueia finalizacao admin, antes da RPC",async()=>{
+ const dono=cenario({invalidGithubTarget:true});
+ const pedido=await dono.call("excluir_meu_comercio","owner-jwt");
+ assert.equal(pedido.status,200);
+ assert.ok(dono.calls.includes("db.rpc:catalogo_solicitar_encerramento_financeiro"));
+ noWrites(dono);
+ const admin=cenario({invalidGithubTarget:true,debtClear:true});
+ const fim=await admin.call("excluir_comercio","admin-jwt");
+ assert.equal(fim.status,503);
+ assert.equal(fim.data.sucesso,false);
+ assert.equal(admin.calls.filter(x=>x.startsWith("db.rpc:")).length,0);
+ assert.equal(admin.calls.filter(x=>x.startsWith("github:")).length,0);
 });
 
 test("HTTP real: rejeita dono anonimo e token invalido; nao toca banco financeiro",async()=>{
