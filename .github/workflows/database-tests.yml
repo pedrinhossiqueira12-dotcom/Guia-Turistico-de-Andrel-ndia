@@ -56,18 +56,18 @@ jobs:
           path: ${{ runner.temp }}/asaas-cob06-billing-only-review.zip
           retention-days: 7
           if-no-files-found: error
-        - name: Build and verify explicit COB06 audit-14 review ZIP (never deploy)
-          run: |
-            python3 scripts/validacao-pagamentos/asaas-cob06-empacotar-release-offline.py --profile audit-14 --check
-            python3 scripts/validacao-pagamentos/asaas-cob06-empacotar-release-offline.py --profile audit-14 --build "$RUNNER_TEMP/asaas-cob06-audit-14-review.zip"
-            python3 scripts/validacao-pagamentos/asaas-cob06-empacotar-release-offline.py --profile audit-14 --verify "$RUNNER_TEMP/asaas-cob06-audit-14-review.zip"
-        - name: Retain separate audit-14 candidate for review only
-          uses: actions/upload-artifact@v4
-          with:
-            name: cob06-audit-14-review-${{ github.run_id }}
-            path: ${{ runner.temp }}/asaas-cob06-audit-14-review.zip
-            retention-days: 7
-            if-no-files-found: error
+      - name: Build and verify explicit COB06 audit-14 review ZIP (never deploy)
+        run: |
+          python3 scripts/validacao-pagamentos/asaas-cob06-empacotar-release-offline.py --profile audit-14 --check
+          python3 scripts/validacao-pagamentos/asaas-cob06-empacotar-release-offline.py --profile audit-14 --build "$RUNNER_TEMP/asaas-cob06-audit-14-review.zip"
+          python3 scripts/validacao-pagamentos/asaas-cob06-empacotar-release-offline.py --profile audit-14 --verify "$RUNNER_TEMP/asaas-cob06-audit-14-review.zip"
+      - name: Retain separate audit-14 candidate for review only
+        uses: actions/upload-artifact@v4
+        with:
+          name: cob06-audit-14-review-${{ github.run_id }}
+          path: ${{ runner.temp }}/asaas-cob06-audit-14-review.zip
+          retention-days: 7
+          if-no-files-found: error
       - name: Parse PowerShell 5.1 compatible Storage export without executing it
         shell: pwsh
         run: |
