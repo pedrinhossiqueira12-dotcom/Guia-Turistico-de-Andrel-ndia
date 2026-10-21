@@ -75,6 +75,18 @@ O congelamento do snapshot apos reserva trata corrida emissao/fechamento; evento
 financeiros por loja sao serializados e recebimento tardio nao desfaz estorno.
 O ZIP antigo continua com nove SQLs; agora alerta que o runtime candidato depende
 das cinco correcoes externas ao corte, que exigem revisao explicita separada.
+Investigacao da ordem de locks encontrou ainda potencial ciclo entre registro
+(fechamento -> cobranca) e conciliacao. O candidato 03 agora usa loja -> fechamento
+-> cobranca, compativel com os registradores. Nova corrida real na CI reproduz
+as duas ordens sem abrir rede e exige conclusao sem deadlock. O candidato 05
+protege INSERT/aceite tambem por trigger, cobrindo entrypoints legados.
+
+Primeira CI das cinco correcoes (`e2cfc9e`): run **39653830450, 12/12 PASS**.
+Log confirmou `COB06_AUDITORIA_P2_RESERVA_COMUM_DUAS_CONEXOES_OK`,
+`COB06_AUDITORIA_P3_QUITACAO_ESTORNO_SERIALIZADOS_OK` e instalacao dos cinco
+candidatos no clone. Regressao local apos consulta MP: **981/981 PASS**.
+As protecoes adicionais de snapshot/ordem de locks/entrypoints exigem a proxima
+CI; a primeira nao as valida retroativamente.
 
 Cinco correcoes locais implementadas; regressao e CI em andamento. Concorrencia real de multiplas conexoes requer
 PostgreSQL descartavel na CI; PGlite sozinho nao comprova essa propriedade.

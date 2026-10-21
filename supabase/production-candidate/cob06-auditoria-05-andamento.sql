@@ -33,6 +33,28 @@ BEGIN
 END $$;
 REVOKE ALL ON FUNCTION catalogo_private.catalogo_continuacao_permitida(text,uuid) FROM PUBLIC,anon,authenticated,service_role;
 
+-- A mesma fronteira protege entrypoints legados, nao apenas a Edge V2.
+CREATE FUNCTION catalogo_private.catalogo_pedido_suspenso_guard()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
+DECLARE b boolean;
+BEGIN
+ IF TG_OP='UPDATE' AND NEW.status IS NOT DISTINCT FROM OLD.status
+ AND NEW.aceito_em IS NOT DISTINCT FROM OLD.aceito_em THEN RETURN NEW; END IF;
+ SELECT bloqueado INTO b FROM public.catalogos WHERE comercio_id=NEW.comercio_id FOR UPDATE NOWAIT;
+ IF NOT coalesce(b,false) THEN RETURN NEW; END IF;
+ IF TG_OP='INSERT' THEN RAISE EXCEPTION 'Catalogo suspenso para novos pedidos' USING ERRCODE='23514'; END IF;
+ IF (OLD.aceito_em IS NULL AND NEW.aceito_em IS NOT NULL)
+ OR (NEW.status='em_preparo' AND OLD.status<>'em_preparo')
+ THEN RAISE EXCEPTION 'Catalogo suspenso para novos aceites' USING ERRCODE='23514'; END IF;
+ IF NEW.status IN ('pronto','entregue','concluido')
+ AND NOT catalogo_private.catalogo_continuacao_permitida(NEW.comercio_id,NEW.id)
+ THEN RAISE EXCEPTION 'Pedido sem aceite anterior comprovado' USING ERRCODE='23514'; END IF;
+ RETURN NEW;
+END $$;
+REVOKE ALL ON FUNCTION catalogo_private.catalogo_pedido_suspenso_guard() FROM PUBLIC,anon,authenticated,service_role;
+CREATE TRIGGER cob06_pedido_suspenso BEFORE INSERT OR UPDATE ON public.catalogo_pedidos
+ FOR EACH ROW EXECUTE FUNCTION catalogo_private.catalogo_pedido_suspenso_guard();
+
 ALTER FUNCTION public.catalogo_operar_pedido_v2(uuid,text,uuid,text,uuid,text) RENAME TO catalogo_operar_pedido_pre_suspensao;
 REVOKE ALL ON FUNCTION public.catalogo_operar_pedido_pre_suspensao(uuid,text,uuid,text,uuid,text) FROM PUBLIC,anon,authenticated,service_role;
 CREATE FUNCTION public.catalogo_operar_pedido_v2(p_operador_id uuid,p_comercio_id text,p_pedido_id uuid,p_acao text,p_motoboy_id uuid DEFAULT NULL,p_motivo text DEFAULT NULL)

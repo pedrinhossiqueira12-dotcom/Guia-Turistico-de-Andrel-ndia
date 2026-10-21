@@ -44,6 +44,11 @@ wait "$pid"
 test "$(sql -Atqc "SELECT catalogo_reservar_emissao_mp_fatura('00000000-0000-4000-8000-000000000081',700)->>'ok'")" = false
 test "$(sql -Atqc 'SELECT count(*) FROM catalogo_asaas_emissoes')" = 1
 echo COB06_AUDITORIA_P2_RESERVA_COMUM_DUAS_CONEXOES_OK
+if sql > "$tmp/snapshot.log" 2>&1 -c "UPDATE catalogo_fechamentos_offline SET total_comissao_centavos=701 WHERE id='00000000-0000-4000-8000-000000000081'"; then
+ echo 'ERRO: fechamento alterou total reservado' >&2; exit 1
+fi
+grep -q 'Snapshot reservado' "$tmp/snapshot.log"
+echo COB06_AUDITORIA_P2_SNAPSHOT_RESERVADO_CONGELADO_OK
 sql -f supabase/production-candidate/cob06-auditoria-03-inadimplencia.sql
 sql <<'SQL'
 UPDATE catalogo_fechamentos_offline SET status='vencido',vencimento_em='2020-01-01'
@@ -82,6 +87,27 @@ sql -c "SELECT catalogo_confirmar_cobranca_fatura('mp_audit_race_b','pago','proo
 test "$(sql -Atqc "SELECT bloqueado FROM catalogos WHERE comercio_id='comercio-de-exemplo'")" = t
 test "$(sql -Atqc "SELECT catalogo_confirmar_cobranca_fatura('pay_audit_race_a','pago','late-proof',700,'fixture')->>'ok'")" = false
 echo COB06_AUDITORIA_P3_QUITACAO_ESTORNO_SERIALIZADOS_OK
+sql > "$tmp/register.log" 2>&1 <<'SQL' &
+BEGIN;
+SET statement_timeout='10s';
+SELECT id FROM catalogo_fechamentos_offline WHERE id='00000000-0000-4000-8000-000000000082' FOR UPDATE;
+\echo REGISTRO_FECHAMENTO_RETIDO
+SELECT pg_sleep(2);
+UPDATE catalogo_fatura_cobrancas SET ultima_consulta_em=clock_timestamp() WHERE order_id='mp_audit_race_b';
+COMMIT;
+SQL
+pid=$!
+for i in {1..100}; do
+ if grep -q REGISTRO_FECHAMENTO_RETIDO "$tmp/register.log"; then break; fi
+ sleep 0.02
+done
+grep -q REGISTRO_FECHAMENTO_RETIDO "$tmp/register.log"
+sql > "$tmp/settle-register.log" 2>&1 <<'SQL'
+SET statement_timeout='10s';
+SELECT catalogo_confirmar_cobranca_fatura('mp_audit_race_b','estornado','proof-b',700,'fixture');
+SQL
+wait "$pid"
+echo COB06_AUDITORIA_REGISTRO_CONCILIACAO_SEM_CICLO_DE_LOCK_OK
 sql -f supabase/production-candidate/cob06-auditoria-04-vitrine.sql
 sql -f supabase/production-candidate/cob06-auditoria-05-andamento.sql
 echo COB06_AUDITORIA_CINCO_CANDIDATOS_FORWARD_ONLY_INSTALADOS_NO_CLONE_OK

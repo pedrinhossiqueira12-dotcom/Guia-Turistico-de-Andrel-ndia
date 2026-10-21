@@ -14,6 +14,9 @@ BEGIN
  SELECT * INTO c FROM public.catalogo_fatura_cobrancas WHERE order_id=btrim(coalesce(p_order_id,''));
  IF NOT FOUND THEN RETURN jsonb_build_object('ok',false,'reconhecido',false); END IF;
  SELECT bloqueado,motivo_bloqueio INTO v_block,v_motivo FROM public.catalogos WHERE comercio_id=c.comercio_id FOR UPDATE;
+ -- Registradores MP/Asaas travam fechamento antes da cobranca. Compartilhar
+ -- essa ordem tambem aqui evita ciclo fechamento->cobranca->fechamento.
+ PERFORM 1 FROM public.catalogo_fechamentos_offline WHERE id=c.fechamento_id FOR UPDATE;
  SELECT * INTO c FROM public.catalogo_fatura_cobrancas WHERE id=c.id FOR UPDATE;
  IF (p_estado='pago' AND c.status IN ('estornado','contestado'))
  OR (c.status='pago' AND p_estado IN ('cancelado','expirado'))

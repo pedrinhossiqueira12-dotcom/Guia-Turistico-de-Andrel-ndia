@@ -20,6 +20,8 @@ test('auditoria P5: pedido aceito antes da suspensao termina; novo aceite e titu
   await fn(IDS.owner,{comercio_id:'loja-a',pedido_id:o.id,status:'pronto',motivo:''});
   await assert.rejects(fn(IDS.owner,{comercio_id:'loja-a',pedido_id:novo.id,status:'em_preparo',motivo:''}));
   assert.equal((await operate(db,novo,'aceitar')).ok,false,'SQL tambem recusa novo aceite');
+  await assert.rejects(order(db,{mode:'retirada'}),'Novo pedido fica proibido tambem na tabela');
+  await assert.rejects(db.query(`UPDATE catalogo_pedidos SET status='em_preparo',aceito_em=clock_timestamp() WHERE id=$1`,[novo.id]),'Entry point legado nao contorna aceite');
   assert.equal((await operate(db,o,'pronto',IDS.outsider)).ok,false);
   assert.equal((await rpc(db,'catalogo_confirmar_entrega_autenticada',[IDS.owner,'loja-a',o.id,BAD_HASH,'fixture'])).ok,false);
   assert.equal((await rpc(db,'catalogo_confirmar_entrega_autenticada',[IDS.owner,'loja-a',o.id,HASH,'fixture'])).ok,true);
