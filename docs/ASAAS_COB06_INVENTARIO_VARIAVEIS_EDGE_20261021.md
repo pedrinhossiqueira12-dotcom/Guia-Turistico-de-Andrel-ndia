@@ -6,7 +6,7 @@
 
 - Supabase PRODUÇÃO: `xdmbkflufsfqziixzpxc`. Na consulta de metadados do Supabase foram encontradas **14 Edge Functions ACTIVE**. Todos os 14 diretórios possuem `index.ts` no repositório da PR #39. As versões da coluna abaixo são as versões **implantadas**; os nomes das variáveis foram coletados **exclusivamente do código candidato GitHub da PR**, não do ambiente publicado. Não se pode afirmar igualdade binária entre eles.
 - Extração estática das chamadas literais `Deno.env.get('NOME')` nos 14 `index.ts`; a lista **não é exaustiva** para dependências importadas, funções auxiliares, configurações de painel ou acessos dinâmicos. A ausência de um nome não prova que a função não o usa.
-- Em 13 dos 14 arquivos `index.ts` da branch aparecem `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY`; a função `conta-usuario` também usa essas duas. Portanto, **todos os 14** têm essas duas referências literais. `SUPABASE_SECRET_KEYS` aparece em 13/14 (a exceção é `conta-usuario`). A mera referência não indica obrigatoriedade, valor preenchido nem comportamento produtivo.
+- Nos **14 arquivos `index.ts`** da branch aparecem referências literais a `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY`. `SUPABASE_SECRET_KEYS` aparece em 13/14 (a exceção é `conta-usuario`). A mera referência não indica obrigatoriedade, valor preenchido nem comportamento produtivo.
 - **Nenhum Secret foi lido**. Nunca divulgar valores em GitHub, chat, PowerShell com logging, prints ou arquivos de diagnóstico.
 
 ## Variáveis adicionais referenciadas por função na PR
