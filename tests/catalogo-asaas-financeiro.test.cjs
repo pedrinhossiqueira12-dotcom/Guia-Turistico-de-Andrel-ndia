@@ -298,7 +298,9 @@ test("encerramento auditado protege publicação, histórico e acesso à fatura"
  assert.match(edge,/case "listar_encerramentos_admin":return await listarEncerramentosAdmin\(user\.id\)/);
  assert.match(edge,/case "finalizar_encerramento_admin":return await finalizarEncerramentoAdmin\(user\.id,body\)/);
  assert.match(edge,/check\(body\.confirmacao===true/);
- assert.match(panel,/finalizar_encerramento_admin/);
+ assert.doesNotMatch(panel,/finalizar_encerramento_admin/);
+ assert.match(panel,/client\.functions\.invoke\("whatsapp-bot"/);
+ assert.match(panel,/acao:"excluir_comercio"/);
  assert.match(html,/id="listaEncerramentos"/);
  assert.match(merchant,/Encerramento solicitado pelo proprietário/);
 });
