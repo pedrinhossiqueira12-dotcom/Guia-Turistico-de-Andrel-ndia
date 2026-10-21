@@ -102,6 +102,11 @@ O proximo commit acrescenta apenas cobertura/evidencias. Nenhuma alteracao remot
 ou no manifesto/hash dos nove SQLs. Suspensoes historicas sem marco e aprovacao
 do novo corte permanecem bloqueios explicitos, sem datas/provas inventadas.
 
+Revisao da UI suspensa adicionou prova de isolamento de sessao: o card de pedidos
+e limpo/ocultado antes de revalidar titularidade e so reaparece apos autorizacao.
+O teste reproduziu dados anteriores visiveis sem sessao e agora passa para
+sessao ausente e titularidade negada. E um complemento de P5, sem novo fluxo.
+
 Cinco correcoes locais implementadas; regressao e CI em andamento. Concorrencia real de multiplas conexoes requer
 PostgreSQL descartavel na CI; PGlite sozinho nao comprova essa propriedade.
 COB-06 continua HOLD; nenhum candidato autoriza implantacao ou dinheiro.

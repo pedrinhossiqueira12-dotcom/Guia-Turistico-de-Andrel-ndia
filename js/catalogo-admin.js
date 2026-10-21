@@ -91,6 +91,10 @@
   async function entrarPainel() {
     if (carregando) return;
     carregando = true;
+    // O card pode estar dentro da area suspensa de uma sessao anterior.
+    // Nunca reapresenta-lo antes de revalidar a identidade/titularidade.
+    $("pedidosOfflineCard").hidden=true;
+    $("listaPedidosOffline").innerHTML="";
     const supabase = getClient();
     try {
       const { data: { session } = {} } = await supabase.auth.getSession();
@@ -146,6 +150,7 @@
           $("linkContratacao").hidden = true;
           if(inadimplente||encerrando){
             $("catalogoBloqueado").appendChild($("pedidosOfflineCard"));
+            $("pedidosOfflineCard").hidden=false;
             await carregarPedidosOffline();
           }
         } else {
@@ -162,6 +167,7 @@
       $("painelCatalogo").hidden = false;
       if(paiPedidosOffline&&$("pedidosOfflineCard").parentElement!==paiPedidosOffline)
         paiPedidosOffline.insertBefore($("pedidosOfflineCard"),paiPedidosOffline.children[1]||null);
+      $("pedidosOfflineCard").hidden=false;
       setNotice(resultado.admin ? "Acesso administrativo confirmado" : "Acesso confirmado", resultado.admin
         ? "Você está corrigindo o catálogo como administrador do Guia."
         : "Você está gerenciando o catálogo deste comércio.");
@@ -1084,6 +1090,7 @@
     $("cancelamentoDialog").addEventListener("close", () => { $("cancelamentoForm").reset(); setFeedback("cancelamentoFeedback", ""); });
     $("logoutCatalogo").addEventListener("click", async () => {
       $("catalogoBloqueado").hidden=true;
+      $("pedidosOfflineCard").hidden=true;
       ++consultaFaturaSeq; ++visualizacaoFaturaSeq; ++regularizacaoFaturaSeq;
       faturaAptaParaEmissao=false; competenciaAptaParaEmissao="";
       $("faturaPixResultado").textContent=""; $("resultadoFaturaBloqueada").textContent="";
