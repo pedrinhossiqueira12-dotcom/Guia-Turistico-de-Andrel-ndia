@@ -175,6 +175,29 @@ async function cob06LerPostLimitado(requisicao){
     return {ok:false,status:400,erro:"JSON invalido."};
   }
 }
+// Antiabuso no backend, por identidade confirmada no Auth (nao IP de header).
+// A rota cadastro_web so responde confirmacao; Meta e validada por HMAC e nao
+// participa do limitador de formularios autenticados.
+async function cob06LimitarMutacaoPublica(requisicao,dados){
+  const acao=dados?.acao;
+  const politica=acao==="criar_mural"?{limite:5,janela:3600}:
+    ["editar_meu_mural","editar_meu_comercio"].includes(acao)?{limite:20,janela:60}:null;
+  if(!politica)return null;
+  const usuario=await E(requisicao);
+  if(!usuario?.id)
+    return t({sucesso:false,erro:"Autenticacao necessaria."},401);
+  const chaveBruta="whatsapp-bot:acao:"+acao+":usuario:"+usuario.id;
+  const resumo=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(chaveBruta));
+  const chave=Array.from(new Uint8Array(resumo),valor=>valor.toString(16).padStart(2,"0")).join("");
+  const {data,error}=await g.rpc("catalogo_offline_consumir_limite",{
+    p_chave_hash:chave,p_limite:politica.limite,p_janela_segundos:politica.janela
+  });
+  if(error||data!==true)
+    return t({sucesso:false,erro:error?
+      "Nao foi possivel verificar o limite de requisicoes.":
+      "Muitas tentativas. Aguarde para tentar novamente."},error?503:429);
+  return null;
+}
 async function je(e){
   const metodo=e.method;
   if(metodo==="OPTIONS") return new Response(null,{status:204,headers:T});
@@ -194,6 +217,8 @@ async function je(e){
   const recebido=await cob06LerPostLimitado(e);
   if(!recebido.ok)return t({sucesso:false,erro:recebido.erro},recebido.status);
   const corpoBruto=recebido.bytes,dados=recebido.dados;
+  const bloqueio=await cob06LimitarMutacaoPublica(e,dados);
+  if(bloqueio)return bloqueio;
   if(dados?.object==="whatsapp_business_account"){
     let verificado;
     try{verificado=await cob06VerificarAssinaturaWhatsapp(e,corpoBruto);}
