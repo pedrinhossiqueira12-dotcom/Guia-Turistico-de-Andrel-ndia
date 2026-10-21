@@ -41,7 +41,10 @@ function cenario(op={}){
      throw Error("RPC inesperada");
    }
  };
- const contexto={g:db,u:x=>String(x??"").trim(),
+ const contexto={g:db,cob06DestinoGitHub:()=>{
+   if(op.alvoGitHubInvalido)throw Error("Alvo QA indevido");
+   return "qa/fixture";
+ },u:x=>String(x??"").trim(),
    Y:async()=>({cadastro:{local_id:"loja-teste",usuario_id:uid},erro:null}),
    E:async r=>r.user?{id:r.user}:null,y:async r=>r.admin?{id:r.admin}:null,
    t:(body,status=200)=>({body,status}),
@@ -53,6 +56,18 @@ function cenario(op={}){
  return {...contexto.rotas,uid,chamadas,vitrine,writes:()=>writes};
 }
 const semGithub=c=>assert.equal(c.chamadas.filter(x=>x.startsWith("github:")).length,0);
+
+test("COB-06: destino GitHub invalido impede RPC de encerramento e de arquivamento",async()=>{
+ for(const tipo of ["dono","admin"]){
+  const c=cenario({alvoGitHubInvalido:true});
+  const r=tipo==="dono"?await c.Oe({user:c.uid},{comercio_id:"loja-teste"}):
+    await c.we({admin:c.uid},{comercio_id:"loja-teste"});
+  assert.equal(r.status,503);
+  assert.equal(r.body.sucesso,false);
+  assert.equal(c.chamadas.filter(x=>x.startsWith("rpc:")).length,0);
+  semGithub(c);
+ }
+});
 
 test("COB-06: dono apenas solicita encerramento de loja devedora, sem retirar fotos",async()=>{
  const c=cenario();
