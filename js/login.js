@@ -1456,7 +1456,7 @@ function traduzirErroAuth(
 
 
   const tamanhoMinimoServidor =
-    mensagem.match(/password should be at least\\s+(\\d+)/);
+    mensagem.match(/password should be at least\s+(\d+)/);
   if (tamanhoMinimoServidor) {
     return `A senha precisa ter pelo menos ${tamanhoMinimoServidor[1]} caracteres.`;
   }
