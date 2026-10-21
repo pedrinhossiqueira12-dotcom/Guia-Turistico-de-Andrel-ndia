@@ -41,7 +41,7 @@ function cenario(op={}){
      throw Error("RPC inesperada");
    }
  };
- const contexto={g:db,cob06DestinoGitHub:()=>{
+ const contexto={g:db,I:op.tokenGitHubAusente?"":"token-ficticio-inerte",cob06DestinoGitHub:()=>{
    if(op.alvoGitHubInvalido)throw Error("Alvo QA indevido");
    return "qa/fixture";
  },u:x=>String(x??"").trim(),
@@ -56,6 +56,20 @@ function cenario(op={}){
  return {...contexto.rotas,uid,chamadas,vitrine,writes:()=>writes};
 }
 const semGithub=c=>assert.equal(c.chamadas.filter(x=>x.startsWith("github:")).length,0);
+
+test("COB-06: token GitHub ausente impede arquivamento antes da RPC, dono ainda solicita",async()=>{
+ const dono=cenario({tokenGitHubAusente:true});
+ const pedido=await dono.Oe({user:dono.uid},{comercio_id:"loja-teste"});
+ assert.equal(pedido.status,200);
+ assert.ok(dono.chamadas.includes("rpc:catalogo_solicitar_encerramento_financeiro"));
+ semGithub(dono);
+ const admin=cenario({tokenGitHubAusente:true,finalizacao:{ok:true,situacao:"arquivado"}});
+ const resposta=await admin.we({admin:admin.uid},{comercio_id:"loja-teste"});
+ assert.equal(resposta.status,503);
+ assert.equal(resposta.body.sucesso,false);
+ assert.equal(admin.chamadas.filter(v=>v.startsWith("rpc:")).length,0);
+ semGithub(admin);
+});
 
 test("COB-06: GitHub indevido bloqueia somente arquivamento administrativo",async()=>{
  const dono=cenario({alvoGitHubInvalido:true});
