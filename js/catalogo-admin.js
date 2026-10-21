@@ -481,6 +481,9 @@
   }
 
   let consultaFaturaSeq = 0;
+  let visualizacaoFaturaSeq = 0;
+  let regularizacaoFaturaSeq = 0;
+  let competenciaAptaParaEmissao = "";
   let faturaAptaParaEmissao = false;
   let emissaoFaturaEmAndamento = false;
   // Preflight read-only antes de qualquer emissao: nao criar Pix se a
@@ -490,13 +493,16 @@
     const competencia=$("competenciaOffline")?.value||"";
     const botao=$("gerarPixFatura");
     const numero=++consultaFaturaSeq;
+    const visualizacao=preservarResultado?visualizacaoFaturaSeq:++visualizacaoFaturaSeq;
     faturaAptaParaEmissao=false;
+    competenciaAptaParaEmissao="";
+    if(!preservarResultado)$("faturaPixResultado").textContent="";
     if(!botao)return;
     botao.disabled=true;
     if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(competencia))return;
     try{
       const dado=await chamarFaturaPix({acao:"obter_fatura",competencia});
-      if(numero!==consultaFaturaSeq||$("competenciaOffline")?.value!==competencia)return;
+      if(numero!==consultaFaturaSeq||visualizacao!==visualizacaoFaturaSeq||$("competenciaOffline")?.value!==competencia)return;
       const fatura=dado.fatura;
       const total=Number(fatura?.total_comissao_centavos);
       faturaAptaParaEmissao=Boolean(fatura&&
@@ -504,6 +510,7 @@
         Number.isSafeInteger(total)&&total>=500&&
         dado.fatura_abaixo_minimo_asaas!==true&&
         !dado.cobranca_status&&dado.provedor!=="mercadopago");
+      if(faturaAptaParaEmissao)competenciaAptaParaEmissao=competencia;
       botao.disabled=!faturaAptaParaEmissao||emissaoFaturaEmAndamento;
       if(!preservarResultado&&(dado.fatura_abaixo_minimo_asaas===true||
          dado.cobranca_status||dado.provedor==="mercadopago"))
@@ -511,7 +518,7 @@
       else if(!preservarResultado&&!fatura)$("faturaPixResultado").textContent=
         "Ainda nao ha fatura fechada neste mes.";
     }catch(erro){
-      if(numero!==consultaFaturaSeq||$("competenciaOffline")?.value!==competencia)return;
+      if(numero!==consultaFaturaSeq||visualizacao!==visualizacaoFaturaSeq||$("competenciaOffline")?.value!==competencia)return;
       faturaAptaParaEmissao=false;
       botao.disabled=true;
       $("faturaPixResultado").textContent=
@@ -561,37 +568,59 @@
 
   async function gerarPixFatura() {
     if(emissaoFaturaEmAndamento)return;
-    if(!faturaAptaParaEmissao){
+    if(!faturaAptaParaEmissao||competenciaAptaParaEmissao!==$("competenciaOffline")?.value){
       $("faturaPixResultado").textContent=
         "Consulte uma fatura fechada e elegivel antes de gerar Pix.";
       return;
     }
     const competencia=competenciaDaFatura();
+    const visualizacao=++visualizacaoFaturaSeq;
+    ++consultaFaturaSeq;
+    const atual=()=>visualizacao===visualizacaoFaturaSeq&&$("competenciaOffline")?.value===competencia;
     emissaoFaturaEmAndamento=true;
     faturaAptaParaEmissao=false;
+    competenciaAptaParaEmissao="";
     $("gerarPixFatura").disabled=true;
     $("faturaPixResultado").textContent="Solicitando o Pix da fatura…";
     try {
-      renderizarPixFatura(await chamarFaturaPix({
+      const dados=await chamarFaturaPix({
         acao:"criar_cobranca",competencia,
         nome_pagador:$("faturaAsaasNomePagador")?.value||"",
         documento:$("faturaAsaasDocumento")?.value||""
-      }));
+      });
+      if(atual())renderizarPixFatura(dados);
     } catch(error) {
-      $("faturaPixResultado").textContent=
+      if(atual())$("faturaPixResultado").textContent=
         error.message||"Nao foi possivel gerar o Pix da fatura.";
     } finally {
       emissaoFaturaEmAndamento=false;
       // Exigir nova leitura do banco inclusive apos timeout ou resposta incerta.
       // A API garante a idempotencia; o painel nunca tenta POST automatico.
-      await atualizarPreflightFatura({preservarResultado:true});
+      if(atual())await atualizarPreflightFatura({preservarResultado:true});
+      else $("gerarPixFatura").disabled=!faturaAptaParaEmissao||
+        competenciaAptaParaEmissao!==$("competenciaOffline")?.value;
     }
   }
 
   async function consultarPixFatura() {
-    $("faturaPixResultado").innerHTML = '<p class="form-feedback">Verificando o pagamento da fatura…</p>';
-    try { renderizarPixFatura(await chamarFaturaPix({ acao: "consultar_cobranca", competencia: competenciaDaFatura() })); }
-    catch (error) { $("faturaPixResultado").innerHTML = `<p class="form-feedback">${escapar(error.message || "Não foi possível verificar o pagamento da fatura.")}</p>`; }
+    const competencia=$("competenciaOffline")?.value||"";
+    const visualizacao=++visualizacaoFaturaSeq;
+    ++consultaFaturaSeq;
+    faturaAptaParaEmissao=false;
+    competenciaAptaParaEmissao="";
+    $("gerarPixFatura").disabled=true;
+    const atual=()=>visualizacao===visualizacaoFaturaSeq&&$("competenciaOffline")?.value===competencia;
+    $("faturaPixResultado").textContent="Verificando o pagamento da fatura…";
+    if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(competencia)){
+      $("faturaPixResultado").textContent="Escolha o mes da fatura antes de consultar.";
+      return;
+    }
+    try {
+      const dados=await chamarFaturaPix({ acao: "consultar_cobranca", competencia });
+      if(atual())renderizarPixFatura(dados);
+    }catch(error){
+      if(atual())$("faturaPixResultado").textContent=error.message||"Não foi possível verificar o pagamento da fatura.";
+    }
   }
 
   async function aceitarTermosComercio(event) {
@@ -613,7 +642,9 @@
   async function regularizarFaturaBloqueada(acao){
     // Um unico POST de emissao por painel, incluindo a tela de loja bloqueada.
     if(acao==="criar_cobranca"&&emissaoFaturaEmAndamento)return;
+    const visualizacao=++regularizacaoFaturaSeq;
     const competencia=$("competenciaFaturaBloqueada")?.value||"";
+    const atual=()=>visualizacao===regularizacaoFaturaSeq&&$("competenciaFaturaBloqueada")?.value===competencia;
     if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(competencia)){
       $("resultadoFaturaBloqueada").textContent="Escolha o mes da fatura pendente.";
       return;
@@ -629,10 +660,12 @@
       const dados=await chamarFaturaPix({acao,competencia,
         nome_pagador:$("nomeFaturaBloqueada")?.value||"",
         documento:$("documentoFaturaBloqueada")?.value||""});
-      renderizarPixFatura(dados,"resultadoFaturaBloqueada");
-      if(dados.cobranca_status==="pago")await entrarPainel();
+      if(atual()){
+        renderizarPixFatura(dados,"resultadoFaturaBloqueada");
+        if(dados.cobranca_status==="pago")await entrarPainel();
+      }
     }catch(erro){
-      $("resultadoFaturaBloqueada").textContent=
+      if(atual())$("resultadoFaturaBloqueada").textContent=
         erro.message||"Nao foi possivel consultar a fatura.";
     }finally{
       if(emitir){
@@ -1009,6 +1042,10 @@
     $("catalogoTermsDialog")?.addEventListener("cancel",event=>event.preventDefault());
     $("gerarFaturaBloqueada")?.addEventListener("click",()=>regularizarFaturaBloqueada("criar_cobranca"));
     $("consultarFaturaBloqueada")?.addEventListener("click",()=>regularizarFaturaBloqueada("consultar_cobranca"));
+    $("competenciaFaturaBloqueada")?.addEventListener("change",()=>{
+      ++regularizacaoFaturaSeq;
+      $("resultadoFaturaBloqueada").textContent="";
+    });
     $("competenciaOffline")?.addEventListener("change", atualizarPreflightFatura);
     $("gerarPixFatura").addEventListener("click", gerarPixFatura);
     $("consultarPixFatura").addEventListener("click", consultarPixFatura);
@@ -1016,6 +1053,9 @@
     $("cancelarCancelamento").addEventListener("click", () => $("cancelamentoDialog").close());
     $("cancelamentoDialog").addEventListener("close", () => { $("cancelamentoForm").reset(); setFeedback("cancelamentoFeedback", ""); });
     $("logoutCatalogo").addEventListener("click", async () => {
+      ++consultaFaturaSeq; ++visualizacaoFaturaSeq; ++regularizacaoFaturaSeq;
+      faturaAptaParaEmissao=false; competenciaAptaParaEmissao="";
+      $("faturaPixResultado").textContent=""; $("resultadoFaturaBloqueada").textContent="";
       entregaState.generation += 1; entregaState.userId = ""; entregaState.sessionToken = ""; entregaState.motoboys = []; ultimaListaPedidos = [];
       $("listaPedidosOffline").innerHTML = ""; $("painelCatalogo").hidden = true; $("loginCard").hidden = false; $("logoutCatalogo").hidden = true;
       try { await getClient()?.auth?.signOut({ scope: "local" }); } catch { /* bloqueio visual mesmo se a sessão remota falhar */ }

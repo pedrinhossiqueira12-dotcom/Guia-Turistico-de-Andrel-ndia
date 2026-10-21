@@ -13,6 +13,7 @@ function trecho(inicio,fim){
 const codigo=[
  trecho("  let consultaFaturaSeq = 0;","  function renderizarPixFatura("),
  trecho("  async function gerarPixFatura()","  async function consultarPixFatura()"),
+ trecho("  async function consultarPixFatura()","  async function aceitarTermosComercio("),
  trecho("  async function regularizarFaturaBloqueada(acao)","  async function carregarDadosPainel()")
 ].join("\n");
 
@@ -38,7 +39,7 @@ function cenario(executar){
   entrarPainel:async()=>{}
  };
  vm.createContext(ctx);
- vm.runInContext(codigo+";globalThis.api={atualizarPreflightFatura,gerarPixFatura,regularizarFaturaBloqueada}",ctx);
+ vm.runInContext(codigo+";globalThis.api={atualizarPreflightFatura,gerarPixFatura,consultarPixFatura,regularizarFaturaBloqueada}",ctx);
  return {api:ctx.api,$,acessos,renderizados};
 }
 const fatura=(valor=500,status="faturado",extras={})=>({
@@ -138,4 +139,104 @@ test("COB-06 UI: emissao regular so ocorre depois de obter fatura valida",async(
  await c.api.gerarPixFatura();
  assert.equal(criou,true);
  assert.equal(c.$("faturaPixResultado").textContent,"PIX:PIX-VALIDO");
+});
+
+test("COB-06 UI: trocar competencia apaga Pix anterior inclusive com mes invalido",async()=>{
+ const c=cenario(async()=>fatura(750));
+ c.$("faturaPixResultado").textContent="PIX:OUTUBRO";
+ c.$("competenciaOffline").value="2026-11";
+ await c.api.atualizarPreflightFatura();
+ assert.doesNotMatch(c.$("faturaPixResultado").textContent,/PIX:OUTUBRO/);
+ c.$("faturaPixResultado").textContent="PIX:NOVEMBRO";
+ c.$("competenciaOffline").value="";
+ await c.api.atualizarPreflightFatura();
+ assert.doesNotMatch(c.$("faturaPixResultado").textContent,/PIX:NOVEMBRO/);
+});
+
+test("COB-06 UI: elegibilidade de outubro nao autoriza emissao de novembro",async()=>{
+ const c=cenario(async()=>fatura(750));
+ await c.api.atualizarPreflightFatura();
+ c.$("competenciaOffline").value="2026-11";
+ await c.api.gerarPixFatura();
+ assert.deepEqual(acoes(c),["obter_fatura"]);
+});
+
+test("COB-06 UI: emissao atrasada nao exibe Pix nem erro de outra competencia",async()=>{
+ for(const falhar of [false,true]){
+  const espera=pendencia();
+  const c=cenario(async body=>{
+   if(body.acao==="obter_fatura")return fatura(750);
+   await espera.promessa;
+   if(falhar)throw Error("ERRO-OUTUBRO");
+   return {...fatura(750),pix:{code:"OUTUBRO"}};
+  });
+  await c.api.atualizarPreflightFatura();
+  const emissao=c.api.gerarPixFatura();
+  c.$("competenciaOffline").value="2026-11";
+  await c.api.atualizarPreflightFatura();
+  espera.resolver();
+  await emissao;
+  assert.equal(c.renderizados.length,0);
+  assert.doesNotMatch(c.$("faturaPixResultado").textContent,/OUTUBRO/);
+  assert.equal(acoes(c).filter(x=>x==="criar_cobranca").length,1);
+ }
+});
+
+test("COB-06 UI: consulta antiga nao substitui consulta mais recente do mesmo mes",async()=>{
+ const espera=pendencia();
+ let consultas=0;
+ const c=cenario(async body=>{
+  if(body.acao==="obter_fatura")return fatura(750);
+  if(++consultas===1)return espera.promessa;
+  return {...fatura(750),cobranca_status:"pago"};
+ });
+ const antiga=c.api.consultarPixFatura();
+ await c.api.consultarPixFatura();
+ espera.resolver({...fatura(750),pix:{code:"PIX-ANTIGO"}});
+ await antiga;
+ assert.equal(c.renderizados.length,1);
+ assert.equal(c.renderizados[0].data.cobranca_status,"pago");
+ assert.doesNotMatch(c.$("faturaPixResultado").textContent,/PIX-ANTIGO/);
+});
+
+test("COB-06 UI: regularizacao atrasada nao sobrescreve o mes escolhido",async()=>{
+ const espera=pendencia();
+ const c=cenario(async()=>espera.promessa);
+ const consulta=c.api.regularizarFaturaBloqueada("consultar_cobranca");
+ c.$("competenciaFaturaBloqueada").value="2026-11";
+ espera.resolver({...fatura(750),pix:{code:"OUTUBRO"}});
+ await consulta;
+ assert.equal(c.renderizados.length,0);
+});
+
+test("COB-06 UI: preflight antigo nao reabilita emissao apos consulta paga",async()=>{
+ const espera=pendencia();
+ const c=cenario(async body=>body.acao==="obter_fatura"?espera.promessa:
+  {...fatura(750),cobranca_status:"pago"});
+ const leitura=c.api.atualizarPreflightFatura();
+ await c.api.consultarPixFatura();
+ espera.resolver(fatura(750));
+ await leitura;
+ assert.equal(c.$("gerarPixFatura").disabled,true);
+ await c.api.gerarPixFatura();
+ assert.equal(acoes(c).filter(x=>x==="criar_cobranca").length,0);
+});
+
+test("COB-06 UI: fim de emissao antiga preserva consulta paga mais recente",async()=>{
+ const espera=pendencia();
+ const c=cenario(async body=>{
+  if(body.acao==="obter_fatura")return fatura(750);
+  if(body.acao==="criar_cobranca")return espera.promessa;
+  return {...fatura(750),cobranca_status:"pago"};
+ });
+ await c.api.atualizarPreflightFatura();
+ const emissao=c.api.gerarPixFatura();
+ await c.api.consultarPixFatura();
+ espera.resolver({...fatura(750),pix:{code:"PIX-ANTIGO"}});
+ await emissao;
+ assert.equal(c.renderizados.length,1);
+ assert.equal(c.renderizados[0].data.cobranca_status,"pago");
+ assert.equal(c.$("gerarPixFatura").disabled,true);
+ assert.equal(acoes(c).filter(x=>x==="obter_fatura").length,1,
+  "Finalizacao antiga nao inicia nova leitura sobre a consulta recente");
 });
