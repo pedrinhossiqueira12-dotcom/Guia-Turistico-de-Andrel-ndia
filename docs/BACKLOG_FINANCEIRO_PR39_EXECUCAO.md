@@ -226,6 +226,24 @@ Este documento é a **única fila operacional** do trabalho financeiro do PR #39
 
 ### [ ] COB-06 — Preparar implantação **mínima e segura** no banco/site de produção
 
+**21/10/2026 — PREFLIGHT DE RECUPERAÇÃO FUNCIONAL, SEM EXECUÇÃO:** sincronizado
+por fast-forward até `c61daee`, árvore limpa, PR #39 Draft e CI desse HEAD
+`39691216165` success. Inspeção local apenas de metadados confirmou Docker Desktop
+Linux 29.8.2, clone histórico healthy com rede none/sem portas/restart=no e D:
+BitLocker 100% On. Rede antiga de nome loopback tem `internal=false`; não reutilizar.
+Nenhum SQL/exec no clone, conteúdo de volume/backup, mídia externa ou Secret foi
+acessado; nenhum contêiner/rede/volume criado ou iniciado. Preparado no
+[runbook](ASAAS_COB06_BACKUP_RESTAURACAO_RETOMADA_SEGURA_20261012.md) plano com
+volumes novos, namespace sem saída, executores Cron/pg_net bloqueados antes do
+restore, DB/Auth/metadata Storage/RLS/MP preservados e Edge/configuração local.
+**Bloqueios:** autorização de execução/acesso às cópias locais, localização atual
+do VHDX cifrado, versões/bootstrap compatíveis e imagens faltantes, prova sintética
+do isolamento, mapeamento físico Storage e equivalência das fontes/configurações.
+Não foi necessário código novo. Reutilizados hashes/extração/metadata e nove SQLs
+já aceitos, sem repetir provas. Próximo gate: composição mínima e isolamento com
+dados sintéticos, somente mediante autorização. **Restauração não executada;
+COB-06 HOLD**, sem Supabase remoto, deploy, operação bancária ou merge.
+
 **21/10/2026 — REVISÃO LOCAL DO CORTE 14 E PROVA INTEGRADA DE PAPÉIS:** retomada
 com árvore limpa; fetch e fast-forward de `c263783` até `82286e0`, HEAD da PR #39
 aberta/Draft. [CI desse HEAD 39682624521](https://github.com/pedrinhossiqueira12-dotcom/Guia-Turistico-de-Andrel-ndia/actions/runs/39682624521)

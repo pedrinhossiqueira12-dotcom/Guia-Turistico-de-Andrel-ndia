@@ -2,6 +2,142 @@
 
 **Atualização efetiva: 21/10/2026.** Os sete dumps SQL originais e os 128 objetos físicos Storage já foram exportados e conferidos pelo operador; o pacote `.7z` com criptografia AES-256 no disco E: foi testado mediante extração em D: criptografado. **143/143 arquivos** extraídos conferidos por SHA-256 com seus originais, com **128 objetos e 133855024 bytes de Storage**. O disco E: é um segundo disco físico. **Em 21/10/2026, o operador declarou: `Backup guardado fora do computador`.** Essa declaração é registrada como confirmação operacional de guarda externa **sob a condição de que a mídia que contém o `.7z` esteja de fato fisicamente fora do computador** (não apenas em E: ainda conectado). A confirmação é declaratória: não houve verificação física independente, nem confirmação sobre guarda separada da senha. Foi efetuado ensaio anterior do SQL no clone isolado com rollback, mas **não** uma restauração integral de serviços externos/Edge/configurações. PR #39 Draft e COB-06 HOLD. Evidência detalhada em [ASAAS_COB06_EVIDENCIA_RECUPERACAO_ARQUIVOS_20261021.md](ASAAS_COB06_EVIDENCIA_RECUPERACAO_ARQUIVOS_20261021.md).
 
+## Preflight do ensaio funcional — preparado, NÃO EXECUTADO (21/10/2026)
+
+Esta seção é a orientação atual para o próximo ensaio. Registros datados abaixo
+permanecem históricos; não reabrem os 143 hashes, o ensaio dos nove SQLs ou a
+declaração de guarda externa já recebida. Base sincronizada por fast-forward:
+`c61daee408c375ba9c7b6b6c07507cffd9a0dc74`, árvore limpa, PR #39 aberta/Draft,
+[CI 39691216165 success](https://github.com/pedrinhossiqueira12-dotcom/Guia-Turistico-de-Andrel-ndia/actions/runs/39691216165).
+**Escopo desta rodada: inspeção de metadados Docker/BitLocker e plano documental.**
+Não foi executado SQL, aberto backup privado, acessado conteúdo de volume,
+reconectada mídia, criado contêiner/rede/volume ou iniciado serviço/restauração.
+
+### Ambiente observado em leitura
+
+| Item | Evidência atual e consequência |
+| --- | --- |
+| Engine | Docker Desktop Linux, cliente/servidor **29.8.2**, contexto local `desktop-linux`, named pipe local. A consulta inicial sem elevação foi negada; leitura com permissão local funcionou. Não é indisponibilidade do engine. |
+| Clone histórico | `guia-postgres-offline-20261014` ativo/healthy; `network=none`, portas `{}`, `restart=no`, `privileged=false`; volume `guia_pg_clone_offline_20261014`, driver local, montado RW no PGDATA. **Preservar e não usar como destino do novo ensaio.** Nenhum `docker exec`/SQL foi feito nele. |
+| Contêineres antigos de restauração | `guia-restore-postgres-20261014` e `guia-restore-teste-20261013` parados; rede none, sem portas ou mounts reportados. Não iniciar/reutilizar nem apagar. |
+| Rede de nome loopback | `guia-restore-loopback-20261014`: bridge, **internal=false**, zero contêineres conectados. Nome não comprova bloqueio de saída; **não reutilizar** no teste funcional. |
+| Imagens locais | PostgreSQL Supabase **17.6.1.166** e **17.11.0.002**, GoTrue **v2.197.0**, Storage API **v1.79.28**, Mailpit **v1.31.3**, Kong **2.8.1** e Realtime **v2.140.3**. PostgREST e runtime Edge não apareceram no cache consultado. Presença não comprova compatibilidade com o snapshot. |
+| Cifragem | D: `FullyEncrypted`, proteção `On`, **100%**. `DockerRootDir=/var/lib/docker` é caminho Linux, não prova localização atual do VHDX Windows. Antes de dados privados, confirmar em leitura que o disk image location efetivo continua no D: cifrado, conforme configuração histórica. Não mover disco nem alterar Docker neste preflight. |
+
+Digests locais observados, para identificação posterior sem `latest`:
+
+- PG 17.11.0.002: `sha256:0450166354dc9c1d25f0322ac8b580774d4fb0184d2b087f6e4fe9499c66cf53`.
+- GoTrue v2.197.0: `sha256:1736a63078f5922b198c4cbe50f80ab9a2d3b54fe8b7b6cfb2e9dc5dbbc12c6b`.
+- Storage API v1.79.28: `sha256:1f6c99d3952d78d57129802aa2ae8a80d75e327492cf24742fd0aeaf90967b96`.
+
+### Isolamento exigido ANTES de qualquer dado privado
+
+1. Reservar nomes novos de contêineres e volumes exclusivos do ensaio, sem
+   reaproveitar PGDATA/Storage/volumes históricos. Workspace privado fora do Git,
+   em D: cifrado; nenhum bind de diretório amplo, socket Docker, perfil do usuário,
+   mídia off-host ou pasta de backup no serviço. A futura entrada será uma cópia
+   de trabalho específica autorizada, somente leitura, nunca os originais RW.
+2. Proposta: banco novo com `network=none`, sem portas publicadas, sem privilégio
+   elevado e `restart=no`. Auth, PostgREST, Storage, capturador SMTP e harness
+   compartilharão apenas seu namespace via `network=container:<banco-novo>`;
+   URLs internas em `127.0.0.1`, portas distintas, sem bridge/host/segunda rede,
+   proxy, túnel ou socket de host. Harness HTTP executado nesse namespace,
+   controlado por `docker exec`; não exige publicar portas para o navegador.
+3. Demonstrar primeiro, **com dados sintéticos e autorização de criação local**,
+   interfaces/rotas sem saída IPv4/IPv6, ausência de portas e mounts indevidos e
+   comunicação entre os serviços locais. Não testar conectividade em bancos ou
+   APIs reais. Imagens/dependências devem estar fixadas e preparadas antes de
+   ingressarem dados; se faltarem, parar em vez de conectar o contêiner à Internet.
+4. Não executar `supabase start/reset` nesta raiz: `supabase/config.toml` identifica
+   projeto real. O builder nativo da CI é referência de isolamento **sintético**,
+   não restaurador de backup. Não executar os scripts antigos de preflight:
+   eles abrem dumps e repetem verificação de hashes, fora da autorização atual.
+
+Base técnica: [rede none](https://docs.docker.com/engine/network/drivers/none/)
+cria somente loopback; [namespace compartilhado](https://docs.docker.com/engine/network/#container-networks)
+permite comunicação local dos serviços. O comportamento desta composição ainda
+precisa da prova sintética; não foi criado nem testado neste preflight.
+
+### Bloquear executores antes da importação
+
+- Inicializar PGDATA vazio com configuração local revisada, sem copiar
+  `postgresql.conf`, `postgresql.auto.conf`, Vault ou credenciais do ambiente real.
+  Excluir `pg_cron` e `pg_net` de `shared_preload_libraries` desde o primeiro boot;
+  não iniciar seus workers, cron do SO ou serviços de limpeza/replicação externa.
+  Se a imagem precisar dessas bibliotecas para bootstrap, **parar e revisar**:
+  desabilitar depois de restaurar é tarde. `cron.launch_active_jobs=off` é defesa
+  complementar quando aplicável, não substitui isolamento nem revisão do boot.
+- Na futura análise autorizada da **cópia** lógica, separar comandos de agendamento,
+  filas HTTP, foreign servers/subscriptions, hooks de Auth e gatilhos que chamam
+  rede. Não importar jobs ativos, filas pendentes de envio, Vault/Secrets ou
+  executores externos. Registrar omissões e dependências sem imprimir comandos
+  privados. Não substituir funções financeiras/RLS por stubs para declarar sucesso.
+- Usar carga de dados controlada para impedir disparo de triggers durante COPY;
+  qualquer suspensão temporária é exclusiva da sessão de importação revisada.
+  Depois, restaurar estado original dos triggers e validar FKs/RLS/ACL antes de
+  liberar os serviços. Não deixar `session_replication_role=replica` nos testes.
+  SQL arbitrário, metacomandos psql/shell ou `COPY PROGRAM` exigem revisão; um
+  scanner por regex não constitui aprovação para executar o dump.
+- Nenhum webhook público/worker Edge/assinatura de provedor será registrado ou
+  iniciado. SMTP somente capturador local; OAuth/SMS/telefone e hooks externos
+  desligados **na configuração descartável**. Chaves JWT/senhas locais novas,
+  sem tokens produtivos. Credenciais cifradas do histórico são dados sensíveis
+  inertes, nunca instaladas como configuração de serviço.
+
+Referência: [pg_cron: preload e launch_active_jobs](https://github.com/citusdata/pg_cron#extension-settings).
+Rede bloqueada impede saída; executores neutralizados também evitam mutação
+automática do histórico dentro do próprio banco.
+
+### Sequência mínima proposta, somente após autorização operacional
+
+| Passo | Ação futura e critério de aprovação |
+| --- | --- |
+| 1 — Preparação sintética | Fechar versões/imagens, esquema gerenciado de bootstrap e desenho do namespace; provar isolamento com banco vazio. Nenhuma mídia externa necessária. Não incluir Studio/Realtime/gateway completo se não forem necessários ao teste. |
+| 2 — Entrada autorizada | Operador indica cópias de trabalho SQL/Storage já existentes em D: e autoriza sua leitura. Não reconectar a cópia off-host nem repetir 143 hashes. Sem cópia local disponível, pausar e pedir decisão específica sobre a fonte. |
+| 3 — Banco lógico | Em volumes novos, bootstrap compatível de `auth`/`storage` e papéis; esquema de negócio, dados e histórico de migrations conforme dependências revisadas, com parada no primeiro erro. Preservar owners, memberships, GRANT/REVOKE, policies, RLS, views e triggers; não aplicar `roles.sql` cegamente nem descartar ACL como no dump sintético CI. Usar `psql -X`/`ON_ERROR_STOP` e logs privados protegidos. |
+| 4 — Dados sem duplicidade | Reusar a constatação já aceita de que Auth/Storage aparecem em `data.sql` e nos auxiliares: montar mapa de origem por tabela, importar cada tabela uma vez, sem concatenar os sete arquivos. `history_schema/data` são histórico, não licença para executar migrations pendentes. Não aplicar os nove ou 14 SQLs candidatos neste ensaio de recuperação. |
+| 5 — Integridade | No novo destino, verificar FKs/sequências, políticas/ACL, objetos esperados e histórico MP por contagens/digests privados antes/depois da ativação dos serviços. Usar as evidências aceitas como referência, sem reexecutar o clone histórico. Não emitir, conciliar ou atualizar pagamentos. Datas SQL 13/10 e Storage 20/10 continuam snapshots não atômicos. |
+| 6 — Auth funcional | Fixar versão compatível do GoTrue e revisar migrações automáticas antes de ligá-lo ao banco restaurado. Criar duas contas **sintéticas** no destino pela API Auth; provar login, refresh/logout e JWT local. Não resetar senha, entrar em conta histórica ou reutilizar sessões/chaves reais. Provar acesso de A/B/anon via PostgREST e papéis efetivos, sem superusuário/service_role para afirmar RLS. |
+| 7 — Storage | Restaurar metadados e policies preservados. Backend de arquivos usa volume novo, nunca caminho original. Exercitar dois usuários sintéticos, upload/leitura autorizada e recusa ao outro/anon em bucket privado. Mapeamento dos 128 bytes históricos para o layout físico exigido pela versão Storage API precisa de procedimento revisado; metadata ou cópia direta de pastas não prova download funcional. Se isso faltar, registrar recuperação de metadata apenas, sem atestar Storage completo. |
+| 8 — Edge/configuração | Reconstituir fontes e imports a partir de commit fixo, com versões, `verify_jwt`, contratos de rota e inventário de nomes de variáveis já documentado. Divergência da branch frente aos bundles publicados permanece explícita. Testar com provedores locais/mocks e egress bloqueado; não baixar fontes publicadas, executar deploy ou recuperar Secrets nesta autorização. Dependências remotas devem ser pré-empacotadas/cacheadas. |
+| 9 — Encerramento | Registrar somente códigos, versões, contagens agregadas e resultados; logs/dumps/tokens permanecem privados. Parar serviços do novo ensaio após coleta; remoção posterior somente dos recursos novos explicitamente identificados. Clone histórico e backup off-host permanecem intocados. Sem retorno automático de flags, DNS ou jobs. |
+
+O bootstrap local de schemas gerenciados, a compatibilidade das versões e o
+mapeamento físico Storage ainda não estão aprovados. A documentação de
+[backup/restore Supabase](https://supabase.com/docs/guides/platform/migrating-within-supabase/backup-restore)
+exige atenção separada às customizações de `auth`/`storage`; o ensaio não pode
+inferir equivalência desses serviços apenas do PostgreSQL restaurado.
+
+Configurações **não secretas** a recuperar em manifesto separado de valores:
+versões dos serviços, rotas, `verify_jwt`, schemas expostos, parâmetros Auth,
+templates/redirecionamentos esperados, limites de Storage, policies e dependências
+Edge. No clone, destinos públicos são substituídos por loopback; SMTP e integrações
+reais ficam desligados. Para Secrets, registrar apenas nome/responsável e custódia,
+usando o [inventário existente](ASAAS_COB06_INVENTARIO_VARIAVEIS_EDGE_20261021.md).
+Não copiar o `config.toml` produtivo ou arquivos `.env` para o destino.
+
+### Bloqueios efetivos e próxima decisão
+
+- Falta autorização específica para criar o ambiente sintético e, separadamente,
+  ler as cópias locais indicadas pelo operador e restaurar nelas um destino novo.
+  A autorização deste preflight **não permite iniciar essas fases**.
+- Confirmar localização/cifragem efetiva do VHDX Docker antes de dados privados;
+  fechar imagens faltantes e bootstrap compatível de DB/Auth/Storage/PostgREST/
+  runtime Edge. Não instalar nada nem mudar o Docker silenciosamente.
+- Isolamento da composição proposta e neutralização do bootstrap/workers ainda
+  exigem prova sintética; metadados do clone histórico não aprovam o novo destino.
+- Mapeamento físico Storage e equivalência das fontes Edge/configurações
+  publicadas continuam pendentes. Não solicitar senha ou Secrets pelo chat.
+  Custódia separada da senha e backup periódico são gates do runbook, sem exigir
+  reconexão da mídia ou repetição das evidências aceitas agora.
+
+**Próxima etapa executável mediante autorização:** fechar composição mínima e
+provar isolamento **sem backups**, com serviços/dados sintéticos. Só após esse
+gate e autorização de acesso às cópias locais será possível revisar a entrada
+e realizar a restauração funcional. Não foi necessário código novo nesta rodada;
+qualquer futuro runner deverá ser descrito/revisado antes de implementação.
+**Resultado: plano preparado; restauração não executada; COB-06 permanece HOLD.**
+
 ## Inventário real consultado (somente leitura)
 
 | Ambiente | Referência Supabase | PostgreSQL | Migrações registradas |
