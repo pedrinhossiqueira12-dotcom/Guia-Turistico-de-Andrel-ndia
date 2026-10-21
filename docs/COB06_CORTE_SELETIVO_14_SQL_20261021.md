@@ -88,10 +88,20 @@ python scripts/validacao-pagamentos/asaas-cob06-empacotar-release-offline.py --p
 python -m unittest discover -s tests -p test_asaas_cob06_release_bundle.py
 ```
 
-A CI anterior do HEAD de retomada, run `39655863768`, foi conferida: 12/12 PASS.
-Ela valida o código anterior e a instalação sintética já existente dos cinco
-candidatos; não valida retroativamente o novo perfil. A CI deste corte deverá
-validar também os dois perfis, adulteração, ordem e reprodutibilidade do ZIP.
+**CI do corte `audit-14` confirmada em 21/10/2026:** commit
+[`e7ca504`](https://github.com/pedrinhossiqueira12-dotcom/Guia-Turistico-de-Andrel-ndia/commit/e7ca5044d6732d3c3eebb97e7b5031887e4c1894),
+[Actions 39671658148](https://github.com/pedrinhossiqueira12-dotcom/Guia-Turistico-de-Andrel-ndia/actions/runs/39671658148),
+**12/12 jobs PASS**. O workflow precisou corrigir a indentação de duas etapas
+do perfil audit-14; o código financeiro e os SQLs não foram alterados nesse commit.
+O job de pacote offline executou **11 testes Python PASS**, verificou os perfis
+original-9 e audit-14, gerou ambos ZIPs e publicou artefatos distintos de revisão.
+SHA-256 do ZIP audit-14 **exclusivamente desse run**:
+`1ee3c8c163a3abfe7fc871ebdca2f22f6d55da1b002abab8fd8e1afc2ee820be`.
+Ele contém 14 SQLs, 31 fontes complementares e não faz deploy.
+SHA-256 do ZIP original-9 desse run:
+`1bf2cc7a137fa6b75917ed9f739d439bb12e3b31a201a163f16c257652c9263e`.
+Uma alteração documental posterior pode produzir ZIP de hash diferente;
+essa prova não valida o ambiente remoto nem autoriza instalar SQL.
 Não repetir o ensaio aceito do operador nem acessar backup/clone privado.
 
 Permanecem pendentes revisão independente, equivalência com definições reais,
