@@ -485,7 +485,8 @@
   let emissaoFaturaEmAndamento = false;
   // Preflight read-only antes de qualquer emissao: nao criar Pix se a
   // competencia nao possui fatura elegivel ou se existe cobranca/reserva.
-  async function atualizarPreflightFatura(){
+  async function atualizarPreflightFatura(opcoes={}){
+    const preservarResultado=opcoes?.preservarResultado===true;
     const competencia=$("competenciaOffline")?.value||"";
     const botao=$("gerarPixFatura");
     const numero=++consultaFaturaSeq;
@@ -504,9 +505,10 @@
         dado.fatura_abaixo_minimo_asaas!==true&&
         !dado.cobranca_status&&dado.provedor!=="mercadopago");
       botao.disabled=!faturaAptaParaEmissao||emissaoFaturaEmAndamento;
-      if(dado.fatura_abaixo_minimo_asaas===true||dado.cobranca_status||
-         dado.provedor==="mercadopago")renderizarPixFatura(dado);
-      else if(!fatura)$("faturaPixResultado").textContent=
+      if(!preservarResultado&&(dado.fatura_abaixo_minimo_asaas===true||
+         dado.cobranca_status||dado.provedor==="mercadopago"))
+        renderizarPixFatura(dado);
+      else if(!preservarResultado&&!fatura)$("faturaPixResultado").textContent=
         "Ainda nao ha fatura fechada neste mes.";
     }catch(erro){
       if(numero!==consultaFaturaSeq||$("competenciaOffline")?.value!==competencia)return;
@@ -582,7 +584,7 @@
       emissaoFaturaEmAndamento=false;
       // Exigir nova leitura do banco inclusive apos timeout ou resposta incerta.
       // A API garante a idempotencia; o painel nunca tenta POST automatico.
-      await atualizarPreflightFatura();
+      await atualizarPreflightFatura({preservarResultado:true});
     }
   }
 
