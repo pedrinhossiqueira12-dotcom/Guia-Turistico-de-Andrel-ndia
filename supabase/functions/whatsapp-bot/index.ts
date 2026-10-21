@@ -124,6 +124,45 @@ async function cob06VerificarAssinaturaWhatsapp(requisicao,corpoBruto) {
   const valido=await crypto.subtle.verify("HMAC",chave,assinatura,corpoBruto);
   return valido?{ok:true}:{ok:false,codigo:401};
 }
+async function cob06LerPostLimitado(requisicao){
+  const MAX_BYTES=256*1024;
+  const declarado=requisicao.headers.get("content-length");
+  if(declarado!==null&&(!/^[0-9]+$/.test(declarado)||
+      !Number.isSafeInteger(Number(declarado))))
+    return {ok:false,status:400,erro:"Tamanho de requisicao invalido."};
+  if(declarado!==null&&Number(declarado)>MAX_BYTES)
+    return {ok:false,status:413,erro:"Requisicao excede limite seguro."};
+  if(!requisicao.body)
+    return {ok:false,status:400,erro:"Corpo ausente."};
+  const leitor=requisicao.body.getReader(),partes=[];
+  let total=0,finalizado=false;
+  try{
+    while(true){
+      const parte=await leitor.read();
+      if(parte.done){finalizado=true;break;}
+      total+=parte.value.byteLength;
+      if(total>MAX_BYTES)
+        return {ok:false,status:413,erro:"Requisicao excede limite seguro."};
+      partes.push(parte.value);
+    }
+  }catch{
+    return {ok:false,status:400,erro:"Falha ao ler requisicao."};
+  }finally{
+    if(!finalizado)await leitor.cancel().catch(()=>{});
+    leitor.releaseLock();
+  }
+  if(declarado!==null&&total!==Number(declarado))
+    return {ok:false,status:400,erro:"Tamanho declarado divergente."};
+  const bytes=new Uint8Array(total);
+  let posicao=0;
+  for(const parte of partes){bytes.set(parte,posicao);posicao+=parte.byteLength;}
+  try{
+    const dados=JSON.parse(new TextDecoder("utf-8",{fatal:true}).decode(bytes));
+    return {ok:true,bytes,dados};
+  }catch{
+    return {ok:false,status:400,erro:"JSON invalido."};
+  }
+}
 async function je(e){
   const metodo=e.method;
   if(metodo==="OPTIONS") return new Response(null,{status:204,headers:T});
@@ -138,13 +177,11 @@ async function je(e){
     return new Response("Webhook ativo.",{status:200,headers:{...T,"Content-Type":"text/plain"}});
   }
   if(metodo!=="POST") return t({sucesso:false,erro:"Metodo nao permitido."},405);
-  let corpoBruto,dados;
-  try{
-    corpoBruto=new Uint8Array(await e.arrayBuffer());
-    dados=JSON.parse(new TextDecoder("utf-8",{fatal:true}).decode(corpoBruto));
-  }catch(_err){
-    return t({sucesso:false,erro:"JSON invalido."},400);
-  }
+  // Limite efetivo em bytes durante streaming, mesmo sem Content-Length.
+  // Preserva bytes brutos para HMAC Meta (nao faz stringify nem normaliza Unicode).
+  const recebido=await cob06LerPostLimitado(e);
+  if(!recebido.ok)return t({sucesso:false,erro:recebido.erro},recebido.status);
+  const corpoBruto=recebido.bytes,dados=recebido.dados;
   if(dados?.object==="whatsapp_business_account"){
     let verificado;
     try{verificado=await cob06VerificarAssinaturaWhatsapp(e,corpoBruto);}
