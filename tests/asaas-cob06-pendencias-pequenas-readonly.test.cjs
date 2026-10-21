@@ -124,7 +124,9 @@ test("COB-06: UI impede botão de gerar Pix de competência abaixo do mínimo",a
  assert.equal(botao.disabled,true);
  assert.equal(container.textContent,"resumo exibido");
  campo.value="2026-11";
- respostas.push({fatura_abaixo_minimo_asaas:false,fatura:{id:"fatura-nova"}});
+ respostas.push({fatura_abaixo_minimo_asaas:false,
+   fatura:{id:"fatura-nova",status:"faturado",total_comissao_centavos:500},
+   cobranca_status:null,provedor:"asaas"});
  await fn();
  assert.equal(botao.disabled,false);
 });
