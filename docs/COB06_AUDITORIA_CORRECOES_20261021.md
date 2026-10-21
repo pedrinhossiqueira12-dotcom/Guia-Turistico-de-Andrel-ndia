@@ -49,8 +49,23 @@ exigem revisao explicita antes de compor outro pacote ou serem instalados.
 - 25/25 testes SQL/HTTP direcionados passaram: perda da fila, RPC financeira real,
   autorizacao, idempotencia, GitHub/ACK falhos e arquivo preservado.
 
+## P5 — continuacao de pedidos anteriores a suspensao
+
+- Reproducao HTTP/SQL: pedido aceito era impedido de ficar pronto por 423.
+- Candidato 05 registra o instante de novas suspensoes e envolve as RPCs de
+  operacao/confirmacao, mantendo a implementacao original de titularidade,
+  transicoes, codigo, entrega e financiamento. Novo aceite continua proibido.
+- Pedidos aceitos antes da suspensao financeira/encerramento podem continuar;
+  bloqueio administrativo continua fechado. Historico usa solicitado_em do
+  encerramento quando existente; suspensao antiga sem marco confiavel fica HOLD,
+  sem preencher data artificialmente. Trava NOWAIT evita espera circular com
+  transacoes legadas que ja bloquearam o pedido.
+- Painel suspenso mostra pedidos sem habilitar produtos/configuracao nem novos
+  aceites. Testes de codigo errado, titular alheio, novo aceite, entrega com
+  pagamento e preservacao da suspensao passaram; regressao completa pendente.
+
 ## Estado
 
-P5 em execucao sequencial. Concorrencia real de multiplas conexoes requer
+Cinco correcoes locais implementadas; regressao e CI em andamento. Concorrencia real de multiplas conexoes requer
 PostgreSQL descartavel na CI; PGlite sozinho nao comprova essa propriedade.
 COB-06 continua HOLD; nenhum candidato autoriza implantacao ou dinheiro.

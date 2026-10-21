@@ -22,6 +22,8 @@
   let comercio = null;
   let removendoCategoriaId = null;
   let carregando = false;
+  let operacoesSuspensas = false;
+  let paiPedidosOffline = null;
   const ENTREGA_API_URL = `${SUPABASE_URL}/functions/v1/catalogo-entregas`;
   const STALE_SESSION_REQUEST = "STALE_SESSION_REQUEST";
   const entregaState = { motoboys: [], generation: 0, userId: "", sessionToken: "", carregando: false };
@@ -107,6 +109,8 @@
       $("loginCard").hidden = true;
       $("logoutCatalogo").hidden = false;
       const resultado = await validarProprietario();
+      paiPedidosOffline=paiPedidosOffline||$("pedidosOfflineCard")?.parentElement;
+      operacoesSuspensas=resultado.bloqueado===true;
       comercio = await carregarComercio();
       $("nomeComercioAdmin").textContent = comercio?.nome || comercioId;
       if (resultado.proprietario && !resultado.admin) {
@@ -140,6 +144,10 @@
           if ($("catalogoPagamentoBloqueado"))
             $("catalogoPagamentoBloqueado").hidden=!(inadimplente||encerrando);
           $("linkContratacao").hidden = true;
+          if(inadimplente||encerrando){
+            $("catalogoBloqueado").appendChild($("pedidosOfflineCard"));
+            await carregarPedidosOffline();
+          }
         } else {
           $("lockedTitle").textContent = "Catálogo não liberado";
           $("lockedText").textContent = "Conecte a conta Mercado Pago do comércio para liberar gratuitamente a gestão do catálogo.";
@@ -152,6 +160,8 @@
       $("catalogoBloqueado").hidden = true;
       if ($("catalogoPagamentoBloqueado")) $("catalogoPagamentoBloqueado").hidden = true;
       $("painelCatalogo").hidden = false;
+      if(paiPedidosOffline&&$("pedidosOfflineCard").parentElement!==paiPedidosOffline)
+        paiPedidosOffline.insertBefore($("pedidosOfflineCard"),paiPedidosOffline.children[1]||null);
       setNotice(resultado.admin ? "Acesso administrativo confirmado" : "Acesso confirmado", resultado.admin
         ? "Você está corrigindo o catálogo como administrador do Guia."
         : "Você está gerenciando o catálogo deste comércio.");
@@ -323,9 +333,10 @@
       const pix = pedido.forma_pagamento === "pix" || ["pix", "mercadopago"].includes(pedido.provedor);
       const pixAprovado = ["aprovado", "approved"].includes(String(pedido.status_pagamento || "").toLowerCase());
       const aguardandoPix = pix && !pixAprovado && pedido.status === "aguardando_pagamento";
-      const proxima = ["aguardando_pagamento", "pago"].includes(pedido.status) && (!pix || pixAprovado) ? "Aceitar e preparar" : pedido.status === "em_preparo" && (!pix || pixAprovado) ? "Marcar como pronto" : "";
+      const suspenso=typeof operacoesSuspensas!=="undefined"&&operacoesSuspensas;
+      const proxima = !suspenso && ["aguardando_pagamento", "pago"].includes(pedido.status) && (!pix || pixAprovado) ? "Aceitar e preparar" : pedido.status === "em_preparo" && (!suspenso||Boolean(pedido.aceito_em)) && (!pix || pixAprovado) ? "Marcar como pronto" : "";
       const podeCancelar = ["aguardando_pagamento", "pago", "em_preparo", "pronto"].includes(pedido.status);
-      const podeConfirmar = podeCancelar && (!pix || pixAprovado);
+      const podeConfirmar = podeCancelar && (!pix || pixAprovado) && (!suspenso||Boolean(pedido.aceito_em));
       const aceito = Boolean(pedido.aceito_em) || ["reservado", "coletado", "em_entrega", "entregue", "cancelamento_solicitado"].includes(pedido.entrega_status);
       const endereco = pedido.modalidade === "entrega" && pedido.cliente_endereco ? ` · ${escapar(pedido.cliente_endereco)}${pedido.cliente_numero ? `, ${escapar(pedido.cliente_numero)}` : ""}` : "";
       const versao = Number(pedido.versao_financeira) === 2 ? "Taxa atual" : "Taxa histórica";
@@ -334,7 +345,7 @@
       const totalFee = Number(pedido.taxa_total_centavos ?? plataforma + motoboy);
       const snapshots = pedido.feeSnapshots || pedido.fee_snapshots || pedido.metadata?.feeSnapshots;
       const snapshotText = snapshots ? ` · snapshot ${escapar(typeof snapshots === "string" ? snapshots : "registrado")}` : "";
-      const atribuir = pedido.modalidade === "entrega" && !["entregue", "cancelado"].includes(pedido.status) ? renderizarMotoboysLinha(pedido) : "";
+      const atribuir = pedido.modalidade === "entrega" && (!suspenso||Boolean(pedido.aceito_em)) && !["entregue", "cancelado"].includes(pedido.status) ? renderizarMotoboysLinha(pedido) : "";
       return `<article class="manager-row offline-order-row" data-pedido-id="${escapar(id)}"><div class="offline-order-copy"><strong>${escapar(pedido.cliente_nome || "Cliente")} · ${reais(pedido.total_centavos)}</strong><small>Pedido: ${escapar(pedido.referencia_externa || id)}</small><small>${escapar(pedido.provedor || "offline")} · ${escapar(pedido.forma_pagamento || "Pagamento não informado")} · ${escapar(pedido.modalidade || "")}${endereco}</small>${renderizarItensPedido(pedido)}${renderizarObservacoesPedido(pedido)}${renderizarContatoCliente(pedido)}${renderizarEstadoEntregador(pedido)}<small>Produtos: ${reais(pedido.subtotal_produtos_centavos)} · Taxa do pedido: ${reais(totalFee)}</small><small>${escapar(versao)}${snapshotText} · ${escapar(statusPagamento(pedido.status_pagamento))}</small><span class="offline-status" data-status="${escapar(pedido.entrega_status || pedido.status)}">${escapar(statusOffline(pedido.entrega_status || pedido.status))}</span></div><div class="manager-actions offline-order-actions">${aguardandoPix ? `<p class="form-feedback">Aguardando pagamento Pix. O aceite será liberado após a aprovação.</p>` : ""}${proxima ? `<button class="small-button" type="button" data-offline-next="${escapar(id)}" data-offline-status="${escapar(["aguardando_pagamento", "pago"].includes(pedido.status) ? "em_preparo" : "pronto")}">${proxima}</button>` : ""}${podeConfirmar ? `<button class="small-button" type="button" data-offline-confirm="${escapar(id)}">Confirmar código</button>` : ""}${podeCancelar ? `<button class="small-button danger" type="button" data-offline-cancel="${escapar(id)}">${aceito ? "Solicitar ocorrência" : "Cancelar pedido"}</button>` : ""}${atribuir}</div></article>`;
     }).join("");
   }
@@ -343,7 +354,7 @@
     $("listaPedidosOffline").innerHTML = '<p class="form-feedback">Atualizando pedidos…</p>';
     try {
       renderizarPedidosOffline((await chamarPedidosOffline({ acao: "listar_pedidos" })).pedidos || []);
-      await carregarMotoboys();
+      try{await carregarMotoboys();}catch{setFeedback("pedidosOfflineFeedback","Lista de entregadores indisponível. Os pedidos permanecem visíveis.");}
     }
     catch (error) { $("listaPedidosOffline").innerHTML = `<p class="form-feedback">${escapar(error.message || "Não foi possível carregar os pedidos.")}</p>`; }
   }
@@ -1060,6 +1071,7 @@
     $("cancelarCancelamento").addEventListener("click", () => $("cancelamentoDialog").close());
     $("cancelamentoDialog").addEventListener("close", () => { $("cancelamentoForm").reset(); setFeedback("cancelamentoFeedback", ""); });
     $("logoutCatalogo").addEventListener("click", async () => {
+      $("catalogoBloqueado").hidden=true;
       ++consultaFaturaSeq; ++visualizacaoFaturaSeq; ++regularizacaoFaturaSeq;
       faturaAptaParaEmissao=false; competenciaAptaParaEmissao="";
       $("faturaPixResultado").textContent=""; $("resultadoFaturaBloqueada").textContent="";

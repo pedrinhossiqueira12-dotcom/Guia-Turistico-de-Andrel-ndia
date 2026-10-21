@@ -82,3 +82,6 @@ sql -c "SELECT catalogo_confirmar_cobranca_fatura('mp_audit_race_b','pago','proo
 test "$(sql -Atqc "SELECT bloqueado FROM catalogos WHERE comercio_id='comercio-de-exemplo'")" = t
 test "$(sql -Atqc "SELECT catalogo_confirmar_cobranca_fatura('pay_audit_race_a','pago','late-proof',700,'fixture')->>'ok'")" = false
 echo COB06_AUDITORIA_P3_QUITACAO_ESTORNO_SERIALIZADOS_OK
+sql -f supabase/production-candidate/cob06-auditoria-04-vitrine.sql
+sql -f supabase/production-candidate/cob06-auditoria-05-andamento.sql
+echo COB06_AUDITORIA_CINCO_CANDIDATOS_FORWARD_ONLY_INSTALADOS_NO_CLONE_OK

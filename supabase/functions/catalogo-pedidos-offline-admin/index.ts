@@ -70,7 +70,9 @@ async function requireTermsForNewOrders(userId:string,comercioId:string){
 }
 async function updateStatus(userId: string, body: Record<string, unknown>) {
   const comercioId = text(body.comercio_id, 180); const pedidoId = text(body.pedido_id, 60); const next = text(body.status, 30); const motivo = text(body.motivo, 500);
-  const access = await owner(userId, comercioId); if (access.bloqueado && next !== "cancelado") throw new HttpError("Catálogo bloqueado por inadimplência.", 423);
+  const access = await owner(userId, comercioId);
+  // Novos aceites continuam proibidos; continuacao e revalidada sob lock no SQL.
+  if (access.bloqueado && next === "em_preparo") throw new HttpError("Catálogo bloqueado para novos aceites.", 423);
   if(next==="em_preparo")await requireTermsForNewOrders(userId,comercioId);
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(pedidoId)) throw new HttpError("Pedido inválido.");
   const operations: Record<string, string> = { em_preparo: "aceitar", pronto: "pronto", cancelado: "solicitar_cancelamento" };
