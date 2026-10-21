@@ -41,6 +41,8 @@ class ReleaseBundleTest(unittest.TestCase):
                 self.assertFalse(any("staging-only" in n for n in names))
                 self.assertFalse(any("catalogo-asaas-cob06-auditoria/" in n for n in names))
                 self.assertIn("REVIEW-FIRST.txt", names)
+                self.assertIn("supabase/functions/whatsapp-bot/index.ts", names)
+                self.assertIn("supabase/functions/whatsapp-bot/storage-path-utils.mjs", names)
                 self.assertNotIn("supabase/functions/catalogo-asaas-financeiro/.env", names)
 
     def test_tampered_source_is_rejected(self):
@@ -57,6 +59,21 @@ class ReleaseBundleTest(unittest.TestCase):
             check = run("--verify", str(bad))
             self.assertNotEqual(check.returncode, 0)
             self.assertIn("hash de pages/catalogo-admin.html", check.stderr)
+
+    def test_whatsapp_candidate_tampering_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            original = pathlib.Path(tmp) / "review-original.zip"
+            tampered = pathlib.Path(tmp) / "review-whatsapp-tampered.zip"
+            self.assertEqual(run("--build", str(original)).returncode, 0)
+            with zipfile.ZipFile(original) as source, zipfile.ZipFile(tampered, "w") as dest:
+                for item in source.infolist():
+                    data = source.read(item.filename)
+                    if item.filename == "supabase/functions/whatsapp-bot/index.ts":
+                        data += b"// tampered candidate\n"
+                    dest.writestr(item, data)
+            result = run("--verify", str(tampered))
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("hash de supabase/functions/whatsapp-bot/index.ts", result.stderr)
 
     def test_added_migration_is_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
