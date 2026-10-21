@@ -32,6 +32,23 @@ test("COB-06: rota financeira de finalizacao fica fora da allowlist PROD",()=>{
  assert.match(edge,/case "finalizar_encerramento_admin":return await finalizarEncerramentoAdmin/);
 });
 
+test("COB-06: trava da propria funcao recusa producao ANTES de chamar RPC",async()=>{
+ const begin=edge.indexOf("async function finalizarEncerramentoAdmin(");
+ const end=edge.indexOf("async function listarAnalisesResiduais(",begin);
+ assert.ok(begin>0&&end>begin);
+ const src=edge.slice(begin,end).replace("uid:string,body:Record<string,unknown>","uid,body");
+ let chamadas=0;
+ const fn=vm.runInNewContext("("+src.trim()+")",{
+  ENVIRONMENT:"production",
+  ADMIN_USER_ID:"admin-fixture",
+  Failure:class Failure extends Error{constructor(m,status){super(m);this.status=status}},
+  rpc:async()=>{chamadas++;return {ok:true}},
+  check:()=>{},commerce:x=>x,respond:x=>x
+ });
+ await assert.rejects(fn("admin-fixture",{comercio_id:"loja",confirmacao:true}),/exige sincronizacao/);
+ assert.equal(chamadas,0);
+});
+
 test("COB-06: sucesso exige simultaneamente banco arquivado e vitrine confirmada",async()=>{
  const caso=ensaio({sucesso:true,arquivado:true,mensagem:"Concluido"});
  const result=await caso.fn("comercio-fixture");
