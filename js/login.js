@@ -1455,14 +1455,13 @@ function traduzirErroAuth(
   }
 
 
-  if (
-    mensagem.includes(
-      "password should be at least"
-    )
-  ) {
-
-    return "A senha precisa ter pelo menos 6 caracteres.";
-
+  const tamanhoMinimoServidor =
+    mensagem.match(/password should be at least\\s+(\\d+)/);
+  if (tamanhoMinimoServidor) {
+    return `A senha precisa ter pelo menos ${tamanhoMinimoServidor[1]} caracteres.`;
+  }
+  if (mensagem.includes("password should be at least")) {
+    return "A senha não atende ao tamanho mínimo exigido.";
   }
 
 
