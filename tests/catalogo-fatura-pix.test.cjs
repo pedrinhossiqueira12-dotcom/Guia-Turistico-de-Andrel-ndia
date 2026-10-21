@@ -73,7 +73,7 @@ test('painel do comércio permite gerar e conferir o Pix da fatura', () => {
   assert.match(html, /id="consultarPixFatura"/);
   assert.match(html, /id="faturaPixResultado"/);
   assert.match(adminJs, /invoke\("catalogo-asaas-financeiro"/);
-  assert.match(adminJs, /acao: "criar_cobranca"/);
+  assert.match(adminJs, /acao:\s*"criar_cobranca"/);
   assert.match(adminJs, /acao: "consultar_cobranca"/);
   assert.match(adminJs, /Pix copia e cola/);
   assert.doesNotMatch(adminJs, /MP_PLATFORM_ACCESS_TOKEN|service_role/i);
