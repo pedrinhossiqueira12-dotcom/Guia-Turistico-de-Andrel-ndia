@@ -1,6 +1,6 @@
 # COB-06 — backup, restauração e retorno seguro sem perda financeira
 
-**Atualização efetiva: 21/10/2026.** Os sete dumps SQL originais e os 128 objetos físicos Storage já foram exportados e conferidos pelo operador; o pacote `.7z` com criptografia AES-256 no disco E: foi testado mediante extração em D: criptografado. **143/143 arquivos** extraídos conferidos por SHA-256 com seus originais, com **128 objetos e 133855024 bytes de Storage**. O disco E: é um segundo disco físico que o operador confirma poder desconectar, mas ainda **não houve confirmação de desconexão e guarda em local distinto**. Foi efetuado ensaio anterior do SQL no clone isolado com rollback, mas **não** uma restauração integral de serviços externos/Edge/configurações. PR #39 Draft e COB-06 HOLD. Evidência detalhada em [ASAAS_COB06_EVIDENCIA_RECUPERACAO_ARQUIVOS_20261021.md](ASAAS_COB06_EVIDENCIA_RECUPERACAO_ARQUIVOS_20261021.md).
+**Atualização efetiva: 21/10/2026.** Os sete dumps SQL originais e os 128 objetos físicos Storage já foram exportados e conferidos pelo operador; o pacote `.7z` com criptografia AES-256 no disco E: foi testado mediante extração em D: criptografado. **143/143 arquivos** extraídos conferidos por SHA-256 com seus originais, com **128 objetos e 133855024 bytes de Storage**. O disco E: é um segundo disco físico. **Em 21/10/2026, o operador declarou: `Backup guardado fora do computador`.** Essa declaração é registrada como confirmação operacional de guarda externa **sob a condição de que a mídia que contém o `.7z` esteja de fato fisicamente fora do computador** (não apenas em E: ainda conectado). A confirmação é declaratória: não houve verificação física independente, nem confirmação sobre guarda separada da senha. Foi efetuado ensaio anterior do SQL no clone isolado com rollback, mas **não** uma restauração integral de serviços externos/Edge/configurações. PR #39 Draft e COB-06 HOLD. Evidência detalhada em [ASAAS_COB06_EVIDENCIA_RECUPERACAO_ARQUIVOS_20261021.md](ASAAS_COB06_EVIDENCIA_RECUPERACAO_ARQUIVOS_20261021.md).
 
 ## Inventário real consultado (somente leitura)
 
@@ -56,6 +56,12 @@ No job `All financial migrations except remote scheduling (disposable PostgreSQL
 - **Depois de gerar faturas reais:** não restaurar automaticamente backup antigo sobre produção ativa (apaga pedidos, faturas e pagamentos posteriores), não rodar `DROP TABLE`, não apagar webhooks nem marcar pagamentos/repasse como pendentes por SQL. Primeiro bloquear novas emissões, preservar e conciliar operações emitidas; planejar correção forward-only e reconciliação com Asaas.
 - **Incidente grave / corrupção de banco:** decisão humana documentada, janela e restauração para novo projeto ou PITR conforme ferramenta de backup contratada, comparação de eventos externos Asaas/MP e replay seguro somente depois de identificar discrepâncias. Não executar restore destrutivo sem autorização específica e plano de corte.
 - **Saques:** permanecem fora do escopo, desativados mesmo em eventual lançamento de cobranças.
+
+## Confirmação do operador recebida em 21/10/2026 — guarda externa
+
+O operador afirmou explicitamente **“Backup guardado fora do computador”**, após confirmar que a cópia criptografada no disco E: já havia sido criada e validada. Registrar como **declaração de guarda off-host**, não como novo backup, novo teste de senha, hash ou restauração. Considera-se atendido o requisito de separação física **se** o disco E: foi removido e guardado separadamente, ou se uma cópia cifrada equivalente foi transferida para mídia externa retirada. Se E: continuar conectado ao mesmo PC sem cópia externa, a declaração deverá ser retificada e o requisito continua pendente. Não solicitar acesso ao HD, à senha ou aos arquivos privados.
+
+**Ainda pendentes:** localização segura da senha por via independente (não informada), estratégia de backups periódicos depois do snapshot de 20/10, e recuperação funcional DB/Auth/Storage/Edge/configurações em ambiente realmente isolado. **COB-06 permanece HOLD.**
 
 ## Próxima ação do operador: comprovação física de guarda fora do computador
 
