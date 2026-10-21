@@ -7,6 +7,8 @@
 **Commit de referência da auditoria:** `b7d1d0b5bed28e37dcda1d3aaba39508c27f53e0`.  
 **CI aprovada:** [run 38186833319](https://github.com/pedrinhossiqueira12-dotcom/Guia-Turistico-de-Andrel-ndia/actions/runs/38186833319) — 12/12 jobs.
 
+**21/10/2026 — COB-06, perfil de revisão de 14 SQLs validado localmente e na CI (HOLD):** após corrigir somente a indentação de duas etapas do workflow no commit [`e7ca504`](https://github.com/pedrinhossiqueira12-dotcom/Guia-Turistico-de-Andrel-ndia/commit/e7ca5044d6732d3c3eebb97e7b5031887e4c1894), a [Actions 39671658148](https://github.com/pedrinhossiqueira12-dotcom/Guia-Turistico-de-Andrel-ndia/actions/runs/39671658148) concluiu **12/12 PASS**. O job offline verificou **ambos** os ZIPs (9 SQLs originais congelados e 14 SQLs incluindo os 5 candidatos forward-only), executou **11 testes Python** e publicou separadamente os dois artefatos somente para revisão. Nenhum SQL original ou hash foi alterado; o perfil de 14 SQLs não é instalador nem autorização. Evidência, ordem, dependências e SHA-256 do ZIP no documento [COB06_CORTE_SELETIVO_14_SQL_20261021.md](COB06_CORTE_SELETIVO_14_SQL_20261021.md). **Próximo gate:** revisão independente das novas cinco fontes, definições/ACL efetivas, recuperação funcional/off-host e homologação autorizada antes de COB-07. Nenhum acesso a PROD/STAGING, emissão Pix, deploy, merge ou operação bancária nesta correção de CI. **COB-06 permanece HOLD; não repetir ensaios já aceitos.**
+
 ## Contrato de execução: não ampliar o escopo
 
 Este documento é a **única fila operacional** do trabalho financeiro do PR #39. O backlog geral `docs/BACKLOG_GUIA_ANDRELANDIA.md` e as issues existentes são histórico e rastreabilidade, **não autorização para iniciar trabalhos paralelos**.
