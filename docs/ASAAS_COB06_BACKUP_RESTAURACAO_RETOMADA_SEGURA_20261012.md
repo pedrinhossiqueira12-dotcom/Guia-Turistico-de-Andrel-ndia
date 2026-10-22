@@ -1,5 +1,14 @@
 # COB-06 — backup, restauração e retorno seguro sem perda financeira
 
+## Revisão estática do bloqueio Vault — 22/10/2026, SEM NOVA TENTATIVA
+
+A primeira tentativa real permanece **BLOQUEADA**; nenhuma execução, nova leitura do backup, conexão remota, manipulação de Secrets, criação de recurso ou retry foi autorizada ou realizada nesta revisão. **CI do commit documental `f8e19e2`: [39714284928](https://github.com/pedrinhossiqueira12-dotcom/Guia-Turistico-de-Andrel-ndia/actions/runs/39714284928), 12/12 PASS**; isso não prova restauração.
+
+- **Causa observada:** `schema-sem-cron-net.sql`, linha 44, `CREATE EXTENSION supabase_vault` falhou com `3F000` porque o schema alvo `vault` não existia no bootstrap. O [controle oficial da extensão Vault](https://github.com/supabase/vault/blob/main/supabase_vault.control.in) declara `schema = vault`; a [documentação oficial de instalação](https://github.com/supabase/vault/blob/main/README.md#installation) confirma `supabase_vault` como extensão, não mero schema. Esses arquivos públicos não comprovam a **versão/compatibilidade efetiva da extensão instalada** na imagem PostgreSQL 17.6 local.
+- **Próximo preflight seguro (sem executar):** revisar controle/versão instalados localmente, owners e ACL esperados, dependências criptográficas de `pgsodium`, política de não executar funções de decriptação, e presença/ausência de `vault.secrets` nos dados de entrada por inspeção **privada, sem imprimir conteúdo**. Conferir se criação prévia do schema `vault` vazio e posterior extensão na versão compatível satisfaz o DDL sem ampliar permissões ou iniciar executor externo. **Não instalar automaticamente, não criar stubs e não remover dependências financeiras/segurança para forçar sucesso.**
+- **Chave criptográfica é gate independente:** [Supabase Vault — key portability](https://supabase.com/docs/guides/database/vault#key-portability-and-migration) explica que `pg_dump` manual não leva a chave raiz necessária à leitura de segredos Vault criptografados originados em outro projeto. **Não consultar/transferir a chave raiz, Secrets, nem tentar decriptar dados reais nesta fase.** Se houver dependência de segredos históricos, manter recuperação criptográfica **NÃO COMPROVADA** e planejar custódia/reativação sob autorização distinta; não confundir extensão instalada com segredos recuperados.
+- **Autorização:** a tentativa anterior foi consumida e parou no primeiro erro, conforme instruído. Qualquer nova importação em recursos locais novos exige autorização explícita, com `pg_cron`/`pg_net` neutralizados antes do bootstrap. Preservar os sete originais, todos os recursos existentes e o disco E: sem acesso. **COB-06 HOLD.**
+
 ## Tentativa SQL real autorizada — 21/10/2026, 23:54 BRT — BLOQUEADA
 
 **Resultado: BLOQUEADA no primeiro pré-requisito de bootstrap não atendido.**
