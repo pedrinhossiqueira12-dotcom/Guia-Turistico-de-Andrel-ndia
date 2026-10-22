@@ -1,5 +1,135 @@
 # COB-06 — backup, restauração e retorno seguro sem perda financeira
 
+## Tentativa SQL real autorizada — 21/10/2026, 23:54 BRT — BLOQUEADA
+
+**Resultado: BLOQUEADA no primeiro pré-requisito de bootstrap não atendido.**
+COB-06 permanece HOLD. Autorização do proprietário nesta rodada: cópias privadas
+dos sete SQLs e uma tentativa local em recursos novos, sem rede, Storage físico,
+Edge, dados/SQL remotos ou operações financeiras. Base limpa e sincronizada:
+`7a01ec854d1ebfc1f123b7ed80ca01ca770e6072`, PR #39 aberta/Draft.
+Não houve repetição das provas sintéticas, dos 143 hashes ou do clone histórico.
+
+### Primeiro bloqueio e parada
+
+Na cópia controlada `schema-sem-cron-net.sql`, **linha 44**, a declaração
+de criação da extensão **supabase_vault**, destinada ao schema **vault**, retornou
+**SQLSTATE 3F000 (schema inexistente)**. O bootstrap novo havia preparado auth,
+storage e extensions; o pré-requisito vault não estava preparado.
+O erro ocorreu na fase DDL, antes de qualquer carga de registros de produção.
+
+A transação desse arquivo foi revertida por psql com `ON_ERROR_STOP` e
+`--single-transaction`. A execução foi interrompida; **não se criou o schema
+faltante, não se alterou a extensão e não se refez a importação**. Não foram
+usadas permissões adicionais para contornar o erro.
+
+| Arquivo/cópia | Estado desta tentativa |
+| --- | --- |
+| roles.sql | Executado uma vez; configurações de timeout e GRANT de parâmetro sobre papel técnico NOLOGIN preparados no banco novo. Não representa reconstrução comprovada de todos os atributos/memberships reais. |
+| history_schema.sql | Executado uma vez; estrutura histórica vazia mantida no novo volume. |
+| schema.sql | Original e cópia-base preservados. Derivada controlada omitiu somente duas declarações de criação de extensão: pg_cron e pg_net. Aplicação da derivada interrompida em supabase_vault, com rollback integral desse arquivo. |
+| data.sql | Não executado. Fonte única de dados escolhida para a tentativa. |
+| auth_data.sql | Conferido em leitura; não executado, para evitar duplicidade. |
+| storage_metadata.sql | Conferido em leitura; não executado, para evitar duplicidade. Nenhum objeto físico foi acessado. |
+| history_data.sql | Não executado. |
+
+**Nenhum COPY de dados de produção foi executado.** Integridade referencial dos
+registros reais, estados financeiros/MP, identidades, sequências, owners/ACL/RLS
+de negócio e consistência dos dados Auth/Storage **não foram aprovados** nesta
+rodada. A preparação do banco e a compatibilidade estrutural não substituem carga
+e validação completas. Não classificar como restauração parcial aprovada.
+
+### Segurança e compatibilidade comprovadas antes da carga
+
+- D: `FullyEncrypted`, BitLocker `On`, 100%. Docker configurado em
+  `D:\DockerDesktopWSL`; presença de `disk\docker_data.vhdx` e `main\ext4.vhdx`
+  conferida apenas por metadados, sem montar/ler os discos ou alterar configurações.
+- Sete cópias integrais em diretório novo privado de D:, fora do repositório.
+  ACL protegida, somente usuário local e SYSTEM; cópias, scripts, temporários e
+  logs com zero entrada inesperada de acesso. Nenhum bind privado no Docker.
+- Os sete originais foram comparados byte a byte com as cópias-base após a
+  tentativa: **7/7 inalterados**. Não foram repetidos hashes de 143 arquivos.
+  Dumps, scripts derivados, manifestos detalhados e logs ficaram exclusivamente
+  no diretório privado; nenhum desses artefatos é versionado ou enviado ao GitHub.
+- Origem dos dumps: cabeçalhos PostgreSQL/pg_dump 17.6. Destino escolhido:
+  PostgreSQL 17.6, imagem oficial fixada já disponível. Produção atual não foi
+  consultada; não se presume sua versão atual a partir do snapshot.
+- Bootstrap Auth/Storage realizado somente no banco vazio com as imagens abaixo.
+  Tabelas e colunas dos 26 blocos Auth e cinco Storage confrontadas; zero coluna
+  ausente/gerada indevidamente ou campo obrigatório novo sem default nesse teste.
+  As duas APIs foram paradas antes da fase SQL real e não foram reiniciadas.
+- Banco `network=none`, única interface lo, IPv4 sem rotas e IPv6 somente
+  loopback/rejeição em lo. Auxiliares compartilharam exclusivamente seu namespace.
+  Zero porta publicada, bridge/host/proxy/túnel, socket Docker ou mount privado.
+  `privileged=false`, cap-drop ALL, no-new-privileges, rootfs read-only, tmpfs local,
+  `restart=no`. PostgreSQL executado como postgres, Storage bootstrap como node.
+- Preload vazio desde o primeiro boot, sem pg_cron/pg_net instalados ou workers
+  correspondentes. Bootstrap não importou Vault/Secrets reais, jobs, SMTP,
+  webhooks, Edge ou provedores. Logs do servidor configurados para não registrar
+  SQL/valores de erros comuns; stderr de cliente permaneceu em log privado.
+- A leitura estática não encontrou event triggers ou comandos psql nos arquivos.
+  A referência a vault.decrypted_secrets foi identificada como dependência de
+  função armazenada; nenhuma função financeira/decriptação foi invocada.
+- Os 26 blocos Auth e cinco Storage dos auxiliares coincidem com data.sql em
+  colunas, quantidade e conteúdo, comparado em memória sem imprimir linhas.
+  Estratégia escolhida: data.sql uma única vez, auxiliares não executados,
+  history_schema/history_data separados. Sem concatenação dos sete dumps,
+  ON CONFLICT ou filtros indiscriminados de SQL.
+- Neutralização por fronteiras léxicas de statements: somente duas declarações
+  CREATE EXTENSION omitidas na derivada. Tokens/corpos dos statements retidos
+  conferidos; nenhuma constraint, trigger, policy, RLS ou GRANT/REVOKE removido.
+  A configuração de session_replication_role da cópia de dados foi identificada,
+  mas **não executada**, porque a carga de dados não foi iniciada.
+
+Antes de qualquer arquivo real, a consulta auxiliar de metadados de extensões
+teve erro de operador name[]/text[] (42883). Corrigido somente o cast do verificador,
+com prova de zero arquivos reais executados naquele ponto. Esse diagnóstico está
+no log privado; não houve reexecução de arquivo real após a falha DDL 3F000.
+
+### Imagens e recursos novos preservados
+
+Sem downloads; todas iniciadas por ID imutável com `--pull=never`.
+
+| Imagem oficial / versão | ID local = RepoDigest SHA-256 |
+| --- | --- |
+| public.ecr.aws/supabase/postgres:17.6.1.166 | `sha256:b3bfedb107413abb3b8cb0d0874b0414a1dceb3d55bc0c778de6ad22d1f7dc86` |
+| public.ecr.aws/supabase/gotrue:v2.197.0 | `sha256:1736a63078f5922b198c4cbe50f80ab9a2d3b54fe8b7b6cfb2e9dc5dbbc12c6b` |
+| public.ecr.aws/supabase/storage-api:v1.79.28 | `sha256:1f6c99d3952d78d57129802aa2ae8a80d75e327492cf24742fd0aeaf90967b96` |
+
+Execução/label: `cob06-real-sql-20261022023846483-ff8e90` /
+`guia.cob06.real-sql`. Nome = prefixo da execução + sufixo abaixo.
+
+| Sufixo | ID completo | Estado final |
+| --- | --- | --- |
+| pg | `5f1af6d95c0542a1ef07c210bd363a941cee965907e26de736abf9b972feac9e` | exited / 0 |
+| auth-bootstrap | `3486edcfa98e9a1d451852dfa1784b14c1f8670178c58a83d6c640a3dc58d27a` | exited / 0 |
+| storage-bootstrap | `7d8b42a449e30a83db7ecd2b9dfa4e75325721ae655c6f906d9d620392bf083a` | exited / 0 |
+
+Um volume novo: `cob06-real-sql-20261022023846483-ff8e90-pgdata`.
+Todos os três contêineres parados; volume mantido. Zero recurso removido.
+**38 contêineres, 18 volumes e quatro redes preexistentes preservados**; nenhum
+start/exec no clone histórico ou nos ensaios anteriores. O destino conserva
+somente bootstrap gerenciado e preparações que haviam sido confirmadas antes
+do arquivo DDL revertido; não conserva carga de registros reais.
+
+### Pendências e próximo passo condicionado
+
+Revisar o bootstrap da dependência Vault e seus requisitos de schema, owner,
+extensão e privilégios, sem Secrets produtivos ou executores de rede. Depois,
+será necessária autorização para **nova tentativa**, pois esta foi limitada a
+uma carga e parada no primeiro erro. Não retomar automaticamente o volume nem
+criar outro destino para contornar essa parada.
+
+Continuam pendentes todas as verificações de dados/ACL de origem após carga,
+Auth funcional sem login em contas reais, Storage físico e Edge (estes dois
+últimos fora da autorização desta rodada). Os sete dumps não fornecem por si
+só prova de todos os atributos/memberships reais nem do DDL/ACL gerenciado
+histórico; a comparação de colunas não fecha essa lacuna.
+
+Registro público limitado a este runbook e à backlog. Sem nova suíte de código:
+alteração documental; diff conferido. Reutilizada a [CI 12/12 da base 7a01ec8](https://github.com/pedrinhossiqueira12-dotcom/Guia-Turistico-de-Andrel-ndia/actions/runs/39710358835),
+sem reexecutar provas aceitas. **COB-06 HOLD; nenhuma autorização de implantação,
+COB-07/08, cobrança, Pix, saque ou merge resulta desta preparação.**
+
 **Atualização efetiva: 21/10/2026.** Os sete dumps SQL originais e os 128 objetos físicos Storage já foram exportados e conferidos pelo operador; o pacote `.7z` com criptografia AES-256 no disco E: foi testado mediante extração em D: criptografado. **143/143 arquivos** extraídos conferidos por SHA-256 com seus originais, com **128 objetos e 133855024 bytes de Storage**. O disco E: é um segundo disco físico. **Em 21/10/2026, o operador declarou: `Backup guardado fora do computador`.** Essa declaração é registrada como confirmação operacional de guarda externa **sob a condição de que a mídia que contém o `.7z` esteja de fato fisicamente fora do computador** (não apenas em E: ainda conectado). A confirmação é declaratória: não houve verificação física independente, nem confirmação sobre guarda separada da senha. Foi efetuado ensaio anterior do SQL no clone isolado com rollback, mas **não** uma restauração integral de serviços externos/Edge/configurações. PR #39 Draft e COB-06 HOLD. Evidência detalhada em [ASAAS_COB06_EVIDENCIA_RECUPERACAO_ARQUIVOS_20261021.md](ASAAS_COB06_EVIDENCIA_RECUPERACAO_ARQUIVOS_20261021.md).
 
 ## Recuperação funcional entre dois clusters independentes — 21/10/2026, 23:12 BRT
