@@ -2,6 +2,126 @@
 
 **Atualização efetiva: 21/10/2026.** Os sete dumps SQL originais e os 128 objetos físicos Storage já foram exportados e conferidos pelo operador; o pacote `.7z` com criptografia AES-256 no disco E: foi testado mediante extração em D: criptografado. **143/143 arquivos** extraídos conferidos por SHA-256 com seus originais, com **128 objetos e 133855024 bytes de Storage**. O disco E: é um segundo disco físico. **Em 21/10/2026, o operador declarou: `Backup guardado fora do computador`.** Essa declaração é registrada como confirmação operacional de guarda externa **sob a condição de que a mídia que contém o `.7z` esteja de fato fisicamente fora do computador** (não apenas em E: ainda conectado). A confirmação é declaratória: não houve verificação física independente, nem confirmação sobre guarda separada da senha. Foi efetuado ensaio anterior do SQL no clone isolado com rollback, mas **não** uma restauração integral de serviços externos/Edge/configurações. PR #39 Draft e COB-06 HOLD. Evidência detalhada em [ASAAS_COB06_EVIDENCIA_RECUPERACAO_ARQUIVOS_20261021.md](ASAAS_COB06_EVIDENCIA_RECUPERACAO_ARQUIVOS_20261021.md).
 
+## Compatibilidade funcional sintetica - 21/10/2026, 22:29 BRT (COB-06 HOLD)
+
+Autorizacao expressa: stack nova exclusivamente sintetica, download oficial fixado
+pelo host e containers sem internet. Base limpa e sincronizada por fast-forward:
+`6974e116521e49225d551be08e0094db85bbecc9`; PR #39 aberta/Draft,
+[CI da base aprovada](https://github.com/pedrinhossiqueira12-dotcom/Guia-Turistico-de-Andrel-ndia/actions/runs/39693862227).
+Nao foram repetidos os 35 testes anteriores, os 143 hashes ou o ensaio historico
+dos nove SQLs. Nenhum backup privado, clone historico, Supabase remoto ou servico
+financeiro foi acessado. Nenhuma configuracao Docker foi alterada.
+
+### Imagens oficiais e reproducibilidade
+
+Somente PostgREST foi baixado pelo Engine no host. Demais imagens reutilizadas do
+cache; containers criados por ID imutavel com `--pull=never`.
+Os valores abaixo sao tanto IDs locais como RepoDigests observados (prefixar o
+repositorio sem tag com `@` para referencia por digest).
+
+| Servico | Repositorio/versao | SHA-256 |
+| --- | --- | --- |
+| `PostgreSQL` | `public.ecr.aws/supabase/postgres:17.11.0.002` | `sha256:0450166354dc9c1d25f0322ac8b580774d4fb0184d2b087f6e4fe9499c66cf53` |
+| `GoTrue` | `public.ecr.aws/supabase/gotrue:v2.197.0` | `sha256:1736a63078f5922b198c4cbe50f80ab9a2d3b54fe8b7b6cfb2e9dc5dbbc12c6b` |
+| `PostgREST` | `postgrest/postgrest:v14.18` | `sha256:c7cd7e265a85b05248abf53f4473fcec7e327c282d0bd0cf60f1551996d09fcf` |
+| `Storage API / helper` | `public.ecr.aws/supabase/storage-api:v1.79.28` | `sha256:1f6c99d3952d78d57129802aa2ae8a80d75e327492cf24742fd0aeaf90967b96` |
+
+Fontes oficiais consultadas: [compose Supabase](https://github.com/supabase/supabase/blob/master/docker/docker-compose.yml),
+[imagem PostgREST e requisito PG >=13](https://docs.postgrest.org/en/v14/explanations/install.html),
+[configuracao PostgREST](https://docs.postgrest.org/en/v14/references/configuration.html),
+[Storage v1.79.28](https://github.com/supabase/storage/tree/v1.79.28) e seu
+[Dockerfile](https://github.com/supabase/storage/blob/v1.79.28/Dockerfile).
+O compose consultado indica PostgREST v14.18/GoTrue v2.197.0; Storage foi mantido
+na versao oficial ja disponivel v1.79.28, nao atualizado para a versao do compose.
+A compatibilidade desta combinacao foi demonstrada abaixo; nao ha garantia de
+paridade com os schemas/versoes do snapshot real. Edge Runtime nao e necessario
+para esses testes; nao foi baixado ou iniciado. Nenhuma dependencia npm foi baixada.
+
+### Prova final: 48/48 PASS
+
+Runner restrito: [asaas-cob06-compatibilidade-sintetica-local.cjs](../scripts/validacao-pagamentos/asaas-cob06-compatibilidade-sintetica-local.cjs).
+Exige `--execute-synthetic`, cria nomes novos com label `guia.cob06.compat` e
+para somente seus containers em `finally`. Nao executar novamente automaticamente.
+
+| Grupo | Resultado comprovado |
+| --- | --- |
+| Docker/rede | PG network=none; todos os auxiliares no namespace exato do novo PG. Somente lo com 127.0.0.1/::1; zero rotas IPv4, IPv6 apenas loopback/rejeicao em lo. Sem bridge, interfaces externas, portas publicadas, binds, socket Docker ou volumes antigos. Sem tentativa de conexao externa. |
+| Processo/mounts | restart=no, privileged=false, cap-drop ALL, no-new-privileges, rootfs somente leitura e /tmp tmpfs. Somente volumes novos listados abaixo. Copiador montou sua origem sintetica read-only. |
+| Listeners | 127.0.0.1 nas portas 5432 PG, 9999 Auth, 3000 REST, 5000 Storage, 5002 Storage recuperado; zero listener IPv6. Portas nao publicadas. |
+| Bootstrap | initdb direto em PGDATA novo; GoTrue e Storage executaram suas migrations gerenciadas neste banco vazio. Auth admin dono de auth; Storage admin dono de storage; sem superuser nos papeis de aplicacao. DB_INSTALL_ROLES=false evita bootstrap Storage que concede postgres ao authenticator. |
+| Auth + REST | Dois usuarios ficticios distintos; login/JWT aceito como authenticated. Inserts proprios A/B aceitos. A nao le/altera linhas B; insert com owner B recusado; linha B permanece intacta. Anon nao le dados privados nem insere; RPC confirma anon/authenticated. JWT com assinatura adulterada recusado 401. |
+| Storage | Bucket privado e dois arquivos ficticios; upload/leitura autorizados A/B. B nao le arquivo A nem grava no caminho A. Endpoint publico nao permite leitura anonima de bucket privado. Dois metadados confirmados. |
+| Recuperacao sintetica | pg_dump -Fc do banco criado pelo runner, mantido em memoria, restaurado em nova DB synthetic_recovered no mesmo cluster novo. Dois usuarios e dois objetos presentes; RLS de api.private_notes preservada. Arquivos copiados para OUTRO volume novo; segunda Storage API le ambos os arquivos recuperados com JWT original e recusa leitura cruzada. |
+| Executores inertes | Preload vazio; extensoes pg_cron, pg_net e supabase_vault ausentes. Sem funcoes financeiras/importacao de SQL privado. Fila/worker Storage, S3, lifecycle, transformacao e telemetria explicitamente desabilitados; sem webhook configurado. |
+
+A recuperacao testa conteudo e ACL/RLS sinteticos. Nao testa recuperacao de roles
+em cluster independente (papeis mantidos no mesmo cluster), login Auth contra a
+DB recuperada, MFA, SMTP, Edge, snapshots reais nao atomicos, conversao do layout
+Storage de exports reais ou compatibilidade de historicos gerenciados antigos.
+Os tokens, senhas e DSNs ficticios nao estao neste documento. Os relatorios do
+runner contem somente IDs/metadados/resultados; nao armazenam dump nem tokens.
+
+### Recursos novos preservados e parados
+
+Execucao final: `cob06-compat-20261022012945133-e33d24`.
+Todos os containers abaixo foram parados; nao houve remocao ou criacao de rede.
+
+| Papel | ID completo | Estado/exit |
+| --- | --- | --- |
+| `pg` | `1215a7c26686df97a5fe26fd99ab30d60db71a25e33c30e08982b9a6180722a9` | exited / 0 |
+| `probe` | `6df561e63670d56cef2ae06f6a50ca17f2352f08d51deac371fae7a26befa87c` | exited / 0 |
+| `auth` | `723fa119230e9e0ec3e9afb725a303eb9859d722c621ff78f04016fab5ef472e` | exited / 0 |
+| `rest` | `87a2549c0385e75b5fc6bac8b101510c58243e11e82b62c521817244066a1ce5` | exited / 255 |
+| `storage` | `3ca960c924f0504646e5beacdb1551a8ccd25a58bf293618f43a65a7d0e8de7a` | exited / 0 |
+| `file-copy` | `68c127abb4042f100ebb894c5d054dc86ec03628d6d88f48b05fb7649801335b` | exited / 0 |
+| `storage-recovered` | `93864f9f03b5e67d6f4fb768f73baaa381bca2cbed46f0add616f3b9c05e6169` | exited / 0 |
+
+Nome de cada container: prefixo da execucao final + `-<papel>`.
+Volumes novos finais:
+
+- `cob06-compat-20261022012945133-e33d24-pgdata`
+- `cob06-compat-20261022012945133-e33d24-files`
+- `cob06-compat-20261022012945133-e33d24-files-recovered`
+
+Tentativas intermediarias preservadas:
+
+- `cob06-compat-20261022012839565-dab5b6`: `pg` ID `d049759ff2398d98ab0fc96d395bb931fbf413f7c142d081816e8c3a8e6490e7`. Volumes: `cob06-compat-20261022012839565-dab5b6-pgdata`, `cob06-compat-20261022012839565-dab5b6-files`. Todos parados.
+- `cob06-compat-20261022012854878-129ff3`: `pg` ID `e58bb3ad57bc52ec2c623d1b5df5059aef6065711c20c5c2ef0da5830aae45c4`; `probe` ID `4c5aa85aa1172b6d780c8273ab826407273268ae94d4bde48577b6284a3ddffe`; `auth` ID `432bdb1ec11fb07879253c2efb073126f5177b2564c9bad742fa884a501a63ef`. Volumes: `cob06-compat-20261022012854878-129ff3-pgdata`, `cob06-compat-20261022012854878-129ff3-files`. Todos parados.
+
+Total desta rodada: **11 containers e 7 volumes novos**, sem remover recursos.
+A primeira tentativa parou por cast text/uuid incorreto no bootstrap sintetico;
+a segunda, porque as migrations Auth precisavam ser proprietarias de auth.uid/role.
+Corrigidos apenas os objetos do bootstrap no runner. Nenhum privilegio elevado
+foi concedido aos servicos. Execucao final sem falhas. PostgREST registrou SIGTERM
+na parada controlada e retornou 255; nao houve falha durante seus testes HTTP.
+Os outros containers finais encerraram com exit 0.
+
+Conferencia posterior somente por metadados: **12/12 containers e 4/4 volumes do
+ensaio anterior presentes**, IDs/imagens/redes dos containers preservados e todos
+parados. Nenhum start/exec nesses recursos ou no clone historico.
+VHDX: reutilizada a confirmacao anterior de `D:\DockerDesktopWSL\disk\docker_data.vhdx`
+no D: cifrado; nao houve nova leitura/montagem do disco nem alteracao da localizacao.
+
+### Bloqueios e proxima fase
+
+A ausencia da imagem PostgREST e o funcionamento sintetico do Storage deixam de
+ser bloqueios. Continuam pendentes: mapeamento das versoes/migrations reais de
+Auth e Storage; estrategia para importar SQL combinado OU auxiliares sem duplicar
+COPY; papeis/ACL reais; conversao dos bytes Storage exportados para backend local;
+equivalencia de fontes Edge implantadas/dependencias/configuracoes nao secretas;
+consistencia temporal dos snapshots; senha recuperavel em meio independente e
+rotina de backups futuros. Esta prova nao autoriza corrigir tais itens com dados reais.
+
+Procedimento minimo futuro: obter autorizacao especifica que delimite arquivos,
+destino e operacoes; verificar isolamento e destino cifrado novamente ANTES da
+entrada; preparar schemas gerenciados conforme versoes reais, papeis e extensoes
+inertes; inspecionar neutralizacao de Cron/pg_net/hooks/comandos de restauracao;
+importar uma unica selecao nao duplicada; recuperar metadados e bytes com RLS;
+validar Auth/REST/Storage e historico Mercado Pago sem rede. Edge apenas com
+fontes/dependencias fixadas e configuracoes ficticias. Parar tudo ao terminar.
+**PARADO antes de abrir/copiar/restaurar backup real. COB-06 permanece HOLD;
+COB-07, COB-08, saques, deploy e merge nao autorizados.**
+
 ## Ensaio de isolamento sintético autorizado — APROVADO NO ESCOPO (21/10/2026)
 
 Autorização expressa do proprietário nesta sessão: criar e testar somente recursos
