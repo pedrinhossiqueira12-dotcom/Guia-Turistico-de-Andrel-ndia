@@ -2,6 +2,202 @@
 
 **Atualização efetiva: 21/10/2026.** Os sete dumps SQL originais e os 128 objetos físicos Storage já foram exportados e conferidos pelo operador; o pacote `.7z` com criptografia AES-256 no disco E: foi testado mediante extração em D: criptografado. **143/143 arquivos** extraídos conferidos por SHA-256 com seus originais, com **128 objetos e 133855024 bytes de Storage**. O disco E: é um segundo disco físico. **Em 21/10/2026, o operador declarou: `Backup guardado fora do computador`.** Essa declaração é registrada como confirmação operacional de guarda externa **sob a condição de que a mídia que contém o `.7z` esteja de fato fisicamente fora do computador** (não apenas em E: ainda conectado). A confirmação é declaratória: não houve verificação física independente, nem confirmação sobre guarda separada da senha. Foi efetuado ensaio anterior do SQL no clone isolado com rollback, mas **não** uma restauração integral de serviços externos/Edge/configurações. PR #39 Draft e COB-06 HOLD. Evidência detalhada em [ASAAS_COB06_EVIDENCIA_RECUPERACAO_ARQUIVOS_20261021.md](ASAAS_COB06_EVIDENCIA_RECUPERACAO_ARQUIVOS_20261021.md).
 
+## Recuperação funcional entre dois clusters independentes — 21/10/2026, 23:12 BRT
+
+**Resultado: APROVADO no escopo exclusivamente sintético. COB-06 permanece HOLD.**
+Base `1e0d3a91bd74b16d745f624c098279c0e041c9c5`, árvore limpa,
+fetch/fast-forward sem mudanças, PR #39 aberta/Draft. As provas anteriores
+48/48, 35/35, 143 hashes e nove SQLs históricos não foram reexecutadas.
+Nenhum dump privado em D:/E:, clone histórico ou projeto Supabase remoto foi
+aberto/usado. Nenhuma alteração de Secret/flag, operação financeira, deploy ou merge.
+
+Runner específico: [asaas-cob06-recuperacao-dois-clusters-sinteticos.cjs](../scripts/validacao-pagamentos/asaas-cob06-recuperacao-dois-clusters-sinteticos.cjs).
+Aceita somente `--execute-synthetic`, sem parâmetros para backups/recursos existentes.
+A execução foi concluída em fases sobre os recursos desta rodada, após correções
+do harness descritas abaixo. O script consolidado teve sintaxe/guardas conferidas;
+não foi feita nova execução integral para repetir os resultados ou criar mais volumes.
+Os comandos de continuação usaram IDs/labels exatos desta execução; isso não
+autoriza retomar outros recursos. Nenhum relatório contém dump, senha ou token.
+
+### Independência e isolamento demonstrados
+
+- Execução: `cob06-2pg-20261022015521627-543e4d`.
+- Dois `initdb` independentes: system identifiers origem
+  `7699304938800402455` e destino
+  `7699304979478794257`, diferentes e preservados nas retomadas.
+- Quatro volumes novos distintos: PGDATA e arquivos da origem separados dos do
+  destino. Nenhum volume montado simultaneamente pelos dois clusters; transferência
+  lógica por buffers em memória no host, sem arquivos de backup no workspace.
+- Ambos os PGs em `network=none`; serviços compartilham exclusivamente o namespace
+  do respectivo PG, nunca o do outro cluster. Namespaces distintos comprovados.
+  Somente interface `lo`, zero rotas IPv4, IPv6 apenas loopback/rejeição em `lo`.
+  Origem totalmente parada antes da restauração/validação do destino.
+- Sem publicação de portas, bridge/host networking, saída externa, binds privados,
+  socket Docker ou proxies. `restart=no`, `privileged=false`, `cap-drop=ALL`,
+  `no-new-privileges`, rootfs read-only e tmpfs local.
+- Administrador PostgreSQL somente por socket local `/tmp`; conexões TCP de
+  aplicação com SCRAM e senhas fictícias diferentes entre os clusters.
+  Nenhum serviço recebeu superuser/CREATEROLE/CREATEDB/REPLICATION.
+  `service_role` tem BYPASSRLS intencional do bootstrap; testes de usuários usam
+  exclusivamente `authenticated`/anon, nunca esse papel administrativo.
+- Preload vazio, extensões Cron/pg_net/Vault ausentes. Filas/workers Storage,
+  transformação de imagens, lifecycle, S3 e telemetria desabilitados; sem webhooks.
+  Nenhuma função financeira ou migration produtiva importada.
+- Coleta final: listeners 5432/9999/3000 em 127.0.0.1, zero IPv6. Storage 5000
+  respondeu no loopback na fase funcional; a última coleta ocorreu durante seu
+  reinício e não listou essa porta. Não houve teste de conectividade externa.
+
+### O que foi reconstruído e comprovado
+
+O destino começou sem os oito papéis da allowlist. Foram reconstruídos atributos,
+memberships ADMIN/INHERIT/SET e search_path sem importar hashes/senhas. Owners e
+privilégios são comparados por nome, não por OID. Auth e Storage das mesmas imagens
+bootstraparam schemas vazios no destino antes da importação. Seus serviços ficaram
+parados na carga; históricos de migrations gerenciadas do bootstrap não foram
+sobrescritos. Os SQLs de exportação são gerados exclusivamente dos fixtures novos.
+
+| Controle | Evidência final |
+| --- | --- |
+| Papéis | Atributos, settings e memberships iguais entre clusters independentes; senha TCP nova no destino. Papéis fixture_owner/fixture_reader NOLOGIN; authenticator sem superuser. |
+| Owners e ACL | Comparação completa de schemas, relações e funções em auth/storage/api; GRANT/REVOKE, grantors e default ACLs conferidos. Ordem dos itens de ACL de função normalizada, preservando diferença NULL/ACL vazia. |
+| Funções/RLS | Definições, SECURITY INVOKER, policies, RLS/force RLS e constraints iguais. EXECUTE autorizado como authenticated; anônimo recusado. DELETE explicitamente revogado permanece recusado. |
+| Integridade | Contagem de todas as tabelas gerenciadas igual (exceto históricos de migrations mantidos do bootstrap); dois registros de aplicação preservados. Zero órfãos em aplicação/usuários, identities/usuários, sessions/usuários e objects/buckets. FK rejeitou inserção órfã; triggers reativadas, constraints validadas. |
+| Auth no destino | Login novo de dois usuários exportados da origem, com a mesma senha fictícia e mesmos IDs; JWTs emitidos pelo GoTrue do destino. Não se limitou a reutilizar JWT da origem. |
+| PostgREST no destino | Ambos leem apenas sua linha recuperada; função retorna papel authenticated; A não altera B, não transfere owner para B; anônimo sem leitura, DELETE e EXECUTE indevidos recusados; conteúdo permanece intacto. |
+| Storage independente | Um bucket privado e um arquivo fictício recuperados. Metadados por dump lógico e bytes copiados para volume próprio, igualdade dos bytes conferida em memória. A lê com JWT novo do destino; B é recusado. Não há mount de origem no serviço de destino. |
+| Default ACL efetiva | Configuração global reconstruída antes da verificação. Nova função criada como fixture_owner em transação: authenticated tem EXECUTE, anon não tem; função de prova revertida. |
+| Preservação/parada | 26 contêineres e 14 volumes preexistentes preservados, inclusive IDs, imagens, estado, rede e mounts. Todos os 12 contêineres novos parados; nenhum recurso removido. |
+
+As 12 verificações funcionais finais do destino passaram. O registro técnico da
+rodada consolidou **91 nomes distintos de verificações aprovadas entre as fases**,
+incluindo guardas, comparações e retomadas; não são 91 cenários independentes nem
+uma reexecução da suíte anterior de 48. Falhas intermediárias foram preservadas
+como diagnóstico e corrigidas pontualmente; não foram reinterpretadas como PASS.
+
+### Correções locais e limites da prova
+
+1. Dump seletivo de `api` não transporta GRANTs externos sobre `auth`.
+   Reconstruídos USAGE para fixture_owner e REFERENCES em auth.users; reimportado
+   somente o schema fictício api no destino, mantendo os dados Auth/Storage.
+   O runner consolidado prepara esses GRANTs antes da importação.
+2. O entrypoint original da rodada tentava initdb novamente ao reiniciar.
+   Os dois contêineres PG originais ficaram parados com exit 1; PGDATA preservado.
+   Foram necessários dois processos PG substitutos, serviços de destino
+   correspondentes e um leitor read-only dos arquivos sintéticos. Usaram os
+   mesmos quatro volumes novos desta rodada; zero novos clusters/volumes nas
+   retomadas. A guarda de PG_VERSION foi incorporada ao runner.
+3. ACL da função tinha os mesmos itens em ordem diferente após pg_restore.
+   Comparação passou a ordenar itens, mantendo privilégios/grantors e NULL.
+4. Classificação da recusa RPC foi corrigida: ausência de EXECUTE pode produzir
+   401/403 ou função oculta 404. A coleta explícita final foi **401 / SQLSTATE
+   42501**, junto de has_function_privilege(anon)=false; RPC autenticada respondeu.
+5. O fixture revogava default EXECUTE apenas no schema. Isso não remove o grant
+   global a PUBLIC. Corrigida a configuração global de fixture_owner na origem,
+   exportada por allowlist e reconstruída no destino. Catálogos novamente iguais
+   e teste de criação de função aprovado. A conclusão vale para esse fixture;
+   não foi identificada/alterada uma configuração de produção.
+6. Relatórios transitórios não serão versionados separadamente; os IDs,
+   resultados, limitações e diagnósticos sanitizados estão nesta seção.
+
+Fontes oficiais: [pg_dump não inclui objetos globais como roles](https://www.postgresql.org/docs/17/app-pgdump.html),
+[memberships PostgreSQL 17](https://www.postgresql.org/docs/17/sql-grant.html) e
+[default privileges globais e por schema](https://www.postgresql.org/docs/17/sql-alterdefaultprivileges.html).
+A consulta ao índice changelog Supabase retornou erro de content-type; não houve
+atualização de versão. Foram reutilizadas as configurações oficiais das imagens
+fixadas já verificadas na prova anterior.
+
+### Imagens e recursos desta rodada
+
+Sem downloads. Mesmas imagens oficiais já locais, todas com `--pull=never`:
+
+| Serviço / versão | ID local = RepoDigest SHA-256 |
+| --- | --- |
+| public.ecr.aws/supabase/postgres:17.11.0.002 | `sha256:0450166354dc9c1d25f0322ac8b580774d4fb0184d2b087f6e4fe9499c66cf53` |
+| public.ecr.aws/supabase/gotrue:v2.197.0 | `sha256:1736a63078f5922b198c4cbe50f80ab9a2d3b54fe8b7b6cfb2e9dc5dbbc12c6b` |
+| public.ecr.aws/supabase/storage-api:v1.79.28 | `sha256:1f6c99d3952d78d57129802aa2ae8a80d75e327492cf24742fd0aeaf90967b96` |
+| postgrest/postgrest:v14.18 | `sha256:c7cd7e265a85b05248abf53f4473fcec7e327c282d0bd0cf60f1551996d09fcf` |
+
+Nome: prefixo da execução acima + `-<papel>`. Label
+`guia.cob06.two-clusters=cob06-2pg-20261022015521627-543e4d`.
+
+| Papel | ID completo | Estado / exit |
+| --- | --- | --- |
+| `source-pg` | `c7ee95d0e51d89ab2ff146517f8fa921d725996cbc800b4097d30a711a5193da` | exited / 1 |
+| `source-auth` | `47ba6d7dc463794eb550abf3a07f0c220ff1d93ded47769371c83e210b22183c` | exited / 0 |
+| `source-storage` | `60a8a5428082c9ac99fe74adbfb4888c87afb9b078ba7fc629c1c1957c36ef44` | exited / 0 |
+| `target-pg` | `45192ca4f230edf966b82844c17b760afb06cad7d710dbbba23a891e58d4a8df` | exited / 1 |
+| `target-auth` | `7e644f5d04b44fad911d669868dadf8009ea82eaf14272ff0ef08d10c2d1047b` | exited / 0 |
+| `target-storage` | `88cddefa8f68d83fa72faa00d7392c447668f707cf1c1cb59da103c30a51a85a` | exited / 0 |
+| `source-pg-recovery` | `02960de0bb144e24405333aa58fcc5162aff5e170213355c7c1cc5e70f3e871d` | exited / 0 |
+| `target-pg-recovery` | `47d282c20125550cdddd7427d41e6e2e1ed1fa74c2aba5ec39fc262bfaaae1f6` | exited / 0 |
+| `source-file-export` | `6fe5b10a78918ae6b560264212c4080a0257d469cda7c619d4f0440f0baa28a8` | exited / 0 |
+| `target-auth-recovery` | `284c946d86e2d86fcd9ff3834ba4b2a61ce09acb8682f0c8375d9987eef6d010` | exited / 0 |
+| `target-storage-recovery` | `ed32c195a6899c2b4dccf86d8687988e147b930ab4bc26f706438f4686911248` | exited / 0 |
+| `target-rest` | `e7f22b0837b887db45a045e9b038b3bc991ef0d794af678f820ddc435c4f3d0a` | exited / 255 |
+
+PostgREST registrou parada controlada; exit 255 não é resultado dos testes HTTP.
+Os contêineres PG substitutos e serviços funcionais encerraram com exit 0.
+Volumes preservados:
+
+- `cob06-2pg-20261022015521627-543e4d-source-pgdata`
+- `cob06-2pg-20261022015521627-543e4d-source-files`
+- `cob06-2pg-20261022015521627-543e4d-target-pgdata`
+- `cob06-2pg-20261022015521627-543e4d-target-files`
+
+### Sequência documental dos sete dumps reais — NÃO EXECUTAR nesta autorização
+
+Plano baseado somente no conhecimento já aceito; **nenhum dos sete arquivos foi
+reaberto**, copiado, hasheado ou executado. Não concatenar dumps. A escolha abaixo
+usa os auxiliares como fonte única de Auth/Storage e exige excluir esses mesmos
+blocos do data.sql em cópia de trabalho futura autorizada. Alternativa válida
+é usar data.sql como fonte única e omitir ambos os auxiliares; jamais combinar
+as duas estratégias nem completar por tentativa após erro.
+
+| Arquivo | Finalidade / ordem futura condicionada | Dependências e bloqueios |
+| --- | --- | --- |
+| roles.sql | 1 — reconciliar apenas comandos aprovados, após inventário dos papéis necessários | Não é bootstrap completo de roles/owners. Reconstruir atributos, memberships, GUCs e ACLs globais por inventário separado. Não importar passwords ou elevar privilégios automaticamente. GRANT/SET administrativos exigem revisão específica. |
+| history_schema.sql | 2 — criar exclusivamente o schema/tabelas do histórico se ainda ausentes | Verificar colisões com bootstrap; apenas DDL histórico, nenhum conteúdo histórico vira migration a executar. |
+| schema.sql | 3 — preparar DDL de negócio compatível com schemas gerenciados; reservar pós-dados para constraints/triggers/ACL conforme dependências | Auth/Storage e extensões seguras precisam existir. Revisar dependências entre funções, tipos e roles; preservar owners/RLS/GRANT/REVOKE/default ACL e histórico Mercado Pago. Sem aplicar candidatos 9/14 SQL. |
+| auth_data.sql | 4 — fonte única da carga Auth, uma vez por tabela | Schema/colunas/constraints precisam corresponder à versão do snapshot. Não sobrescrever histórico de migrations gerenciadas do bootstrap sem compatibilidade comprovada. Não ligar GoTrue a dados reais antes de revisar migrations automáticas. |
+| storage_metadata.sql | 5 — fonte única dos metadados Storage, uma vez por tabela | Auth e buckets/objetos/tipos compatíveis; ordem interna por FKs. Não contém os bytes. Recuperação do layout de arquivos e datas dos snapshots continua pendente. |
+| data.sql | 6 — carregar somente tabelas de negócio não carregadas nas etapas 4/5 | Excluir em cópia futura autorizada os 26 blocos Auth e cinco Storage já identificados; mapear também qualquer histórico repetido. Não alterar originais nem fazer filtros regex sobre SQL arbitrário. Não usar ON CONFLICT para esconder duplicidade. |
+| history_data.sql | 7 — carregar o histórico uma única vez após estrutura e dados correspondentes | history_schema existente; verificar compatibilidade do inventário. Preservar registros, sem executar statements históricos nem migrations pendentes. |
+
+Antes da etapa 1: autorização específica delimitando arquivos/destino, mídia/senha
+por vias independentes e destino cifrado verificado; dois níveis de contenção,
+rede sem saída e executores inertes. Sem montar mídia off-host automaticamente.
+Preparar papéis e schemas gerenciados conforme versões reais, não presumir que
+as imagens sintéticas reproduzem o snapshot.
+
+Antes de qualquer carga: preload sem Cron/pg_net/Vault; sem workers, jobs ativos,
+SMTP, webhooks, Edge ou provedores reais. Não instalar Cron/pg_net para satisfazer
+uma dependência. Se faltar tipo/função de extensão ou versão gerenciada compatível,
+**bloquear a parte afetada**, revisar o tratamento e não reativar o executor.
+Inspecionar metacomandos psql, conexões, COPY PROGRAM, event triggers, hooks,
+ALTER SYSTEM e código de privilégio; nenhum SQL arbitrário se torna seguro apenas
+por estar sem rede. Restaurar em sessão fixa, psql -X/ON_ERROR_STOP, sem log de dados.
+
+A carga controlada pode inibir triggers somente no destino autorizado e em sessão
+delimitada; isso também pode suspender FKs e não neutraliza event triggers ou
+comandos de cliente. Reativar e conferir constraints/triggers, validar relações
+órfãs e invariantes, owners, GRANT/REVOKE, funções e RLS após a carga. Não confiar
+apenas em convalidated=true de constraints preexistentes. Separar pré/pós-dados
+com revisão estrutural, preservando os originais; este documento não é instalador.
+
+Antes de iniciar APIs: comparar contagens/invariantes e histórico MP sem alterar
+pagamentos; recuperar bytes Storage para layout local correto e validar RLS.
+Usar somente contas/tokens fictícios para testar o destino. Fontes Edge, import
+maps/dependências e configurações não secretas precisam de equivalência revisada;
+nenhuma Edge financeira deve ser iniciada. Não importar Secrets reais.
+
+**Pendência sintética de independência dos clusters: atendida no escopo acima.**
+Continuam abertos: compatibilidade dos schemas/roles/dados reais; mapa de carga
+por tabela sem duplicidade; layout/consistência temporal de Storage; equivalência
+de Edge/configurações; guarda independente da senha e rotina de novos backups.
+Parar antes de qualquer acesso ou restauração de backup real. COB-06 HOLD;
+COB-07/08, saques, deploy e merge seguem sem autorização.
+
+
 ## Compatibilidade funcional sintetica - 21/10/2026, 22:29 BRT (COB-06 HOLD)
 
 Autorizacao expressa: stack nova exclusivamente sintetica, download oficial fixado
