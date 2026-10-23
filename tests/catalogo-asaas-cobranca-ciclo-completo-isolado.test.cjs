@@ -10,6 +10,7 @@ const between=(a,b)=>{
  assert.ok(start>=0&&end>start,"Missing financial function "+a);
  return edge.slice(start,end);
 };
+const issuance=between("function requireIssuance(){","function check(");
 const verified=between("async function verifyInvoice(","async function loadOrCreateCustomer(")
  .replace("async function verifyInvoice(paymentId:string,charge:Record<string,unknown>,store:string,month:string)",
   "async function verifyInvoice(paymentId,charge,store,month)")
@@ -90,6 +91,7 @@ function fixture(){
  class Failure extends Error{constructor(message,status=409){super(message);this.status=status;}}
  const context={
   ASAAS_COBRANCA_MINIMA_CENTAVOS:500,
+  ISSUANCE_ON:true,
   db:{from:clientQuery},asaas,
   enabled:kind=>assert.equal(kind,"billing"),
   invoice:async()=>({f:state.f,charge:state.charge,store,month}),
@@ -135,7 +137,7 @@ function fixture(){
   consultarERegistrarTransferenciaExcepcionalSandbox:async()=>{throw Error("Money out forbidden")},
   reconcileTransfer:async()=>{throw Error("Money out forbidden")}
  };
- const js=verified+"\n"+reconciled+"\n"+created+"\n"+worker+
+ const js=issuance+"\n"+verified+"\n"+reconciled+"\n"+created+"\n"+worker+
    "\n({verifyInvoice,reconcileInvoice,createInvoice,processarEventoAsaasPendente})";
  const funcs=vm.runInNewContext(js,context);
  return {state,funcs,body:{comercio_id:store,competencia:month},
