@@ -26,6 +26,8 @@ const WITHDRAWAL_AUTH_TOKEN = Deno.env.get("ASAAS_SAQUE_VALIDACAO_TOKEN") || "";
 const WITHDRAWAL_AUTH_ON = Deno.env.get("ASAAS_SAQUE_VALIDACAO_ENABLED") === "true";
 const ENCRYPTION_KEY = Deno.env.get("CATALOGO_DATA_ENCRYPTION_KEY") || Deno.env.get("MP_OAUTH_ENCRYPTION_KEY") || "";
 const BILLING_ON = Deno.env.get("ASAAS_BILLING_ENABLED") === "true";
+// Emissao nova exige opt-in independente, inclusive no Sandbox. Nao bloqueia conciliacao.
+const ISSUANCE_ON = Deno.env.get("ASAAS_ISSUANCE_ENABLED") === "true";
 // Trava independente: uma chave produtiva e a flag geral NAO ligam cobranças reais.
 const PRODUCTION_BILLING_APPROVED = Deno.env.get("ASAAS_PRODUCTION_BILLING_APPROVED") === "true";
 // Somente auditoria GET no Sandbox; independente das flags de emissão e saque.
@@ -82,6 +84,11 @@ function enabled(kind:"billing"|"payouts"){
     (!WEBHOOK_WORKER_ON || WEBHOOK_WORKER_TOKEN.length<48 ||
      WEBHOOK_TOKEN.length<32))
    throw new Failure("Recuperação de webhooks Asaas não configurada em produção. Cobranças bloqueadas.",503);
+}
+function requireIssuance(){
+ if(!ISSUANCE_ON)
+  throw new Failure("Nova emissão Asaas desativada. Consulte cobranças existentes para conciliação.",503);
+ enabled("billing");
 }
 function check(ok:unknown,msg:string,status=409):asserts ok {if(!ok)throw new Failure(msg,status);}
 async function auth(req:Request){
@@ -468,6 +475,8 @@ async function lerListagemAsaasLimitada(response:Response):Promise<unknown>{
  }
 }
 async function asaas(path:string,method="GET",body?:unknown,timeoutMs=ASAAS_HTTP_TIMEOUT_MS){
+ // Defesa na saida: nenhum cadastro/cobranca mutante contorna a guarda de emissao.
+ if(method!=="GET" && /^\/(?:payments|customers)(?:\/|\?|$)/.test(path))requireIssuance();
  if(!Number.isSafeInteger(timeoutMs)||timeoutMs<500||timeoutMs>ASAAS_HTTP_TIMEOUT_MS)
   throw new Failure("Prazo HTTP do provedor inválido.",503);
  // Defesa independente, na saída HTTP: esta implementação não envia saques na produção.
@@ -810,6 +819,8 @@ async function reconcileInvoice(uid:string,body:Record<string,unknown>){
    :"Aguardando liquidação da cobrança."});
 }
 async function createInvoice(uid:string,body:Record<string,unknown>,email:string){
+ // Antes de leitura, reserva, cadastro ou POST; consulta usa sua action propria.
+ requireIssuance();
  // Regularização de obrigação já constituída não depende da aceitação
  // de novos termos; aceite continua obrigatório para iniciar novas vendas.
  const {data:method,error:methodError}=await db.from("catalogo_cobranca_preferencias")
