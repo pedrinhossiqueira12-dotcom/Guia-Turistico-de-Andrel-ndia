@@ -4,11 +4,12 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
 
-function render(pedido) {
+function render(pedido,suspenso=false) {
   const elements = new Map();
   const document = { addEventListener() {}, getElementById(id) { if (!elements.has(id)) elements.set(id, { innerHTML: '', hidden: false }); return elements.get(id); } };
   const window = { location: { search: '?id=comercio-de-exemplo' }, CatalogoUtils: { formatarMoeda: (v) => String(v) } };
   let source = fs.readFileSync(path.join(__dirname, '..', 'js', 'catalogo-admin.js'), 'utf8');
+  if(suspenso)source=source.replace('let operacoesSuspensas = false;','let operacoesSuspensas = true;');
   source = source.replace(/\}\)\(\);\s*$/, 'window.__renderPedidos = renderizarPedidosOffline; })();');
   vm.runInNewContext(source, { window, document, URLSearchParams, console });
   window.__renderPedidos([{ id: 'pedido-teste', modalidade: 'retirada', total_centavos: 700, subtotal_produtos_centavos: 700, taxa_plataforma_centavos: 49, taxa_motoboy_centavos: 0, taxa_total_centavos: 49, versao_financeira: 2, ...pedido }]);
@@ -35,4 +36,12 @@ test('Retirada v2 não anuncia taxa de motoboy', () => {
   const html = render({ provedor: 'offline', forma_pagamento: 'dinheiro', status: 'aguardando_pagamento', status_pagamento: 'pendente' });
   assert.match(html, /Taxa do pedido: 0\.49/);
   assert.doesNotMatch(html, /2% logística|taxa do motoboy/i);
+});
+
+test('Suspensao oculta novo aceite, mas conserva pronto/codigo de pedido antes aceito',()=>{
+ const novo=render({provedor:'offline',forma_pagamento:'dinheiro',status:'aguardando_pagamento'},true);
+ assert.doesNotMatch(novo,/Aceitar e preparar|data-offline-confirm=/);
+ const antigo=render({provedor:'offline',forma_pagamento:'dinheiro',status:'em_preparo',aceito_em:'2026-01-01'},true);
+ assert.match(antigo,/Marcar como pronto/);
+ assert.match(antigo,/data-offline-confirm=/);
 });

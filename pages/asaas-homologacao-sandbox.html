@@ -1,0 +1,823 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Homologação Asaas Sandbox | Guia Andrelândia</title>
+<style>
+:root{font-family:Roboto,Arial,sans-serif;background:#f5f3ef;color:#202522}
+*{box-sizing:border-box}body{margin:0}main{max-width:860px;margin:32px auto;padding:0 18px}
+header{background:#091d1c;color:white;padding:28px;border-radius:16px}
+h1{font-size:1.65rem;margin:8px 0}h2{font-size:1.15rem;margin:0 0 12px}
+header p{color:#dbe7e1;line-height:1.6}section{background:white;padding:24px;margin-top:16px;border:1px solid #dde1dc;border-radius:16px}
+label{display:block;margin-top:12px;font-size:.95rem;font-weight:600}
+input,select{display:block;width:100%;margin-top:6px;padding:12px;border:1px solid #bfc8c1;border-radius:9px;font:inherit}
+button{padding:12px 17px;background:#194138;color:white;border:0;border-radius:10px;font:inherit;font-weight:600;cursor:pointer}
+button:disabled{opacity:.5;cursor:wait}.secondary{background:#eff4ef;color:#194138}
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
+small,.muted{color:#626c64}p{line-height:1.6}.pill{background:#d6eade;color:#174634;border-radius:99px;padding:6px 11px;font-size:.8rem}
+pre{white-space:pre-wrap;word-break:break-all;padding:14px;background:#f3f5f1;border-radius:10px;max-height:240px;overflow:auto}
+#message{min-height:30px}#message.error{color:#a12222}#message.success{color:#194138}
+[hidden]{display:none!important}
+</style>
+</head>
+<body><main>
+<header><span class="pill">AMBIENTE DE TESTES — SEM DINHEIRO REAL</span>
+<h1>Homologação de fatura Pix — Asaas</h1>
+<p>Esta página usa exclusivamente o Supabase <strong>jbttwihctuibchhcyqtl</strong>. Ela não acessa os pedidos, usuários ou cobranças do Guia Andrelândia em produção. Não use uma chave de produção nesta página.</p>
+</header>
+<section>
+<h2>1. Entrar com usuário do Supabase de testes</h2>
+<p class="muted">Crie um usuário de testes em Authentication → Users → Add user, no projeto de testes. Não utilize suas credenciais da produção.</p>
+<form id="login-form">
+<label>E-mail de teste<input id="email" type="email" autocomplete="username" required></label>
+<label>Senha de teste<input id="password" type="password" autocomplete="current-password" required></label>
+<div class="actions"><button type="submit" id="login">Entrar no Sandbox</button></div>
+</form>
+<div class="actions"><button class="secondary" id="logout" type="button" hidden>Sair da conta de testes</button></div>
+<p id="session" class="muted">Não autenticado.</p><p id="uid" class="muted" hidden></p>
+</section>
+<section id="qa-order" hidden>
+<h2>2. Venda de retirada — teste anterior já concluído</h2><p class="muted"><strong>COB-04: não use os botões de criar ou confirmar retirada deste bloco.</strong> Para testar os 2% do motoboy, siga o bloco “Entrega V2”, começando pelo botão 7. Os botões 3 e 4 abaixo também são usados para aceitar e preparar o pedido de ENTREGA criado no botão 8.</p>
+<p class="muted">Somente <strong>asaas-cob02</strong> no Supabase STAGING. O produto de teste custa R$100. Este fluxo utiliza os endpoints reais de pedidos e fechamento, sem mercadoria nem dinheiro real. Nunca use dados pessoais reais.</p>
+<div class="actions">
+<button type="button" id="qa-terms">1 · Aceitar termos de comércio</button>
+<button type="button" id="qa-create" disabled title="Retirada já homologada; COB-04 usa o pedido de ENTREGA do botão 8">2 · Criar retirada (teste anterior)</button>
+<button type="button" id="qa-accept">3 · Aceitar pedido</button>
+<button type="button" id="qa-ready">4 · Marcar pronto</button>
+</div>
+<label>ID do pedido de teste<input id="qa-order-id" placeholder="Preenchido ao criar pedido; reutilizável se necessário"></label>
+<label>Código de 6 dígitos gerado pelo comprador<input id="qa-delivery-code" inputmode="numeric" maxlength="6" placeholder="Preenchido ao criar pedido"></label>
+<div class="actions">
+<button type="button" id="qa-finish" disabled title="COB-04: entrega deve ser confirmada pelo motoboy no botão 15">5 · Confirmar retirada (teste anterior)</button>
+<button type="button" id="qa-close">6 · Fechar competência da fatura</button>
+</div>
+<p id="qa-feedback" role="status" style="font-weight:600">Execute os botões em ordem. O resultado de cada operação aparecerá aqui.</p>
+<pre id="qa-result">Nenhum pedido criado. O aceite dos termos não cria um pedido.</pre>
+</section>
+
+<section id="qa-cob06" hidden>
+<h2>COB-06 · Solicitar revisao de cancelamento ficticio</h2>
+<p class="muted"><strong>Somente STAGING.</strong> Entre como proprietario <strong>pedrinhossiqueira@gmail.com</strong>. O pedido ja existe e esta pronto; este botao <strong>nao cria nenhum pedido, nao cobra Pix e nao devolve dinheiro</strong>. Ele apenas solicita a revisao administrativa para um pedido de retirada inteiramente ficticio e confirmado sem entrega ou recebimento.</p>
+<p class="muted">Pedido exclusivo: <code>a4ca7c4e-465f-4342-ae18-5c7eea1dec15</code> · comercio <code>asaas-cob02</code>. Nao toque nos botoes de criacao, entrega ou fechamento acima.</p>
+<div class="actions"><button type="button" id="qa-cob06-request">COB-06 · Solicitar cancelamento ficticio</button></div>
+<pre id="qa-cob06-output">Nenhuma solicitacao de cancelamento enviada.</pre>
+</section>
+
+<section id="qa-cob06-review" hidden>
+<h2>COB-06 · Revisao administrativa de retirada ficticia</h2>
+<p class="muted"><strong>Somente STAGING e somente a conta pedrinhossiqueira12@gmail.com.</strong> A revisao abaixo exige a flag temporaria do servidor e sera recusada enquanto ela estiver desligada. Nao utilize PROD. Antes da decisao, confirme que este pedido nao foi entregue, nao teve qualquer recebimento de dinheiro e nao possui pagamentos vinculados.</p>
+<p class="muted"><strong>Atencao:</strong> diferentemente do botao anterior, este executa o <strong>cancelamento definitivo apenas do pedido ficticio</strong>, cancela sua comissao ainda aberta de R$ 7,00 e estorna o lancamento retido. Nao executa Pix, pagamento externo nem reembolso. Faturas pagas permanecem protegidas pela RPC.</p>
+<p class="muted">Pedido: <code>a4ca7c4e-465f-4342-ae18-5c7eea1dec15</code><br>Ocorrencia: <code>b8bc453b-810b-4e6a-af6d-b82c59b1db20</code></p>
+<div class="actions"><button type="button" id="qa-cob06-review-submit">COB-06 · Revisar e cancelar pedido ficticio</button></div>
+<pre id="qa-cob06-review-output">Nenhuma revisao administrativa enviada.</pre>
+</section>
+
+<section id="qa-cob06-acumulo" hidden>
+<h2>COB-06 · Preparar acúmulo contábil de R$ 5,60</h2>
+<p class="muted"><strong>Somente Supabase STAGING e conta administrativa pedrinhossiqueira12@gmail.com.</strong> Fevereiro/2027 e março/2027 já foram fechados com R$ 2,80 cada. A preparação cria <strong>um lote contábil persistente e uma referência interna imutável</strong> para a loja fictícia <code>asaas-cob02</code>. Não emite Pix, não quita dívida, não libera remuneração e não faz saque.</p>
+<p class="muted"><strong>Antes de clicar:</strong> confirme no painel que as duas flags <code>ASAAS_COB06_PREPARACAO_ISOLADA_ENABLED</code> e <code>ASAAS_COB06_PREPARACAO_ADMIN_ENABLED</code> estão em <code>true</code> apenas no projeto de testes. A operação não é reversível pela interface; caso a resposta seja incerta, <strong>não prepare de novo</strong>, use “Retomar lote”.</p>
+<div class="actions">
+<button type="button" id="qa-cob06-acumulo-submit">COB-06 · Preparar lote fictício (R$ 5,60)</button>
+<button type="button" class="secondary" id="qa-cob06-acumulo-retomar">Retomar lote já reservado</button>
+</div>
+<pre id="qa-cob06-acumulo-output" role="status">Nenhuma reserva permanente solicitada.</pre>
+</section>
+
+
+<section id="qa-cob06-get-auditoria" hidden>
+<h2>COB-06 · Auditar duplicidade no Asaas Sandbox (somente GET bancário)</h2>
+<p class="muted"><strong>Somente administrador do Supabase de testes.</strong> A operação consulta unicamente a referência do lote fictício de <strong>R$ 5,60</strong> no Asaas Sandbox. No navegador, envia uma solicitação administrativa autenticada à Edge; a Edge pode executar apenas GET bancário, nunca criar cobrança, registrar observação, quitar ou liberar valores.</p>
+<p class="muted"><strong>Antes de usar:</strong> no projeto de testes, confirme <code>ASAAS_COB06_AUDITORIA_ISOLADA_ENABLED=true</code>, <code>ASAAS_COB06_GET_ADMIN_READONLY_ENABLED=true</code>, <code>ASAAS_ENVIRONMENT=sandbox</code>, token Asaas Sandbox apenas nas Secrets do servidor e UID de administrador correto. Mantenha as flags de Pix e saques desligadas. Não copie nenhum token para esta página nem para o chat.</p>
+<div class="actions">
+<button type="button" class="secondary" id="qa-cob06-get-auditoria-submit">Consultar duplicidade GET — lote R$ 5,60 (uma tentativa)</button>
+</div>
+<pre id="qa-cob06-get-auditoria-output" role="status">Aguardando autorização e configuração de leitura. Nenhuma consulta feita.</pre>
+</section>
+
+<section id="qa-cob06-reserva-sem-pix" hidden>
+<h2>COB-06 · Registrar uma tentativa QA, sem Pix</h2>
+<p class="muted"><strong>Somente administrador do STAGING.</strong> Esta operação registra permanentemente uma única tentativa para o lote fictício de <strong>R$ 5,60</strong>. Não chama o Asaas, não emite cobrança/Pix, não quita faturas e não libera motoboy. A tentativa não pode ser repetida para este lote.</p>
+<p class="muted"><strong>Pré-requisito:</strong> autorização específica do proprietário e Secret <code>ASAAS_COB06_GATE_RESERVA_QA_ENABLED=true</code> somente no STAGING. Mantenha flags de Pix, quitação e saques desligadas. Após a resposta, desligue novamente a flag; em caso de erro ou timeout, <strong>NÃO repita</strong>, peça conferência do ledger no banco.</p>
+<div class="actions"><button type="button" id="qa-cob06-reserva-sem-pix-submit">Reservar UMA tentativa sem Pix (irreversível)</button></div>
+<pre id="qa-cob06-reserva-sem-pix-output" role="status">Nenhuma tentativa enviada.</pre>
+</section>
+
+<section id="qa-cob06-encerramento" hidden>
+<h2>COB-06 · Conferência HTTP do encerramento (somente leitura)</h2>
+<p class="muted">Conta administrativa de testes apenas. Este botão verifica sua sessão no servidor e consulta o lote fictício de R$ 5,60 e uma identificação inexistente de comércio. Não fecha loja, não chama as RPCs de arquivamento, não altera GitHub ou WhatsApp, nem emite Pix.</p>
+<div class="actions"><button type="button" class="secondary" id="qa-cob06-encerramento-submit">Verificar HTTP de encerramento (sem alterações)</button></div>
+<pre id="qa-cob06-encerramento-output" role="status">Verificação não executada.</pre>
+</section>
+
+<section id="qa-cob06-integracao" hidden>
+<h2>COB-06 · Integração GitHub isolada</h2>
+<p class="muted"><strong>Somente STAGING · administrador pedrinhossiqueira12@gmail.com.</strong> Comece pelas duas conferências de leitura com <code>COB06_ENCERRAMENTO_HTTP_QA_ENABLED=false</code>. Esses botões não encerram comércio nem alteram GitHub ou Pix.</p>
+<div class="actions">
+<button type="button" class="secondary" id="qa-cob06-integracao-config">1 · Verificar secrets e bloqueio</button>
+<button type="button" class="secondary" id="qa-cob06-integracao-repo">2 · Verificar GitHub QA</button>
+</div>
+<pre id="qa-cob06-integracao-output" role="status">Ainda não verificado. Clique primeiro no botão 1.</pre>
+<div style="margin-top:20px;padding:16px;border:2px solid #b46b35;border-radius:12px;background:#fff8ed">
+<p><strong>Etapa 3 já executada no STAGING em 17/10/2026. Não repetir.</strong> Depois que os dois testes acima passarem, habilite TEMPORARIAMENTE <code>COB06_ENCERRAMENTO_HTTP_QA_ENABLED=true</code> nas secrets do projeto STAGING, apenas sob orientação. Esta ação altera o banco de testes e a branch <code>qa/cob06-isolado</code>; não move dinheiro, não modifica a branch principal e não aciona WhatsApp.</p>
+<div class="actions"><button type="button" id="qa-cob06-integracao-concluir" disabled>3 · Arquivamento QA já realizado — NÃO repetir</button></div>
+<p class="muted">O banco de testes já arquivou este comércio fictício. O botão 3 está bloqueado permanentemente nesta página. Use exclusivamente a recuperação GitHub abaixo.</p>
+</div>
+<pre id="qa-cob06-integracao-concluir-output" role="status">Arquivamento STAGING confirmado anteriormente. Não repetir.</pre>
+<div style="margin-top:20px;padding:16px;border:2px solid #28557d;border-radius:12px;background:#f1f7ff">
+<h3>Etapa 4 · Recuperar sincronização pendente, somente GitHub QA</h3>
+<p class="muted"><strong>Use apenas após o erro 503 anterior.</strong> O servidor verificará que <code>cob06-qa-integracao-ficticia-20261017</code> já está <code>deletado</code> no STAGING e atualizará apenas esse registro na branch <code>qa/cob06-isolado</code>. Esta ação <strong>não chama a RPC de arquivamento, não altera registros reais, não emite Pix e não aciona WhatsApp</strong>.</p>
+<p class="muted">Antes de clicar, habilite temporariamente <code>COB06_ENCERRAMENTO_HTTP_QA_ENABLED=true</code> somente nas secrets do Supabase STAGING. A flag deve voltar para <code>false</code> imediatamente depois, mesmo se houver erro.</p>
+<div class="actions"><button type="button" id="qa-cob06-integracao-sincronizar">4 · SINCRONIZAR PENDÊNCIA GITHUB QA</button></div>
+<p class="muted">Executa uma vez, após dois preflights HTTP, duas confirmações e a frase de segurança. Resposta inconclusiva: não repetir; enviar o JSON para revisão.</p>
+</div>
+<pre id="qa-cob06-integracao-sincronizar-output" role="status">Recuperação GitHub ainda não executada.</pre>
+</section>
+
+<section id="qa-delivery" hidden>
+<h2>COB-04 · Entrega V2 com motoboy (somente STAGING)</h2><p class="muted"><strong>Próxima ação:</strong> botão 7 para autorizar a conta de motoboy existente, depois botão 8 para criar UM pedido de entrega. Não confirme o pedido de retirada que ficou “pronto”.</p>
+<p class="muted">COB-04 (já homologado): produto R$100 gera R$7 de comissão. COB-06: produto QA R$40 gera R$2,80 (R$2 plataforma + R$0,80 motoboy). Fevereiro/2027 já foi faturado com R$2,80; o novo pedido aceito deve ir para março/2027. Somente após entrega confirmada, feche março e confira a prévia de R$5,60 acumulados em duas competências. Não emita Pix, não quite e não transfira valores neste ensaio.</p>
+<label>E-mail do motoboy de testes já cadastrado<input id="qa-moto-email" type="email" autocomplete="off" placeholder="Informe o e-mail da conta de motoboy do Sandbox"></label><p class="muted">O ID do motoboy é localizado pela API quando você autoriza. Não precisa consultar ou digitar esse ID.</p>
+<label>Nome de identificação do motoboy<input id="qa-moto-name" maxlength="120" autocomplete="off" value="Motoboy de homologação" placeholder="Motoboy de homologação"></label>
+<label>ID do motoboy autorizado (automático)<input id="qa-moto-id" readonly aria-readonly="true" placeholder="Será preenchido pelo botão 7; não precisa digitar"></label>
+<label>Produto QA a usar na entrega<select id="qa-product"><option value="">Clique em carregar produtos antes do pedido</option></select></label>
+<div class="actions"><button type="button" id="qa-products-load" class="secondary">Carregar produtos da loja de testes</button></div>
+<p class="muted">Escolha R$40 para testar o bloqueio de cobrança abaixo de R$5. Este seletor não altera preço, cadastro ou valores no servidor. Não emita Pix após o teste de valor baixo.</p>
+<div class="actions">
+<button type="button" id="qa-authorize">7 · Proprietário: autorizar motoboy</button>
+<button type="button" id="qa-create-delivery">8 · Criar pedido de entrega em dinheiro</button>
+<button type="button" id="qa-assign">9 · Proprietário: atribuir pedido ao motoboy</button>
+</div><p id="qa-delivery-feedback" role="status" aria-live="polite" style="font-weight:600">A resposta da autorização aparecerá aqui, inclusive se ocorrer algum erro.</p>
+<pre id="qa-delivery-result" aria-label="Resultado da homologação de entregas">Nenhuma operação de entrega confirmada.</pre>
+<p class="muted">Pelo proprietário, use também os botões 3 · Aceitar pedido e 4 · Marcar pronto acima. <strong>Para entrega V2, NÃO use o botão 5 de confirmar retirada; a entrega deve ser concluída pela conta do motoboy no botão 15.</strong> Depois saia e entre como motoboy de testes, sem mudar de projeto.</p>
+<div class="actions">
+<button type="button" id="qa-moto-terms">10 · Motoboy: aceitar termos</button>
+<button type="button" id="qa-moto-available">11 · Motoboy: ficar disponível</button>
+<button type="button" id="qa-moto-accept">12 · Motoboy: aceitar entrega</button>
+<button type="button" id="qa-moto-pickup">13 · Motoboy: confirmar coleta</button>
+<button type="button" id="qa-moto-onroad">14 · Motoboy: iniciar entrega</button>
+<button type="button" id="qa-moto-finish">15 · Motoboy: confirmar código e recebimento fictício</button>
+</div>
+<p class="muted">Após a entrega, volte à conta proprietária para fechar a competência, consultar a fatura e testar o Pix exclusivamente no Asaas Sandbox. Nunca gere outro pedido ou cobrança quando um resultado for inconclusivo; consulte o estado primeiro.</p>
+</section>
+<section id="billing" hidden>
+<h2>3. Consultar fatura de homologação</h2>
+<p>O comércio <strong>asaas-cob02</strong> está vinculado à conta existente de homologação. Primeiro conclua o pedido do Sandbox e feche a competência.</p>
+<label>Competência da fatura<input id="competencia" type="month" value="2027-03"></label><p class="muted">COB-06 (17/10/2026): fevereiro/2027 está faturado com R$2,80 e deve ficar imutável. Use março/2027 apenas após concluir a nova entrega de R$40; confira a comissão antes de fechar. A prévia acumulada esperada é R$5,60 (fevereiro + março). NÃO clique em emitir Pix neste teste, mesmo que o valor acumulado atinja R$5.</p>
+<div class="actions"><button id="consultar" type="button">Consultar fatura</button><button class="secondary" id="conciliar" type="button">Verificar pagamento no Asaas</button></div>
+<h2 style="margin-top:25px">4. Emitir Pix fictício da fatura</h2>
+<p class="muted">Execute somente depois de habilitar <code>ASAAS_BILLING_ENABLED=true</code> no Supabase de testes. A emissão é recuperável e não deve ser feita novamente para a mesma competência se existir cobrança anterior.</p>
+<label>Nome/razão social do pagador<input id="nome" maxlength="120" autocomplete="off"></label>
+<label>CPF/CNPJ autorizado para testes<input id="documento" maxlength="30" autocomplete="off"></label>
+<div class="actions"><button id="emitir" type="button">Criar/recuperar cobrança de teste</button></div>
+</section>
+<section>
+<h2>Resultado</h2>
+<p id="message" role="status"></p>
+<pre id="result" aria-label="Resumo de fatura">Nenhuma consulta realizada.</pre>
+<div id="pix" hidden>
+<p><strong>Pix copia e cola</strong> (somente Sandbox)</p><pre id="pix-code"></pre>
+<button class="secondary" id="copy-pix" type="button">Copiar código</button>
+<p><a id="link-asaas" target="_blank" rel="noreferrer noopener" hidden>Abrir cobrança no Asaas</a></p>
+</div>
+</section>
+<p class="muted">Segurança: utiliza somente chave pública Supabase, solicita um JWT do próprio usuário e nunca apresenta chaves financeiras ou service role. Pagamentos e saques reais permanecem desativados.</p>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script>
+<script>
+(() => {
+"use strict";
+const $=id=>document.getElementById(id);
+const PROJECT="jbttwihctuibchhcyqtl";
+const STORE="asaas-cob02";
+const URL_SUPABASE="https://"+PROJECT+".supabase.co";
+const PUBLIC_KEY="sb_publishable_W80rooaGpHP4voYiLwtz7w_-k32qHsF";
+const client=window.supabase?.createClient(URL_SUPABASE,PUBLIC_KEY,{auth:{persistSession:true,autoRefreshToken:true}});
+const msg=(m,error=false)=>{ $("message").textContent=m;$("message").className=error?"error":"success"; };
+const pretty=data=>{const {pix,...publicResult}=data||{};return JSON.stringify(publicResult,null,2);};
+async function refresh(){
+ const {data}=await client.auth.getUser();
+ const u=data?.user||null;
+ $("billing").hidden=!u;$("qa-order").hidden=!u;$("qa-delivery").hidden=!u;$("qa-cob06").hidden=!u||u.email?.toLowerCase()!=="pedrinhossiqueira@gmail.com";$("qa-cob06-review").hidden=!u||u.email?.toLowerCase()!=="pedrinhossiqueira12@gmail.com";$("qa-cob06-acumulo").hidden=!u||u.id!=="d896cc0c-31e4-4ef7-8fa4-13d15f02dd2a"||u.email?.toLowerCase()!=="pedrinhossiqueira12@gmail.com";$("qa-cob06-get-auditoria").hidden=!u||u.id!==COB06_QA_REVISOR||u.email?.toLowerCase()!=="pedrinhossiqueira12@gmail.com";$("qa-cob06-reserva-sem-pix").hidden=!u||u.id!==COB06_QA_REVISOR||u.email?.toLowerCase()!=="pedrinhossiqueira12@gmail.com";$("qa-cob06-encerramento").hidden=!u||u.id!=="d896cc0c-31e4-4ef7-8fa4-13d15f02dd2a"||u.email?.toLowerCase()!=="pedrinhossiqueira12@gmail.com";$("qa-cob06-integracao").hidden=!u||u.id!=="d896cc0c-31e4-4ef7-8fa4-13d15f02dd2a"||u.email?.toLowerCase()!=="pedrinhossiqueira12@gmail.com";$("logout").hidden=!u;
+ $("login-form").hidden=!!u;
+ $("session").textContent=u?"Autenticado no Sandbox: "+u.email:"Não autenticado.";
+ $("uid").hidden=!u;$("uid").textContent=u?"Seu User UID de testes: "+u.id:"";
+ if(!u){$("pix").hidden=true;$("result").textContent="Nenhuma consulta realizada.";}
+}
+async function call(acao,body={}){
+ const {data,error}=await client.auth.getSession();
+ if(error||!data?.session?.access_token)throw Error("Faça login com a conta de testes.");
+ const res=await fetch(URL_SUPABASE+"/functions/v1/catalogo-asaas-financeiro",{
+  method:"POST",headers:{"Content-Type":"application/json",apikey:PUBLIC_KEY,
+   Authorization:"Bearer "+data.session.access_token},
+  body:JSON.stringify({acao,comercio_id:STORE,competencia:$("competencia").value,...body}),
+ });
+ const out=await res.json().catch(()=>({}));
+ if(!res.ok||out.success!==true)throw Error(out.mensagem||"Falha na API do ambiente de testes ("+res.status+").");
+ return out;
+}
+function show(o){
+ $("result").textContent=pretty(o);
+ const payload=typeof o.pix?.code==="string"?o.pix.code:"";
+ $("pix-code").textContent=payload;
+ $("pix").hidden=!payload;
+ const link=typeof o.pix?.ticketUrl==="string"?o.pix.ticketUrl:"";
+ let safe="";
+ try {const u=new URL(link);if(u.protocol==="https:"&&(/(^|\.)asaas\.com$/.test(u.hostname)||/(^|\.)asaas\.com\.br$/.test(u.hostname)))safe=u.href;}catch{}
+ $("link-asaas").hidden=!safe;
+ if(safe)$("link-asaas").href=safe;else $("link-asaas").removeAttribute("href");
+}
+async function withBusy(button,task){
+ const isQa=button?.id?.startsWith("qa-");
+ if(isQa){
+  $("qa-feedback").textContent="Executando "+button.textContent.trim()+"…";
+  $("qa-delivery-feedback").textContent=$("qa-feedback").textContent;
+  $("qa-delivery-feedback").style.color="#194138";
+  $("qa-feedback").style.color="#194138";
+  $("qa-result").textContent="Aguardando resposta do servidor. Nenhuma operação concluída nesta tentativa.";
+  $("qa-delivery-result").textContent=$("qa-result").textContent;
+ }
+ button.disabled=true;
+ try{
+  const result=await task();
+  if(isQa){
+   $("qa-feedback").textContent=result===false?"Operação cancelada pelo usuário. Nenhuma ação enviada.":"Etapa finalizada: "+button.textContent.trim()+".";
+   $("qa-delivery-feedback").textContent=$("qa-feedback").textContent;
+   $("qa-delivery-feedback").style.color="#194138";
+   $("qa-feedback").style.color="#194138";
+  }
+ }catch(e){
+  const message=e?.message||"Não foi possível concluir.";
+  msg(message,true);
+  if(isQa){
+   $("qa-feedback").textContent="FALHOU: "+message;
+   $("qa-delivery-feedback").textContent=$("qa-feedback").textContent;
+   $("qa-delivery-feedback").style.color="#a12222";
+   $("qa-feedback").style.color="#a12222";
+   $("qa-result").textContent="Falha na etapa "+button.textContent.trim()+": "+message;
+   $("qa-delivery-result").textContent=$("qa-result").textContent;
+  }
+ }finally{
+  if(!["qa-create","qa-create-delivery"].includes(button.id) || !$("qa-order-id").value.trim())button.disabled=false;
+ }
+}
+$("login-form").addEventListener("submit",e=>{e.preventDefault();withBusy($("login"),async()=>{
+ const {error}=await client.auth.signInWithPassword({email:$("email").value.trim(),password:$("password").value});
+ $("password").value="";
+ if(error)throw Error("Não foi possível autenticar no Supabase de testes.");
+ msg("Login de testes realizado.");await refresh();
+});});
+$("logout").addEventListener("click",()=>withBusy($("logout"),async()=>{
+ const {error}=await client.auth.signOut();if(error)throw Error("Não foi possível sair da conta de testes.");msg("Sessão encerrada.");await refresh();
+}));
+$("consultar").addEventListener("click",()=>withBusy($("consultar"),async()=>{
+ const out=await call("obter_fatura");show(out);msg("Fatura consultada no Supabase de testes.");
+}));
+$("conciliar").addEventListener("click",()=>withBusy($("conciliar"),async()=>{
+ const out=await call("consultar_cobranca");show(out);msg(out.mensagem||"Conciliação concluída.");
+}));
+$("emitir").addEventListener("click",()=>withBusy($("emitir"),async()=>{
+ const displayed=JSON.parse($("result").textContent||"{}");
+ if(String(displayed?.fatura?.competencia||"").slice(0,7)!==$("competencia").value)throw Error("Consulte primeiro a fatura da competência selecionada antes de emitir qualquer Pix.");
+ if(displayed?.fatura?.total_comissao_centavos<500)throw Error("Fatura inferior a R$5: emissão proibida. COB-06 permanece HOLD.");
+ if(!window.confirm("Confirmar emissão/recuperação de cobrança SOMENTE no Asaas Sandbox?"))return;
+ const out=await call("criar_cobranca",{nome_pagador:$("nome").value.trim(),documento:$("documento").value.trim()});
+ show(out);$("documento").value="";msg(out.mensagem||"Cobrança de teste criada ou recuperada.");
+}));
+// Ações de checkout são executadas no backend já existente. Nenhuma linha
+// financeira é inserida diretamente pelo browser ou fabricada via SQL.
+async function qaApi(slug,body,authenticated=true){
+ const {data,error}=await client.auth.getSession();
+ if(error||!data?.session?.access_token)throw Error("Entre com o proprietário de testes.");
+ const response=await fetch(URL_SUPABASE+"/functions/v1/"+slug,{
+   method:"POST",
+   headers:{"Content-Type":"application/json",apikey:PUBLIC_KEY,...(authenticated?{Authorization:"Bearer "+data.session.access_token}:{})},
+   body:JSON.stringify({comercio_id:STORE,...body})
+ });
+ const out=await response.json().catch(()=>({}));
+ if(!response.ok||out.success!==true)throw Error(out.mensagem||"Operação de testes não autorizada ("+response.status+").");
+ return out;
+}
+const qaLog=(o)=>{const formatted=JSON.stringify(o,null,2);$("qa-result").textContent=formatted;$("qa-delivery-result").textContent=formatted;};
+
+// COB-06: unica solicitacao elegivel. Apenas o proprietario autenticado.
+const COB06_QA_CANCEL_PEDIDO = "a4ca7c4e-465f-4342-ae18-5c7eea1dec15";
+let cob06PedidoSolicitado = false;
+$("qa-cob06-request").addEventListener("click",()=>withBusy($("qa-cob06-request"),async()=>{
+ if(cob06PedidoSolicitado)throw Error("A solicitacao ja foi enviada nesta sessao. Nao repita.");
+ const {data,error}=await client.auth.getUser();
+ if(error||data?.user?.email?.toLowerCase()!=="pedrinhossiqueira@gmail.com")
+   throw Error("Entre como proprietario pedrinhossiqueira@gmail.com no STAGING. Nao use admin nem motoboy.");
+ if(!window.confirm("Solicitar UMA revisao de cancelamento do pedido ficticio COB-06? Nenhuma mercadoria ou dinheiro foi recebido/entregue."))
+   return false;
+ const out=await qaApi("catalogo-pedidos-offline-admin",{
+   acao:"atualizar_status",pedido_id:COB06_QA_CANCEL_PEDIDO,status:"cancelado",
+   motivo:"Solicitacao QA COB-06: retirada inteiramente ficticia, sem entrega de produto ou recebimento de dinheiro."
+ });
+ cob06PedidoSolicitado=true;
+ const result={etapa:"solicitar_cancelamento_ficticio",pedido_id:COB06_QA_CANCEL_PEDIDO,resultado:out};
+ $("qa-cob06-output").textContent=JSON.stringify(result,null,2);
+ qaLog(result);
+ msg("Solicitacao registrada. Nao clique novamente: aguarde revisao administrativa.");
+}).then(()=>{if(cob06PedidoSolicitado)$("qa-cob06-request").disabled=true;}));
+
+// COB-06 revisao final: o navegador nao pode burlar o JWT nem a flag da Edge.
+const COB06_QA_OCORRENCIA = "b8bc453b-810b-4e6a-af6d-b82c59b1db20";
+const COB06_QA_REVISOR = "d896cc0c-31e4-4ef7-8fa4-13d15f02dd2a";
+let cob06Revisado = false;
+$("qa-cob06-review-submit").addEventListener("click",()=>withBusy($("qa-cob06-review-submit"),async()=>{
+ if(cob06Revisado)throw Error("Esta revisao ja foi concluida nesta sessao. Nao repita.");
+ const {data,error}=await client.auth.getUser();
+ if(error||data?.user?.id!==COB06_QA_REVISOR||data?.user?.email?.toLowerCase()!=="pedrinhossiqueira12@gmail.com")
+   throw Error("Entre na conta administrativa confirmada pedrinhossiqueira12@gmail.com no STAGING.");
+ if(!window.confirm("COB-06: voce confirma que o pedido e TOTALMENTE FICTICIO, sem produto entregue e sem nenhum dinheiro recebido?"))
+   return false;
+ if(!window.confirm("ATENCAO: cancelar DEFINITIVAMENTE este unico pedido ficticio e sua comissao aberta de R$ 7,00? Nao executa Pix/reembolso."))
+   return false;
+ const out=await qaApi("catalogo-cob06-qa",{
+   acao:"cancelar_retirada_ficticia_qa",
+   pedido_id:COB06_QA_CANCEL_PEDIDO,
+   ocorrencia_id:COB06_QA_OCORRENCIA,
+   decisao:"cancelamento_legitimo",
+   sem_recebimento_confirmado:true,
+   sem_entrega_confirmada:true,
+   motivo:"Revisao administrativa COB-06 em STAGING: retirada inteiramente ficticia, sem produto entregue nem dinheiro recebido, sem pagamento ou cobranca externa."
+ });
+ cob06Revisado=true;
+ const result={etapa:"revisao_cancelamento_ficticio_qa",pedido_id:COB06_QA_CANCEL_PEDIDO,ocorrencia_id:COB06_QA_OCORRENCIA,resultado:out};
+ $("qa-cob06-review-output").textContent=JSON.stringify(result,null,2);
+ qaLog(result);
+ msg("Revisao do pedido ficticio concluida. Nao repita; desabilite a flag do servidor e aguarde a conciliacao.");
+}).then(()=>{if(cob06Revisado)$("qa-cob06-review-submit").disabled=true;}));
+
+// COB-06: somente a sessao Auth real do administrador pode pedir reserva.
+const COB06_ACUMULO_CORTE = "2027-03-01";
+let cob06AcumuloPreparado = false;
+async function adminAcumulo(acao) {
+ const {data,error}=await client.auth.getUser();
+ if(error||data?.user?.id!==COB06_QA_REVISOR||
+    data?.user?.email?.toLowerCase()!=="pedrinhossiqueira12@gmail.com")
+   throw Error("Entre como administrador pedrinhossiqueira12@gmail.com no STAGING.");
+ if(acao!=="preparar_acumulo_qa"&&acao!=="retomar_acumulo_qa")
+   throw Error("Operação COB-06 não autorizada.");
+ const out=await qaApi("catalogo-cob06-acumulo-preparacao",{
+   acao,comercio_id:STORE,competencia_corte:COB06_ACUMULO_CORTE
+ });
+ if(out.pix_emitido!==false||out.pode_emitir_pix!==false||
+    out.pode_quitar!==false||out.pode_liberar_motoboy!==false||
+    out.hold_obrigatorio!==true||out.total_centavos!==560||
+    out.quantidade_faturas!==2)
+   throw Error("Resposta contábil inconsistente: mantenha HOLD e não repita o preparo.");
+ cob06AcumuloPreparado=true;
+ const result={etapa:acao,resultado:out};
+ $("qa-cob06-acumulo-output").textContent=JSON.stringify(result,null,2);
+ qaLog(result);
+ msg("Lote contábil fictício confirmado. Pix, quitação e saque continuam proibidos.");
+ return out;
+}
+$("qa-cob06-acumulo-submit").addEventListener("click",()=>withBusy($("qa-cob06-acumulo-submit"),async()=>{
+ if(cob06AcumuloPreparado)throw Error("Lote ja confirmado nesta sessao. Nao prepare novamente.");
+ if(!window.confirm("STAGING COB-06: criar reserva contábil PERSISTENTE de R$ 5,60 para 2 competências fictícias? Sem Pix, quitação ou saque."))
+   return false;
+ if(window.prompt("Para confirmar o lote contábil persistente, digite RESERVAR COB06:")!=="RESERVAR COB06")
+   return false;
+ return await adminAcumulo("preparar_acumulo_qa");
+}).then(()=>{if(cob06AcumuloPreparado)$("qa-cob06-acumulo-submit").disabled=true;}));
+$("qa-cob06-acumulo-retomar").addEventListener("click",()=>withBusy($("qa-cob06-acumulo-retomar"),async()=>{
+ if(!window.confirm("Retomar SOMENTE um lote COB-06 já reservado após timeout ou erro inconclusivo? Nenhum novo lote será criado."))
+   return false;
+ return await adminAcumulo("retomar_acumulo_qa");
+}).then(()=>{if(cob06AcumuloPreparado)$("qa-cob06-acumulo-submit").disabled=true;}));
+
+// COB-06: uma unica tentativa de auditoria com token de sessao STAGING.
+// Nao faz POST bancario, e nao transfere segredo Asaas para o navegador.
+let cob06AuditoriaGetSolicitada=false;
+$("qa-cob06-get-auditoria-submit").addEventListener("click",async()=>{
+ const button=$("qa-cob06-get-auditoria-submit");
+ const output=$("qa-cob06-get-auditoria-output");
+ if(cob06AuditoriaGetSolicitada)return;
+ if(!window.confirm("Consultar somente o lote ficticio COB-06 de R$ 5,60 no Asaas Sandbox? Nao havera Pix, quitacao, observacao ou saque."))return;
+ cob06AuditoriaGetSolicitada=true;
+ button.disabled=true;
+ output.textContent="Consultando. Nao clique novamente e nao recarregue enquanto aguarda.";
+ try{
+  const {data:user,error:userError}=await client.auth.getUser();
+  if(userError||user?.user?.id!==COB06_QA_REVISOR||
+     user?.user?.email?.toLowerCase()!=="pedrinhossiqueira12@gmail.com")
+    throw Error("Entre com a conta administrativa de STAGING, nao a de motoboy.");
+  const {data:auth,error:authError}=await client.auth.getSession();
+  if(authError||!auth?.session?.access_token)
+    throw Error("Sessao de STAGING expirada. Entre novamente antes de tentar.");
+  const res=await fetch(URL_SUPABASE+"/functions/v1/catalogo-asaas-cob06-auditoria",{
+   method:"POST",
+   headers:{"Content-Type":"application/json",apikey:PUBLIC_KEY,
+     Authorization:"Bearer "+auth.session.access_token},
+   body:JSON.stringify({
+     acao:"auditar_duplicidade_acumulo_sandbox_admin",
+     lote_id:"583d761a-ecb9-49be-b484-e43f6183971e"
+   })
+  });
+  const out=await res.json().catch(()=>({}));
+  output.textContent=JSON.stringify({
+   etapa:"auditar_duplicidade_acumulo_sandbox_admin",http_status:res.status,resultado:out
+  },null,2);
+  if(!res.ok||out.success!==true||out.hold_obrigatorio!==true||
+     out.banco_alterado!==false||out.pix_emitido!==false||
+     out.pode_emitir_pix!==false||out.pode_quitar!==false||
+     out.pode_liberar_motoboy!==false){
+   msg("Auditoria em HOLD: "+(out.mensagem||"verifique configuracao e resposta HTTP."),true);
+  }else{
+   msg("GET Sandbox concluido. O HOLD financeiro continua obrigatorio.");
+  }
+ }catch(e){
+  output.textContent=JSON.stringify({
+   etapa:"auditar_duplicidade_acumulo_sandbox_admin",erro:e?.message||"Falha na consulta.",
+   hold_obrigatorio:true
+  },null,2);
+  msg("Consulta nao confirmada. Nenhuma liberacao financeira autorizada.",true);
+ }
+});
+
+// COB-06: cliente envia uma unica RPC encapsulada pela Edge administrativa.
+// A flag nasce desligada no servidor. Nao enviar token ou chave privilegiada
+// para chat, GitHub ou corpo do request. Nao repetir apos erro/timeout.
+let cob06TentativaQaEnviada=false;
+$("qa-cob06-reserva-sem-pix-submit").addEventListener("click",async()=>{
+ const button=$("qa-cob06-reserva-sem-pix-submit");
+ const output=$("qa-cob06-reserva-sem-pix-output");
+ if(cob06TentativaQaEnviada)return;
+ if(!window.confirm("STAGING: registrar UMA tentativa permanente do lote ficticio de R$ 5,60, SEM PIX, SEM cobranca e SEM quitacao? A tentativa NAO pode ser desfeita."))return;
+ if(window.prompt("Para confirmar a reserva irreversivel, digite exatamente RESERVA QA SEM PIX:")!=="RESERVA QA SEM PIX")return;
+ cob06TentativaQaEnviada=true;
+ button.disabled=true; // Bloqueia inclusive retry automatico apos falha HTTP ou timeout.
+ output.textContent="Solicitacao unica enviada. Aguarde e NAO clique/recarregue.";
+ try{
+  const {data:user,error:userError}=await client.auth.getUser();
+  if(userError||user?.user?.id!==COB06_QA_REVISOR||
+     user?.user?.email?.toLowerCase()!=="pedrinhossiqueira12@gmail.com")
+   throw Error("Entre com a conta administrativa de STAGING, nao a de motoboy.");
+  const {data:auth,error:authError}=await client.auth.getSession();
+  if(authError||!auth?.session?.access_token)throw Error("Sua sessao STAGING expirou. Entre novamente.");
+  const response=await fetch(URL_SUPABASE+"/functions/v1/catalogo-cob06-reserva-qa-sem-pix",{
+   method:"POST",
+   headers:{"Content-Type":"application/json",apikey:PUBLIC_KEY,
+    Authorization:"Bearer "+auth.session.access_token},
+   body:JSON.stringify({
+    acao:"reservar_tentativa_qa_sem_pix_admin",
+    lote_id:"583d761a-ecb9-49be-b484-e43f6183971e"
+   })
+  });
+  const out=await response.json().catch(()=>({}));
+  output.textContent=JSON.stringify({etapa:"reservar_tentativa_qa_sem_pix_admin",
+   http_status:response.status,resultado:out},null,2);
+  if(response.ok&&out.success===true&&out.nova_tentativa===true&&
+     out.estado==="tentativa_reservada_sem_pix"&&out.post_executado===false&&
+     out.pode_emitir_pix===false&&out.pode_quitar===false&&
+     out.pode_liberar_motoboy===false&&out.hold_obrigatorio===true){
+    msg("Reserva QA registrada, SEM PIX. Desligue a flag e envie somente este resultado para conferência.");
+  }else{
+    msg("Reserva NAO confirmada. NAO repita. Desligue a flag e solicite leitura do banco.",true);
+  }
+ }catch(e){
+  output.textContent=JSON.stringify({etapa:"reservar_tentativa_qa_sem_pix_admin",
+    resultado_inconclusivo:true,erro:e?.message||"Erro de rede",hold_obrigatorio:true},null,2);
+  msg("Resposta inconclusiva. NAO repita; desligue a flag e confira o banco.",true);
+ }
+});
+
+$("qa-cob06-encerramento-submit").addEventListener("click",()=>withBusy($("qa-cob06-encerramento-submit"),async()=>{
+ const {data,error}=await client.auth.getSession();
+ if(error||!data?.session?.access_token)throw Error("Entre como administrador de STAGING.");
+ const res=await fetch(URL_SUPABASE+"/functions/v1/catalogo-cob06-encerramento-preflight",{
+   method:"POST",
+   headers:{"Content-Type":"application/json",apikey:PUBLIC_KEY,
+     Authorization:"Bearer "+data.session.access_token},
+   body:JSON.stringify({acao:"verificar_encerramento_http_qa"})
+ });
+ const out=await res.json().catch(()=>({}));
+ $("qa-cob06-encerramento-output").textContent=JSON.stringify(
+   {etapa:"preflight_encerramento_http_qa",http_status:res.status,resultado:out},null,2);
+ if(!res.ok||out.success!==true||out.operacao!=="somente_leitura"||
+    out.hold_obrigatorio!==true||out.pix_emitido!==false)
+   throw Error(out.mensagem||"Preflight HTTP recusado. Nenhuma mudanca foi feita.");
+ msg("Autenticacao HTTP e consultas de STAGING verificadas, sem qualquer escrita.");
+}));
+
+const cob06IntegracaoChecks=new Set();
+let cob06IntegracaoEncerramentoEnviado=false;
+// COB-06: duas conferencias isoladas apenas de leitura, sem token GitHub no navegador.
+async function verificarIntegracaoCOb06(acao){
+ const {data:auth,error:authError}=await client.auth.getUser();
+ if(authError||auth?.user?.id!=="d896cc0c-31e4-4ef7-8fa4-13d15f02dd2a"||
+    auth?.user?.email?.toLowerCase()!=="pedrinhossiqueira12@gmail.com")
+   throw Error("Entre com a conta administrativa confirmada do Supabase STAGING.");
+ const {data,error}=await client.auth.getSession();
+ if(error||!data?.session?.access_token)throw Error("Sua sessao STAGING expirou. Entre novamente.");
+ const response=await fetch(URL_SUPABASE+"/functions/v1/catalogo-cob06-encerramento-integracao-qa",{
+   method:"POST",
+   headers:{"Content-Type":"application/json",apikey:PUBLIC_KEY,
+     Authorization:"Bearer "+data.session.access_token},
+   body:JSON.stringify({acao})
+ });
+ const out=await response.json().catch(()=>({}));
+ $("qa-cob06-integracao-output").textContent=JSON.stringify({etapa:acao,http_status:response.status,resultado:out},null,2);
+ if(!response.ok||out.success!==true||out.operacao!=="somente_leitura"||
+    out.github_alterado!==false||out.encerramento_executado!==false||
+    out.pix_emitido!==false)
+   throw Error(out.mensagem||"Conferencia QA recusada ("+response.status+"). Mantenha HOLD.");
+ if(out.integracao_habilitada!==false)
+   throw Error("A flag de encerramento esta ligada. Desligue-a antes de continuar.");
+ if(acao==="verificar_config_qa" &&
+    (out.alvo_ficticio_preparado!==true||out.branch_qa_configurada!==true||
+     out.token_github_configurado!==true))
+   throw Error("Uma das configuracoes ou o registro ficticio ainda nao foi validado. Mantenha HOLD.");
+ if(acao==="verificar_repositorio_qa" &&
+    (out.alvo_ficticio_preparado!==true||out.registro_github_qa!==true||
+     out.status_github_qa!=="ativo"))
+   throw Error("Vitrine GitHub isolada divergente. Mantenha HOLD.");
+ cob06IntegracaoChecks.add(acao);
+ $("qa-cob06-integracao-concluir").disabled=true; // Arquivamento ja ocorreu; usar apenas etapa 4.
+ msg("Conferencia COB-06 aprovada: nenhuma escrita, encerramento bloqueado e Pix nao emitido.");
+}
+for(const [id,acao] of [
+ ["qa-cob06-integracao-config","verificar_config_qa"],
+ ["qa-cob06-integracao-repo","verificar_repositorio_qa"]
+]){
+ $(id).addEventListener("click",()=>withBusy($(id),()=>verificarIntegracaoCOb06(acao)));
+}
+
+// Etapa final: somente o alvo ficticio, com dois preflights HTTP antes da unica escrita.
+$("qa-cob06-integracao-concluir").addEventListener("click",()=>withBusy($("qa-cob06-integracao-concluir"),async()=>{
+ if(cob06IntegracaoEncerramentoEnviado)throw Error("Ja houve tentativa nesta sessao. Nao repita; envie o resultado para revisao.");
+ if(!cob06IntegracaoChecks.has("verificar_config_qa")||
+    !cob06IntegracaoChecks.has("verificar_repositorio_qa"))
+   throw Error("Execute primeiro os botoes de leitura 1 e 2 com a flag desligada.");
+ const {data:auth,error:authError}=await client.auth.getUser();
+ if(authError||auth?.user?.id!=="d896cc0c-31e4-4ef7-8fa4-13d15f02dd2a"||
+    auth?.user?.email?.toLowerCase()!=="pedrinhossiqueira12@gmail.com")
+   throw Error("Somente o administrador de STAGING pode executar a etapa 3.");
+ const {data,error}=await client.auth.getSession();
+ if(error||!data?.session?.access_token)throw Error("Sessao de testes expirada. Entre novamente.");
+ const endpoint=URL_SUPABASE+"/functions/v1/catalogo-cob06-encerramento-integracao-qa";
+ async function consultar(acao){
+  const res=await fetch(endpoint,{method:"POST",headers:{
+   "Content-Type":"application/json",apikey:PUBLIC_KEY,
+   Authorization:"Bearer "+data.session.access_token
+  },body:JSON.stringify({acao})});
+  const out=await res.json().catch(()=>({}));
+  if(!res.ok||out.success!==true||out.operacao!=="somente_leitura"||
+     out.github_alterado!==false||out.encerramento_executado!==false||
+     out.pix_emitido!==false)
+   throw Error(out.mensagem||"Preflight HTTP nao aprovado. Nenhuma escrita enviada.");
+  return out;
+ }
+ const config=await consultar("verificar_config_qa");
+ if(config.integracao_habilitada!==true||config.alvo_ficticio_preparado!==true||
+    config.branch_qa_configurada!==true||config.token_github_configurado!==true)
+   throw Error("Flag/credenciais/registro STAGING nao preparados. Nenhuma escrita enviada.");
+ const repo=await consultar("verificar_repositorio_qa");
+ if(repo.integracao_habilitada!==true||repo.alvo_ficticio_preparado!==true||
+    repo.registro_github_qa!==true||repo.status_github_qa!=="ativo")
+   throw Error("GitHub QA mudou ou registro ficticio nao esta ativo. Nenhuma escrita enviada.");
+ if(!window.confirm("ARQUIVAR SOMENTE cob06-qa-integracao-ficticia-20261017 em STAGING e mudar APENAS a branch qa/cob06-isolado?"))
+   return false;
+ if(!window.confirm("CONFIRMA que este comercio e inteiramente ficticio, sem catalogo, sem pedidos, sem dinheiro real, e que voce desativara a flag apos o teste?"))
+   return false;
+ if(window.prompt("Digite ENCERRAR COB06 FICTICIO para autorizar a operacao QA:")!=="ENCERRAR COB06 FICTICIO")
+   return false;
+ cob06IntegracaoEncerramentoEnviado=true; // Bloqueia repeticao se houver timeout.
+ const response=await fetch(endpoint,{method:"POST",headers:{
+   "Content-Type":"application/json",apikey:PUBLIC_KEY,
+   Authorization:"Bearer "+data.session.access_token
+ },body:JSON.stringify({acao:"concluir_encerramento_qa"})});
+ const out=await response.json().catch(()=>({}));
+ $("qa-cob06-integracao-concluir-output").textContent=JSON.stringify(
+   {etapa:"concluir_encerramento_qa",http_status:response.status,resultado:out},null,2);
+ if(!response.ok||out.success!==true||out.arquivado!==true||
+    out.github_qa_sincronizado!==true||out.pix_emitido!==false||
+    out.hold_financeiro_mantido!==true)
+   throw Error(out.mensagem||"Resultado inconclusivo. Nao clique novamente; envie o JSON para revisao.");
+ msg("Arquivamento ficticio isolado executado. Desative AGORA a flag no STAGING e envie o JSON.");
+}).then(()=>{if(cob06IntegracaoEncerramentoEnviado)$("qa-cob06-integracao-concluir").disabled=true;}));
+
+// Recuperacao de 503: SEM repetir a RPC financeira de encerramento.
+let cob06SincronizacaoPendenteEnviada=false;
+$("qa-cob06-integracao-sincronizar").addEventListener("click",()=>withBusy($("qa-cob06-integracao-sincronizar"),async()=>{
+ if(cob06SincronizacaoPendenteEnviada)
+   throw Error("Ja houve tentativa de sincronizacao nesta sessao. Nao repita.");
+ const {data:auth,error:authError}=await client.auth.getUser();
+ if(authError||auth?.user?.id!=="d896cc0c-31e4-4ef7-8fa4-13d15f02dd2a"||
+    auth?.user?.email?.toLowerCase()!=="pedrinhossiqueira12@gmail.com")
+   throw Error("Somente administrador STAGING pode sincronizar.");
+ const {data,error}=await client.auth.getSession();
+ if(error||!data?.session?.access_token)throw Error("Entre novamente no Sandbox de testes.");
+ const endpoint=URL_SUPABASE+"/functions/v1/catalogo-cob06-encerramento-integracao-qa";
+ async function verificar(acao){
+  const res=await fetch(endpoint,{method:"POST",headers:{
+   "Content-Type":"application/json",apikey:PUBLIC_KEY,
+   Authorization:"Bearer "+data.session.access_token
+  },body:JSON.stringify({acao})});
+  const out=await res.json().catch(()=>({}));
+  if(!res.ok||out.success!==true||out.operacao!=="somente_leitura"||
+     out.pix_emitido!==false||out.github_alterado!==false||out.encerramento_executado!==false)
+   throw Error(out.mensagem||"Preflight de leitura recusado. Nenhuma escrita enviada.");
+  return out;
+ }
+ const config=await verificar("verificar_config_qa");
+ if(config.integracao_habilitada!==true||config.alvo_ficticio_preparado!==true||
+    config.branch_qa_configurada!==true||config.token_github_configurado!==true)
+   throw Error("Flag ou configuracoes STAGING nao habilitadas para recuperacao.");
+ const repo=await verificar("verificar_repositorio_qa");
+ if(repo.integracao_habilitada!==true||repo.registro_github_qa!==true||
+    repo.status_github_qa!=="ativo")
+   throw Error("Registro GitHub QA nao esta mais ativo. Nao executar sincronizacao.");
+ if(!window.confirm("STAGING QA: sincronizar SOMENTE o comercio FICTICIO ja arquivado na branch qa/cob06-isolado, SEM repetir RPC e SEM mexer em pagamento?"))
+   return false;
+ if(!window.confirm("Confirma que o banco de testes JA arquivou este registro e que a flag sera desligada imediatamente apos esta tentativa?"))
+   return false;
+ if(window.prompt("Digite SINCRONIZAR GITHUB QA para confirmar:")!=="SINCRONIZAR GITHUB QA")
+   return false;
+ cob06SincronizacaoPendenteEnviada=true;
+ const response=await fetch(endpoint,{method:"POST",headers:{
+   "Content-Type":"application/json",apikey:PUBLIC_KEY,
+   Authorization:"Bearer "+data.session.access_token
+ },body:JSON.stringify({acao:"sincronizar_pendente_qa"})});
+ const out=await response.json().catch(()=>({}));
+ $("qa-cob06-integracao-sincronizar-output").textContent=JSON.stringify({
+   etapa:"sincronizar_pendente_qa",http_status:response.status,resultado:out
+ },null,2);
+ if(!response.ok||out.success!==true||out.operacao!=="somente_github_qa"||
+    out.arquivado!==true||out.github_qa_sincronizado!==true||
+    out.rpc_executada!==false||out.pix_emitido!==false||out.hold_financeiro_mantido!==true)
+   throw Error(out.mensagem||"Sincronizacao inconclusiva. Desligue a flag e envie o JSON. Nao repita.");
+ msg("Sincronizacao exclusiva GitHub QA confirmada. Desligue AGORA a flag no STAGING e envie o JSON.");
+}).then(()=>{if(cob06SincronizacaoPendenteEnviada)$("qa-cob06-integracao-sincronizar").disabled=true;}));
+
+async function deliveryApi(acao,body={}){
+ const out=await qaApi("catalogo-entregas",{acao,...body});
+ if(out.ok===false)throw Error(out.mensagem||"A operação de entregas foi recusada pelo servidor.");
+ return out;
+}
+// Consulta SOMENTE os produtos da loja QA; não cria pedido nem muda cadastro.
+$("qa-products-load").addEventListener("click",()=>withBusy($("qa-products-load"),async()=>{
+ const {data:products,error}=await client.from("catalogo_produtos")
+   .select("id,nome,preco").eq("comercio_id",STORE).eq("disponivel",true)
+   .is("deletado_em",null).order("preco",{ascending:true}).limit(30);
+ if(error||!Array.isArray(products)||!products.length)
+   throw Error("Nenhum produto ativo da loja QA disponível. Nenhum pedido criado.");
+ const options=[new Option("Escolha um produto QA","")];
+ for(const product of products){
+  if(!/^[a-f0-9-]{36}$/i.test(product.id)||!Number.isFinite(Number(product.preco)))continue;
+  options.push(new Option(product.nome+" — R$ "+Number(product.preco).toFixed(2),product.id));
+ }
+ $("qa-product").replaceChildren(...options);
+ msg("Produtos carregados apenas para escolha. Nenhum pedido criado.");
+}));
+$("qa-authorize").addEventListener("click",()=>withBusy($("qa-authorize"),async()=>{
+ const email=$("qa-moto-email").value.trim().toLowerCase(),nome=$("qa-moto-name").value.trim();
+ if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||!nome)throw Error("Informe e-mail confirmado e nome do motoboy de testes.");
+ if(!window.confirm("Autorizar este entregador SOMENTE para asaas-cob02 no STAGING?"))return false;
+ const out=await deliveryApi("autorizar_motoboy",{email,nome});
+ const id=out.motoboy?.usuario_id;
+ if(!/^[a-f0-9-]{36}$/i.test(id||""))throw Error("A API não confirmou o usuário do entregador.");
+ $("qa-moto-id").value=id;
+ qaLog({etapa:"motoboy_autorizado",motoboy_id:id,comercio_id:STORE});
+ msg("Motoboy autorizado pela operação autenticada da loja QA.");
+}));
+$("qa-create-delivery").addEventListener("click",()=>withBusy($("qa-create-delivery"),async()=>{
+ if($("qa-order-id").value.trim())throw Error("Já há um ID de pedido na página. Consulte-o antes de criar outro.");
+ // Só cria após verificar autorização realmente persistida no servidor.
+ const motoEmail=$("qa-moto-email").value.trim().toLowerCase();
+ if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(motoEmail))
+  throw Error("Informe o e-mail do motoboy. O ID não precisa ser digitado.");
+ const autorizacoes=await deliveryApi("listar_motoboys");
+ const autorizado=Array.isArray(autorizacoes.motoboys)?autorizacoes.motoboys.find(item=>
+  item.ativo===true && String(item.email||"").toLowerCase()===motoEmail):null;
+ if(!autorizado || !/^[a-f0-9-]{36}$/i.test(autorizado.usuario_id||""))
+  throw Error("Nenhum motoboy autorizado com este e-mail nesta loja QA. Use primeiro o botão 7 com a conta proprietária e confirme a autorização. O pedido NÃO foi criado.");
+ $("qa-moto-id").value=autorizado.usuario_id;
+ const selectedId=$("qa-product").value;
+ if(!/^[a-f0-9-]{36}$/i.test(selectedId))throw Error("Carregue os produtos e selecione UM produto QA antes de criar pedido.");
+ const {data:product,error}=await client.from("catalogo_produtos")
+   .select("id,nome,preco").eq("comercio_id",STORE).eq("id",selectedId)
+   .eq("disponivel",true).is("deletado_em",null).maybeSingle();
+ if(error||!product)throw Error("Produto QA selecionado não está mais disponível. Nenhum pedido criado.");
+ const cents=Math.round(Number(product.preco)*100);
+ if(!Number.isSafeInteger(cents)||cents<=0)throw Error("Valor inválido de produto QA.");
+ const expectedPlatform=Math.round(cents*0.05),expectedMotoboy=Math.round(cents*0.02);
+ const expectedTotal=expectedPlatform+expectedMotoboy;
+ if(!window.confirm("Criar UM pedido fictício de ENTREGA de R$"+Number(product.preco).toFixed(2)+" (taxa R$"+(expectedTotal/100).toFixed(2)+") somente no STAGING?"))return false;
+ const out=await qaApi("catalogo-pedido-offline",{
+  acao:"criar_pedido_offline",modalidade:"entrega",forma_pagamento:"dinheiro",entrega_centavos:0,
+  cliente:{nome:"Comprador fictício QA",email:"comprador-qa@exemplo.test",telefone:"35000000000",
+    endereco:"Rua Fictícia de Testes",numero:"0",bairro:"Homologação"},
+  itens:[{id:product.id,quantidade:1}],observacoes:expectedTotal<500?"COB-06: valor baixo, sem Pix e sem mercadoria real":"COB-04: entrega fictícia, sem dinheiro ou mercadoria real"
+ },false);
+ $("qa-order-id").value=out.pedido_id||"";
+ $("qa-delivery-code").value=out.codigo_entrega||"";
+ if(out.pedido_id){$("qa-create").disabled=true;$("qa-create-delivery").disabled=true;}
+ qaLog({pedido_id:out.pedido_id,produto:product.nome,versao_financeira:out.versao_financeira,status:out.status,
+  codigo_entrega:out.codigo_entrega,taxa_total_centavos:out.taxa_total_centavos,
+  taxa_plataforma_centavos:out.taxa_plataforma_centavos,taxa_motoboy_centavos:out.taxa_motoboy_centavos});
+ if(product.nome==="Pedido teste Asaas - R$100"&&
+  (out.taxa_total_centavos!==700||out.taxa_plataforma_centavos!==500||out.taxa_motoboy_centavos!==200))
+   throw Error("ATENÇÃO: houve regressão na precificação COB-04 de R$100. NÃO crie outro pedido.");
+ if(out.versao_financeira!==2||out.taxa_total_centavos!==expectedTotal||
+    out.taxa_plataforma_centavos!==expectedPlatform||out.taxa_motoboy_centavos!==expectedMotoboy)
+   throw Error("ATENÇÃO: pedido criado com valores divergentes; ID guardado acima. NÃO crie outro nem finalize antes de verificar o STAGING.");
+ msg(expectedTotal<500?"Pedido V2 de baixa comissão criado. Conclua a entrega, feche a competência correta e apenas CONSULTE a fatura (NÃO emita Pix).":"Pedido V2 criado. Aceite e marque pronto como proprietário; depois atribua ao motoboy.");
+}));
+$("qa-assign").addEventListener("click",()=>withBusy($("qa-assign"),async()=>{
+ const id=$("qa-moto-id").value.trim();
+ if(!/^[a-f0-9-]{36}$/i.test(id))throw Error("Autorize o motoboy de testes antes de atribuir.");
+ const out=await deliveryApi("atribuir_pedido",{pedido_id:pedido(),motoboy_id:id});
+ qaLog({etapa:"atribuir_pedido",pedido_id:pedido(),motoboy_id:out.motoboy_preferido_id||id});
+ msg("Pedido atribuído pelo proprietário. Saia e entre como o motoboy de testes.");
+}));
+$("qa-moto-terms").addEventListener("click",()=>withBusy($("qa-moto-terms"),async()=>{
+ if(!window.confirm("Confirma que leu e aceita os Termos para Motoboys e está ciente da Política de Privacidade no STAGING?"))return;
+ const out=await call("aceitar_termos",{papel:"motoboy",aceito_termos:true,ciente_privacidade:true});
+ qaLog({papel:"motoboy",aceito:out.aceito,versao:out.versao});
+ msg("Termos do motoboy registrados no projeto de testes.");
+}));
+$("qa-moto-available").addEventListener("click",()=>withBusy($("qa-moto-available"),async()=>{
+ const out=await deliveryApi("definir_disponibilidade",{disponivel:true});
+ qaLog({etapa:"disponibilidade",disponivel:true,ok:out.ok});
+ msg("Motoboy habilitado para receber ofertas no STAGING.");
+}));
+for(const [id,acao,feedback] of [
+ ["qa-moto-accept","aceitar_entrega","Oferta reservada pelo motoboy."],
+ ["qa-moto-pickup","coletar","Coleta fictícia registrada."],
+ ["qa-moto-onroad","em_entrega","Etapa de transporte registrada."]
+]){
+ $(id).addEventListener("click",()=>withBusy($(id),async()=>{
+  const out=await deliveryApi(acao,{pedido_id:pedido()});
+  qaLog({etapa:acao,pedido_id:pedido(),resultado:out});
+  msg(feedback);
+ }));
+}
+$("qa-moto-finish").addEventListener("click",()=>withBusy($("qa-moto-finish"),async()=>{
+ const code=$("qa-delivery-code").value.trim();
+ if(!/^\d{6}$/.test(code))throw Error("Informe o código correto de seis dígitos do pedido fictício.");
+ if(!window.confirm("Simular recebimento presencial de dinheiro e confirmar a entrega fictícia NO STAGING? Nenhum dinheiro será movimentado."))return;
+ const out=await deliveryApi("confirmar_entrega",{
+  pedido_id:pedido(),codigo_entrega:code,recebimento_confirmado:true
+ });
+ qaLog({etapa:"entrega_confirmada",pedido_id:pedido(),resultado:out.pedido});
+ msg("Entrega V2 confirmada. Volte à conta proprietária; feche somente uma competência inédita.");
+}));
+const pedido=()=>{const v=$("qa-order-id").value.trim();if(!/^[a-f0-9-]{36}$/i.test(v))throw Error("Crie um pedido de testes válido primeiro.");return v;};
+$("qa-terms").addEventListener("click",()=>withBusy($("qa-terms"),async()=>{
+ if(!window.confirm("Confirma que leu os Termos para Estabelecimentos e a Política de Privacidade nesta conta de TESTES?"))return;
+ const out=await call("aceitar_termos",{papel:"comercio",aceito_termos:true,ciente_privacidade:true});
+ qaLog({aceito:out.aceito,versao:out.versao,proxima_etapa:"2 · Criar pedido em dinheiro (retirada)",pedido_criado:false});
+ msg("Aceite registrado. Agora execute Criar pedido em dinheiro.");
+}));
+$("qa-create").addEventListener("click",()=>withBusy($("qa-create"),async()=>{
+ const {data:product,error}=await client.from("catalogo_produtos")
+   .select("id,nome,preco").eq("comercio_id",STORE).eq("disponivel",true).is("deletado_em",null).limit(1).maybeSingle();
+ if(error||!product)throw Error("Não foi possível consultar o produto de homologação no STAGING.");
+ if(!window.confirm("Criar um pedido de R$"+Number(product.preco).toFixed(2)+" em DINHEIRO no STAGING? Não é uma cobrança bancária."))return;
+ const out=await qaApi("catalogo-pedido-offline",{
+   acao:"criar_pedido_offline",modalidade:"retirada",forma_pagamento:"dinheiro",entrega_centavos:0,
+   cliente:{nome:"Comprador fictício QA",email:"comprador-qa@exemplo.test",telefone:"35000000000"},
+   itens:[{id:product.id,quantidade:1}],observacoes:"COB-02; somente Supabase Sandbox"
+ },false);
+ $("qa-order-id").value=out.pedido_id||"";
+ $("qa-delivery-code").value=out.codigo_entrega||"";
+ if(out.pedido_id){$("qa-create").disabled=true;$("qa-create-delivery").disabled=true;} // Evita segundo pedido na mesma sessão.
+ qaLog({pedido_id:out.pedido_id,status:out.status,codigo_entrega:out.codigo_entrega,
+   subtotal_centavos:out.subtotal_centavos,taxa_total_centavos:out.taxa_total_centavos,
+   taxa_plataforma_centavos:out.taxa_plataforma_centavos,provedor:out.provedor});
+ msg("Pedido de teste criado pelo endpoint normal. Guarde o código exibido.");
+}));
+for(const [id,status,feedback] of [
+ ["qa-accept","em_preparo","Pedido aceito pelo estabelecimento de testes."],
+ ["qa-ready","pronto","Pedido pronto para retirada."]
+]){
+ $(id).addEventListener("click",()=>withBusy($(id),async()=>{
+   const out=await qaApi("catalogo-pedidos-offline-admin",{acao:"atualizar_status",pedido_id:pedido(),status});
+   qaLog(out);msg(feedback);
+ }));
+}
+$("qa-finish").addEventListener("click",()=>withBusy($("qa-finish"),async()=>{
+ const code=$("qa-delivery-code").value.trim();
+ if(!/^\d{6}$/.test(code))throw Error("Informe o código de 6 dígitos do pedido de teste.");
+ const out=await qaApi("catalogo-pedidos-offline-admin",{
+  acao:"confirmar_entrega",pedido_id:pedido(),codigo_entrega:code
+ });
+ qaLog(out);msg("Pedido confirmado pelo servidor; consulte a comissão antes de emitir Pix.");
+}));
+$("qa-close").addEventListener("click",()=>withBusy($("qa-close"),async()=>{
+ const competencia=$("competencia").value;
+ if(!/^\d{4}-\d{2}$/.test(competencia))throw Error("Informe a competência da fatura.");
+ const out=await qaApi("catalogo-pedidos-offline-admin",{acao:"gerar_fechamento",competencia});
+ if(!out.fechamento_id)throw Error("Ainda não há comissão elegível para fechar. Conclua a entrega primeiro.");
+ qaLog(out);msg("Competência fechada pelo serviço normal. Consulte a fatura antes de emitir Pix Sandbox.");
+}));
+$("copy-pix").addEventListener("click",()=>navigator.clipboard?.writeText($("pix-code").textContent||"").then(()=>msg("Código do Sandbox copiado.")).catch(()=>msg("Selecione e copie o código manualmente.",true)));
+if(!client){msg("Não foi possível carregar Supabase JS. Confira sua conexão.",true);return;}
+refresh().catch(()=>msg("Falha ao conferir autenticação no Sandbox.",true));
+})();
+</script></body></html>

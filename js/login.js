@@ -23,11 +23,16 @@
    CONFIGURAÇÃO SUPABASE
 ========================================================= */
 
-const LOGIN_SUPABASE_URL =
-  "https://xdmbkflufsfqziixzpxc.supabase.co";
-
-const LOGIN_SUPABASE_KEY =
-  "sb_publishable_dvwNkLDf3oZrCqvZ5uAaRA_VsfiuZFy";
+// Login Sandbox apenas em catalogo.html e catalogo-admin.html com opt-in.
+// Nao reutilizar a identidade de producao durante o ensaio financeiro.
+const LOGIN_QA_SANDBOX = /\/catalogo(?:-admin)?\.html$/.test(String(window.location?.pathname || "")) &&
+  new URLSearchParams(String(window.location?.search || "")).get("asaas-sandbox") === "1";
+const LOGIN_SUPABASE_URL = LOGIN_QA_SANDBOX
+  ? "https://jbttwihctuibchhcyqtl.supabase.co"
+  : "https://xdmbkflufsfqziixzpxc.supabase.co";
+const LOGIN_SUPABASE_KEY = LOGIN_QA_SANDBOX
+  ? "sb_publishable_W80rooaGpHP4voYiLwtz7w_-k32qHsF"
+  : "sb_publishable_dvwNkLDf3oZrCqvZ5uAaRA_VsfiuZFy";
 
 
 /* =========================================================
@@ -869,12 +874,12 @@ async function cadastrarUsuario() {
    */
 
   if (
-    senha.length < 6
+    senha.length < 12
   ) {
 
     mostrarErroAuth(
       erro,
-      "A senha precisa ter pelo menos 6 caracteres."
+      "Para criar uma conta, use uma senha de pelo menos 12 caracteres."
     );
 
     senhaInput.focus();
@@ -1450,14 +1455,13 @@ function traduzirErroAuth(
   }
 
 
-  if (
-    mensagem.includes(
-      "password should be at least"
-    )
-  ) {
-
-    return "A senha precisa ter pelo menos 6 caracteres.";
-
+  const tamanhoMinimoServidor =
+    mensagem.match(/password should be at least\s+(\d+)/);
+  if (tamanhoMinimoServidor) {
+    return `A senha precisa ter pelo menos ${tamanhoMinimoServidor[1]} caracteres.`;
+  }
+  if (mensagem.includes("password should be at least")) {
+    return "A senha não atende ao tamanho mínimo exigido.";
   }
 
 

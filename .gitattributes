@@ -1,0 +1,3 @@
+# Preserve os bytes versionados em qualquer sistema, inclusive no Windows.
+# Conversao automatica de EOL invalida hashes de migrations e os harnesses offline.
+* -text

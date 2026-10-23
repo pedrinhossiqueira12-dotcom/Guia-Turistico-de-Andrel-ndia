@@ -1,0 +1,784 @@
+{
+  "scope": "SYNTHETIC_ONLY_NO_BACKUP_NO_RESTORE",
+  "base_commit": "f9b169fdcec4bb154dd9a009586a110b485f3eae",
+  "context": "desktop-linux",
+  "engine": "29.8.2",
+  "images": {
+    "pg": "sha256:0450166354dc9c1d25f0322ac8b580774d4fb0184d2b087f6e4fe9499c66cf53",
+    "auth": "sha256:1736a63078f5922b198c4cbe50f80ab9a2d3b54fe8b7b6cfb2e9dc5dbbc12c6b",
+    "probe": "sha256:1f6c99d3952d78d57129802aa2ae8a80d75e327492cf24742fd0aeaf90967b96",
+    "mail": "sha256:ed9b00c609e77e99c79b93f1178255ebc271868920f2c69a8d166bd5634ed10d"
+  },
+  "vhdx": {
+    "configured_root": "D:\\DockerDesktopWSL",
+    "distribution_path": "D:\\DockerDesktopWSL\\main",
+    "data_file": "D:\\DockerDesktopWSL\\disk\\docker_data.vhdx",
+    "verification": "settings + registry + file metadata only; not mounted or read",
+    "bitlocker_d": "FullyEncrypted / On / 100%"
+  },
+  "attempts": [
+    {
+      "tag": "cob06-sint-20261021232236578-02acae",
+      "checks": [
+        {
+          "name": "local_image_pg",
+          "ok": true
+        },
+        {
+          "name": "local_image_auth",
+          "ok": true
+        },
+        {
+          "name": "local_image_probe",
+          "ok": true
+        },
+        {
+          "name": "local_image_mail",
+          "ok": true
+        },
+        {
+          "name": "network_pg",
+          "ok": true
+        },
+        {
+          "name": "privilege_restart_pg",
+          "ok": true
+        },
+        {
+          "name": "no_host_ports_pg",
+          "ok": true
+        },
+        {
+          "name": "only_new_volume_pg",
+          "ok": true
+        },
+        {
+          "name": "readonly_dropcaps_pg",
+          "ok": true
+        },
+        {
+          "name": "postgres_ready",
+          "ok": false
+        }
+      ],
+      "errors": [
+        "CHECK_FAILED:postgres_ready"
+      ],
+      "limits": [],
+      "containers": [
+        {
+          "name": "cob06-sint-20261021232236578-02acae-diag",
+          "id": "f7fb847169b75425efe0af3eed703d82620af69ec1ab6bec8cde1a192229fe54",
+          "image": "sha256:0450166354dc9c1d25f0322ac8b580774d4fb0184d2b087f6e4fe9499c66cf53",
+          "state": "exited",
+          "exit_code": 0,
+          "network": "none",
+          "ports": {},
+          "privileged": false,
+          "restart": "no",
+          "readonly_root": true,
+          "cap_drop": [
+            "ALL"
+          ],
+          "user": "postgres",
+          "mounts": [
+            {
+              "type": "volume",
+              "name": "cob06-sint-20261021232236578-02acae-pgdata",
+              "target": "/synthetic-data",
+              "rw": false
+            }
+          ],
+          "oom_killed": false
+        },
+        {
+          "name": "cob06-sint-20261021232236578-02acae-pg",
+          "id": "6b249f185c05d48f55eb255b324f396c9080b175a564ab8216e5a26deb3798b5",
+          "image": "sha256:0450166354dc9c1d25f0322ac8b580774d4fb0184d2b087f6e4fe9499c66cf53",
+          "state": "exited",
+          "exit_code": 0,
+          "network": "none",
+          "ports": {},
+          "privileged": false,
+          "restart": "no",
+          "readonly_root": true,
+          "cap_drop": [
+            "ALL"
+          ],
+          "user": "postgres",
+          "mounts": [
+            {
+              "type": "volume",
+              "name": "cob06-sint-20261021232236578-02acae-pgdata",
+              "target": "/var/lib/postgresql/data",
+              "rw": true
+            }
+          ],
+          "oom_killed": false
+        }
+      ],
+      "volumes": [
+        {
+          "name": "cob06-sint-20261021232236578-02acae-pgdata",
+          "driver": "local",
+          "scope": "local",
+          "label": "cob06-sint-20261021232236578-02acae"
+        }
+      ]
+    },
+    {
+      "tag": "cob06-sint-20261021232349683-552053",
+      "checks": [
+        {
+          "name": "local_image_pg",
+          "ok": true
+        },
+        {
+          "name": "local_image_auth",
+          "ok": true
+        },
+        {
+          "name": "local_image_probe",
+          "ok": true
+        },
+        {
+          "name": "local_image_mail",
+          "ok": true
+        },
+        {
+          "name": "network_pg",
+          "ok": true
+        },
+        {
+          "name": "privilege_restart_pg",
+          "ok": true
+        },
+        {
+          "name": "no_host_ports_pg",
+          "ok": true
+        },
+        {
+          "name": "only_new_volume_pg",
+          "ok": true
+        },
+        {
+          "name": "readonly_dropcaps_pg",
+          "ok": true
+        },
+        {
+          "name": "postgres_ready",
+          "ok": true
+        },
+        {
+          "name": "no_cron_pgnet_extensions",
+          "ok": true
+        },
+        {
+          "name": "no_cron_pgnet_workers",
+          "ok": true
+        },
+        {
+          "name": "no_preload",
+          "ok": true
+        },
+        {
+          "name": "synthetic_sql_roundtrip",
+          "ok": true
+        },
+        {
+          "name": "network_probe",
+          "ok": false
+        }
+      ],
+      "errors": [
+        "CHECK_FAILED:network_probe"
+      ],
+      "limits": [],
+      "containers": [
+        {
+          "name": "cob06-sint-20261021232349683-552053-probe",
+          "id": "e5c48f0fb0421e50dfe2e0a0c503793b03c18d617ffebd5950217cd3c116596f",
+          "image": "sha256:1f6c99d3952d78d57129802aa2ae8a80d75e327492cf24742fd0aeaf90967b96",
+          "state": "created",
+          "exit_code": 0,
+          "network": "container:e9163579bc11e78421815c15be2015569540e670ad830a1c1734ee9472363ad8",
+          "ports": {},
+          "privileged": false,
+          "restart": "no",
+          "readonly_root": true,
+          "cap_drop": [
+            "ALL"
+          ],
+          "user": "node",
+          "mounts": [],
+          "oom_killed": false
+        },
+        {
+          "name": "cob06-sint-20261021232349683-552053-pg",
+          "id": "e9163579bc11e78421815c15be2015569540e670ad830a1c1734ee9472363ad8",
+          "image": "sha256:0450166354dc9c1d25f0322ac8b580774d4fb0184d2b087f6e4fe9499c66cf53",
+          "state": "exited",
+          "exit_code": 0,
+          "network": "none",
+          "ports": {},
+          "privileged": false,
+          "restart": "no",
+          "readonly_root": true,
+          "cap_drop": [
+            "ALL"
+          ],
+          "user": "postgres",
+          "mounts": [
+            {
+              "type": "volume",
+              "name": "cob06-sint-20261021232349683-552053-pgdata",
+              "target": "/var/lib/postgresql/data",
+              "rw": true
+            }
+          ],
+          "oom_killed": false
+        }
+      ],
+      "volumes": [
+        {
+          "name": "cob06-sint-20261021232349683-552053-pgdata",
+          "driver": "local",
+          "scope": "local",
+          "label": "cob06-sint-20261021232349683-552053"
+        }
+      ]
+    },
+    {
+      "tag": "cob06-sint-20261021232417847-466023",
+      "checks": [
+        {
+          "name": "local_image_pg",
+          "ok": true
+        },
+        {
+          "name": "local_image_auth",
+          "ok": true
+        },
+        {
+          "name": "local_image_probe",
+          "ok": true
+        },
+        {
+          "name": "local_image_mail",
+          "ok": true
+        },
+        {
+          "name": "network_pg",
+          "ok": true
+        },
+        {
+          "name": "privilege_restart_pg",
+          "ok": true
+        },
+        {
+          "name": "no_host_ports_pg",
+          "ok": true
+        },
+        {
+          "name": "only_new_volume_pg",
+          "ok": true
+        },
+        {
+          "name": "readonly_dropcaps_pg",
+          "ok": true
+        },
+        {
+          "name": "postgres_ready",
+          "ok": true
+        },
+        {
+          "name": "no_cron_pgnet_extensions",
+          "ok": true
+        },
+        {
+          "name": "no_cron_pgnet_workers",
+          "ok": true
+        },
+        {
+          "name": "no_preload",
+          "ok": true
+        },
+        {
+          "name": "synthetic_sql_roundtrip",
+          "ok": true
+        },
+        {
+          "name": "network_probe",
+          "ok": true
+        },
+        {
+          "name": "privilege_restart_probe",
+          "ok": true
+        },
+        {
+          "name": "no_host_ports_probe",
+          "ok": true
+        },
+        {
+          "name": "only_new_volume_probe",
+          "ok": true
+        },
+        {
+          "name": "readonly_dropcaps_probe",
+          "ok": true
+        },
+        {
+          "name": "namespace_has_no_external_interface_or_route",
+          "ok": true
+        },
+        {
+          "name": "shared_namespace_postgres_tcp",
+          "ok": true
+        },
+        {
+          "name": "network_mail",
+          "ok": true
+        },
+        {
+          "name": "privilege_restart_mail",
+          "ok": true
+        },
+        {
+          "name": "no_host_ports_mail",
+          "ok": true
+        },
+        {
+          "name": "only_new_volume_mail",
+          "ok": true
+        },
+        {
+          "name": "readonly_dropcaps_mail",
+          "ok": true
+        },
+        {
+          "name": "mailpit_http_internal",
+          "ok": true
+        },
+        {
+          "name": "network_auth",
+          "ok": true
+        },
+        {
+          "name": "privilege_restart_auth",
+          "ok": true
+        },
+        {
+          "name": "no_host_ports_auth",
+          "ok": true
+        },
+        {
+          "name": "only_new_volume_auth",
+          "ok": true
+        },
+        {
+          "name": "readonly_dropcaps_auth",
+          "ok": true
+        }
+      ],
+      "errors": [
+        "DOCKER_FAILED:start"
+      ],
+      "limits": [
+        "GoTrue nao ficou saudavel; nenhuma conta criada."
+      ],
+      "containers": [
+        {
+          "name": "cob06-sint-20261021232417847-466023-auth",
+          "id": "544c6309ab12c2ae95e2dfc2341eff03066b92c4656dac1db2742bc012746b53",
+          "image": "sha256:1736a63078f5922b198c4cbe50f80ab9a2d3b54fe8b7b6cfb2e9dc5dbbc12c6b",
+          "state": "exited",
+          "exit_code": 1,
+          "network": "container:40b9a8fcb615e967d41449e2832084f9212d4908b3da6b0a900a3b17adafec4c",
+          "ports": {},
+          "privileged": false,
+          "restart": "no",
+          "readonly_root": true,
+          "cap_drop": [
+            "ALL"
+          ],
+          "user": "supabase",
+          "mounts": [],
+          "oom_killed": false
+        },
+        {
+          "name": "cob06-sint-20261021232417847-466023-mail",
+          "id": "9525266da5a033b64dd587c50b2a44c4bdac953a66bf4fc5e05e1273bd751582",
+          "image": "sha256:ed9b00c609e77e99c79b93f1178255ebc271868920f2c69a8d166bd5634ed10d",
+          "state": "exited",
+          "exit_code": 0,
+          "network": "container:40b9a8fcb615e967d41449e2832084f9212d4908b3da6b0a900a3b17adafec4c",
+          "ports": {},
+          "privileged": false,
+          "restart": "no",
+          "readonly_root": true,
+          "cap_drop": [
+            "ALL"
+          ],
+          "user": "",
+          "mounts": [],
+          "oom_killed": false
+        },
+        {
+          "name": "cob06-sint-20261021232417847-466023-probe",
+          "id": "2e14b536ed08b635bd8aca1e487c8b5f62327cbf0d59d3b7a2b714e4e748d910",
+          "image": "sha256:1f6c99d3952d78d57129802aa2ae8a80d75e327492cf24742fd0aeaf90967b96",
+          "state": "exited",
+          "exit_code": 127,
+          "network": "container:40b9a8fcb615e967d41449e2832084f9212d4908b3da6b0a900a3b17adafec4c",
+          "ports": {},
+          "privileged": false,
+          "restart": "no",
+          "readonly_root": true,
+          "cap_drop": [
+            "ALL"
+          ],
+          "user": "node",
+          "mounts": [],
+          "oom_killed": false
+        },
+        {
+          "name": "cob06-sint-20261021232417847-466023-pg",
+          "id": "40b9a8fcb615e967d41449e2832084f9212d4908b3da6b0a900a3b17adafec4c",
+          "image": "sha256:0450166354dc9c1d25f0322ac8b580774d4fb0184d2b087f6e4fe9499c66cf53",
+          "state": "exited",
+          "exit_code": 1,
+          "network": "none",
+          "ports": {},
+          "privileged": false,
+          "restart": "no",
+          "readonly_root": true,
+          "cap_drop": [
+            "ALL"
+          ],
+          "user": "postgres",
+          "mounts": [
+            {
+              "type": "volume",
+              "name": "cob06-sint-20261021232417847-466023-pgdata",
+              "target": "/var/lib/postgresql/data",
+              "rw": true
+            }
+          ],
+          "oom_killed": false
+        }
+      ],
+      "volumes": [
+        {
+          "name": "cob06-sint-20261021232417847-466023-pgdata",
+          "driver": "local",
+          "scope": "local",
+          "label": "cob06-sint-20261021232417847-466023"
+        }
+      ]
+    },
+    {
+      "tag": "cob06-sint-20261021232651130-2d81f7",
+      "checks": [
+        {
+          "name": "local_image_pg",
+          "ok": true
+        },
+        {
+          "name": "local_image_auth",
+          "ok": true
+        },
+        {
+          "name": "local_image_probe",
+          "ok": true
+        },
+        {
+          "name": "local_image_mail",
+          "ok": true
+        },
+        {
+          "name": "network_pg",
+          "ok": true
+        },
+        {
+          "name": "privilege_restart_pg",
+          "ok": true
+        },
+        {
+          "name": "no_host_ports_pg",
+          "ok": true
+        },
+        {
+          "name": "only_new_volume_pg",
+          "ok": true
+        },
+        {
+          "name": "readonly_dropcaps_pg",
+          "ok": true
+        },
+        {
+          "name": "postgres_ready",
+          "ok": true
+        },
+        {
+          "name": "no_cron_pgnet_extensions",
+          "ok": true
+        },
+        {
+          "name": "no_cron_pgnet_workers",
+          "ok": true
+        },
+        {
+          "name": "no_preload",
+          "ok": true
+        },
+        {
+          "name": "synthetic_sql_roundtrip",
+          "ok": true
+        },
+        {
+          "name": "network_probe",
+          "ok": true
+        },
+        {
+          "name": "privilege_restart_probe",
+          "ok": true
+        },
+        {
+          "name": "no_host_ports_probe",
+          "ok": true
+        },
+        {
+          "name": "only_new_volume_probe",
+          "ok": true
+        },
+        {
+          "name": "readonly_dropcaps_probe",
+          "ok": true
+        },
+        {
+          "name": "namespace_has_no_external_interface_or_route",
+          "ok": true
+        },
+        {
+          "name": "shared_namespace_postgres_tcp",
+          "ok": true
+        },
+        {
+          "name": "network_mail",
+          "ok": true
+        },
+        {
+          "name": "privilege_restart_mail",
+          "ok": true
+        },
+        {
+          "name": "no_host_ports_mail",
+          "ok": true
+        },
+        {
+          "name": "only_new_volume_mail",
+          "ok": true
+        },
+        {
+          "name": "readonly_dropcaps_mail",
+          "ok": true
+        },
+        {
+          "name": "mailpit_http_internal",
+          "ok": true
+        },
+        {
+          "name": "network_auth",
+          "ok": true
+        },
+        {
+          "name": "privilege_restart_auth",
+          "ok": true
+        },
+        {
+          "name": "no_host_ports_auth",
+          "ok": true
+        },
+        {
+          "name": "only_new_volume_auth",
+          "ok": true
+        },
+        {
+          "name": "readonly_dropcaps_auth",
+          "ok": true
+        },
+        {
+          "name": "gotrue_health",
+          "ok": true
+        },
+        {
+          "name": "gotrue_two_synthetic_users_login_refresh_logout",
+          "ok": true
+        },
+        {
+          "name": "all_service_listeners_loopback_only",
+          "ok": true
+        }
+      ],
+      "errors": [],
+      "limits": [
+        "Storage API nao iniciada: imagem PostgREST ausente; sem downloads.",
+        "Runtime Edge ausente; nenhum teste Edge ou webhook. Sem restore e sem prova de paridade com PROD."
+      ],
+      "containers": [
+        {
+          "name": "cob06-sint-20261021232651130-2d81f7-auth",
+          "id": "ac9b2f265fbaf5d113838c433a252c9f3a685989a106fa9171f7824eb6a641f3",
+          "image": "sha256:1736a63078f5922b198c4cbe50f80ab9a2d3b54fe8b7b6cfb2e9dc5dbbc12c6b",
+          "state": "exited",
+          "exit_code": 0,
+          "network": "container:cdb5eae6f37b3c5c1b7fad5a940545396769fee4e7229e22ae0309aadfe97718",
+          "ports": {},
+          "privileged": false,
+          "restart": "no",
+          "readonly_root": true,
+          "cap_drop": [
+            "ALL"
+          ],
+          "user": "supabase",
+          "mounts": [],
+          "oom_killed": false
+        },
+        {
+          "name": "cob06-sint-20261021232651130-2d81f7-mail",
+          "id": "3cc7f5783c7845f0be2ef2def9dda24d058ca542ea60158f055b2a0e38c7ce24",
+          "image": "sha256:ed9b00c609e77e99c79b93f1178255ebc271868920f2c69a8d166bd5634ed10d",
+          "state": "exited",
+          "exit_code": 0,
+          "network": "container:cdb5eae6f37b3c5c1b7fad5a940545396769fee4e7229e22ae0309aadfe97718",
+          "ports": {},
+          "privileged": false,
+          "restart": "no",
+          "readonly_root": true,
+          "cap_drop": [
+            "ALL"
+          ],
+          "user": "",
+          "mounts": [],
+          "oom_killed": false
+        },
+        {
+          "name": "cob06-sint-20261021232651130-2d81f7-probe",
+          "id": "e6d7e8bb6dee251a684f2654ce1b38c0a57c998063c0cf616ffda1ebb1ace888",
+          "image": "sha256:1f6c99d3952d78d57129802aa2ae8a80d75e327492cf24742fd0aeaf90967b96",
+          "state": "exited",
+          "exit_code": 137,
+          "network": "container:cdb5eae6f37b3c5c1b7fad5a940545396769fee4e7229e22ae0309aadfe97718",
+          "ports": {},
+          "privileged": false,
+          "restart": "no",
+          "readonly_root": true,
+          "cap_drop": [
+            "ALL"
+          ],
+          "user": "node",
+          "mounts": [],
+          "oom_killed": false
+        },
+        {
+          "name": "cob06-sint-20261021232651130-2d81f7-pg",
+          "id": "cdb5eae6f37b3c5c1b7fad5a940545396769fee4e7229e22ae0309aadfe97718",
+          "image": "sha256:0450166354dc9c1d25f0322ac8b580774d4fb0184d2b087f6e4fe9499c66cf53",
+          "state": "exited",
+          "exit_code": 0,
+          "network": "none",
+          "ports": {},
+          "privileged": false,
+          "restart": "no",
+          "readonly_root": true,
+          "cap_drop": [
+            "ALL"
+          ],
+          "user": "postgres",
+          "mounts": [
+            {
+              "type": "volume",
+              "name": "cob06-sint-20261021232651130-2d81f7-pgdata",
+              "target": "/var/lib/postgresql/data",
+              "rw": true
+            }
+          ],
+          "oom_killed": false
+        }
+      ],
+      "volumes": [
+        {
+          "name": "cob06-sint-20261021232651130-2d81f7-pgdata",
+          "driver": "local",
+          "scope": "local",
+          "label": "cob06-sint-20261021232651130-2d81f7"
+        }
+      ]
+    }
+  ],
+  "final_proof": {
+    "tag": "cob06-sint-20261021232651130-2d81f7",
+    "passed": 35,
+    "failed": 0,
+    "network": {
+      "interfaces": {
+        "lo": [
+          {
+            "address": "127.0.0.1",
+            "netmask": "255.0.0.0",
+            "family": "IPv4",
+            "mac": "00:00:00:00:00:00",
+            "internal": true,
+            "cidr": "127.0.0.1/8"
+          },
+          {
+            "address": "::1",
+            "netmask": "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff",
+            "family": "IPv6",
+            "mac": "00:00:00:00:00:00",
+            "internal": true,
+            "cidr": "::1/128",
+            "scopeid": 0
+          }
+        ]
+      },
+      "ipv4_routes": [],
+      "ipv6_routes": [
+        "00000000000000000000000000000000 00 00000000000000000000000000000000 00 00000000000000000000000000000000 ffffffff 00000001 00000000 00200200       lo",
+        "00000000000000000000000000000001 80 00000000000000000000000000000000 00 00000000000000000000000000000000 00000000 00000002 00000000 80200001       lo",
+        "00000000000000000000000000000000 00 00000000000000000000000000000000 00 00000000000000000000000000000000 ffffffff 00000001 00000000 00200200       lo"
+      ],
+      "only_loopback": true,
+      "all_addresses_internal": true,
+      "no_ipv4_routes": true,
+      "ipv6_only_loopback": true,
+      "postgres_tcp": true
+    },
+    "listeners": {
+      "ipv4": [
+        "0100007F:270F",
+        "0100007F:0401",
+        "0100007F:1538",
+        "0100007F:1F59"
+      ],
+      "ipv6": [],
+      "ok": true
+    },
+    "auth": {
+      "signup_a": 200,
+      "signup_b": 200,
+      "distinct_users": true,
+      "login": 200,
+      "refresh": 200,
+      "logout": 204,
+      "jwt_local_claims": true,
+      "ok": true
+    },
+    "mail": {
+      "ok": true,
+      "status": 200
+    }
+  },
+  "all_new_containers_stopped": true,
+  "no_download_no_backup_no_remote": true
+}

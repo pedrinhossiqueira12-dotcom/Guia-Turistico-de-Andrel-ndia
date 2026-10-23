@@ -290,6 +290,29 @@ async function carregarLocal() {
       return;
     }
 
+    // O JSON pode estar desatualizado após o arquivamento financeiro.
+    // A publicação registrada no banco prevalece sobre a cópia estática.
+    if (encontrado._tipo === "comercio") {
+      const cliente = obterSupabaseClient();
+      if (!cliente) {
+        mostrarLocalIndisponivel("Não foi possível verificar a disponibilidade deste comércio. Tente novamente.");
+        return;
+      }
+      const { data: publicacoes, error: erroPublicacao } = await cliente
+        .rpc("catalogo_status_publicacao", { p_ids: [String(encontrado.id)] });
+
+      if (erroPublicacao || !Array.isArray(publicacoes)) {
+        console.warn("Não foi possível conferir o status da publicação:", erroPublicacao || "Resposta inválida");
+        mostrarLocalIndisponivel("Não foi possível verificar a disponibilidade deste comércio. Tente novamente.");
+        return;
+      }
+      const publicacao = Array.isArray(publicacoes) ? publicacoes[0] : null;
+      if (publicacao && String(publicacao.status || "").toLowerCase() !== "ativo") {
+        mostrarLocalIndisponivel("Este estabelecimento foi despublicado do Guia.");
+        return;
+      }
+    }
+
     if (encontrado._tipo === "comercio" && String(encontrado.status || "").toLowerCase() !== "ativo") {
       mostrarLocalIndisponivel("Este estabelecimento não está disponível publicamente.");
       return;
@@ -2883,120 +2906,44 @@ EXCLUIR MEU COMÉRCIO
 ========================================================= */
 
 async function excluirMeuComercio() {
-
-if (!localAtual) {
-return;
-}
-
-const usuario =
-await obterUsuarioAutenticadoLocal();
-
-if (!usuario) {
-
-abrirLoginSeNecessario();
-
-return;
-
-}
-
-const cadastro =
-localAtual._cadastroSupabase;
-
-if (!cadastro) {
-
-console.error(
-"Não foi possível identificar o cadastro deste comércio."
-);
-
-return;
-
-}
-
-const confirmacao =
-confirm(
-`Deseja desativar "${localAtual.nome}"?\n\nO estabelecimento deixará de aparecer publicamente, mas será mantido no histórico administrativo.`
-);
-
-if (!confirmacao) {
-return;
-}
-
-try {
-
-const token =
-await obterTokenSupabase();
-
-if (!token) {
-window.alert("Sua sessão expirou. Entre novamente e tente arquivar o estabelecimento.");
-return;
-}
-
-const resposta =
-await fetch(
-EDGE_FUNCTION_URL,
-{
-method:
-"POST",
-
-headers: {
-
-"Content-Type":
-"application/json",
-
-"Authorization":
-`Bearer ${token}`
-
-},
-
-body:
-JSON.stringify({
-
-acao:
-"marcar_meu_comercio_deletado",
-
-comercio_id:
-cadastro.id
-
-})
-
-}
-);
-
-const resultado =
-await resposta.json();
-
-if (!resposta.ok || resultado?.sucesso !== true) {
-
-console.error(
-"Erro ao excluir comércio:",
-resultado
-);
-
-window.alert(
-resultado?.erro ||
-"Não foi possível arquivar o estabelecimento. Ele continua ativo. Tente novamente mais tarde."
-);
-
-return;
-
-}
-
-window.location.href =
-"../index.html";
-
-} catch (erro) {
-
-console.error(
-"Erro ao excluir comércio:",
-erro
-);
-
-window.alert(
-"Não foi possível conectar ao servidor para arquivar o estabelecimento. Ele continua ativo. Tente novamente mais tarde."
-);
-
-}
-
+  if (!localAtual) return;
+  const usuario=await obterUsuarioAutenticadoLocal();
+  if (!usuario) { abrirLoginSeNecessario(); return; }
+  const comercioId=String(localAtual.id || localAtual.local_id || "").trim();
+  if (!/^[a-z0-9-]{1,180}$/.test(comercioId)) {
+    window.alert("O identificador deste comércio não permite encerramento automático. Entre em contato com a administração.");
+    return;
+  }
+  const ok=window.confirm(
+    `Solicitar encerramento de "${localAtual.nome}"?\n\nNovos pedidos serão suspensos imediatamente. As faturas e comissões existentes não serão apagadas. Se houver dívida, será necessário quitá-la para concluir o encerramento.`
+  );
+  if (!ok) return;
+  try {
+    const token=await obterTokenSupabase();
+    if (!token) { window.alert("Entre novamente na sua conta para solicitar o encerramento."); return; }
+    // Nunca usar a antiga ação de exclusão direta: a conferência financeira é atômica na RPC.
+    const resposta=await fetch(`${SUPABASE_URL}/functions/v1/catalogo-asaas-financeiro`,{
+      method:"POST",
+      headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},
+      body:JSON.stringify({acao:"solicitar_encerramento",comercio_id:comercioId})
+    });
+    const resultado=await resposta.json().catch(()=>({}));
+    if (!resposta.ok || resultado.success!==true) {
+      window.alert(resultado.mensagem || "Não foi possível verificar pendências. O comércio não foi encerrado.");
+      return;
+    }
+    if (resultado.situacao==="aguardando_quitacao") {
+      const pendente=(Number(resultado.divida_centavos||0)/100).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
+      window.alert(`Novos pedidos suspensos. Existem pendências financeiras estimadas em ${pendente} e/ou pedidos em andamento. O encerramento definitivo só será analisado após a regularização.`);
+      window.location.href=`catalogo-admin.html?id=${encodeURIComponent(comercioId)}`;
+      return;
+    }
+    window.alert("Novos pedidos suspensos. O comércio está aguardando a retirada definitiva da vitrine pela administração, mantendo o histórico financeiro exigido.");
+    window.location.href="../index.html";
+  } catch (erro) {
+    console.error("Erro ao solicitar encerramento:",erro);
+    window.alert("Não foi possível confirmar o encerramento com o servidor. Tente novamente.");
+  }
 }
 
 /* =========================================================
