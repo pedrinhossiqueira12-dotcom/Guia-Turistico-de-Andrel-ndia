@@ -2768,5 +2768,26 @@
     "imagens": [],
     "status": "ativo",
     "destaque": false
+  },
+  {
+    "id": "cob06-p4-qa-b-20261025",
+    "nome": "cob06-p4-qa-b-20261025",
+    "categoria": "QA COB06 P4",
+    "descricao": "Fixture sintetica COB06 P4 sem operacoes financeiras",
+    "historia": "",
+    "curiosidades": "",
+    "endereco": "QA sintetico sem endereco real",
+    "horario": "",
+    "entrada": "",
+    "telefone": "",
+    "whatsapp": "",
+    "instagram": "",
+    "site": "",
+    "latitude": null,
+    "longitude": null,
+    "imagem": "",
+    "imagens": [],
+    "status": "ativo",
+    "destaque": false
   }
 ]
