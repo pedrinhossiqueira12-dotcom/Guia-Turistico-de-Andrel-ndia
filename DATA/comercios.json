@@ -2787,7 +2787,7 @@
     "longitude": null,
     "imagem": "",
     "imagens": [],
-    "status": "ativo",
+    "status": "deletado",
     "destaque": false
   }
 ]
