@@ -37,6 +37,7 @@ test("OAuth callback defaults to production mode and uses separate QA credential
   assert.match(callback, /\.\.\.\(QA_MODE \? \{ test_token: "true" \} : \{\}\)/);
   assert.doesNotMatch(callback, /test_token: "false"/);
   assert.match(callback, /oauthState\.comercio_id !== QA_ALLOWED_COMMERCE_ID/);
+  assert.match(callback, /status: QA_MODE \? "bloqueado" : "ativo"/);
   assert.match(callback, /\.is\("usado_em", null\)/);
   assert.match(callback, /if \(updateStateError \|\| !claimed\)/);
   assert.match(callback, /QA_MODE\s*\? await admin\.from\("catalogo_recebedores"\)\.insert\(receiverRow\)/);
