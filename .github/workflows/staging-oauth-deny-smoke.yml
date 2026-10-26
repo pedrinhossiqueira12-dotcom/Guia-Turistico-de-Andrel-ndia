@@ -54,3 +54,25 @@ jobs:
           code="$(curl --silent --show-error --max-time 20 --request POST --header "apikey: $key" --header "authorization: Bearer $key" --header 'content-type: application/json' --data '{"acao":"verificar_configuracao_qa","comercio_id":"asaas-homologacao"}' --output /dev/null --write-out '%{http_code}' 'https://jbttwihctuibchhcyqtl.supabase.co/functions/v1/catalogo-oauth-qa-iniciar')"
           echo "Anonymous QA configuration diagnostic HTTP: $code"
           test "$code" = '401'
+
+      - name: Cloudflare branch preview must serve the isolated STAGING login
+        shell: bash
+        run: |
+          set -euo pipefail
+          origin='https://fix-staging-oauth-qa-guard-2.guia-turistico-de-andrelandia.pages.dev'
+          page="$(mktemp)"
+          script="$(mktemp)"
+          trap 'rm -f "$page" "$script"' EXIT
+          curl --fail --silent --show-error --retry 3 --retry-delay 2 --max-time 20 --output "$page" "$origin/pages/catalogo-oauth-qa.html"
+          curl --fail --silent --show-error --retry 3 --retry-delay 2 --max-time 20 --output "$script" "$origin/js/catalogo-oauth-qa.js"
+          grep -q 'id="loginPanel"' "$page"
+          grep -q 'id="inspectButton"' "$page"
+          grep -q 'id="connectButton".*disabled' "$page"
+          grep -q 'catalogo-oauth-qa.js' "$page"
+          grep -q 'https://jbttwihctuibchhcyqtl.supabase.co' "$script"
+          grep -q 'verificar_configuracao_qa' "$script"
+          if grep -q 'xdmbkflufsfqziixzpxc' "$script"; then
+            echo 'Production Supabase reference found in QA frontend' >&2
+            exit 1
+          fi
+          echo 'QA branch preview HTML and JS available without financial endpoints'
