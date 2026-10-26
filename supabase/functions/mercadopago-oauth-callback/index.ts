@@ -64,8 +64,15 @@ Deno.serve(async (request: Request) => {
     if (MP_PROD_SELLER_ID && String(credentials.user_id) === MP_PROD_SELLER_ID) {
       throw new Error("A conta da plataforma não pode ser conectada como recebedora de um comércio.");
     }
-    if (credentials.live_mode !== true) {
-      throw new Error("Conecte uma conta Mercado Pago de produção, não uma conta de teste.");
+    // QA only: fail closed. Production must never accept a test OAuth account.
+    // Requiring both the exact staging project URL and an opt-in Secret prevents
+    // accidental test-account acceptance in another Supabase environment.
+    const qaProjectUrl = "https://jbttwihctuibchhcyqtl.supabase.co";
+    const qaMode = SUPABASE_URL === qaProjectUrl && Deno.env.get("MP_OAUTH_QA_ENABLED") === "true";
+    if (qaMode ? credentials.live_mode !== false : credentials.live_mode !== true) {
+      throw new Error(qaMode
+        ? "Nesta homologação são permitidas apenas contas Mercado Pago de teste."
+        : "Conecte uma conta Mercado Pago de produção, não uma conta de teste.");
     }
     const now = new Date().toISOString();
     const { error: updateStateError } = await admin.from("catalogo_oauth_estados").update({ usado_em: now }).eq("id", oauthState.id).is("usado_em", null);
