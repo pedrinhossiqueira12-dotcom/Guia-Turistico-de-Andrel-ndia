@@ -123,6 +123,8 @@ jobs:
         run: node tests/browser-marketplace-smoke.cjs
       - name: Reject fake authenticated users without owner or courier permissions
         run: node tests/browser-marketplace-permissoes.cjs
+      - name: Validate OAuth QA owner readiness UI (offline, no financial calls)
+        run: node tests/browser-oauth-qa-smoke.cjs
 
   frontend-node-regressions:
     name: Frontend, buyer, merchant and courier regression tests (Node)
