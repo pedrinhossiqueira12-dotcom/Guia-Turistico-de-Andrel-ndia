@@ -62,6 +62,16 @@ const PAGES = [
     },
   },
   {
+    id: "oauth-qa-staging",
+    path: "/pages/catalogo-oauth-qa.html",
+    check: async page => {
+      assert.equal(await page.locator("#loginPanel").isVisible(), true);
+      assert.equal(await page.locator("#oauthPanel").isVisible(), false);
+      assert.equal(await page.locator("#connectButton").isDisabled(), true);
+      assert.match(await page.locator("#status").innerText(), /STAGING/);
+    },
+  },
+  {
     id: "codigo-antigo",
     path: "/pages/pedido-offline.html?token=TOKEN_SINTETICO_SEM_VALOR",
     check: async page => {
