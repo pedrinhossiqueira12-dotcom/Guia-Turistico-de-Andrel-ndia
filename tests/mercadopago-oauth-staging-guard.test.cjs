@@ -56,3 +56,20 @@ test("seller onboarding page describes the agreed 7% policy", () => {
   assert.match(page, /2%/);
   assert.doesNotMatch(page, /95% para o comércio|Retirada e consumo local mantêm 5%|comissão de 5% incide somente nas vendas/);
 });
+
+test("QA page authenticates only against STAGING and never creates payments", () => {
+  const page = read("pages/catalogo-oauth-qa.html");
+  const browser = read("js/catalogo-oauth-qa.js");
+  assert.match(page, /<meta name="robots" content="noindex,nofollow,noarchive">/);
+  assert.match(page, /catalogo-oauth-qa\.js/);
+  assert.match(browser, /https:\/\/jbttwihctuibchhcyqtl\.supabase\.co/);
+  assert.match(browser, /sb_publishable_/);
+  assert.match(browser, /auth\.signInWithPassword/);
+  assert.match(browser, /client\.auth\.getUser\(\)/);
+  assert.match(browser, /functions\.invoke\("catalogo-oauth-qa-iniciar"/);
+  assert.match(browser, /acao: "iniciar_conexao_qa"/);
+  assert.match(browser, /destination\.protocol === "https:"/);
+  assert.match(browser, /auth\.mercadopago\.com/);
+  assert.doesNotMatch(browser, /MP_OAUTH_QA_CLIENT_SECRET|SUPABASE_SERVICE_ROLE_KEY|criar_pix|\/v1\/payments/);
+  assert.doesNotMatch(page, /<script[^>]*login\.js/);
+});
