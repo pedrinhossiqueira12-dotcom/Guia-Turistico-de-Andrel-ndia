@@ -144,7 +144,7 @@ async function fixture(options={}) {
   for (const commerce of ['loja-a','loja-b']) {
     db.tables.catalogos.push({comercio_id:commerce,modalidades:['entrega','retirada','consumo_local'],metodos_pagamento:['pix'],bloqueado:false});
     db.tables.catalogo_publicado.push({comercio_id:commerce,modalidades:['entrega','retirada','consumo_local'],metodos_pagamento:['pix']});
-    db.tables.catalogo_recebedores.push({comercio_id:commerce,status:'ativo',conta_externa_id:commerce==='loja-a'?'123':'456',oauth_access_token_enc:tokenCipher});
+    db.tables.catalogo_recebedores.push({comercio_id:commerce,status:'ativo',conta_externa_id:commerce==='loja-a'?'123':'456',oauth_access_token_enc:tokenCipher,oauth_live_mode:true});
     for (const id of [productId,secondId]) db.tables.catalogo_produtos.push({id,comercio_id:commerce,categoria_id:productId,nome:'Pão de queijo á',descricao:'Produto íntegro',preco:'100.00',disponivel:true,deletado_em:null,catalogo_categorias:{ativa:true,deletado_em:null}});
   }
   db.from=table=>{ assert.ok(schemas[table],table); return new Query(db,table); };
