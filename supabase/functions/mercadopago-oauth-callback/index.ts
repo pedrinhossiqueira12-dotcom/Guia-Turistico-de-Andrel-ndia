@@ -60,7 +60,7 @@ async function encrypt(value: string) {
   return `${base64Url(iv)}.${base64Url(cipher)}`;
 }
 async function exchangeCode(code: string, verifier: string) {
-  const response = await fetch("https://api.mercadopago.com/oauth/token", { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded", accept: "application/json" }, body: new URLSearchParams({ client_id: QA_MODE ? QA_CLIENT_ID : MP_OAUTH_CLIENT_ID, client_secret: QA_MODE ? QA_CLIENT_SECRET : MP_OAUTH_CLIENT_SECRET, grant_type: "authorization_code", code, redirect_uri: QA_MODE ? QA_REDIRECT_URI : MP_OAUTH_REDIRECT_URI, code_verifier: verifier }) });
+  const response = await fetch("https://api.mercadopago.com/oauth/token", { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded", accept: "application/json" }, body: new URLSearchParams({ client_id: QA_MODE ? QA_CLIENT_ID : MP_OAUTH_CLIENT_ID, client_secret: QA_MODE ? QA_CLIENT_SECRET : MP_OAUTH_CLIENT_SECRET, grant_type: "authorization_code", code, redirect_uri: QA_MODE ? QA_REDIRECT_URI : MP_OAUTH_REDIRECT_URI, code_verifier: verifier, ...(QA_MODE ? { test_token: "true" } : {}) }) });
   const data = await response.json().catch(() => ({}));
   if (!response.ok || !data.access_token || !data.refresh_token || !data.user_id) throw new Error("Mercado Pago não autorizou a conta recebedora.");
   return data;
