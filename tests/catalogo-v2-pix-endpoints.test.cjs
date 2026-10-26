@@ -214,6 +214,15 @@ async function fixture(options={}) {
   return {db,provider,pix,webhook,body,call,notify,diagnostics};
 }
 
+test('catalogo-v2-pix-endpoints recebedor OAuth de QA nunca cria Pix, mesmo com checkout ligado',async()=>{
+  const f=await fixture();
+  f.db.tables.catalogo_recebedores[0].oauth_live_mode=false;
+  const result=await f.call();
+  assert.equal(result.status,409);
+  assert.equal(result.body.success,false);
+  assert.equal(f.provider.posts.length,0,'nenhum POST ao Mercado Pago');
+});
+
 test('catalogo-v2-pix-endpoints criação entrega: código6/hash/token forte/AAD e fee7% com schema real',async()=>{
   const f=await fixture(); const result=await f.call(); assert.equal(result.status,200,JSON.stringify(result.body));
   const r=f.db.tables.catalogo_pedidos[0]; assert.equal(r.status_pagamento,'pendente'); assert.equal(r.status,'aguardando_pagamento');
