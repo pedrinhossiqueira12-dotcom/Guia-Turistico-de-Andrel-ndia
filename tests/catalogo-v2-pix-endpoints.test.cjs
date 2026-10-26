@@ -233,7 +233,14 @@ test('catalogo-v2-pix-endpoints recebedor bloqueado por QA impede POST mesmo com
   assert.equal(result.status,409);
   assert.equal(result.body.success,false);
   assert.equal(f.provider.posts.length,0,'nenhum POST ao provedor');
-  assert.equal(f.db.tables.catalogo_pedidos.length,0,'nenhum pedido financeiro criado');
+  // O checkout cria uma reserva local idempotente ANTES de consultar o recebedor.
+  // Rejeição em receiverFor não pode confirmar cobrança, nem fabricar Pix.
+  assert.equal(f.db.tables.catalogo_pedidos.length,1,'pode persistir uma reserva local');
+  const order=f.db.tables.catalogo_pedidos[0];
+  assert.equal(order.status,'aguardando_pagamento');
+  assert.equal(order.status_pagamento,'pendente');
+  assert.equal(order.payment_id ?? null,null,'nenhum pagamento externo associado');
+  assert.equal(order.pix_codigo ?? null,null,'nenhum Pix emitido');
 });
 
 test('catalogo-v2-pix-endpoints criação entrega: código6/hash/token forte/AAD e fee7% com schema real',async()=>{
