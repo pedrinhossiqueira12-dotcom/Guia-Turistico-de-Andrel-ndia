@@ -125,7 +125,7 @@ Deno.serve(async (req: Request) => {
     expira_em: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
   });
   if (insertError) return json({ success: false, mensagem: "Não foi possível iniciar a autorização." }, 503);
-  const url = new URL("https://auth.mercadopago.com.br/authorization");
+  const url = new URL("https://auth.mercadopago.com/authorization");
   url.search = new URLSearchParams({
     client_id: QA_CLIENT_ID,
     response_type: "code",
