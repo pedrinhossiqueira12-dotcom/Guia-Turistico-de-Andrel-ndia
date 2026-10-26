@@ -26,12 +26,35 @@
     $("oauthPanel").hidden = !authenticated;
   };
 
+  async function checkConfiguration() {
+    $("connectButton").disabled = true;
+    $("qaReadiness").textContent = "Conferindo configuração no STAGING…";
+    try {
+      const { data, error } = await client.functions.invoke("catalogo-oauth-qa-iniciar", {
+        body: { acao: "verificar_configuracao_qa", comercio_id: $("commerceId").value },
+      });
+      if (error || data?.success !== true || !Array.isArray(data.pendencias)) {
+        throw new Error("Não foi possível verificar a configuração. A vinculação continua bloqueada.");
+      }
+      const ready = data.configuracao_pronta === true && data.pendencias.length === 0;
+      $("qaReadiness").textContent = ready
+        ? "Configuração presente. A vinculação ainda exige a autorização do vendedor de teste."
+        : "Configuração pendente: " + data.pendencias.join(", ") + ". Os valores secretos não são exibidos.";
+      $("connectButton").disabled = !ready;
+    } catch (error) {
+      $("qaReadiness").textContent = error.message || "Falha ao verificar a configuração.";
+      $("connectButton").disabled = true;
+    }
+  }
+
   async function refresh() {
     const { data, error } = await client.auth.getUser();
     const authenticated = !error && Boolean(data?.user?.id);
     show(authenticated);
-    status(authenticated ? "Sessão de teste autenticada. Você pode iniciar o OAuth."
+    status(authenticated ? "Sessão de teste autenticada. Conferindo a configuração OAuth…"
       : "Entre com uma conta do STAGING para continuar.");
+    if (authenticated) await checkConfiguration();
+    else $("connectButton").disabled = true;
   }
 
   async function login(event) {
@@ -79,7 +102,8 @@
     } catch (error) {
       status(error.message || "Não foi possível iniciar a autorização.", true);
       busy = false;
-      $("connectButton").disabled = false;
+      $("connectButton").disabled = true;
+      $("qaReadiness").textContent = "Reconfira a configuração antes de outra tentativa.";
     }
   }
 
@@ -98,6 +122,8 @@
   }
 
   $("loginForm").addEventListener("submit", login);
+  $("inspectButton").addEventListener("click", checkConfiguration);
+  $("commerceId").addEventListener("change", checkConfiguration);
   $("connectButton").addEventListener("click", connect);
   $("logoutButton").addEventListener("click", logout);
   refresh().catch(() => {
