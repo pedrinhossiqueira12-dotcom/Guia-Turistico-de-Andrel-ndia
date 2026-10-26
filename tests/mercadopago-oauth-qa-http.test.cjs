@@ -214,3 +214,54 @@ test("PRODUCTION callback never requests test_token, rejects sandbox credentials
   assert.equal(calls[0].client_id, "99999");
   assert.equal(db.rows.catalogo_recebedores.length, 0);
 });
+
+function diagnosticRequest(token = "valid-owner-token", commerce = "asaas-homologacao") {
+  return new Request(STAGING + "/functions/v1/catalogo-oauth-qa-iniciar", {
+    method: "POST",
+    headers: { authorization: "Bearer " + token, "content-type": "application/json" },
+    body: JSON.stringify({ acao: "verificar_configuracao_qa", comercio_id: commerce }),
+  });
+}
+test("QA preflight returns names of missing settings to authenticated owner, never secret values", async () => {
+  const db = fakeDatabase(), env = envForQa(false);
+  delete env.MP_OAUTH_QA_CLIENT_SECRET;
+  delete env.MP_OAUTH_QA_REDIRECT_URI;
+  delete env.MP_OAUTH_ENCRYPTION_KEY;
+  const handler = load("supabase/functions/catalogo-oauth-qa-iniciar/index.ts", env, db);
+  const response = await handler(diagnosticRequest());
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.equal(data.success, true);
+  assert.equal(data.configuracao_pronta, false);
+  assert.ok(data.pendencias.includes("MP_OAUTH_QA_ENABLED"));
+  assert.ok(data.pendencias.includes("MP_OAUTH_QA_CLIENT_SECRET"));
+  assert.ok(data.pendencias.includes("MP_OAUTH_QA_REDIRECT_URI"));
+  assert.ok(data.pendencias.includes("MP_OAUTH_ENCRYPTION_KEY"));
+  assert.ok(!JSON.stringify(data).includes("fake-service-key"));
+  assert.equal(db.rows.catalogo_oauth_estados.length, 0);
+});
+test("QA preflight is private: invalid JWT, unrelated and unpublished owners never see settings", async () => {
+  const db = fakeDatabase();
+  const handler = load("supabase/functions/catalogo-oauth-qa-iniciar/index.ts", envForQa(false), db);
+  assert.equal((await handler(diagnosticRequest("wrong-token"))).status, 401);
+  assert.equal((await handler(diagnosticRequest("valid-owner-token", "outra-loja"))).status, 403);
+  db.rows.catalogos[0].proprietario_id = "another-owner";
+  assert.equal((await handler(diagnosticRequest())).status, 403);
+  assert.equal(db.rows.catalogo_oauth_estados.length, 0);
+});
+test("QA preflight requires complete callback credentials and financial checkout disabled", async () => {
+  const db = fakeDatabase(), env = envForQa();
+  const handler = load("supabase/functions/catalogo-oauth-qa-iniciar/index.ts", env, db);
+  const response = await handler(diagnosticRequest());
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).configuracao_pronta, true);
+  const envWithCheckout = { ...env, MARKETPLACE_CHECKOUT_ENABLED: "true" };
+  const closed = load("supabase/functions/catalogo-oauth-qa-iniciar/index.ts", envWithCheckout, db);
+  const check = await (await closed(diagnosticRequest())).json();
+  assert.ok(check.pendencias.includes("CHECKOUT_FINANCEIRO_DESLIGADO"));
+  assert.equal((await closed(postBody())).status, 503);
+  const missingCallbackSecret = load("supabase/functions/catalogo-oauth-qa-iniciar/index.ts",
+    { ...env, MP_OAUTH_QA_CLIENT_SECRET: "" }, db);
+  assert.equal((await missingCallbackSecret(postBody())).status, 503);
+  assert.equal(db.rows.catalogo_oauth_estados.length, 0);
+});
