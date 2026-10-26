@@ -63,8 +63,8 @@ jobs:
           page="$(mktemp)"
           script="$(mktemp)"
           trap 'rm -f "$page" "$script"' EXIT
-          curl --fail --silent --show-error --retry 3 --retry-delay 2 --max-time 20 --output "$page" "$origin/pages/catalogo-oauth-qa.html"
-          curl --fail --silent --show-error --retry 3 --retry-delay 2 --max-time 20 --output "$script" "$origin/js/catalogo-oauth-qa.js"
+          curl --fail --location --proto-redir =https --silent --show-error --retry 3 --retry-delay 2 --max-time 20 --output "$page" "$origin/pages/catalogo-oauth-qa.html"
+          curl --fail --location --proto-redir =https --silent --show-error --retry 3 --retry-delay 2 --max-time 20 --output "$script" "$origin/js/catalogo-oauth-qa.js"
           echo "HTML bytes: $(wc -c < "$page"); JavaScript bytes: $(wc -c < "$script")"
           grep -q 'id="loginPanel"' "$page" || { echo "Preview missing loginPanel" >&2; exit 1; }
           grep -q 'id="inspectButton"' "$page" || { echo "Preview missing inspectButton" >&2; exit 1; }
