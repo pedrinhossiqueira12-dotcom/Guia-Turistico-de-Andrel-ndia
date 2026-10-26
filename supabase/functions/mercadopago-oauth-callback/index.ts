@@ -8,6 +8,15 @@ const MP_OAUTH_CLIENT_SECRET = Deno.env.get("MP_OAUTH_CLIENT_SECRET") ?? "";
 const MP_OAUTH_REDIRECT_URI = Deno.env.get("MP_OAUTH_REDIRECT_URI") ?? "";
 const MP_PROD_SELLER_ID = Deno.env.get("MP_PROD_SELLER_ID") ?? "";
 const MP_OAUTH_ENCRYPTION_KEY = Deno.env.get("MP_OAUTH_ENCRYPTION_KEY") ?? "";
+const STAGING_URL = "https://jbttwihctuibchhcyqtl.supabase.co";
+const QA_PROJECT = SUPABASE_URL === STAGING_URL;
+const QA_ENABLED = Deno.env.get("MP_OAUTH_QA_ENABLED") === "true";
+const QA_MODE = QA_PROJECT && QA_ENABLED;
+const QA_CLIENT_ID = Deno.env.get("MP_OAUTH_QA_CLIENT_ID") ?? "";
+const QA_CLIENT_SECRET = Deno.env.get("MP_OAUTH_QA_CLIENT_SECRET") ?? "";
+const QA_REDIRECT_URI = Deno.env.get("MP_OAUTH_QA_REDIRECT_URI") ?? "";
+const QA_ALLOWED_COMMERCE_ID = Deno.env.get("MP_OAUTH_QA_ALLOWED_COMMERCE_ID") ?? "";
+const EXPECTED_QA_REDIRECT = `${STAGING_URL}/functions/v1/mercadopago-oauth-callback`;
 const SITE_URL = (Deno.env.get("SITE_URL") || "https://guia-turistico-de-andrelandia.pages.dev").replace(/\/$/, "");
 const CORS_HEADERS = { "Cache-Control": "no-store, no-cache, must-revalidate", "Referrer-Policy": "no-referrer" };
 let serviceKey = "";
@@ -19,6 +28,14 @@ if (!serviceKey) serviceKey = LEGACY_SERVICE_ROLE_KEY;
 const admin = createClient(SUPABASE_URL, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
 
 function redirectToSite(commerceId: string, result: "success" | "error") {
+  if (QA_PROJECT) {
+    return new Response(result === "success"
+      ? "Conta de teste vinculada no STAGING. Feche esta aba."
+      : "A vinculação de teste não foi concluída. Nenhuma cobrança foi feita.", {
+      status: result === "success" ? 200 : 400,
+      headers: { ...CORS_HEADERS, "Content-Type": "text/plain; charset=utf-8" },
+    });
+  }
   const target = new URL(`${SITE_URL}/pages/catalogo-pix-producao.html`);
   if (commerceId) target.searchParams.set("id", commerceId);
   target.searchParams.set("oauth", result);
@@ -43,7 +60,7 @@ async function encrypt(value: string) {
   return `${base64Url(iv)}.${base64Url(cipher)}`;
 }
 async function exchangeCode(code: string, verifier: string) {
-  const response = await fetch("https://api.mercadopago.com/oauth/token", { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded", accept: "application/json" }, body: new URLSearchParams({ client_id: MP_OAUTH_CLIENT_ID, client_secret: MP_OAUTH_CLIENT_SECRET, grant_type: "authorization_code", code, redirect_uri: MP_OAUTH_REDIRECT_URI, code_verifier: verifier }) });
+  const response = await fetch("https://api.mercadopago.com/oauth/token", { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded", accept: "application/json" }, body: new URLSearchParams({ client_id: QA_MODE ? QA_CLIENT_ID : MP_OAUTH_CLIENT_ID, client_secret: QA_MODE ? QA_CLIENT_SECRET : MP_OAUTH_CLIENT_SECRET, grant_type: "authorization_code", code, redirect_uri: QA_MODE ? QA_REDIRECT_URI : MP_OAUTH_REDIRECT_URI, code_verifier: verifier }) });
   const data = await response.json().catch(() => ({}));
   if (!response.ok || !data.access_token || !data.refresh_token || !data.user_id) throw new Error("Mercado Pago não autorizou a conta recebedora.");
   return data;
@@ -55,29 +72,37 @@ Deno.serve(async (request: Request) => {
   const state = url.searchParams.get("state") || "";
   const error = url.searchParams.get("error") || "";
   if (error || !code || !state) return redirectToSite("", "error");
-  if (!MP_OAUTH_CLIENT_ID || !MP_OAUTH_CLIENT_SECRET || !MP_OAUTH_REDIRECT_URI || !MP_OAUTH_ENCRYPTION_KEY) return redirectToSite("", "error");
+  // Nunca aceitar credenciais produtivas no projeto STAGING nem credenciais de teste fora dele.
+  if (QA_PROJECT && !QA_MODE) return redirectToSite("", "error");
+  if (QA_MODE
+    ? (!QA_CLIENT_ID || !QA_CLIENT_SECRET || QA_REDIRECT_URI !== EXPECTED_QA_REDIRECT || !QA_ALLOWED_COMMERCE_ID || !MP_OAUTH_ENCRYPTION_KEY)
+    : (!MP_OAUTH_CLIENT_ID || !MP_OAUTH_CLIENT_SECRET || !MP_OAUTH_REDIRECT_URI || !MP_OAUTH_ENCRYPTION_KEY)
+  ) return redirectToSite("", "error");
   try {
     const stateHash = await sha256(state);
     const { data: oauthState, error: stateError } = await admin.from("catalogo_oauth_estados").select("id,comercio_id,proprietario_id,code_verifier,expira_em,usado_em").eq("estado_hash", stateHash).maybeSingle();
     if (stateError || !oauthState || oauthState.usado_em || new Date(oauthState.expira_em).getTime() < Date.now()) return redirectToSite("", "error");
+    if (QA_MODE && oauthState.comercio_id !== QA_ALLOWED_COMMERCE_ID) return redirectToSite("", "error");
     const credentials = await exchangeCode(code, oauthState.code_verifier);
     if (MP_PROD_SELLER_ID && String(credentials.user_id) === MP_PROD_SELLER_ID) {
       throw new Error("A conta da plataforma não pode ser conectada como recebedora de um comércio.");
     }
-    // QA only: fail closed. Production must never accept a test OAuth account.
-    // Requiring both the exact staging project URL and an opt-in Secret prevents
-    // accidental test-account acceptance in another Supabase environment.
-    const qaProjectUrl = "https://jbttwihctuibchhcyqtl.supabase.co";
-    const qaMode = SUPABASE_URL === qaProjectUrl && Deno.env.get("MP_OAUTH_QA_ENABLED") === "true";
-    if (qaMode ? credentials.live_mode !== false : credentials.live_mode !== true) {
-      throw new Error(qaMode
+    // O vendedor de teste nunca é aceito fora do projeto STAGING e do opt-in.
+    if (QA_MODE ? credentials.live_mode !== false : credentials.live_mode !== true) {
+      throw new Error(QA_MODE
         ? "Nesta homologação são permitidas apenas contas Mercado Pago de teste."
         : "Conecte uma conta Mercado Pago de produção, não uma conta de teste.");
     }
     const now = new Date().toISOString();
-    const { error: updateStateError } = await admin.from("catalogo_oauth_estados").update({ usado_em: now }).eq("id", oauthState.id).is("usado_em", null);
-    if (updateStateError) throw new Error("Não foi possível finalizar o estado OAuth.");
-    const { error: receiverError } = await admin.from("catalogo_recebedores").upsert({ comercio_id: oauthState.comercio_id, provedor: "mercadopago", conta_externa_id: String(credentials.user_id), oauth_user_id: String(credentials.user_id), oauth_access_token_enc: await encrypt(String(credentials.access_token)), oauth_refresh_token_enc: await encrypt(String(credentials.refresh_token)), oauth_expires_at: new Date(Date.now() + Number(credentials.expires_in || 15552000) * 1000).toISOString(), oauth_scope: String(credentials.scope || ""), oauth_public_key: String(credentials.public_key || ""), oauth_live_mode: Boolean(credentials.live_mode), oauth_conectado_em: now, conectado_em: now, status: "ativo", atualizado_em: now }, { onConflict: "comercio_id" });
+    const { data: claimed, error: updateStateError } = await admin.from("catalogo_oauth_estados")
+      .update({ usado_em: now }).eq("id", oauthState.id).is("usado_em", null)
+      .select("id").maybeSingle();
+    if (updateStateError || !claimed) throw new Error("Estado OAuth já utilizado ou indisponível.");
+    const receiverRow = { comercio_id: oauthState.comercio_id, provedor: "mercadopago", conta_externa_id: String(credentials.user_id), oauth_user_id: String(credentials.user_id), oauth_access_token_enc: await encrypt(String(credentials.access_token)), oauth_refresh_token_enc: await encrypt(String(credentials.refresh_token)), oauth_expires_at: new Date(Date.now() + Number(credentials.expires_in || 15552000) * 1000).toISOString(), oauth_scope: String(credentials.scope || ""), oauth_public_key: String(credentials.public_key || ""), oauth_live_mode: Boolean(credentials.live_mode), oauth_conectado_em: now, conectado_em: now, status: "ativo", atualizado_em: now };
+    // Em QA, INSERT impede sobrescrever qualquer recebedor preexistente, mesmo com corrida.
+    const { error: receiverError } = QA_MODE
+      ? await admin.from("catalogo_recebedores").insert(receiverRow)
+      : await admin.from("catalogo_recebedores").upsert(receiverRow, { onConflict: "comercio_id" });
     if (receiverError) throw new Error("Autorização recebida, mas não foi possível salvar o recebedor.");
     return redirectToSite(oauthState.comercio_id, "success");
   } catch (error) {
