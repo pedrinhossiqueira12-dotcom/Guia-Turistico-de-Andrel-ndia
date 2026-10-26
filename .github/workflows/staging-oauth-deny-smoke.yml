@@ -16,6 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - uses: actions/checkout@v4
       - name: Callback must reject external OAuth error without state
         shell: bash
         run: |
@@ -33,3 +34,12 @@ jobs:
           code="$(curl --silent --show-error --max-time 20 --request POST --header 'content-type: application/json' --data '{"acao":"iniciar_conexao_qa","comercio_id":"asaas-homologacao"}' --output /dev/null --write-out '%{http_code}' "$url")"
           echo "Unauthenticated starter HTTP: $code"
           test "$code" = '401'
+
+      - name: Starter must stay disabled for public project key while QA opt-in is absent
+        shell: bash
+        run: |
+          set -euo pipefail
+          key="$(node -e 'const fs=require("node:fs");const t=fs.readFileSync("js/catalogo-oauth-qa.js","utf8");const m=t.match(/const STAGING_PUBLISHABLE_KEY = "(sb_publishable_[A-Za-z0-9_-]+)";/);if(!m)process.exit(1);process.stdout.write(m[1]);')"
+          code="$(curl --silent --show-error --max-time 20 --request POST --header "apikey: $key" --header "authorization: Bearer $key" --header 'content-type: application/json' --data '{"acao":"iniciar_conexao_qa","comercio_id":"asaas-homologacao"}' --output /dev/null --write-out '%{http_code}' 'https://jbttwihctuibchhcyqtl.supabase.co/functions/v1/catalogo-oauth-qa-iniciar')"
+          echo "Starter with public project key HTTP: $code"
+          test "$code" = '503'
