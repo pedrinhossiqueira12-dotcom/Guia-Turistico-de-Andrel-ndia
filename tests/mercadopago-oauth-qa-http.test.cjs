@@ -169,7 +169,7 @@ test("QA callback exchanges sandbox token, encrypts and saves once; second callb
   assert.equal(db.rows.catalogo_recebedores.length, 1);
   const receiver = db.rows.catalogo_recebedores[0];
   assert.equal(receiver.oauth_live_mode, false);
-  assert.equal(receiver.status, "ativo");
+  assert.equal(receiver.status, "bloqueado", "vendedor de teste nunca fica ativo para Pix");
   assert.ok(!receiver.oauth_access_token_enc.includes("fake-sandbox-access"));
   assert.equal(db.rows.catalogo_oauth_estados[0].usado_em !== null, true);
   const replay = await callback(request);
