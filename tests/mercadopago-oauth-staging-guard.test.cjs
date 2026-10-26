@@ -33,6 +33,9 @@ test("OAuth callback defaults to production mode and uses separate QA credential
   assert.match(callback, /QA_MODE \? QA_REDIRECT_URI : MP_OAUTH_REDIRECT_URI/);
   assert.match(callback, /QA_REDIRECT_URI !== EXPECTED_QA_REDIRECT/);
   assert.match(callback, /QA_MODE \? credentials\.live_mode !== false : credentials\.live_mode !== true/);
+  // Mercado Pago: 'test_token=true' must be emitted only in the QA OAuth exchange.
+  assert.match(callback, /\.\.\.\(QA_MODE \? \{ test_token: "true" \} : \{\}\)/);
+  assert.doesNotMatch(callback, /test_token: "false"/);
   assert.match(callback, /oauthState\.comercio_id !== QA_ALLOWED_COMMERCE_ID/);
   assert.match(callback, /\.is\("usado_em", null\)/);
   assert.match(callback, /if \(updateStateError \|\| !claimed\)/);
