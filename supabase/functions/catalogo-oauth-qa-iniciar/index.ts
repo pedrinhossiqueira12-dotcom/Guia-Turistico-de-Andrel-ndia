@@ -59,19 +59,18 @@ Deno.serve(async (req: Request) => {
   }
   const commerceId = QA_ALLOWED_COMMERCE_ID;
 
-  // O usuário precisa ser dono do catálogo e possuir cadastro aprovado.
-  const [published, catalog, registrations, receiver] = await Promise.all([
+  // Apenas o proprietário autenticado de catálogo existente, não bloqueado e publicado.
+  // Não criar catalogos/recebedores aqui; os dados de QA são administrados separadamente.
+  const [published, catalog, receiver] = await Promise.all([
     admin.from("comercios_publicados").select("local_id,status").eq("local_id", commerceId).maybeSingle(),
     admin.from("catalogos").select("comercio_id,proprietario_id,bloqueado").eq("comercio_id", commerceId).maybeSingle(),
-    admin.from("cadastros_comercios").select("id,local_id,status,usuario_id").eq("usuario_id", userId).eq("status", "aprovado").eq("local_id", commerceId).limit(1),
     admin.from("catalogo_recebedores").select("comercio_id").eq("comercio_id", commerceId).maybeSingle(),
   ]);
-  if (published.error || catalog.error || registrations.error || receiver.error) {
+  if (published.error || catalog.error || receiver.error) {
     return json({ success: false, mensagem: "Não foi possível validar o comércio." }, 503);
   }
   if (published.data?.status !== "ativo" || !catalog.data
-    || catalog.data.proprietario_id !== userId || catalog.data.bloqueado
-    || !registrations.data?.length || receiver.data) {
+    || catalog.data.proprietario_id !== userId || catalog.data.bloqueado || receiver.data) {
     return json({ success: false, mensagem: "Este comércio não está elegível para vinculação OAuth de QA." }, 403);
   }
 
