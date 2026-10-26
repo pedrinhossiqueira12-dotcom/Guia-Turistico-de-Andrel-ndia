@@ -65,12 +65,13 @@ jobs:
           trap 'rm -f "$page" "$script"' EXIT
           curl --fail --silent --show-error --retry 3 --retry-delay 2 --max-time 20 --output "$page" "$origin/pages/catalogo-oauth-qa.html"
           curl --fail --silent --show-error --retry 3 --retry-delay 2 --max-time 20 --output "$script" "$origin/js/catalogo-oauth-qa.js"
-          grep -q 'id="loginPanel"' "$page"
-          grep -q 'id="inspectButton"' "$page"
-          grep -q 'id="connectButton".*disabled' "$page"
-          grep -q 'catalogo-oauth-qa.js' "$page"
-          grep -q 'https://jbttwihctuibchhcyqtl.supabase.co' "$script"
-          grep -q 'verificar_configuracao_qa' "$script"
+          echo "HTML bytes: $(wc -c < "$page"); JavaScript bytes: $(wc -c < "$script")"
+          grep -q 'id="loginPanel"' "$page" || { echo "Preview missing loginPanel" >&2; exit 1; }
+          grep -q 'id="inspectButton"' "$page" || { echo "Preview missing inspectButton" >&2; exit 1; }
+          grep -q 'id="connectButton".*disabled' "$page" || { echo "Preview missing disabled connectButton" >&2; exit 1; }
+          grep -q 'catalogo-oauth-qa.js' "$page" || { echo "Preview missing QA script tag" >&2; exit 1; }
+          grep -q 'https://jbttwihctuibchhcyqtl.supabase.co' "$script" || { echo "Preview script missing STAGING reference" >&2; exit 1; }
+          grep -q 'verificar_configuracao_qa' "$script" || { echo "Preview script missing authenticated preflight" >&2; exit 1; }
           if grep -q 'xdmbkflufsfqziixzpxc' "$script"; then
             echo 'Production Supabase reference found in QA frontend' >&2
             exit 1
