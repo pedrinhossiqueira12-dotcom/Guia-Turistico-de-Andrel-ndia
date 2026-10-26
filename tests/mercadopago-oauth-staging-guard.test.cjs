@@ -18,3 +18,10 @@ test("OAuth callback remains non-payment endpoint", () => {
   assert.match(source, /request\.method !== "GET"/);
   assert.doesNotMatch(source, /\/v1\/payments|\/v1\/transfers/);
 });
+
+test("buyer Pix refuses OAuth test sellers, regardless of checkout flag", () => {
+  const pix = fs.readFileSync(path.join(__dirname, "../supabase/functions/catalogo-pedido-pix/index.ts"), "utf8");
+  assert.match(pix, /oauth_live_mode/);
+  assert.match(pix, /receiver\.oauth_live_mode !== true/);
+  assert.match(pix, /Recebedor de teste não pode gerar Pix neste checkout/);
+});
