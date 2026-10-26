@@ -3,7 +3,7 @@
 
 ## Evidência confirmada
 - Projeto **STAGING** Supabase: `jbttwihctuibchhcyqtl`. PROD: `xdmbkflufsfqziixzpxc` **não modificado**.
-- Deploy realizado no STAGING: `catalogo-oauth-qa-iniciar` v1, **ACTIVE**, `verify_jwt=true`. Código obtido da PR #57 e guardado por URL exata, opt-in explícito, proprietário autenticado e comércio permitido.
+- Deploy realizado no STAGING: `catalogo-oauth-qa-iniciar` v2, **ACTIVE**, `verify_jwt=true`. Código obtido da PR #57 e guardado por URL exata, opt-in explícito, proprietário autenticado e comércio permitido.
 - Deploy realizado no STAGING: `mercadopago-oauth-callback` v2, **ACTIVE**, `verify_jwt=false` porque recebe redirecionamento GET do provedor sem JWT. Verifica `state` aleatório expirável, PKCE, uso único e exige `live_mode=false` somente quando modo QA estiver ativo. Não cria pagamentos.
 - CI do commit `fbfc056ebcff5e0be36e62f9347755748deb2c08`: 13/13 verificações aprovadas. Suite Node 1.037/1.037; sete testes executáveis novos de OAuth com banco e provedor simulados passaram.
 - Banco STAGING pós-deploy: `catalogo_oauth_estados=0`, `catalogo_recebedores=0`, `catalogo_pagamentos_v2=0`. Tabelas OAuth e recebedores com RLS ativo, sem privilégios explícitos a `anon`/`authenticated`.
@@ -38,7 +38,7 @@ A URL de callback precisa estar cadastrada **exatamente** como Redirect URL na a
 ## Limites e impedimentos
 - Não há ferramenta conectada nesta sessão para gravar/inspecionar valores de **Secrets** hospedados; esse passo permanece manual no Dashboard. Nunca colocar Secrets em mensagens ou commits.
 - O endpoint `catalogo-pedido-pix` implantado no STAGING anteriormente **não** foi alterado neste deploy. A proteção adicional por `oauth_live_mode` está somente na PR #57; por isso **não** ligar checkout.
-- As funções OAuth v1 não têm rota de criação de Pix, Asaas ou transferências. Deploy dessas novas rotas não substituiu versões anteriores de funções Asaas.
+- As funções OAuth (starter v2, callback v2) não têm rota de criação de Pix, Asaas ou transferências. Deploy dessas novas rotas não substituiu versões anteriores de funções Asaas.
 - PR #57 deve permanecer **Draft**, sem merge ou publicação em produção até revisão e aprovação de homologação.
 
 ## Proteção adicional contra checkout antigo (revisada em 26/10/2026; implantada na v2)
@@ -49,3 +49,13 @@ A URL de callback precisa estar cadastrada **exatamente** como Redirect URL na a
 - O status bloqueado em QA significa **autorização armazenada para auditoria**, não habilitação de recebimentos. A interface comercial normal não deve declarar esse recebedor pronto para Pix.
 - Observação de idempotência: a função Pix pode salvar um **pedido local `aguardando_pagamento` / `pendente`** antes de verificar se o recebedor está bloqueado. Esse registro não é pagamento: para recebedor de QA bloqueado, a chamada deve devolver HTTP 409 **antes de POST ao Mercado Pago**; `payment_id` e `pix_codigo` ficam vazios. O teste em `tests/catalogo-v2-pix-endpoints.test.cjs` verifica essa distinção. Não excluir automaticamente reservas pendentes sem reconciliação.
 - A coluna legada `catalogo_recebedores.percentual_plataforma` permanece com CHECK/default de **5%**. A comissão operacional V2 de **7%** é calculada pela RPC `catalogo_fluxo_precificar` e usada como `application_fee` no checkout; não atualizar o legado como substituto da validação da RPC.
+
+## Diagnóstico privado de configuração OAuth (starter v2)
+- A função `catalogo-oauth-qa-iniciar` possui uma segunda ação: `verificar_configuracao_qa`. Ela exige JWT de usuário válido **e** valida que o usuário é proprietário do catálogo solicitado e que a publicação está ativa. Não requer que o modo QA já esteja habilitado.
+- Retorno ao proprietário: `configuracao_pronta` (boolean) e `pendencias` (nomes dos parâmetros) — **sem valores de Secrets, tokens nem credenciais**. Verifica Client ID numérico, presença do Client Secret, URL de callback exata, allowlist do comércio, chave AES hex de 64 caracteres, flag QA e checkout financeiro desligado.
+- O próprio início OAuth agora exige Client Secret e chave AES presentes, além das condições anteriores. A função continua recusando tentativas `iniciar_conexao_qa` incompletas com HTTP 503.
+- A interface `pages/catalogo-oauth-qa.html` + `js/catalogo-oauth-qa.js` consulta esse diagnóstico após autenticação e só libera o botão de conectar quando o backend indicar disponibilidade. É uma medida de UX adicional, **não** substitui a validação no servidor.
+- Evidência de teste isolado: novos testes HTTP simulados de diagnóstico (sessão inválida, proprietário diferente, ambiente incompleto, checkout habilitado) aprovados; suíte Node 1.041/1.041.
+- Evidência HTTP hospedada para o starter v2: callback com erro = 400, inicio anônimo = 401, inicio com chave pública e sem habilitação = 503, diagnóstico com chave pública sem sessão de usuário = **401**. Job https://github.com/pedrinhossiqueira12-dotcom/Guia-Turistico-de-Andrel-ndia/actions/runs/40396240571/job/121829924397.
+- A configuração real de Secrets **não foi lida**; o teste 503 não prova qual flag ou Secret está faltando. Para conhecer as pendências reais é necessário que o proprietário faça login no STAGING e clique em **Conferir configuração de homologação**.
+- **Não realizar OAuth real até que o administrador confira a configuração e habilite o fluxo de forma consciente.** Nenhum Pix deve ser emitido no teste OAuth.
