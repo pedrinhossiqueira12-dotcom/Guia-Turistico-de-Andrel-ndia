@@ -1,0 +1,35 @@
+name: STAGING OAuth fail-closed HTTP smoke (no credentials)
+
+on:
+  push:
+    branches:
+      - fix/staging-oauth-qa-guard-20261026
+    paths:
+      - .github/workflows/staging-oauth-deny-smoke.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  oauth-deny-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Callback must reject external OAuth error without state
+        shell: bash
+        run: |
+          set -euo pipefail
+          url='https://jbttwihctuibchhcyqtl.supabase.co/functions/v1/mercadopago-oauth-callback?error=access_denied'
+          code="$(curl --silent --show-error --max-time 20 --output /dev/null --write-out '%{http_code}' "$url")"
+          echo "OAuth callback denial HTTP: $code"
+          test "$code" = '400'
+
+      - name: OAuth starter must reject unauthenticated POST
+        shell: bash
+        run: |
+          set -euo pipefail
+          url='https://jbttwihctuibchhcyqtl.supabase.co/functions/v1/catalogo-oauth-qa-iniciar'
+          code="$(curl --silent --show-error --max-time 20 --request POST --header 'content-type: application/json' --data '{"acao":"iniciar_conexao_qa","comercio_id":"asaas-homologacao"}' --output /dev/null --write-out '%{http_code}' "$url")"
+          echo "Unauthenticated starter HTTP: $code"
+          test "$code" = '401'
