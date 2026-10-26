@@ -31,7 +31,7 @@ A URL de callback precisa estar cadastrada **exatamente** como Redirect URL na a
 2. Confirmar PKCE habilitado no aplicativo Mercado Pago e URL de retorno idêntica; usar **apenas contas de teste**.
 3. Validar uma sessão Auth do STAGING para o proprietário do catálogo permitido; usar `pages/catalogo-oauth-qa.html` em uma origem de testes aprovada, sem misturar sessões com o site de produção.
 4. Mediante autorização, habilitar somente `MP_OAUTH_QA_ENABLED` no STAGING e realizar uma autorização OAuth de vendedor de teste. Se falhar, preservar a configuração segura e examinar logs **sem imprimir tokens**.
-5. Confirmar via consulta agregada/read-only que o recebedor salvo é `oauth_live_mode=false`, que o state ficou consumido e que não apareceu registro em `catalogo_pagamentos_v2`. Não expor access/refresh tokens.
+5. Confirmar via consulta agregada/read-only que o recebedor salvo é `oauth_live_mode=false` **e status `bloqueado`**, que o state ficou consumido e que não apareceu registro em `catalogo_pagamentos_v2`. Não expor access/refresh tokens. **Nunca alterar o status de teste para `ativo`.**
 6. Após o teste, desabilitar a flag de QA. A eventual remoção de vínculos e limpeza de estados deve ser planejada separadamente, sem apagar dados arbitrariamente.
 
 ## Limites e impedimentos
@@ -39,3 +39,10 @@ A URL de callback precisa estar cadastrada **exatamente** como Redirect URL na a
 - O endpoint `catalogo-pedido-pix` implantado no STAGING anteriormente **não** foi alterado neste deploy. A proteção adicional por `oauth_live_mode` está somente na PR #57; por isso **não** ligar checkout.
 - As funções OAuth v1 não têm rota de criação de Pix, Asaas ou transferências. Deploy dessas novas rotas não substituiu versões anteriores de funções Asaas.
 - PR #57 deve permanecer **Draft**, sem merge ou publicação em produção até revisão e aprovação de homologação.
+
+## Proteção adicional contra checkout antigo (revisada em 26/10/2026)
+- A Edge `catalogo-pedido-pix` **v78**, efetivamente publicada no STAGING, rejeita recebedores com `status != 'ativo'`, mas ainda não lê `oauth_live_mode`.
+- Por isso o callback OAuth do STAGING agora registra a conta de teste como `status='bloqueado'`, impedindo que a função Pix v78 a considere elegível, mesmo se uma flag global mudar por engano.
+- O banco confirma a existência de `bloqueado` no CHECK `catalogo_recebedores_status_check`. O caminho de produção do callback preserva `status='ativo'`.
+- A proteção mais forte (checagem adicional de `oauth_live_mode=true` dentro do endpoint Pix) continua exclusivamente no código da PR #57. Não substituir a função Pix v78 sem revisão específica.
+- O status bloqueado em QA significa **autorização armazenada para auditoria**, não habilitação de recebimentos. A interface comercial normal não deve declarar esse recebedor pronto para Pix.
