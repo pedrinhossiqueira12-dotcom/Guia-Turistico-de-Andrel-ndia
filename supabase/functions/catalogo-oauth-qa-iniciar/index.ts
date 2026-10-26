@@ -46,7 +46,7 @@ Deno.serve(async (req: Request) => {
   if (probe && typeof probe === "object" && !Array.isArray(probe)
     && probe.acao === "verificar_configuracao_qa") {
     if (!admin) return json({ success: false, mensagem: "Projeto de homologação indisponível." }, 503);
-    const bearer = req.headers.get("authorization")?.match(/^Bearer\\s+(.+)$/i)?.[1];
+    const bearer = req.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1];
     if (!bearer) return json({ success: false, mensagem: "Sessão necessária." }, 401);
     const { data: authenticated, error: authError } = await admin.auth.getUser(bearer);
     if (authError || !authenticated.user?.id) return json({ success: false, mensagem: "Sessão inválida." }, 401);
