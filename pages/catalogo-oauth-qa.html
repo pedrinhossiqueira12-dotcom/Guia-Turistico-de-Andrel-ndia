@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <meta name="referrer" content="no-referrer">
+  <title>Vinculação Mercado Pago — STAGING</title>
+  <style>
+    :root{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#172a25;background:#f5f7f6}
+    *{box-sizing:border-box}body{margin:0;padding:24px}main{max-width:590px;margin:30px auto}
+    .panel{background:white;border:1px solid #dbe4df;border-radius:14px;padding:24px;margin:18px 0;box-shadow:0 4px 16px #1a31240c}
+    h1{font-size:1.6rem;line-height:1.25;margin:0 0 10px}h2{font-size:1.1rem;margin:0 0 14px}
+    p{line-height:1.5}.small{color:#4b5d55;font-size:.93rem}label{display:block;font-weight:600;margin:12px 0 5px}
+    input,select,button{font:inherit;width:100%;padding:11px;border-radius:8px;border:1px solid #9daea4}
+    button{background:#194138;color:white;border:0;cursor:pointer;margin-top:14px;font-weight:650}
+    button:disabled{background:#9baaa2;cursor:not-allowed}button.secondary{background:#e8efec;color:#194138}
+    #status{padding:12px;background:#e8efec;border-radius:8px;white-space:pre-wrap}
+    #status[data-error="true"]{background:#fff0ee;color:#9f2820}
+    [hidden]{display:none!important}
+  </style>
+</head>
+<body>
+<main>
+  <h1>Conectar vendedor de teste</h1>
+  <p class="small"><strong>Ambiente: Supabase STAGING.</strong> Esta ferramenta não emite Pix, não confirma pagamentos e não transfere valores. Não utilize credenciais de produção.</p>
+  <div id="status" role="status" aria-live="polite">Iniciando sessão de homologação…</div>
+
+  <section class="panel" id="loginPanel" hidden>
+    <h2>Entrar na conta de teste do Guia</h2>
+    <p class="small">Use uma conta de acesso do <strong>Supabase STAGING</strong>, não seu login de produção.</p>
+    <form id="loginForm">
+      <label for="email">E-mail</label>
+      <input id="email" type="email" autocomplete="username" required>
+      <label for="password">Senha</label>
+      <input id="password" type="password" autocomplete="current-password" required>
+      <button id="loginButton" type="submit">Entrar no STAGING</button>
+    </form>
+  </section>
+
+  <section class="panel" id="oauthPanel" hidden>
+    <h2>Autorizar o vendedor de teste</h2>
+    <p class="small">Conta de homologação autenticada. A autorização utiliza uma conta Mercado Pago de teste e só registra o vínculo no STAGING.</p>
+    <label for="commerceId">Comércio de homologação</label>
+    <select id="commerceId">
+      <option value="asaas-homologacao">asaas-homologacao</option>
+      <option value="asaas-cob02">asaas-cob02</option>
+    </select>
+    <button id="connectButton" type="button">Conectar Mercado Pago de teste</button>
+    <button class="secondary" id="logoutButton" type="button">Sair da conta de teste</button>
+    <p class="small">O projeto precisa estar configurado pelo administrador. Se a vinculação não estiver habilitada, a operação será recusada sem criar pagamento.</p>
+  </section>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js" crossorigin="anonymous"></script>
+<script src="../js/catalogo-oauth-qa.js"></script>
+</body>
+</html>
