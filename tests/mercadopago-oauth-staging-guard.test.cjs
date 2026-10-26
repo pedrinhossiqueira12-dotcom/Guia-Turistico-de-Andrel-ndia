@@ -3,25 +3,53 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const source = fs.readFileSync(
-  path.join(__dirname, "../supabase/functions/mercadopago-oauth-callback/index.ts"),
-  "utf8"
-);
+const read = (relative) => fs.readFileSync(path.join(__dirname, "..", relative), "utf8");
+const callback = read("supabase/functions/mercadopago-oauth-callback/index.ts");
+const starter = read("supabase/functions/catalogo-oauth-qa-iniciar/index.ts");
+const pix = read("supabase/functions/catalogo-pedido-pix/index.ts");
 
-test("test OAuth sellers only allowed with explicit staging project and QA opt-in", () => {
-  assert.match(source, /SUPABASE_URL === qaProjectUrl && Deno\.env\.get\("MP_OAUTH_QA_ENABLED"\) === "true"/);
-  assert.match(source, /https:\/\/jbttwihctuibchhcyqtl\.supabase\.co/);
-  assert.match(source, /qaMode \? credentials\.live_mode !== false : credentials\.live_mode !== true/);
+test("OAuth QA endpoint requires project, opt-in and separate credentials", () => {
+  assert.match(starter, /SUPABASE_URL === STAGING_URL && serviceKey/);
+  assert.match(starter, /!admin \|\| !QA_ENABLED/);
+  assert.match(starter, /MP_OAUTH_QA_CLIENT_ID/);
+  assert.match(starter, /QA_REDIRECT_URI !== CALLBACK_URL/);
+  assert.match(starter, /MP_OAUTH_QA_ALLOWED_COMMERCE_ID/);
+  assert.match(starter, /admin\.auth\.getUser\(token\)/);
+  assert.match(starter, /catalog\.data\.proprietario_id !== userId/);
+  assert.match(starter, /published\.data\?\.status !== "ativo"/);
+  assert.match(starter, /receiver\.data/);
+  assert.match(starter, /code_challenge_method: "S256"/);
+  assert.match(starter, /estado_hash: await sha256\(state\)/);
+  assert.match(starter, /expires_in: 600/);
+  assert.doesNotMatch(starter, /\/v1\/payments|\/v1\/transfers|criar_pix|desconectar_recebedor/);
 });
 
-test("OAuth callback remains non-payment endpoint", () => {
-  assert.match(source, /request\.method !== "GET"/);
-  assert.doesNotMatch(source, /\/v1\/payments|\/v1\/transfers/);
+test("OAuth callback defaults to production mode and uses separate QA credentials only in staging", () => {
+  assert.match(callback, /QA_PROJECT = SUPABASE_URL === STAGING_URL/);
+  assert.match(callback, /QA_MODE = QA_PROJECT && QA_ENABLED/);
+  assert.match(callback, /QA_PROJECT && !QA_MODE/);
+  assert.match(callback, /QA_MODE \? QA_CLIENT_ID : MP_OAUTH_CLIENT_ID/);
+  assert.match(callback, /QA_MODE \? QA_CLIENT_SECRET : MP_OAUTH_CLIENT_SECRET/);
+  assert.match(callback, /QA_MODE \? QA_REDIRECT_URI : MP_OAUTH_REDIRECT_URI/);
+  assert.match(callback, /QA_REDIRECT_URI !== EXPECTED_QA_REDIRECT/);
+  assert.match(callback, /QA_MODE \? credentials\.live_mode !== false : credentials\.live_mode !== true/);
+  assert.match(callback, /oauthState\.comercio_id !== QA_ALLOWED_COMMERCE_ID/);
+  assert.match(callback, /\.is\("usado_em", null\)/);
+  assert.match(callback, /if \(updateStateError \|\| !claimed\)/);
+  assert.match(callback, /QA_MODE\s*\? await admin\.from\("catalogo_recebedores"\)\.insert\(receiverRow\)/);
+  assert.match(callback, /if \(QA_PROJECT\)/);
+  assert.doesNotMatch(callback, /\/v1\/payments|\/v1\/transfers/);
 });
 
-test("buyer Pix refuses OAuth test sellers, regardless of checkout flag", () => {
-  const pix = fs.readFileSync(path.join(__dirname, "../supabase/functions/catalogo-pedido-pix/index.ts"), "utf8");
+test("buyer Pix explicitly refuses test OAuth sellers even if checkout flag enables", () => {
   assert.match(pix, /oauth_live_mode/);
   assert.match(pix, /receiver\.oauth_live_mode !== true/);
   assert.match(pix, /Recebedor de teste não pode gerar Pix neste checkout/);
+});
+
+test("seller onboarding page describes the agreed 7% policy", () => {
+  const page = read("pages/catalogo-pix-producao.html");
+  assert.match(page, /7%/);
+  assert.match(page, /2%/);
+  assert.doesNotMatch(page, /95% para o comércio|Retirada e consumo local mantêm 5%|comissão de 5% incide somente nas vendas/);
 });
