@@ -40,7 +40,48 @@ const admin = SUPABASE_URL === STAGING_URL && serviceKey
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return json({ success: false, mensagem: "Use POST." }, 405);
+  // Diagnóstico de configuração: disponível apenas ao dono autenticado do catálogo.
+  // Nunca retorna valores de Secrets; não cria state OAuth nem faz chamadas externas.
+  const probe = await req.clone().json().catch(() => null);
+  if (probe && typeof probe === "object" && !Array.isArray(probe)
+    && probe.acao === "verificar_configuracao_qa") {
+    if (!admin) return json({ success: false, mensagem: "Projeto de homologação indisponível." }, 503);
+    const bearer = req.headers.get("authorization")?.match(/^Bearer\\s+(.+)$/i)?.[1];
+    if (!bearer) return json({ success: false, mensagem: "Sessão necessária." }, 401);
+    const { data: authenticated, error: authError } = await admin.auth.getUser(bearer);
+    if (authError || !authenticated.user?.id) return json({ success: false, mensagem: "Sessão inválida." }, 401);
+    const requestedId = str(probe.comercio_id);
+    if (!/^[a-z0-9][a-z0-9-]{0,179}$/.test(requestedId)) {
+      return json({ success: false, mensagem: "Comércio inválido." }, 400);
+    }
+    const [pub, cat, receiver] = await Promise.all([
+      admin.from("comercios_publicados").select("status").eq("local_id", requestedId).maybeSingle(),
+      admin.from("catalogos").select("proprietario_id,bloqueado").eq("comercio_id", requestedId).maybeSingle(),
+      admin.from("catalogo_recebedores").select("comercio_id").eq("comercio_id", requestedId).maybeSingle(),
+    ]);
+    if (pub.error || cat.error || receiver.error) {
+      return json({ success: false, mensagem: "Validação temporariamente indisponível." }, 503);
+    }
+    if (pub.data?.status !== "ativo" || cat.data?.proprietario_id !== authenticated.user.id || cat.data.bloqueado) {
+      return json({ success: false, mensagem: "Comércio não autorizado." }, 403);
+    }
+    const required: Record<string, boolean> = {
+      MP_OAUTH_QA_ENABLED: QA_ENABLED,
+      MP_OAUTH_QA_CLIENT_ID: /^[0-9]+$/.test(QA_CLIENT_ID),
+      MP_OAUTH_QA_CLIENT_SECRET: Boolean(Deno.env.get("MP_OAUTH_QA_CLIENT_SECRET")),
+      MP_OAUTH_QA_REDIRECT_URI: QA_REDIRECT_URI === CALLBACK_URL,
+      MP_OAUTH_QA_ALLOWED_COMMERCE_ID: QA_ALLOWED_COMMERCE_ID === requestedId,
+      MP_OAUTH_ENCRYPTION_KEY: /^[a-f0-9]{64}$/i.test(Deno.env.get("MP_OAUTH_ENCRYPTION_KEY") || ""),
+      CHECKOUT_FINANCEIRO_DESLIGADO: Deno.env.get("MARKETPLACE_CHECKOUT_ENABLED") !== "true",
+    };
+    const pendencias = Object.entries(required).filter(([, ok]) => !ok).map(([name]) => name);
+    if (receiver.data) pendencias.push("RECEBEDOR_JA_CADASTRADO");
+    return json({ success: true, configuracao_pronta: pendencias.length === 0, pendencias });
+  }
   if (!admin || !QA_ENABLED || !QA_CLIENT_ID || !/^[0-9]+$/.test(QA_CLIENT_ID)
+    || !Deno.env.get("MP_OAUTH_QA_CLIENT_SECRET")
+    || !/^[a-f0-9]{64}$/i.test(Deno.env.get("MP_OAUTH_ENCRYPTION_KEY") || "")
+    || Deno.env.get("MARKETPLACE_CHECKOUT_ENABLED") === "true"
     || QA_REDIRECT_URI !== CALLBACK_URL
     || !/^[a-z0-9][a-z0-9-]{0,179}$/.test(QA_ALLOWED_COMMERCE_ID)) {
     return json({ success: false, mensagem: "OAuth de homologação indisponível neste ambiente." }, 503);
