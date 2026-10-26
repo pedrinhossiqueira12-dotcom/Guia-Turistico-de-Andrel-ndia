@@ -223,6 +223,19 @@ test('catalogo-v2-pix-endpoints recebedor OAuth de QA nunca cria Pix, mesmo com 
   assert.equal(f.provider.posts.length,0,'nenhum POST ao Mercado Pago');
 });
 
+test('catalogo-v2-pix-endpoints recebedor bloqueado por QA impede POST mesmo com token e live_mode=true',async()=>{
+  const f=await fixture();
+  const r=f.db.tables.catalogo_recebedores[0];
+  assert.ok(r.oauth_access_token_enc, 'token cifrado fictício existe');
+  r.status='bloqueado';
+  r.oauth_live_mode=true; // mesmo com modo real, status bloqueado deve prevalecer
+  const result=await f.call();
+  assert.equal(result.status,409);
+  assert.equal(result.body.success,false);
+  assert.equal(f.provider.posts.length,0,'nenhum POST ao provedor');
+  assert.equal(f.db.tables.catalogo_pedidos.length,0,'nenhum pedido financeiro criado');
+});
+
 test('catalogo-v2-pix-endpoints criação entrega: código6/hash/token forte/AAD e fee7% com schema real',async()=>{
   const f=await fixture(); const result=await f.call(); assert.equal(result.status,200,JSON.stringify(result.body));
   const r=f.db.tables.catalogo_pedidos[0]; assert.equal(r.status_pagamento,'pendente'); assert.equal(r.status,'aguardando_pagamento');
