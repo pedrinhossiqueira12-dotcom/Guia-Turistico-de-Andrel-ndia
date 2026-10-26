@@ -4,12 +4,13 @@
 ## Evidência confirmada
 - Projeto **STAGING** Supabase: `jbttwihctuibchhcyqtl`. PROD: `xdmbkflufsfqziixzpxc` **não modificado**.
 - Deploy realizado no STAGING: `catalogo-oauth-qa-iniciar` v1, **ACTIVE**, `verify_jwt=true`. Código obtido da PR #57 e guardado por URL exata, opt-in explícito, proprietário autenticado e comércio permitido.
-- Deploy realizado no STAGING: `mercadopago-oauth-callback` v1, **ACTIVE**, `verify_jwt=false` porque recebe redirecionamento GET do provedor sem JWT. Verifica `state` aleatório expirável, PKCE, uso único e exige `live_mode=false` somente quando modo QA estiver ativo. Não cria pagamentos.
+- Deploy realizado no STAGING: `mercadopago-oauth-callback` v2, **ACTIVE**, `verify_jwt=false` porque recebe redirecionamento GET do provedor sem JWT. Verifica `state` aleatório expirável, PKCE, uso único e exige `live_mode=false` somente quando modo QA estiver ativo. Não cria pagamentos.
 - CI do commit `fbfc056ebcff5e0be36e62f9347755748deb2c08`: 13/13 verificações aprovadas. Suite Node 1.037/1.037; sete testes executáveis novos de OAuth com banco e provedor simulados passaram.
 - Banco STAGING pós-deploy: `catalogo_oauth_estados=0`, `catalogo_recebedores=0`, `catalogo_pagamentos_v2=0`. Tabelas OAuth e recebedores com RLS ativo, sem privilégios explícitos a `anon`/`authenticated`.
 - Os usuários proprietários dos catálogos `asaas-homologacao` e `asaas-cob02` existem no Auth do STAGING.
-- **Não** foi possível realizar um smoke test HTTP de fora do Supabase nesta sessão: a resolução DNS externa falhou. Status ACTIVE + inspeção do código publicado **não** equivalem a teste de rede.
+- Smoke test HTTP real executado com sucesso no GitHub Actions (sem credenciais privadas): callback com erro OAuth = HTTP 400; início OAuth sem autenticação = HTTP 401; início OAuth com chave pública do STAGING = HTTP 503. Evidência: https://github.com/pedrinhossiqueira12-dotcom/Guia-Turistico-de-Andrel-ndia/actions/runs/40393836115/job/121821508317. O HTTP 503 confirma que a função **não autoriza o início do OAuth nesta configuração**, mas **não identifica qual variável de QA está ausente**. Não é prova de que a flag específica esteja falsa.
 - **Não** houve troca real de código OAuth com Mercado Pago, nem conexão de vendedor real/de teste.
+- CI da mudança do status bloqueado: commit `c02b1a787c24acb6fefa1af43f18a3b8e16c3b8b`, 13/13 PASS. A conferência HTTP pública foi automatizada em `.github/workflows/staging-oauth-deny-smoke.yml`.
 
 ## Configuração necessária, SOMENTE no projeto STAGING
 Configurar em **Supabase Dashboard > Edge Functions > Secrets**, usando a conta administradora, sem compartilhar valores no chat ou no repositório:
@@ -40,7 +41,7 @@ A URL de callback precisa estar cadastrada **exatamente** como Redirect URL na a
 - As funções OAuth v1 não têm rota de criação de Pix, Asaas ou transferências. Deploy dessas novas rotas não substituiu versões anteriores de funções Asaas.
 - PR #57 deve permanecer **Draft**, sem merge ou publicação em produção até revisão e aprovação de homologação.
 
-## Proteção adicional contra checkout antigo (revisada em 26/10/2026)
+## Proteção adicional contra checkout antigo (revisada em 26/10/2026; implantada na v2)
 - A Edge `catalogo-pedido-pix` **v78**, efetivamente publicada no STAGING, rejeita recebedores com `status != 'ativo'`, mas ainda não lê `oauth_live_mode`.
 - Por isso o callback OAuth do STAGING agora registra a conta de teste como `status='bloqueado'`, impedindo que a função Pix v78 a considere elegível, mesmo se uma flag global mudar por engano.
 - O banco confirma a existência de `bloqueado` no CHECK `catalogo_recebedores_status_check`. O caminho de produção do callback preserva `status='ativo'`.
