@@ -124,7 +124,7 @@ test("QA starter creates fresh, expiring state with correct S256 PKCE and no out
   assert.equal(result.expires_in, 600);
   const url = new URL(result.authorization_url);
   assert.equal(url.protocol, "https:");
-  assert.equal(url.hostname, "auth.mercadopago.com.br");
+  assert.equal(url.hostname, "auth.mercadopago.com");
   assert.equal(url.searchParams.get("redirect_uri"), CALLBACK);
   assert.equal(url.searchParams.get("code_challenge_method"), "S256");
   assert.equal(url.searchParams.get("client_id"), "10001234");
