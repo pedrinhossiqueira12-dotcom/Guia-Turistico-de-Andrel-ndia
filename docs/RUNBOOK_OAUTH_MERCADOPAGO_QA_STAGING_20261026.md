@@ -21,7 +21,7 @@ Configurar em **Supabase Dashboard > Edge Functions > Secrets**, usando a conta 
 | `MP_OAUTH_QA_CLIENT_SECRET` | Secret correspondente; somente backend |
 | `MP_OAUTH_QA_REDIRECT_URI` | `https://jbttwihctuibchhcyqtl.supabase.co/functions/v1/mercadopago-oauth-callback` |
 | `MP_OAUTH_QA_ALLOWED_COMMERCE_ID` | Escolher **um** dos comércios aprovados: `asaas-homologacao` OU `asaas-cob02` |
-| `MP_OAUTH_ENCRYPTION_KEY` | 64 caracteres hexadecimais de chave AES-256 **exclusiva do STAGING**, criada por gerenciador de segredos |
+| `MP_OAUTH_QA_ENCRYPTION_KEY` | **Nova chave exclusiva para tokens OAuth de teste**, 64 caracteres hexadecimais (32 bytes AES-256). Não reutilizar nem substituir `MP_OAUTH_ENCRYPTION_KEY`. |
 | `MP_OAUTH_QA_ENABLED` | **Permanecer falso/ausente** até validar aplicação, credenciais e redirecionamento do provedor. Só então alterar para `true` com autorização |
 | `MARKETPLACE_CHECKOUT_ENABLED` | **Não habilitar**. A homologação do OAuth não autoriza emissão de Pix |
 
@@ -66,3 +66,11 @@ A URL de callback precisa estar cadastrada **exatamente** como Redirect URL na a
 - Teste executável de geração de URL/PKCE ajustado para exigir `auth.mercadopago.com`.
 - Smoke CI de negação com chave pública aceita **401 ou 503**: ambos rejeitam um cliente sem sessão de usuário. Isso evita falhar em uma habilitação válida da configuração OAuth de QA. HTTP 200 continua inadmissível no smoke sem sessão.
 - Este ajuste não prova a aceitação de credenciais pelo Mercado Pago: nenhum vendedor foi autenticado nem foi trocado código OAuth real. Continuar sem habilitar checkout financeiro.
+
+## Chave exclusiva de QA — preservar dados históricos do STAGING (26/10/2026)
+- Foi constatado por consultas agregadas que o STAGING contém **7 pedidos com códigos de entrega cifrados** e nenhum recebedor OAuth ainda cadastrado. Não ler os conteúdos nem alterar o segredo legado.
+- O dashboard mostra que `MP_OAUTH_ENCRYPTION_KEY` já existe, porém o diagnóstico anterior o marcava pendente (valor ausente ou não conforme o formato hexadecimal esperado). **Não sobrescrever o segredo existente.**
+- A partir desta correção, os dois handlers OAuth em STAGING exigem `MP_OAUTH_QA_ENCRYPTION_KEY` separado. O callback cifra **apenas** tokens de vendedores de teste usando esta nova chave; o fluxo de produção no código continua usando o segredo legado `MP_OAUTH_ENCRYPTION_KEY`.
+- Gerar a nova chave localmente com um gerador criptográfico seguro de 32 bytes, codificar como **64 caracteres hexadecimais** e armazená-la **somente** em Supabase STAGING → Edge Functions → Secrets. Nunca enviar valores via chat nem salvar em git.
+- O checkout do STAGING usa a chave legada e **não pode** usar recebedores QA: permanecem com `status='bloqueado'` e `oauth_live_mode=false`. `MARKETPLACE_CHECKOUT_ENABLED` deve continuar desligado.
+- Até criar o novo segredo e habilitar conscientemente `MP_OAUTH_QA_ENABLED`, o botão de autorização permanecerá desabilitado. A verificação exibirá os nomes `MP_OAUTH_QA_ENCRYPTION_KEY` e `MP_OAUTH_QA_ENABLED` como pendentes.
