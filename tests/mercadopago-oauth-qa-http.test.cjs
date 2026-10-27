@@ -314,7 +314,8 @@ test("QA callback revalidates owner, publication, receiver and checkout before p
 test("QA-only rejected token diagnostics report boolean and prefix classes, never credentials", async () => {
   for (const input of [
     { mode: true, token: "APP_USR-fake-private-credential", expected: "live_mode=true, token_prefix=APP_USR" },
-    { mode: undefined, token: "TEST-fake-private-credential", expected: "live_mode=missing, token_prefix=TEST" },
+    { mode: undefined, token: "APP_USR-fake-private-credential", expected: "live_mode=missing, token_prefix=APP_USR" },
+    { mode: true, token: "TEST-fake-private-credential", expected: "live_mode=true, token_prefix=TEST" },
     { mode: "false", token: "unrecognized-private-credential", expected: "live_mode=other, token_prefix=OTHER" },
   ]) {
     const db = fakeDatabase(), request = prepareCallback(db), logs = [], calls = [];
@@ -329,4 +330,24 @@ test("QA-only rejected token diagnostics report boolean and prefix classes, neve
     assert.doesNotMatch(combined, /fake-private-credential|fake-sandbox-refresh|test-oauth-state|test-code|fake-test-secret|1000111/);
     assert.doesNotMatch(combined, /Bearer|authorization_code|client_secret|refresh_token|access_token\s*[=:]/);
   }
+});
+
+test("OAuth QA accepts sandbox TEST token with omitted live_mode and still blocks all checkout", async () => {
+  const db = fakeDatabase(), request = prepareCallback(db), logs = [], calls = [];
+  const callback = load("supabase/functions/mercadopago-oauth-callback/index.ts",
+    envForQa(), db, tokenFetch(undefined, calls, "TEST-fake-sandbox-only-token"),
+    (message) => logs.push(message));
+  const accepted = await callback(request);
+  assert.equal(accepted.status, 200);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].test_token, "true");
+  assert.equal(db.rows.catalogo_recebedores.length, 1);
+  const row = db.rows.catalogo_recebedores[0];
+  assert.equal(row.status, "bloqueado");
+  assert.equal(row.oauth_live_mode, false);
+  assert.ok(row.oauth_access_token_enc && !row.oauth_access_token_enc.includes("TEST-fake"));
+  assert.ok(db.rows.catalogo_oauth_estados[0].usado_em);
+  assert.deepEqual(logs, [], "accepted sandbox tokens do not generate error logs");
+  assert.equal((await callback(request)).status, 400, "replaying code/state fails");
+  assert.equal(calls.length, 1, "no second outbound exchange");
 });
