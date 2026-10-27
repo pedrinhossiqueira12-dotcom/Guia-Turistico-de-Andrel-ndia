@@ -62,14 +62,14 @@ function fakeDatabase() {
   } }, from } };
 }
 
-function load(file, env, db, fetchMock) {
+function load(file, env, db, fetchMock, safeLog) {
   let handler = null;
   const source = read(file).replace(/^import[^\n]*;\s*$/gm, "");
   const stripped = stripTypeScriptTypes(source, { mode: "strip" });
   const context = vm.createContext({
     crypto: webcrypto, TextEncoder, Uint8Array, btoa, atob, Date,
     URL, URLSearchParams, Request, Response,
-    console: { error() {} },
+    console: { error(...messages) { if (safeLog) safeLog(messages.map(String).join(" ")); } },
     createClient: () => db.client,
     fetch: fetchMock || (() => { throw new Error("Unexpected outbound network request"); }),
     Deno: { env: { get: (name) => env[name] }, serve: (fn) => { handler = fn; } },
@@ -145,13 +145,13 @@ function prepareCallback(db, state = "test-oauth-state") {
   });
   return new Request(CALLBACK + "?state=" + encodeURIComponent(state) + "&code=test-code");
 }
-function tokenFetch(response, calls) {
+function tokenFetch(response, calls, token = "fake-sandbox-access") {
   return async (url, options) => {
     assert.equal(url, "https://api.mercadopago.com/oauth/token");
     const values = Object.fromEntries(new URLSearchParams(options.body));
     calls.push(values);
     return Response.json({
-      access_token: "fake-sandbox-access", refresh_token: "fake-sandbox-refresh",
+      access_token: token, refresh_token: "fake-sandbox-refresh",
       user_id: 1000111, expires_in: 3600, live_mode: response,
     });
   };
@@ -308,5 +308,25 @@ test("QA callback revalidates owner, publication, receiver and checkout before p
     assert.equal(db.rows.catalogo_oauth_estados[0].usado_em, null, caseName);
     assert.equal(db.calls.insert, 0, caseName);
     assert.equal(db.calls.upsert, 0, caseName);
+  }
+});
+
+test("QA-only rejected token diagnostics report boolean and prefix classes, never credentials", async () => {
+  for (const input of [
+    { mode: true, token: "APP_USR-fake-private-credential", expected: "live_mode=true, token_prefix=APP_USR" },
+    { mode: undefined, token: "TEST-fake-private-credential", expected: "live_mode=missing, token_prefix=TEST" },
+    { mode: "false", token: "unrecognized-private-credential", expected: "live_mode=other, token_prefix=OTHER" },
+  ]) {
+    const db = fakeDatabase(), request = prepareCallback(db), logs = [], calls = [];
+    const cb = load("supabase/functions/mercadopago-oauth-callback/index.ts",
+      envForQa(), db, tokenFetch(input.mode, calls, input.token), (message) => logs.push(message));
+    assert.equal((await cb(request)).status, 400);
+    assert.equal(calls.length, 1, "authorization exchange happens once");
+    assert.equal(db.rows.catalogo_recebedores.length, 0, "no tokens saved on rejection");
+    assert.equal(db.rows.catalogo_oauth_estados[0].usado_em, null, "state left unused");
+    assert.ok(logs.some((message) => message.includes(input.expected)), "safe diagnostic categories recorded");
+    const combined = logs.join("\n");
+    assert.doesNotMatch(combined, /fake-private-credential|fake-sandbox-refresh|test-oauth-state|test-code|fake-test-secret|1000111/);
+    assert.doesNotMatch(combined, /Bearer|authorization_code|client_secret|refresh_token|access_token\s*[=:]/);
   }
 });
