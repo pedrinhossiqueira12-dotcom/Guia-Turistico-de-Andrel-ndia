@@ -103,6 +103,16 @@ Deno.serve(async (request: Request) => {
     if (MP_PROD_SELLER_ID && String(credentials.user_id) === MP_PROD_SELLER_ID) {
       throw new Error("A conta da plataforma não pode ser conectada como recebedora de um comércio.");
     }
+    // Diagnóstico QA sem dados sensíveis: nunca registrar user_id, token, code, state ou secrets.
+    // O prefixo APP_USR também aparece em credenciais de teste, portanto não autoriza a vinculação.
+    if (QA_MODE && credentials.live_mode !== false) {
+      const mode = credentials.live_mode === true ? "true"
+        : credentials.live_mode === undefined ? "missing"
+        : credentials.live_mode === null ? "null" : "other";
+      const accessType = String(credentials.access_token).startsWith("TEST-") ? "TEST"
+        : String(credentials.access_token).startsWith("APP_USR-") ? "APP_USR" : "OTHER";
+      console.error(`Mercado Pago OAuth QA diagnostic: live_mode=${mode}, token_prefix=${accessType}, test_token_requested=true`);
+    }
     // O vendedor de teste nunca é aceito fora do projeto STAGING e do opt-in.
     if (QA_MODE ? credentials.live_mode !== false : credentials.live_mode !== true) {
       throw new Error(QA_MODE
