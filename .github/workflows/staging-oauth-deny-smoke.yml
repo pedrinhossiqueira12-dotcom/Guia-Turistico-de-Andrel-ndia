@@ -35,16 +35,17 @@ jobs:
           echo "Unauthenticated starter HTTP: $code"
           test "$code" = '401'
 
-      - name: Starter must reject public-key-only caller regardless of QA opt-in
+      - name: After QA closeout the starter must be disabled (public-key-only returns 503)
         shell: bash
         run: |
           set -euo pipefail
           key="$(node -e 'const fs=require("node:fs");const t=fs.readFileSync("js/catalogo-oauth-qa.js","utf8");const m=t.match(/const STAGING_PUBLISHABLE_KEY = "(sb_publishable_[A-Za-z0-9_-]+)";/);if(!m)process.exit(1);process.stdout.write(m[1]);')"
           code="$(curl --silent --show-error --max-time 20 --request POST --header "apikey: $key" --header "authorization: Bearer $key" --header 'content-type: application/json' --data '{"acao":"iniciar_conexao_qa","comercio_id":"asaas-homologacao"}' --output /dev/null --write-out '%{http_code}' 'https://jbttwihctuibchhcyqtl.supabase.co/functions/v1/catalogo-oauth-qa-iniciar')"
           echo "Starter with public project key HTTP: $code"
-          # 503: QA off/incomplete; 401: QA ready but no signed-in user.
-          # Both are fail-closed. A legitimate QA opt-in must not break CI.
-          case "$code" in 401|503) ;; *) exit 1 ;; esac
+          # QA homologation is complete: MP_OAUTH_QA_ENABLED must remain false.
+          # 503 is emitted BEFORE checking user authentication when QA is disabled.
+          # 401 would mean the QA starter is ready, so reject it in this closeout check.
+          test "$code" = '503'
 
       - name: Configuration diagnostic must reject public-key-only caller
         shell: bash
