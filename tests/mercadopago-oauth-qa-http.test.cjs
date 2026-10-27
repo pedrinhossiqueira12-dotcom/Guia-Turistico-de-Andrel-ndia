@@ -292,3 +292,21 @@ test("QA callback refuses absent QA-only encryption key even when legacy key exi
   assert.equal((await starter(postBody())).status, 503);
 });
 
+test("QA callback revalidates owner, publication, receiver and checkout before provider access", async () => {
+  for (const caseName of ["owner-revoked", "catalog-blocked", "unpublished", "receiver-present", "checkout-enabled"]) {
+    const db = fakeDatabase(), request = prepareCallback(db), calls = [];
+    const env = envForQa();
+    if (caseName === "owner-revoked") db.rows.catalogos[0].proprietario_id = "another-owner";
+    if (caseName === "catalog-blocked") db.rows.catalogos[0].bloqueado = true;
+    if (caseName === "unpublished") db.rows.comercios_publicados[0].status = "inativo";
+    if (caseName === "receiver-present") db.rows.catalogo_recebedores.push({ comercio_id: "asaas-homologacao", status: "bloqueado" });
+    if (caseName === "checkout-enabled") env.MARKETPLACE_CHECKOUT_ENABLED = "true";
+    const callback = load("supabase/functions/mercadopago-oauth-callback/index.ts",
+      env, db, tokenFetch(false, calls));
+    assert.equal((await callback(request)).status, 400, caseName);
+    assert.equal(calls.length, 0, caseName + ": no OAuth external call");
+    assert.equal(db.rows.catalogo_oauth_estados[0].usado_em, null, caseName);
+    assert.equal(db.calls.insert, 0, caseName);
+    assert.equal(db.calls.upsert, 0, caseName);
+  }
+});
