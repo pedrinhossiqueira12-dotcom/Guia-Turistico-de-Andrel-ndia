@@ -71,7 +71,7 @@ Deno.serve(async (req: Request) => {
       MP_OAUTH_QA_CLIENT_SECRET: Boolean(Deno.env.get("MP_OAUTH_QA_CLIENT_SECRET")),
       MP_OAUTH_QA_REDIRECT_URI: QA_REDIRECT_URI === CALLBACK_URL,
       MP_OAUTH_QA_ALLOWED_COMMERCE_ID: QA_ALLOWED_COMMERCE_ID === requestedId,
-      MP_OAUTH_ENCRYPTION_KEY: /^[a-f0-9]{64}$/i.test(Deno.env.get("MP_OAUTH_ENCRYPTION_KEY") || ""),
+      MP_OAUTH_QA_ENCRYPTION_KEY: /^[a-f0-9]{64}$/i.test(Deno.env.get("MP_OAUTH_QA_ENCRYPTION_KEY") || ""),
       CHECKOUT_FINANCEIRO_DESLIGADO: Deno.env.get("MARKETPLACE_CHECKOUT_ENABLED") !== "true",
     };
     const pendencias = Object.entries(required).filter(([, ok]) => !ok).map(([name]) => name);
@@ -80,7 +80,7 @@ Deno.serve(async (req: Request) => {
   }
   if (!admin || !QA_ENABLED || !QA_CLIENT_ID || !/^[0-9]+$/.test(QA_CLIENT_ID)
     || !Deno.env.get("MP_OAUTH_QA_CLIENT_SECRET")
-    || !/^[a-f0-9]{64}$/i.test(Deno.env.get("MP_OAUTH_ENCRYPTION_KEY") || "")
+    || !/^[a-f0-9]{64}$/i.test(Deno.env.get("MP_OAUTH_QA_ENCRYPTION_KEY") || "")
     || Deno.env.get("MARKETPLACE_CHECKOUT_ENABLED") === "true"
     || QA_REDIRECT_URI !== CALLBACK_URL
     || !/^[a-z0-9][a-z0-9-]{0,179}$/.test(QA_ALLOWED_COMMERCE_ID)) {
