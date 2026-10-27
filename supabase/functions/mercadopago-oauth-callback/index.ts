@@ -8,6 +8,7 @@ const MP_OAUTH_CLIENT_SECRET = Deno.env.get("MP_OAUTH_CLIENT_SECRET") ?? "";
 const MP_OAUTH_REDIRECT_URI = Deno.env.get("MP_OAUTH_REDIRECT_URI") ?? "";
 const MP_PROD_SELLER_ID = Deno.env.get("MP_PROD_SELLER_ID") ?? "";
 const MP_OAUTH_ENCRYPTION_KEY = Deno.env.get("MP_OAUTH_ENCRYPTION_KEY") ?? "";
+const QA_ENCRYPTION_KEY = Deno.env.get("MP_OAUTH_QA_ENCRYPTION_KEY") ?? "";
 const STAGING_URL = "https://jbttwihctuibchhcyqtl.supabase.co";
 const QA_PROJECT = SUPABASE_URL === STAGING_URL;
 const QA_ENABLED = Deno.env.get("MP_OAUTH_QA_ENABLED") === "true";
@@ -52,8 +53,9 @@ function base64Url(bytes: Uint8Array) { let binary = ""; for (const byte of byte
 async function sha256(value: string) { return base64Url(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)))); }
 function hexKey(value: string) { return Uint8Array.from(value.match(/.{1,2}/g) || [], (pair) => Number.parseInt(pair, 16)); }
 async function encrypt(value: string) {
-  const raw = hexKey(MP_OAUTH_ENCRYPTION_KEY);
-  if (raw.length !== 32) throw new Error("MP_OAUTH_ENCRYPTION_KEY deve ter 64 caracteres hexadecimais.");
+  const secret = QA_MODE ? QA_ENCRYPTION_KEY : MP_OAUTH_ENCRYPTION_KEY;
+  if (!/^[a-f0-9]{64}$/i.test(secret)) throw new Error("Chave de criptografia OAuth inválida.");
+  const raw = hexKey(secret);
   const key = await crypto.subtle.importKey("raw", raw, "AES-GCM", false, ["encrypt"]);
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const cipher = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, new TextEncoder().encode(value)));
@@ -75,7 +77,7 @@ Deno.serve(async (request: Request) => {
   // Nunca aceitar credenciais produtivas no projeto STAGING nem credenciais de teste fora dele.
   if (QA_PROJECT && !QA_MODE) return redirectToSite("", "error");
   if (QA_MODE
-    ? (!QA_CLIENT_ID || !QA_CLIENT_SECRET || QA_REDIRECT_URI !== EXPECTED_QA_REDIRECT || !QA_ALLOWED_COMMERCE_ID || !MP_OAUTH_ENCRYPTION_KEY)
+    ? (!QA_CLIENT_ID || !QA_CLIENT_SECRET || QA_REDIRECT_URI !== EXPECTED_QA_REDIRECT || !QA_ALLOWED_COMMERCE_ID || !/^[a-f0-9]{64}$/i.test(QA_ENCRYPTION_KEY))
     : (!MP_OAUTH_CLIENT_ID || !MP_OAUTH_CLIENT_SECRET || !MP_OAUTH_REDIRECT_URI || !MP_OAUTH_ENCRYPTION_KEY)
   ) return redirectToSite("", "error");
   try {
