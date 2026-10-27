@@ -197,7 +197,7 @@ async function fixture(options={}) {
   };
   function loadEndpoint(rel) {
     let handler;
-    const env={SUPABASE_URL:'https://db.invalid',SUPABASE_SERVICE_ROLE_KEY:'local-service',MP_OAUTH_ENCRYPTION_KEY:key,MP_MARKETPLACE_WEBHOOK_SECRET:options.webhookSecret ?? secret,MARKETPLACE_CHECKOUT_ENABLED:'true'};
+    const env={SUPABASE_URL:'https://db.invalid',SUPABASE_SERVICE_ROLE_KEY:'local-service',MP_OAUTH_ENCRYPTION_KEY:key,MP_MARKETPLACE_WEBHOOK_SECRET:options.webhookSecret ?? secret,MARKETPLACE_CHECKOUT_ENABLED:options.checkoutEnabled===false?'false':'true'};
     const context=vm.createContext(baseContext({...h,...webhookEvents,console:{error(...args){ diagnostics.push(args.join(" ")); }},createClient:()=>db,fetch:fetchFake,Deno:{env:{get:n=>env[n]},serve:fn=>{handler=fn;}}}));
     const src=read(rel).replace(/^import[\s\S]*?;\s*$/gm,'');
     vm.runInContext(stripTypeScriptTypes(src,{mode:'strip'}),context,{filename:rel}); assert.equal(typeof handler,'function'); return handler;
@@ -213,6 +213,37 @@ async function fixture(options={}) {
   };
   return {db,provider,pix,webhook,body,call,notify,diagnostics};
 }
+
+test('catalogo-v2-pix-endpoints sem checkout habilitado recusa antes de criar reserva ou chamar provedor',async()=>{
+  const f=await fixture({checkoutEnabled:false});
+  const result=await f.call();
+  assert.equal(result.status,503);
+  assert.equal(result.body.success,false);
+  assert.equal(f.provider.posts.length,0,'nenhum POST ao provedor');
+  assert.equal(f.provider.gets.length,0,'nenhum GET ao provedor');
+  assert.equal(f.db.tables.catalogo_pedidos.length,0,'nenhum pedido/reserva criado');
+  assert.equal(f.db.tables.catalogo_pedido_itens.length,0,'nenhum item criado');
+  assert.equal(f.db.rpcCalls.length,0,'nenhum RPC mutável foi solicitado');
+});
+
+test('catalogo-v2-pix-endpoints exige live_mode exatamente true antes de qualquer POST, inclusive se status ativo',async()=>{
+  for (const liveMode of [false,null,undefined,'false',0]) {
+    const f=await fixture();
+    const receiver=f.db.tables.catalogo_recebedores[0];
+    receiver.status='ativo';
+    if(liveMode===undefined)delete receiver.oauth_live_mode;
+    else receiver.oauth_live_mode=liveMode;
+    const result=await f.call();
+    assert.equal(result.status,409,'recusa modo '+String(liveMode));
+    assert.equal(result.body.success,false);
+    assert.equal(f.provider.posts.length,0,'nenhum POST ao Mercado Pago');
+    assert.equal(f.provider.gets.length,0,'nenhum GET ao Mercado Pago');
+    assert.equal(f.db.tables.catalogo_pedidos.length,1,'reserva local pendente pode existir');
+    const order=f.db.tables.catalogo_pedidos[0];
+    assert.equal(order.payment_id??null,null,'nenhum payment_id');
+    assert.equal(order.status_pagamento,'pendente');
+  }
+});
 
 test('catalogo-v2-pix-endpoints recebedor OAuth de QA nunca cria Pix, mesmo com checkout ligado',async()=>{
   const f=await fixture();
