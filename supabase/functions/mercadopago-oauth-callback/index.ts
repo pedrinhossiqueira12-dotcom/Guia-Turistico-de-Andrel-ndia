@@ -85,6 +85,20 @@ Deno.serve(async (request: Request) => {
     const { data: oauthState, error: stateError } = await admin.from("catalogo_oauth_estados").select("id,comercio_id,proprietario_id,code_verifier,expira_em,usado_em").eq("estado_hash", stateHash).maybeSingle();
     if (stateError || !oauthState || oauthState.usado_em || new Date(oauthState.expira_em).getTime() < Date.now()) return redirectToSite("", "error");
     if (QA_MODE && oauthState.comercio_id !== QA_ALLOWED_COMMERCE_ID) return redirectToSite("", "error");
+    // QA: um state ainda válido não dispensa revalidar a autorização atual do proprietário.
+    // Executar antes de qualquer chamada ao Mercado Pago. Fora de QA, preservar fluxo legado.
+    if (QA_MODE) {
+      if (Deno.env.get("MARKETPLACE_CHECKOUT_ENABLED") === "true") return redirectToSite("", "error");
+      const [catalog, published, existingReceiver] = await Promise.all([
+        admin.from("catalogos").select("proprietario_id,bloqueado").eq("comercio_id", oauthState.comercio_id).maybeSingle(),
+        admin.from("comercios_publicados").select("status").eq("local_id", oauthState.comercio_id).maybeSingle(),
+        admin.from("catalogo_recebedores").select("comercio_id").eq("comercio_id", oauthState.comercio_id).maybeSingle(),
+      ]);
+      if (catalog.error || published.error || existingReceiver.error
+        || !catalog.data || catalog.data.proprietario_id !== oauthState.proprietario_id
+        || catalog.data.bloqueado || published.data?.status !== "ativo" || existingReceiver.data
+      ) return redirectToSite("", "error");
+    }
     const credentials = await exchangeCode(code, oauthState.code_verifier);
     if (MP_PROD_SELLER_ID && String(credentials.user_id) === MP_PROD_SELLER_ID) {
       throw new Error("A conta da plataforma não pode ser conectada como recebedora de um comércio.");
