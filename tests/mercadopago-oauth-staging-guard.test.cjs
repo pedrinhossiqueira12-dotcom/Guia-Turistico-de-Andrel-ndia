@@ -35,7 +35,10 @@ test("OAuth callback defaults to production mode and uses separate QA credential
   assert.match(callback, /QA_MODE \? QA_REDIRECT_URI : MP_OAUTH_REDIRECT_URI/);
   assert.match(callback, /QA_MODE \? QA_ENCRYPTION_KEY : MP_OAUTH_ENCRYPTION_KEY/);
   assert.match(callback, /QA_REDIRECT_URI !== EXPECTED_QA_REDIRECT/);
-  assert.match(callback, /QA_MODE \? credentials\.live_mode !== false : credentials\.live_mode !== true/);
+  assert.match(callback, /QA_MODE \\? !qaSandboxAccepted : credentials\\.live_mode !== true/);
+  assert.match(callback, /credentials\\.live_mode === false/);
+  assert.match(callback, /credentials\\.live_mode === undefined && qaSandboxToken/);
+  assert.match(callback, /credentials\\.access_token\\.startsWith\\("TEST-"\\)/);
   // Mercado Pago: 'test_token=true' must be emitted only in the QA OAuth exchange.
   assert.match(callback, /\.\.\.\(QA_MODE \? \{ test_token: "true" \} : \{\}\)/);
   assert.doesNotMatch(callback, /test_token: "false"/);
