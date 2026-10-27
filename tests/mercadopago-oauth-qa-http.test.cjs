@@ -85,6 +85,7 @@ function envForQa(enabled = true) {
     MP_OAUTH_QA_CLIENT_ID: "10001234", MP_OAUTH_QA_CLIENT_SECRET: "fake-test-secret",
     MP_OAUTH_QA_REDIRECT_URI: CALLBACK, MP_OAUTH_QA_ALLOWED_COMMERCE_ID: "asaas-homologacao",
     MP_OAUTH_ENCRYPTION_KEY: "11".repeat(32),
+    MP_OAUTH_QA_ENCRYPTION_KEY: "22".repeat(32),
   };
 }
 function postBody(commerce = "asaas-homologacao", token = "valid-owner-token") {
@@ -171,6 +172,18 @@ test("QA callback exchanges sandbox token, encrypts and saves once; second callb
   assert.equal(receiver.oauth_live_mode, false);
   assert.equal(receiver.status, "bloqueado", "vendedor de teste nunca fica ativo para Pix");
   assert.ok(!receiver.oauth_access_token_enc.includes("fake-sandbox-access"));
+  // SHA-invariant QA key separation: test tokens must not use historical order encryption key.
+  const { createDecipheriv } = require("node:crypto");
+  function decrypt(token, hex) {
+    const [iv, ciphertext] = token.split(".");
+    const bytes = Buffer.from(ciphertext, "base64url");
+    const decipher = createDecipheriv("aes-256-gcm", Buffer.from(hex, "hex"), Buffer.from(iv, "base64url"));
+    decipher.setAuthTag(bytes.subarray(bytes.length - 16));
+    return Buffer.concat([decipher.update(bytes.subarray(0, -16)), decipher.final()]).toString("utf8");
+  }
+  assert.equal(decrypt(receiver.oauth_access_token_enc, "22".repeat(32)), "fake-sandbox-access");
+  assert.throws(() => decrypt(receiver.oauth_access_token_enc, "11".repeat(32)));
+
   assert.equal(db.rows.catalogo_oauth_estados[0].usado_em !== null, true);
   const replay = await callback(request);
   assert.equal(replay.status, 400);
@@ -226,7 +239,7 @@ test("QA preflight returns names of missing settings to authenticated owner, nev
   const db = fakeDatabase(), env = envForQa(false);
   delete env.MP_OAUTH_QA_CLIENT_SECRET;
   delete env.MP_OAUTH_QA_REDIRECT_URI;
-  delete env.MP_OAUTH_ENCRYPTION_KEY;
+  delete env.MP_OAUTH_QA_ENCRYPTION_KEY;
   const handler = load("supabase/functions/catalogo-oauth-qa-iniciar/index.ts", env, db);
   const response = await handler(diagnosticRequest());
   assert.equal(response.status, 200);
@@ -236,7 +249,7 @@ test("QA preflight returns names of missing settings to authenticated owner, nev
   assert.ok(data.pendencias.includes("MP_OAUTH_QA_ENABLED"));
   assert.ok(data.pendencias.includes("MP_OAUTH_QA_CLIENT_SECRET"));
   assert.ok(data.pendencias.includes("MP_OAUTH_QA_REDIRECT_URI"));
-  assert.ok(data.pendencias.includes("MP_OAUTH_ENCRYPTION_KEY"));
+  assert.ok(data.pendencias.includes("MP_OAUTH_QA_ENCRYPTION_KEY"));
   assert.ok(!JSON.stringify(data).includes("fake-service-key"));
   assert.equal(db.rows.catalogo_oauth_estados.length, 0);
 });
@@ -265,3 +278,17 @@ test("QA preflight requires complete callback credentials and financial checkout
   assert.equal((await missingCallbackSecret(postBody())).status, 503);
   assert.equal(db.rows.catalogo_oauth_estados.length, 0);
 });
+
+test("QA callback refuses absent QA-only encryption key even when legacy key exists", async () => {
+  const db = fakeDatabase(), req = prepareCallback(db), env = envForQa();
+  delete env.MP_OAUTH_QA_ENCRYPTION_KEY;
+  const exchanges = [];
+  const callback = load("supabase/functions/mercadopago-oauth-callback/index.ts",
+    env, db, tokenFetch(false, exchanges));
+  assert.equal((await callback(req)).status, 400);
+  assert.equal(exchanges.length, 0);
+  assert.equal(db.rows.catalogo_recebedores.length, 0);
+  const starter = load("supabase/functions/catalogo-oauth-qa-iniciar/index.ts", env, db);
+  assert.equal((await starter(postBody())).status, 503);
+});
+
