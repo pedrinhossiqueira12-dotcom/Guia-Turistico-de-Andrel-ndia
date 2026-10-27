@@ -14,6 +14,8 @@ test("OAuth QA endpoint requires project, opt-in and separate credentials", () =
   assert.match(starter, /MP_OAUTH_QA_CLIENT_ID/);
   assert.match(starter, /QA_REDIRECT_URI !== CALLBACK_URL/);
   assert.match(starter, /MP_OAUTH_QA_ALLOWED_COMMERCE_ID/);
+  assert.match(starter, /MP_OAUTH_QA_ENCRYPTION_KEY/);
+  assert.doesNotMatch(starter, /MP_OAUTH_ENCRYPTION_KEY/);
   assert.match(starter, /admin\.auth\.getUser\(token\)/);
   assert.match(starter, /catalog\.data\.proprietario_id !== userId/);
   assert.match(starter, /published\.data\?\.status !== "ativo"/);
@@ -31,6 +33,7 @@ test("OAuth callback defaults to production mode and uses separate QA credential
   assert.match(callback, /QA_MODE \? QA_CLIENT_ID : MP_OAUTH_CLIENT_ID/);
   assert.match(callback, /QA_MODE \? QA_CLIENT_SECRET : MP_OAUTH_CLIENT_SECRET/);
   assert.match(callback, /QA_MODE \? QA_REDIRECT_URI : MP_OAUTH_REDIRECT_URI/);
+  assert.match(callback, /QA_MODE \? QA_ENCRYPTION_KEY : MP_OAUTH_ENCRYPTION_KEY/);
   assert.match(callback, /QA_REDIRECT_URI !== EXPECTED_QA_REDIRECT/);
   assert.match(callback, /QA_MODE \? credentials\.live_mode !== false : credentials\.live_mode !== true/);
   // Mercado Pago: 'test_token=true' must be emitted only in the QA OAuth exchange.
