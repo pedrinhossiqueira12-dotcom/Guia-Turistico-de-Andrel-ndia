@@ -24,12 +24,12 @@
         <h1>Receba pedidos pelo seu catálogo.</h1>
         <p id="introCheckout">Conecte sua conta Mercado Pago para receber pedidos pagos no próprio site.</p>
       </div>
-      <div class="test-stamp" aria-hidden="true">5%</div>
+      <div class="test-stamp" aria-hidden="true">7%</div>
     </section>
 
     <section class="test-warning" role="note">
       <strong>Como funciona</strong>
-      <p>O cliente paga o pedido via Pix no catálogo. O Mercado Pago divide automaticamente o recebimento: 95% para o comércio e 5% para o Guia, calculados somente sobre os produtos. O valor da entrega fica fora da comissão. A tarifa do Mercado Pago é descontada do comércio conforme as condições da conta.</p>
+      <p>A taxa total da venda é de 7% sobre o subtotal dos produtos. Na entrega, são 5% destinados à plataforma e 2% ao motoboy; em retirada ou consumo no local, os 7% são da plataforma. As tarifas do provedor e a liquidação financeira obedecem às condições aplicáveis e ainda exigem validação do fluxo de pagamento.</p>
     </section>
 
     <section id="checkoutStatus" class="test-status" role="status" aria-live="polite">
@@ -43,8 +43,8 @@
       </div>
       <p id="receiverDescription" class="test-subtitle">A conta conectada será usada somente para receber pedidos deste comércio.</p>
       <div id="receiverChecklist" class="receiver-checklist">
-        <div><strong>Comissão da plataforma</strong><span>5% sobre os produtos</span></div>
-        <div><strong>Entrega</strong><span>Fica fora da comissão</span></div>
+        <div><strong>Taxa total de serviço</strong><span>7% sobre os produtos</span></div>
+        <div><strong>Entrega</strong><span>5% plataforma + 2% motoboy (taxa sobre produtos)</span></div>
         <div><strong>Pagamento</strong><span>Pix dentro do catálogo</span></div>
       </div>
       <button id="connectMercadoPago" class="activation-button" type="button" hidden>Conectar conta Mercado Pago</button>
@@ -61,14 +61,14 @@
       <p id="paymentFeedback" class="plan-feedback" role="status" aria-live="polite"></p>
       <button id="refreshPayment" class="secondary-test-button" type="button">Atualizar status</button>
       <button id="disconnectMercadoPago" class="secondary-test-button" type="button" hidden>Desconectar conta Mercado Pago</button>
-      <p class="test-no-activate">Não existe assinatura mensal ou anual. A conexão é gratuita; a comissão de 5% incide somente nas vendas.</p>
+      <p class="test-no-activate">Não existe assinatura mensal ou anual. A conexão é gratuita; a taxa total de 7% incide sobre os produtos dos pedidos no fluxo V2.</p>
     </section>
 
     <footer class="test-footer">
       <p>O catálogo passará a receber pedidos via Pix após a conexão da conta Mercado Pago. O WhatsApp continuará disponível para contato.</p>
       <a id="linkPerfilCheckout" href="../index.html">Voltar ao perfil do comércio</a>
     </footer>
-  <section class="card" id="politica-entregas-v2"><h2>Taxas sobre os produtos</h2><p>A plataforma recebe 5%. No novo fluxo de entregas, a taxa total é 7%: 5% da plataforma e 2% reservados para o motoboy. Retirada e consumo local mantêm 5%, sem bônus de entregador. A política nova só se aplica aos pedidos criados após sua ativação; não existe mensalidade para liberar o catálogo.</p></section>
+  <section class="card" id="politica-entregas-v2"><h2>Taxas sobre os produtos</h2><p>No fluxo financeiro V2, a taxa total é de 7% sobre os produtos: em entrega, 5% da plataforma e 2% do motoboy; em retirada ou consumo local, 7% da plataforma. Pedidos históricos preservam suas condições originais. A conexão da conta é gratuita e não há mensalidade para liberar o catálogo.</p></section>
 </main>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>

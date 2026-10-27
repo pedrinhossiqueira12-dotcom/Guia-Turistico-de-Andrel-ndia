@@ -123,10 +123,13 @@ async function validateCatalog(comercioId: string, modalidade: string, ids: stri
   return byId;
 }
 async function receiverFor(comercioId: string) {
-  const { data, error } = await admin.from("catalogo_recebedores").select("comercio_id,status,conta_externa_id,oauth_access_token_enc").eq("comercio_id", comercioId).maybeSingle();
+  const { data, error } = await admin.from("catalogo_recebedores").select("comercio_id,status,conta_externa_id,oauth_access_token_enc,oauth_live_mode").eq("comercio_id", comercioId).maybeSingle();
   const receiver = record(data);
   if (error) throw new HttpError("Falha ao validar o recebedor Mercado Pago.", 503);
   if (!data || receiver.status !== "ativo" || !receiver.conta_externa_id || !receiver.oauth_access_token_enc) throw new HttpError("Este comércio ainda não está habilitado para receber Pix.", 409);
+  // O fluxo de pagamentos deste endpoint nunca utiliza tokens de vendedores de teste.
+  // Homologação OAuth pode persistir live_mode=false no STAGING, mas não criar cobranças.
+  if (receiver.oauth_live_mode !== true) throw new HttpError("Recebedor de teste não pode gerar Pix neste checkout.", 409);
   return { token: await decryptAesGcm(String(receiver.oauth_access_token_enc), MP_OAUTH_ENCRYPTION_KEY), conta: String(receiver.conta_externa_id) };
 }
 // Compare-and-swap de JSONB evita sobrescrever metadados adicionados por conciliação concorrente.

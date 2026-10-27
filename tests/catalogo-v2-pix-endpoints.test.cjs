@@ -144,7 +144,7 @@ async function fixture(options={}) {
   for (const commerce of ['loja-a','loja-b']) {
     db.tables.catalogos.push({comercio_id:commerce,modalidades:['entrega','retirada','consumo_local'],metodos_pagamento:['pix'],bloqueado:false});
     db.tables.catalogo_publicado.push({comercio_id:commerce,modalidades:['entrega','retirada','consumo_local'],metodos_pagamento:['pix']});
-    db.tables.catalogo_recebedores.push({comercio_id:commerce,status:'ativo',conta_externa_id:commerce==='loja-a'?'123':'456',oauth_access_token_enc:tokenCipher});
+    db.tables.catalogo_recebedores.push({comercio_id:commerce,status:'ativo',conta_externa_id:commerce==='loja-a'?'123':'456',oauth_access_token_enc:tokenCipher,oauth_live_mode:true});
     for (const id of [productId,secondId]) db.tables.catalogo_produtos.push({id,comercio_id:commerce,categoria_id:productId,nome:'Pão de queijo á',descricao:'Produto íntegro',preco:'100.00',disponivel:true,deletado_em:null,catalogo_categorias:{ativa:true,deletado_em:null}});
   }
   db.from=table=>{ assert.ok(schemas[table],table); return new Query(db,table); };
@@ -197,7 +197,7 @@ async function fixture(options={}) {
   };
   function loadEndpoint(rel) {
     let handler;
-    const env={SUPABASE_URL:'https://db.invalid',SUPABASE_SERVICE_ROLE_KEY:'local-service',MP_OAUTH_ENCRYPTION_KEY:key,MP_MARKETPLACE_WEBHOOK_SECRET:options.webhookSecret ?? secret,MARKETPLACE_CHECKOUT_ENABLED:'true'};
+    const env={SUPABASE_URL:'https://db.invalid',SUPABASE_SERVICE_ROLE_KEY:'local-service',MP_OAUTH_ENCRYPTION_KEY:key,MP_MARKETPLACE_WEBHOOK_SECRET:options.webhookSecret ?? secret,MARKETPLACE_CHECKOUT_ENABLED:options.checkoutEnabled===false?'false':'true'};
     const context=vm.createContext(baseContext({...h,...webhookEvents,console:{error(...args){ diagnostics.push(args.join(" ")); }},createClient:()=>db,fetch:fetchFake,Deno:{env:{get:n=>env[n]},serve:fn=>{handler=fn;}}}));
     const src=read(rel).replace(/^import[\s\S]*?;\s*$/gm,'');
     vm.runInContext(stripTypeScriptTypes(src,{mode:'strip'}),context,{filename:rel}); assert.equal(typeof handler,'function'); return handler;
@@ -213,6 +213,66 @@ async function fixture(options={}) {
   };
   return {db,provider,pix,webhook,body,call,notify,diagnostics};
 }
+
+test('catalogo-v2-pix-endpoints sem checkout habilitado recusa antes de criar reserva ou chamar provedor',async()=>{
+  const f=await fixture({checkoutEnabled:false});
+  const result=await f.call();
+  assert.equal(result.status,503);
+  assert.equal(result.body.success,false);
+  assert.equal(f.provider.posts.length,0,'nenhum POST ao provedor');
+  assert.equal(f.provider.gets.length,0,'nenhum GET ao provedor');
+  assert.equal(f.db.tables.catalogo_pedidos.length,0,'nenhum pedido/reserva criado');
+  assert.equal(f.db.tables.catalogo_pedido_itens.length,0,'nenhum item criado');
+  assert.equal(f.db.rpcCalls.length,0,'nenhum RPC mutável foi solicitado');
+});
+
+test('catalogo-v2-pix-endpoints exige live_mode exatamente true antes de qualquer POST, inclusive se status ativo',async()=>{
+  for (const liveMode of [false,null,undefined,'false',0]) {
+    const f=await fixture();
+    const receiver=f.db.tables.catalogo_recebedores[0];
+    receiver.status='ativo';
+    if(liveMode===undefined)delete receiver.oauth_live_mode;
+    else receiver.oauth_live_mode=liveMode;
+    const result=await f.call();
+    assert.equal(result.status,409,'recusa modo '+String(liveMode));
+    assert.equal(result.body.success,false);
+    assert.equal(f.provider.posts.length,0,'nenhum POST ao Mercado Pago');
+    assert.equal(f.provider.gets.length,0,'nenhum GET ao Mercado Pago');
+    assert.equal(f.db.tables.catalogo_pedidos.length,1,'reserva local pendente pode existir');
+    const order=f.db.tables.catalogo_pedidos[0];
+    assert.equal(order.payment_id??null,null,'nenhum payment_id');
+    assert.equal(order.status_pagamento,'pendente');
+  }
+});
+
+test('catalogo-v2-pix-endpoints recebedor OAuth de QA nunca cria Pix, mesmo com checkout ligado',async()=>{
+  const f=await fixture();
+  f.db.tables.catalogo_recebedores[0].oauth_live_mode=false;
+  const result=await f.call();
+  assert.equal(result.status,409);
+  assert.equal(result.body.success,false);
+  assert.equal(f.provider.posts.length,0,'nenhum POST ao Mercado Pago');
+});
+
+test('catalogo-v2-pix-endpoints recebedor bloqueado por QA impede POST mesmo com token e live_mode=true',async()=>{
+  const f=await fixture();
+  const r=f.db.tables.catalogo_recebedores[0];
+  assert.ok(r.oauth_access_token_enc, 'token cifrado fictício existe');
+  r.status='bloqueado';
+  r.oauth_live_mode=true; // mesmo com modo real, status bloqueado deve prevalecer
+  const result=await f.call();
+  assert.equal(result.status,409);
+  assert.equal(result.body.success,false);
+  assert.equal(f.provider.posts.length,0,'nenhum POST ao provedor');
+  // O checkout cria uma reserva local idempotente ANTES de consultar o recebedor.
+  // Rejeição em receiverFor não pode confirmar cobrança, nem fabricar Pix.
+  assert.equal(f.db.tables.catalogo_pedidos.length,1,'pode persistir uma reserva local');
+  const order=f.db.tables.catalogo_pedidos[0];
+  assert.equal(order.status,'aguardando_pagamento');
+  assert.equal(order.status_pagamento,'pendente');
+  assert.equal(order.payment_id ?? null,null,'nenhum pagamento externo associado');
+  assert.equal(order.pix_codigo ?? null,null,'nenhum Pix emitido');
+});
 
 test('catalogo-v2-pix-endpoints criação entrega: código6/hash/token forte/AAD e fee7% com schema real',async()=>{
   const f=await fixture(); const result=await f.call(); assert.equal(result.status,200,JSON.stringify(result.body));
