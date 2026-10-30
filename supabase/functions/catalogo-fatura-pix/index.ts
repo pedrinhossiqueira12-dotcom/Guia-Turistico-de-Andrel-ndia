@@ -194,7 +194,7 @@ async function carregarFatura(comercioId: string, competencia: string) {
   if (fechamento?.id) {
     const { data, error: chargeError } = await admin
       .from("catalogo_fatura_cobrancas")
-      .select("id,order_id,status,valor_centavos,qr_code,qr_code_base64,ticket_url,expira_em,pago_em,divergencia,tentativas,criado_em")
+      .select("id,gateway,order_id,status,valor_centavos,qr_code,qr_code_base64,ticket_url,expira_em,pago_em,divergencia,tentativas,criado_em")
       .eq("fechamento_id", fechamento.id)
       .maybeSingle();
     if (chargeError) throw new Error("Falha ao consultar a cobrança da fatura.");
@@ -238,6 +238,8 @@ async function criarCobranca(userId: string, body: Record<string, unknown>, paye
   const sellerId = await assertSeller();
 
   const cobrancaExistente = fatura.cobranca;
+  if(cobrancaExistente&&cobrancaExistente.gateway!=="mercadopago")
+    throw new HttpError("Esta fatura pertence a outro provedor. Nenhum Pix Mercado Pago foi solicitado.",409);
   if (cobrancaExistente?.order_id && cobrancaExistente.status === "pendente") {
     const order = await mpRequest(`/v1/orders/${encodeURIComponent(String(cobrancaExistente.order_id))}`, "GET");
     const avaliacao = assessFaturaOrder(order, {
@@ -271,6 +273,13 @@ async function criarCobranca(userId: string, body: Record<string, unknown>, paye
   const valor = centsToAmountString(valorCentavos);
 
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payerEmail) || payerEmail.length > 254) throw new HttpError("Sua conta precisa de um e-mail válido para emitir a fatura Pix.", 400);
+  const {data:reserva,error:erroReserva}=await admin.rpc("catalogo_reservar_emissao_mp_fatura",{
+    p_fechamento:fechamento.id,p_valor:valorCentavos,
+  });
+  if(erroReserva||reserva?.ok!==true||reserva?.nova!==true||
+     reserva.gateway!=="mercadopago"||reserva.fechamento_id!==fechamento.id||
+     reserva.valor_centavos!==valorCentavos||!reserva.operacao_id)
+    throw new HttpError("Emissão reservada ou indisponível. Concilie o histórico antes de qualquer nova tentativa.",409);
   const created = await mpRequest("/v1/orders", "POST", {
     type: "online",
     processing_mode: "automatic",
@@ -338,6 +347,7 @@ async function consultarCobranca(userId: string, body: Record<string, unknown>) 
   if (!fatura.cobranca?.order_id) {
     return json({ success: true, ...fatura, cobranca_status: null, mensagem: "Nenhuma cobrança emitida para esta fatura." });
   }
+  if(fatura.cobranca.gateway!=="mercadopago")throw new HttpError("Consulte esta fatura no provedor original.",409);
   // Reconsulta também a cobrança paga: webhook perdido não mantém lastro falso indefinidamente.
   if (!MP_ACCESS_TOKEN || !MP_SELLER_ID || !MP_WEBHOOK_SECRET) throw new HttpError("A conciliação está temporariamente indisponível; nenhum saldo foi liberado.", 503);
   const sellerId = await assertSeller();
@@ -381,11 +391,12 @@ async function webhook(request: Request) {
   }
   const { data: cobranca, error } = await admin
     .from("catalogo_fatura_cobrancas")
-    .select("id,comercio_id,competencia,valor_centavos,status")
+    .select("id,gateway,comercio_id,competencia,valor_centavos,status")
     .eq("order_id", orderId)
     .maybeSingle();
   if (error) throw new Error("Falha ao localizar a cobrança da fatura.");
   if (!cobranca) return json({ success: false, mensagem: "Vínculo da cobrança ainda pendente; reenvie a notificação." }, 503);
+  if(cobranca.gateway!=="mercadopago")return json({success:false,mensagem:"Provedor da cobranca divergente."},409);
   await assertSeller();
 
   const order = await mpRequest(`/v1/orders/${encodeURIComponent(orderId)}`, "GET");

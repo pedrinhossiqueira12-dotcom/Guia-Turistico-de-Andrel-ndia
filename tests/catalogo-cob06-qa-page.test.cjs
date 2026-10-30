@@ -1,0 +1,77 @@
+const test=require('node:test');
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const src=fs.readFileSync('pages/asaas-homologacao-sandbox.html','utf8');
+const block=src.slice(src.indexOf('// COB-06: unica solicitacao elegivel.'),src.indexOf('async function deliveryApi('));
+
+test('botao COB06 usa pedido preexistente fixo e nunca cria outro pedido',()=>{
+ assert.match(src,/id="qa-cob06-request"/);
+ assert.match(src,/id="qa-cob06" hidden/);
+ assert.match(block,/COB06_QA_CANCEL_PEDIDO = "a4ca7c4e-465f-4342-ae18-5c7eea1dec15"/);
+ assert.match(block,/qaApi\("catalogo-pedidos-offline-admin"/);
+ assert.match(block,/acao:"atualizar_status",pedido_id:COB06_QA_CANCEL_PEDIDO,status:"cancelado"/);
+ assert.doesNotMatch(block,/criar_pedido_offline|gerar_fechamento|criar_cobranca|confirmar_entrega/);
+});
+test('botao COB06 verifica conta proprietaria de STAGING e confirma natureza ficticia',()=>{
+ assert.match(block,/client\.auth\.getUser\(\)/);
+ assert.match(block,/pedrinhossiqueira@gmail\.com/);
+ assert.match(block,/window\.confirm/);
+ assert.match(block,/sem entrega de produto ou recebimento de dinheiro/);
+ assert.match(block,/cob06PedidoSolicitado=true/);
+ assert.match(block,/cob06PedidoSolicitado\)\$\("qa-cob06-request"\)\.disabled=true/);
+});
+
+const admin=src.slice(src.indexOf('// COB-06 revisao final:'),src.indexOf('// COB-06: somente a sessao Auth real do administrador pode pedir reserva.'));
+
+test('revisor COB06 usa conta real e ocorrencia aberta unica, com duas confirmacoes',()=>{
+ assert.match(src,/id="qa-cob06-review" hidden/);
+ assert.match(src,/id="qa-cob06-review-submit"/);
+ assert.match(src,/qa-cob06-review"\)\.hidden=!u\|\|u\.email\?\.toLowerCase\(\)!=="pedrinhossiqueira12@gmail.com"/);
+ assert.match(admin,/COB06_QA_REVISOR = "d896cc0c-31e4-4ef7-8fa4-13d15f02dd2a"/);
+ assert.match(admin,/COB06_QA_OCORRENCIA = "b8bc453b-810b-4e6a-af6d-b82c59b1db20"/);
+ assert.match(admin,/data\?\.user\?\.id!==COB06_QA_REVISOR/);
+ assert.equal((admin.match(/window\.confirm\(/g)||[]).length,2);
+});
+test('revisao COB06 exige API exclusiva, atestados completos e nao executa cobranca',()=>{
+ assert.match(admin,/qaApi\("catalogo-cob06-qa"/);
+ for(const needle of ['acao:"cancelar_retirada_ficticia_qa"','pedido_id:COB06_QA_CANCEL_PEDIDO','ocorrencia_id:COB06_QA_OCORRENCIA','decisao:"cancelamento_legitimo"','sem_recebimento_confirmado:true','sem_entrega_confirmada:true','cob06Revisado=true'])
+   assert.ok(admin.includes(needle),needle);
+ assert.doesNotMatch(admin,/criar_pedido_offline|gerar_fechamento|criar_cobranca|solicitar_saque|confirmar_entrega/);
+ assert.match(admin,/cob06Revisado\)\$\("qa-cob06-review-submit"\)\.disabled=true/);
+});
+
+const auditoriaGet=src.slice(
+ src.indexOf('// COB-06: uma unica tentativa de auditoria'),
+ src.indexOf('$("qa-cob06-encerramento-submit").addEventListener')
+);
+
+test('auditoria Asaas GET-only: botao visivel somente ao admin STAGING',()=>{
+ assert.match(src,/id="qa-cob06-get-auditoria" hidden/);
+ assert.match(src,/id="qa-cob06-get-auditoria-submit"/);
+ assert.match(src,/qa-cob06-get-auditoria"\)\.hidden=!u\|\|u\.id!==COB06_QA_REVISOR/);
+ assert.match(auditoriaGet,/client\.auth\.getUser\(\)/);
+ assert.match(auditoriaGet,/user\?\.user\?\.id!==COB06_QA_REVISOR/);
+ assert.match(auditoriaGet,/client\.auth\.getSession\(\)/);
+});
+
+test('auditoria Asaas GET-only: tentativa unica, referencia fixa e resposta HOLD',()=>{
+ assert.match(auditoriaGet,/cob06AuditoriaGetSolicitada=true/);
+ assert.match(auditoriaGet,/button\.disabled=true/);
+ assert.match(auditoriaGet,/window\.confirm\(/);
+ assert.match(auditoriaGet,/catalogo-asaas-cob06-auditoria/);
+ assert.match(auditoriaGet,/acao:"auditar_duplicidade_acumulo_sandbox_admin"/);
+ assert.match(auditoriaGet,/lote_id:"583d761a-ecb9-49be-b484-e43f6183971e"/);
+ for(const campo of ['out.hold_obrigatorio!==true','out.banco_alterado!==false',
+   'out.pix_emitido!==false','out.pode_emitir_pix!==false','out.pode_quitar!==false',
+   'out.pode_liberar_motoboy!==false'])assert.ok(auditoriaGet.includes(campo),campo);
+ assert.doesNotMatch(auditoriaGet,/acao:"(?:criar_cobranca|emitir_pix|transferir_saque|registrar_observacao|solicitar_saque)"|\/functions\/v1\/catalogo-asaas-financeiro/);
+});
+
+test('auditoria Asaas GET-only: flags exclusivamente de leitura e sandbox no aviso',()=>{
+ const section=src.slice(src.indexOf('<section id="qa-cob06-get-auditoria"'),
+   src.indexOf('<section id="qa-cob06-encerramento"'));
+ for(const item of ['ASAAS_COB06_AUDITORIA_ISOLADA_ENABLED=true',
+   'ASAAS_COB06_GET_ADMIN_READONLY_ENABLED=true','ASAAS_ENVIRONMENT=sandbox'])
+   assert.ok(section.includes(item),item);
+ assert.match(section,/Mantenha as flags de Pix e saques desligadas/);
+});

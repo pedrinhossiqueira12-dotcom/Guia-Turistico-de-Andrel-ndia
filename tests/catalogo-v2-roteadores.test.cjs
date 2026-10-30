@@ -12,7 +12,7 @@ const ORDER='cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 const ORDER2='dddddddd-dddd-4ddd-8ddd-dddddddddddd';
 const COMMERCE='loja-a';
 
-function endpoint(path,{ actor=RIDER, membership=true, assignment=true, result={ok:true}, rpcError=null }={}) {
+function endpoint(path,{ actor=RIDER, membership=true, assignment=true, result={ok:true}, rpcError=null, env={} }={}) {
   const calls=[];const writes=[];let handler;
   const db={auth:{getUser:async token=>({data:{user:token==='valid'?{id:actor}:null},error:null})},
     rpc:async(name,args)=>{calls.push({name,args});return {data:result,error:rpcError};},
@@ -20,13 +20,15 @@ function endpoint(path,{ actor=RIDER, membership=true, assignment=true, result={
       const q={select(){return q;},eq(){return q;},in(){return q;},order(){return q;},limit(){return q;},
         update(body){writes.push({name,body});return q;},
         maybeSingle:async()=>({data:name==='catalogos'?{proprietario_id:OWNER,bloqueado:false}:name==='catalogo_motoboys'?(membership?{usuario_id:actor}:null):(assignment?{pedido_id:ORDER}:null),error:null}),
-        then(resolve){return Promise.resolve({data:[],error:null}).then(resolve);}};
+        then(resolve){return Promise.resolve({data:name==='catalogo_aceites_operacionais'
+            ?[{documento:'termos'},{documento:'privacidade'}]:[],error:null}).then(resolve);}};
       return q;
     }};
   const source=fs.readFileSync(path,'utf8').replace(/^import[^;]+;\s*/gm,'');
  const helper=stripTypeScriptTypes(fs.readFileSync('supabase/functions/_shared/catalogo-entregas-crypto-v2.ts','utf8')).replace(/^export\s+/gm,'');
-  vm.runInNewContext(helper+"\n"+stripTypeScriptTypes(source),{
-    createClient:()=>db,Deno:{env:{get:()=>''},serve:h=>{handler=h;}},Request,Response,TextEncoder,TextDecoder,atob,btoa,crypto:webcrypto,
+  const conflictHelper=stripTypeScriptTypes(fs.readFileSync('supabase/functions/_shared/catalogo-competencia-conflito.ts','utf8')).replace(/^export\s+/gm,'');
+  vm.runInNewContext(helper+"\n"+conflictHelper+"\n"+stripTypeScriptTypes(source),{
+    createClient:()=>db,Deno:{env:{get:name=>env[name]??''},serve:h=>{handler=h;}},Request,Response,TextEncoder,TextDecoder,atob,btoa,crypto:webcrypto,
     fetch:()=>{throw new Error('Transferência externa proibida no teste.');},console:{error(){},warn(){}}});
   return {handler,calls,writes};
 }
@@ -90,6 +92,7 @@ test('administração financeira não pode ser chamada por comércio ou entregad
     assert.equal(e.calls.length,0);
   }
 });
+
 test('registro de repasse exige declaração, identificação e prova; não transfere dinheiro',async()=>{
   const e=endpoint(delivery,{actor:ADMIN});
   const base={acao:'registrar_repasse',motoboy_id:RIDER,pedido_ids:[ORDER],referencia:'PIX-CONFERIDO',comprovante:'Comprovante bancário conferido pelo operador',transferencia_confirmada:true};

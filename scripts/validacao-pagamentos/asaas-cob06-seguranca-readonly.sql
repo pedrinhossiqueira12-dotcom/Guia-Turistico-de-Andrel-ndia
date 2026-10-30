@@ -1,0 +1,110 @@
+-- COB-06: auditoria SOMENTE LEITURA no clone/STAGING/produção, sem segredos.
+-- Checa proteções que o gate estrutural anterior não verificava.
+WITH expected_tables(name) AS (
+ VALUES
+ -- Candidate COB-06: cobrança e encerramento, sem payout.
+ ('catalogo_asaas_clientes'),('catalogo_asaas_emissoes'),
+ ('catalogo_asaas_webhook_eventos'),('catalogo_cobranca_preferencias'),
+ ('catalogo_aceites_operacionais'),('catalogo_encerramentos_comercio'),
+ -- Faturamento/comissões já existentes e automação desligada por padrão.
+ ('catalogo_automacao_config'),('catalogo_automacao_execucoes'),
+ ('catalogo_comissoes_offline'),('catalogo_fechamentos_offline'),
+ ('catalogo_fatura_cobrancas'),('catalogo_fatura_eventos'),
+ -- Ledger V2 e composição da fatura; acesso segue fechado ao Data API.
+ ('catalogo_fluxo_config'),('catalogo_remuneracoes_v2'),
+ ('catalogo_lancamentos_financeiros_v2'),('catalogo_pagamentos_v2'),
+ ('catalogo_pagamento_eventos_v2'),('catalogo_repasses_v2'),
+ ('catalogo_logistica_offline_v2'),('catalogo_fatura_componentes_v2')
+), t AS (
+ SELECT e.name,c.oid,coalesce(c.relrowsecurity,false) AS rls,
+ coalesce(c.relforcerowsecurity,false) AS force_rls,
+ CASE WHEN c.oid IS NOT NULL THEN
+   NOT EXISTS (
+    SELECT 1
+    FROM (VALUES ('anon'::text),('authenticated'::text)) AS grantee(role_name)
+    CROSS JOIN (VALUES ('SELECT'::text),('INSERT'),('UPDATE'),('DELETE'),
+      ('TRUNCATE'),('REFERENCES'),('TRIGGER')) AS privilege(privilege_name)
+    WHERE has_table_privilege(grantee.role_name,c.oid,privilege.privilege_name)
+   )
+  ELSE false END AS restrito
+ FROM expected_tables e LEFT JOIN pg_class c
+ ON c.oid=to_regclass(format('public.%I',e.name))
+), expected_guards(tablename,triggername) AS (
+ VALUES
+ ('catalogos','catalogo_historico_guard_delete'),
+ ('catalogos','catalogo_encerramento_sem_reabertura'),
+ ('comercios_publicados','catalogo_publicacao_sem_divida_guard'),
+ ('comercios_publicados','catalogo_encerramento_sem_republicacao')
+), g AS (
+ SELECT e.triggername,coalesce(x.tgenabled IN ('O','A'),false) AS ativo
+ FROM expected_guards e LEFT JOIN pg_trigger x
+ ON x.tgrelid=to_regclass(format('public.%I',e.tablename))
+ AND x.tgname=e.triggername AND NOT x.tgisinternal
+), expected_rpc(name,assinatura) AS (
+ VALUES
+ ('catalogo_asaas_registrar_fatura','catalogo_asaas_registrar_fatura(uuid,text,integer,text,text,text,timestamptz)'),
+ ('catalogo_asaas_webhook_receber','catalogo_asaas_webhook_receber(text,text,text,text)'),
+ ('catalogo_asaas_webhook_claim','catalogo_asaas_webhook_claim(integer)'),
+ ('catalogo_asaas_webhook_finalizar','catalogo_asaas_webhook_finalizar(text,uuid,boolean)'),
+ ('catalogo_solicitar_encerramento_financeiro','catalogo_solicitar_encerramento_financeiro(text,uuid)'),
+ ('catalogo_finalizar_encerramento_financeiro','catalogo_finalizar_encerramento_financeiro(text,uuid)'),
+ ('catalogo_arquivar_sem_catalogo_admin','catalogo_arquivar_sem_catalogo_admin(text,uuid)')
+), f AS (
+ SELECT e.name,e.assinatura,p.oid,
+  CASE WHEN p.oid IS NOT NULL THEN
+   NOT has_function_privilege('anon',p.oid,'EXECUTE')
+   AND NOT has_function_privilege('authenticated',p.oid,'EXECUTE')
+  ELSE false END AS restrito
+ FROM expected_rpc e
+ LEFT JOIN pg_catalog.pg_proc p
+  ON p.oid=pg_catalog.to_regprocedure('public.'||e.assinatura)
+), outras_assinaturas AS (
+ -- Uma sobrecarga extra pode estar exposta mesmo que a primeira assinatura
+ -- do nome esteja restrita. Falhar fechado: listar TODAS as extras.
+ SELECT p.oid,p.proname AS name,
+  p.proname||'('||pg_catalog.pg_get_function_identity_arguments(p.oid)||')' AS assinatura,
+  NOT has_function_privilege('anon',p.oid,'EXECUTE')
+  AND NOT has_function_privilege('authenticated',p.oid,'EXECUTE') AS restrito
+ FROM pg_catalog.pg_proc p
+ JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace
+ JOIN expected_rpc e ON e.name=p.proname
+ WHERE n.nspname='public'
+  AND NOT EXISTS (SELECT 1 FROM f WHERE f.oid=p.oid)
+), client_policies AS (
+ -- Policies granted to PUBLIC, anon/authenticated, or roles whose privileges
+ -- anon/authenticated can exercise are reported as latent client exposure.
+ SELECT DISTINCT e.name AS tablename,p.polname AS policyname
+ FROM expected_tables e
+ JOIN pg_catalog.pg_class c
+  ON c.oid=pg_catalog.to_regclass(format('public.%I',e.name))
+ JOIN pg_catalog.pg_policy p ON p.polrelid=c.oid
+ CROSS JOIN LATERAL pg_catalog.unnest(p.polroles) AS target(role_oid)
+ WHERE target.role_oid=0::oid
+  OR pg_catalog.pg_has_role('anon'::pg_catalog.regrole::pg_catalog.oid,target.role_oid,'USAGE')
+  OR pg_catalog.pg_has_role('authenticated'::pg_catalog.regrole::pg_catalog.oid,target.role_oid,'USAGE')
+)
+SELECT
+ (SELECT count(*) FROM t WHERE oid IS NULL) AS tabelas_ausentes,
+ (SELECT count(*) FROM t WHERE oid IS NOT NULL AND NOT rls) AS rls_ausente,
+ (SELECT count(*) FROM t WHERE oid IS NOT NULL AND NOT restrito) AS tabelas_expostas,
+ (SELECT count(*) FROM g WHERE NOT ativo) AS gatilhos_inativos,
+ (SELECT count(*) FROM f WHERE oid IS NULL) AS rpcs_ausentes,
+ ((SELECT count(*) FROM f WHERE oid IS NOT NULL AND NOT restrito)
+ + (SELECT count(*) FROM outras_assinaturas WHERE NOT restrito)) AS rpcs_expostas,
+ (SELECT count(*) FROM outras_assinaturas) AS rpcs_sobrecargas_inesperadas,
+ (SELECT coalesce(jsonb_agg(name ORDER BY name),'[]'::jsonb) FROM t
+  WHERE oid IS NULL OR NOT rls OR NOT restrito) AS tabelas_revisar,
+ (SELECT coalesce(jsonb_agg(triggername ORDER BY triggername),'[]'::jsonb) FROM g
+  WHERE NOT ativo) AS gatilhos_revisar,
+ (SELECT coalesce(jsonb_agg(name ORDER BY name),'[]'::jsonb)
+   FROM (SELECT name FROM f WHERE oid IS NULL OR NOT restrito
+         UNION ALL SELECT name FROM outras_assinaturas) revisar) AS rpcs_revisar,
+ (SELECT coalesce(jsonb_agg(assinatura ORDER BY assinatura),'[]'::jsonb)
+   FROM outras_assinaturas) AS assinaturas_inesperadas,
+ (SELECT count(*) FROM client_policies) AS client_policy_exposures,
+ (SELECT coalesce(jsonb_agg(tablename||':'||policyname ORDER BY tablename,policyname),'[]'::jsonb)
+   FROM client_policies) AS client_policies_review,
+ -- Informational only: FORCE RLS changes table-owner/SECURITY DEFINER semantics.
+ (SELECT count(*) FROM t WHERE force_rls) AS force_rls_enabled_info,
+ (SELECT coalesce(jsonb_agg(name ORDER BY name),'[]'::jsonb) FROM t
+   WHERE oid IS NOT NULL AND force_rls) AS force_rls_tables_info;

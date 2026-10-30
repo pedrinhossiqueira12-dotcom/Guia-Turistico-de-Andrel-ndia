@@ -1,9 +1,17 @@
 (() => {
   "use strict";
 
-  const SUPABASE_URL = "https://xdmbkflufsfqziixzpxc.supabase.co";
-  const SUPABASE_KEY = "sb_publishable_dvwNkLDf3oZrCqvZ5uAaRA_VsfiuZFy";
+  // Modo QA opt-in por URL: ?asaas-sandbox=1. Nao altera o site publico.
+  // As credenciais abaixo sao SOMENTE publishable, nunca service_role.
+  const QA_SANDBOX = new URLSearchParams(window.location.search).get("asaas-sandbox") === "1";
+  const SUPABASE_URL = QA_SANDBOX
+    ? "https://jbttwihctuibchhcyqtl.supabase.co"
+    : "https://xdmbkflufsfqziixzpxc.supabase.co";
+  const SUPABASE_KEY = QA_SANDBOX
+    ? "sb_publishable_W80rooaGpHP4voYiLwtz7w_-k32qHsF"
+    : "sb_publishable_dvwNkLDf3oZrCqvZ5uAaRA_VsfiuZFy";
   const API_URL = `${SUPABASE_URL}/functions/v1/catalogo-entregas`;
+  const ASAAS_ADMIN_URL = `${SUPABASE_URL}/functions/v1/catalogo-asaas-financeiro`;
   const ADMIN_USER_ID = "4b9a0233-6b72-4573-aebd-d596c5b15e1b";
   const STALE_SESSION_REQUEST = "STALE_SESSION_REQUEST";
   const state = { client: null, session: null, userId: "", token: "", generation: 0, authorized: false, destroyed: false, lockedAfterLogout: false, loading: false, data: null, availableCredits: [] };
@@ -11,6 +19,10 @@
 
   function obterCliente() {
     if (state.client) return state.client;
+    // QA precisa de sessao propria do projeto de teste; nao reutilizar
+    // login/cookies do Supabase de producao.
+    if (QA_SANDBOX && window.supabase?.createClient)
+      return (state.client = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY));
     if (window.supabaseLoginClient) return (state.client = window.supabaseLoginClient);
     if (window.supabase && typeof window.supabase.createClient === "function") {
       window.supabaseLoginClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -31,7 +43,7 @@
   function aviso(title, message, status = "") { $("operationNoticeTitle").textContent = title; $("operationNoticeText").textContent = message; $("operationNotice").classList.toggle("is-error", status === "erro"); $("operationNotice").classList.toggle("is-success", status === "sucesso"); }
   function validarSessao(generation = state.generation, userId = state.userId) { if (state.destroyed || generation !== state.generation || !state.session || state.userId !== userId) throw new Error(STALE_SESSION_REQUEST); }
 
-  async function chamarApi(acao, dados = {}, generation = state.generation, userId = state.userId) {
+  async function chamarApi(acao, dados = {}, generation = state.generation, userId = state.userId, endpoint = API_URL) {
     const client = obterCliente();
     if (!client?.auth) throw new Error("O serviço de login não está disponível.");
     const { data: sessionData, error } = await client.auth.getSession();
@@ -41,7 +53,7 @@
     if (!token) throw new Error("Sua sessão expirou. Entre novamente.");
     validarSessao(generation, userId);
     if (session.user?.id !== userId) throw new Error(STALE_SESSION_REQUEST);
-    const response = await fetch(API_URL, { method: "POST", headers: { "Content-Type": "application/json", apikey: SUPABASE_KEY, Authorization: `Bearer ${token}` }, body: JSON.stringify({ acao, ...dados }) });
+    const response = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json", apikey: SUPABASE_KEY, Authorization: `Bearer ${token}` }, body: JSON.stringify({ acao, ...dados }) });
     const result = await response.json().catch(() => ({}));
     validarSessao(generation, userId);
     if (!response.ok || result?.success !== true) { const failure = new Error(result?.mensagem || "A operação não foi autorizada."); failure.status = response.status; throw failure; }
@@ -59,6 +71,13 @@
     $("listaOcorrencias").innerHTML = "";
     $("listaRepasses").innerHTML = "";
     $("historicoRepasses").innerHTML = "";
+    if ($("listaSaquesAsaas")) $("listaSaquesAsaas").innerHTML = "";
+    feedback("saquesAsaasFeedback", "");
+    feedback("conciliarSaqueAsaasFeedback", "");
+    feedback("asaasWebhookInboxResumo", "");
+    feedback("asaasSandboxFaturasFeedback", "");
+    if ($("asaasSandboxFaturasLista")) $("asaasSandboxFaturasLista").innerHTML = "";
+    $("conciliarSaqueAsaasForm")?.reset();
     $("repassePreview").innerHTML = '<p class="empty-state">Selecione um crédito disponível para revisar as provas antes de registrar o repasse.</p>';
   }
 
@@ -111,6 +130,166 @@
     $("operationPanel").hidden = false;
   }
 
+  // Auditoria financeira sem expor chaves Pix nem permitir saque administrativo.
+  // Uma indisponibilidade da integração não retira o acesso às entregas.
+  async function carregarSaquesAsaas(generation = state.generation, userId = state.userId) {
+    if (!state.authorized || !$("listaSaquesAsaas")) return;
+    feedback("saquesAsaasFeedback", "Consultando histórico do provedor...");
+    try {
+      const result = await chamarApi("listar_saques_admin", {}, generation, userId, ASAAS_ADMIN_URL);
+      validarSessao(generation, userId);
+      if (!state.authorized) return;
+      const saques = Array.isArray(result.saques) ? result.saques : [];
+      const emissoes = Array.isArray(result.emissoes_pendentes) ? result.emissoes_pendentes : [];
+      const rows = saques.map((s) => {
+        const status = {reservado:"Reservado (sem confirmação externa)",enviado:"Transferência enviada",concluido:"Pix confirmado",falhou:"Transferência recusada",revisao:"Revisão obrigatória"}[s.status] || "Estado não reconhecido";
+        return `<article class="manager-row"><div class="manager-copy">
+          <strong>${escapar(status)} · ${escapar(reais(s.valor_centavos))}</strong>
+          <small>ID do saque: ${escapar(s.id)}</small>
+          <small>Motoboy: ${escapar(s.motoboy_id)} · solicitação: ${escapar(data(s.criado_em))}</small>
+          <small>Transferência Asaas: ${escapar(s.transferencia_id || "Não identificada")}</small>
+          ${s.mensagem ? `<small>Observação: ${escapar(s.mensagem)}</small>` : ""}
+          </div><span class="status-pill ${["revisao","reservado"].includes(s.status) ? "is-warning" : ""}">${escapar(s.status)}</span></article>`;
+      });
+      if (emissoes.length) rows.unshift(`<p class="empty-state">${emissoes.length} emissão(ões) de fatura reservada(s) ou pendente(s) de revisão. Confira a situação diretamente no Asaas antes de reemitir qualquer cobrança.</p>`);
+      $("listaSaquesAsaas").innerHTML = rows.length ? rows.join("") : '<p class="empty-state">Nenhum saque Asaas registrado até agora.</p>';
+      feedback("saquesAsaasFeedback", "Histórico consultado com autorização do servidor.");
+    } catch (error) {
+      if (error.message === STALE_SESSION_REQUEST) return;
+      if (!state.authorized) return;
+      $("listaSaquesAsaas").innerHTML = '<p class="empty-state">Auditoria Asaas indisponível neste ambiente.</p>';
+      feedback("saquesAsaasFeedback", "Este módulo só estará disponível após instalar a nova função financeira.", true);
+    }
+  }
+
+  // Relatorio apenas consultivo. Nunca criar fechamento ou cobranca nesta tela.
+  async function verificarFaturasSandboxAsaas() {
+    if (!state.authorized) return;
+    const generation = state.generation, userId = state.userId;
+    const button = $("asaasSandboxFaturasConsultar");
+    if (button) button.disabled = true;
+    feedback("asaasSandboxFaturasFeedback", "Conferindo faturas existentes no Sandbox, sem criar cobrança...");
+    try {
+      const res = await chamarApi("diagnosticar_faturas_sandbox_admin", {},
+        generation, userId, ASAAS_ADMIN_URL);
+      validarSessao(generation, userId);
+      if (!state.authorized) return;
+      const lista = $("asaasSandboxFaturasLista");
+      const faturas = Array.isArray(res.faturas) ? res.faturas : [];
+      lista.innerHTML = faturas.length ? faturas.map(f => {
+        const estado = {
+          pronta_para_emissao:"Apta para emitir Pix de teste",
+          cobranca_existente:"Já possui cobrança: consultar e conciliar",
+          emissao_reservada_para_conciliacao:"Emissão reservada: não duplicar Pix",
+          sem_proprietario_autorizado:"Proprietário não verificado"
+        }[f.motivo] || "Revisão necessária";
+        return `<article class="manager-row"><div class="manager-copy">
+          <strong>${escapar(f.comercio_id)} · ${escapar(f.competencia)} · ${escapar(reais(f.valor_centavos))}</strong>
+          <small>${escapar(estado)}${f.gateway_existente ? " · gateway: " + escapar(f.gateway_existente) : ""}</small>
+          <small>Fechamento: ${escapar(f.fechamento_id)}</small>
+          ${f.gateway_existente === "asaas" && ["pendente","vencido"].includes(f.status_cobranca) ?
+            `<button class="small-button" type="button" data-asaas-qa-confirmar="${escapar(f.fechamento_id)}">Simular pagamento no Sandbox</button>` : ""}
+          </div><span class="status-pill ${f.apta ? "" : "is-warning"}">${f.apta ? "Pronta" : "Revisar"}</span></article>`;
+      }).join("") : '<p class="empty-state">Nenhuma fatura aberta e elegível encontrada. Faça um pedido de teste legítimo e conclua o fechamento mensal no Sandbox; não ajuste saldos pelo SQL.</p>';
+      const limit = res.lista_limitada ? " (amostra de 50)" : "";
+      feedback("asaasSandboxFaturasFeedback", "Faturas consultadas: " +
+        Number(res.consultadas || 0) + limit + " · aptas: " + Number(res.aptas || 0) +
+        ". Este relatório não cria nem confirma cobranças.");
+    } catch (error) {
+      if (error.message !== STALE_SESSION_REQUEST && state.authorized) {
+        $("asaasSandboxFaturasLista").innerHTML = "";
+        feedback("asaasSandboxFaturasFeedback", error.message || "Diagnóstico indisponível.", true);
+      }
+    } finally {
+      if (generation === state.generation && button) button.disabled = false;
+    }
+  }
+
+  async function confirmarPagamentoSandboxAsaas(event) {
+    if (!QA_SANDBOX || !state.authorized) return;
+    const button=event.target.closest("[data-asaas-qa-confirmar]");
+    if (!button || !event.currentTarget.contains(button)) return;
+    const fechamentoId=button.dataset.asaasQaConfirmar || "";
+    if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(fechamentoId)) {
+      feedback("asaasSandboxFaturasFeedback","Identificador da fatura inválido.",true);
+      return;
+    }
+    if (!window.confirm("Confirmar a SIMULAÇÃO de pagamento no Asaas Sandbox? Esta ação altera o status da cobrança de TESTE e pode disparar o webhook. Não movimenta dinheiro real.")) return;
+    const generation=state.generation,userId=state.userId;
+    button.disabled=true;
+    feedback("asaasSandboxFaturasFeedback","Enviando confirmação somente ao Asaas Sandbox...");
+    try {
+      const result=await chamarApi("confirmar_fatura_sandbox_admin",
+        {fechamento_id:fechamentoId},generation,userId,ASAAS_ADMIN_URL);
+      validarSessao(generation,userId);
+      if (!state.authorized) return;
+      feedback("asaasSandboxFaturasFeedback",result.mensagem ||
+        "Simulação registrada. Confira webhook e baixa bancária.");
+      // Recarregar apenas o diagnóstico. Nao reenviar POST automaticamente.
+      const refresh=$("asaasSandboxFaturasConsultar");
+      if (refresh) refresh.focus();
+    } catch (error) {
+      if (error.message !== STALE_SESSION_REQUEST && state.authorized)
+        feedback("asaasSandboxFaturasFeedback",error.message ||
+          "Confirmação inconclusiva. Consulte o Asaas antes de tentar novamente.",true);
+    } finally {
+      if (generation===state.generation) button.disabled=false;
+    }
+  }
+
+  async function verificarFilaWebhookAsaas(reprocessar = false) {
+    if (!state.authorized) return;
+    const generation = state.generation, userId = state.userId;
+    const botao = $(reprocessar ? "asaasWebhookInboxReprocessar" : "asaasWebhookInboxConsultar");
+    if (botao) botao.disabled = true;
+    feedback("asaasWebhookInboxResumo", reprocessar
+      ? "Reconciliando eventos recebidos com o provedor (nenhum Pix será criado)..."
+      : "Consultando notificações Asaas não conciliadas...");
+    try {
+      const acao = reprocessar ? "reprocessar_webhooks_asaas_admin" : "diagnosticar_webhooks_asaas_admin";
+      const res = await chamarApi(acao, {}, generation, userId, ASAAS_ADMIN_URL);
+      validarSessao(generation, userId);
+      if (reprocessar) {
+        feedback("asaasWebhookInboxResumo", "Processamento concluído: " + Number(res.concluido || 0) + " evento(s) verificados, " + Number(res.falhou || 0) + " com erro. Reconsulte a fila para acompanhar.");
+      } else {
+        const limit = res.amostra_limitada ? " (primeiros 100 eventos)" : "";
+        feedback("asaasWebhookInboxResumo", "Não conciliados: " + Number(res.pendentes || 0) + limit + ". Aguardando: " + Number(res.aguardando || 0) + " · em andamento: " + Number(res.em_processamento || 0) + " · erro: " + Number(res.em_erro || 0) + ".");
+      }
+    } catch (error) {
+      if (error.message !== STALE_SESSION_REQUEST) feedback("asaasWebhookInboxResumo",
+        error.message || "Não foi possível consultar a fila.", true);
+    } finally {
+      if (generation === state.generation && botao) botao.disabled = false;
+    }
+  }
+
+  async function conciliarSaqueAsaas(event) {
+    event.preventDefault();
+    if (!state.authorized) return;
+    const saqueId = $("saqueAsaasId")?.value.trim() || "";
+    const transferenciaId = $("transferenciaAsaasId")?.value.trim() || "";
+    if (!/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(saqueId) || !/^[A-Za-z0-9_-]{4,130}$/.test(transferenciaId)) {
+      feedback("conciliarSaqueAsaasFeedback", "Informe os IDs da solicitação e da transferência já existente.", true);
+      return;
+    }
+    const generation = state.generation, userId = state.userId;
+    const button = $("conciliarSaqueAsaas");
+    if (button) button.disabled = true;
+    feedback("conciliarSaqueAsaasFeedback", "Conferindo o estado bancário, sem criar transferência...");
+    try {
+      const result = await chamarApi("conciliar_saque_admin",
+        { saque_id: saqueId, transferencia_id: transferenciaId }, generation, userId, ASAAS_ADMIN_URL);
+      validarSessao(generation,userId);
+      feedback("conciliarSaqueAsaasFeedback", result.mensagem || "Consulta concluída no Asaas.");
+      await carregarSaquesAsaas(generation,userId);
+    } catch (error) {
+      if (error.message !== STALE_SESSION_REQUEST)
+        feedback("conciliarSaqueAsaasFeedback", error.message || "Falha na consulta. Nenhuma transferência adicional foi solicitada.", true);
+    } finally {
+      if (generation === state.generation && button) button.disabled = false;
+    }
+  }
+
   async function carregarOperacao() {
     if (!state.session || state.loading) return;
     const generation = state.generation;
@@ -120,6 +299,26 @@
     $("operationPanel").hidden = true;
     aviso("Validando autorização", "Nenhum dado operacional será exibido antes da confirmação do backend.");
     try {
+      if (QA_SANDBOX) {
+        // O endpoint autentica e compara com ASAAS_SANDBOX_ADMIN_USER_ID
+        // (segredo de servidor). Sem administrador configurado: acesso negado.
+        await chamarApi("diagnosticar_faturas_sandbox_admin", {},
+          generation, userId, ASAAS_ADMIN_URL);
+        validarSessao(generation,userId);
+        state.authorized = true;
+        $("operationLoginCard").hidden = true;
+        $("operationLogout").hidden = false;
+        $("operationPanel").hidden = false;
+        for (const section of document.querySelectorAll(".operation-grid > section")) {
+          section.style.display = section.id === "asaasSandboxFaturasCard" ? "" : "none";
+        }
+        const link = document.querySelector("#operationPanel > p");
+        if (link) link.hidden = true;
+        aviso("Acesso de homologação confirmado",
+          "Somente as faturas fechadas no Supabase de TESTES estão disponíveis. Nenhuma cobrança ou transferência será criada.", "sucesso");
+        void verificarFaturasSandboxAsaas();
+        return;
+      }
       const result = await chamarApi("operacao_admin", { operacao: "listar", subacao: "listar" }, generation, userId);
       validarSessao(generation, userId);
       if (!autorizadoExplicitamente(result)) throw new Error("A conta autenticada não tem autorização de administrador da plataforma.");
@@ -127,6 +326,7 @@
       $("operationLoginCard").hidden = true;
       $("operationLogout").hidden = false;
       renderizarDados(result);
+      void carregarSaquesAsaas(generation,userId);
       aviso("Acesso administrativo confirmado", "Ocorrências e créditos foram liberados pelo backend; o painel não usa vínculo de comércio como privilégio.", "sucesso");
     } catch (error) {
       if (error.message === STALE_SESSION_REQUEST) return;
@@ -205,6 +405,11 @@
     $("atualizarOperacao").addEventListener("click", carregarOperacao);
     $("ocorrenciaForm").addEventListener("submit", resolverOcorrencia);
     $("repasseForm").addEventListener("submit", registrarRepasse);
+    $("conciliarSaqueAsaasForm")?.addEventListener("submit", conciliarSaqueAsaas);
+    $("asaasSandboxFaturasConsultar")?.addEventListener("click", verificarFaturasSandboxAsaas);
+    $("asaasSandboxFaturasLista")?.addEventListener("click", confirmarPagamentoSandboxAsaas);
+    $("asaasWebhookInboxConsultar")?.addEventListener("click", () => verificarFilaWebhookAsaas(false));
+    $("asaasWebhookInboxReprocessar")?.addEventListener("click", () => verificarFilaWebhookAsaas(true));
     $("repasseCredito").addEventListener("change", (event) => selecionarCredito(event.target.value));
     $("listaRepasses").addEventListener("click", (event) => { const button = event.target.closest("[data-preview-credit]"); if (button) { $("repasseCredito").value = button.dataset.previewCredit; selecionarCredito(button.dataset.previewCredit); } });
     window.addEventListener("pagehide", () => { state.destroyed = true; state.generation += 1; state.session = null; state.userId = ""; state.token = ""; state.subscription?.unsubscribe?.(); state.subscription = null; limparDados(); });
@@ -212,6 +417,9 @@
   }
   async function restaurarSessao() { const client = obterCliente(); if (!client) return; const { data, error } = await client.auth.getSession(); if (!error && !state.destroyed) await aplicarSessao(data?.session || null); }
   async function iniciar() {
+    // O botao de homologacao nao aparece no painel produtivo.
+    if (!QA_SANDBOX && $("asaasSandboxFaturasCard"))
+      $("asaasSandboxFaturasCard").style.display = "none";
     iniciarEventos(); const client = obterCliente(); if (!client) { aviso("Login indisponível", "Não foi possível carregar o serviço de autenticação.", "erro"); return; }
     const listener = client.auth.onAuthStateChange((_event, session) => { window.setTimeout(() => aplicarSessao(session), 0); }); state.subscription = listener?.data?.subscription || null;
     const { data, error } = await client.auth.getSession(); if (error) { aviso("Sessão não confirmada", "Entre novamente para continuar.", "erro"); return; } await aplicarSessao(data?.session || null);

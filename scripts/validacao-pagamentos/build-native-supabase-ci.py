@@ -55,7 +55,13 @@ def build():
         '[db]\n'
         'major_version = 17\n'
         '[db.seed]\n'
-        'enabled = false\n',
+        'enabled = false\n'
+        # TOTP CLI default pode ser false; somente no workspace descartavel.
+        '[auth.email]\n'
+        'enable_confirmations = false\n'
+        '[auth.mfa.totp]\n'
+        'enroll_enabled = true\n'
+        'verify_enabled = true\n',
         encoding="utf-8",
     )
 

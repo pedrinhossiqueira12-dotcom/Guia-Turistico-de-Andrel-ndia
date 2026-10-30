@@ -1,0 +1,44 @@
+{
+  "contract": "COB-06-billing-only",
+  "status": "candidate-never-auto-deploy",
+  "scope": "9 ordered SQL files in production-like clone, without payouts",
+  "hash_algorithm": "git-blob-sha1",
+  "files": [
+    {
+      "path": "supabase/production-candidate/01_asaas_cobrancas_inbox_sem_saques.sql",
+      "blob_sha1": "75c621e6a887e4f6c29dc4149a7e5eab5c660c0d"
+    },
+    {
+      "path": "supabase/production-candidate/02_termos_encerramento_sem_saques.sql",
+      "blob_sha1": "552da0dad101e2ce2883d381b0b067bdbcfccbf6"
+    },
+    {
+      "path": "supabase/pending-migrations/20261009162000_bloquear_exclusao_debitos_e_finalizar_arquivamento.sql",
+      "blob_sha1": "888d457afd207094b16f63777ae2eb8e391309e3"
+    },
+    {
+      "path": "supabase/pending-migrations/20261009163000_impedir_reabertura_encerramento.sql",
+      "blob_sha1": "230c8ce927c5d26a3075d770a252329453b2b0a3"
+    },
+    {
+      "path": "supabase/pending-migrations/20261009180000_status_publicacao_publica_restrita.sql",
+      "blob_sha1": "8eb9e67bd2eb74d69a3b5f11841d89bcf1989819"
+    },
+    {
+      "path": "supabase/pending-migrations/20261009183000_proteger_republicacao_legada_apos_encerramento.sql",
+      "blob_sha1": "0dfc9cb490d2a24f49c0200b12db2269917c9b90"
+    },
+    {
+      "path": "supabase/pending-migrations/20261009184000_bloquear_despublicacao_legada_qualquer_status.sql",
+      "blob_sha1": "ede71a3c0f0b52b49c90cbbf3edd45264e5b1fc7"
+    },
+    {
+      "path": "supabase/pending-migrations/20261012104000_cob04_fechamento_apenas_entregas_confirmadas.sql",
+      "blob_sha1": "74b3565bddc8bb522118b945484af34fdd2fd044"
+    },
+    {
+      "path": "supabase/pending-migrations/20261012163000_cob04_pagamento_somente_componentes_da_fatura.sql",
+      "blob_sha1": "ee5b3a24ee65a321e0d7b7053d2bb6c558bf73f4"
+    }
+  ]
+}

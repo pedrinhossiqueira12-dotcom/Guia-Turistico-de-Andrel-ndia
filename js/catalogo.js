@@ -1,13 +1,20 @@
 (function () {
   "use strict";
 
-  const SUPABASE_URL = "https://xdmbkflufsfqziixzpxc.supabase.co";
-  const SUPABASE_KEY = "sb_publishable_dvwNkLDf3oZrCqvZ5uAaRA_VsfiuZFy";
+  // Acessar a base de testes somente por opt-in explicito na pagina
+  // de catalogo. Sem a flag, a aplicacao publica nao muda de projeto.
+  const parametros = new URLSearchParams(window.location.search);
+  const QA_SANDBOX = parametros.get("asaas-sandbox") === "1";
+  const SUPABASE_URL = QA_SANDBOX
+    ? "https://jbttwihctuibchhcyqtl.supabase.co"
+    : "https://xdmbkflufsfqziixzpxc.supabase.co";
+  const SUPABASE_KEY = QA_SANDBOX
+    ? "sb_publishable_W80rooaGpHP4voYiLwtz7w_-k32qHsF"
+    : "sb_publishable_dvwNkLDf3oZrCqvZ5uAaRA_VsfiuZFy";
   const BUCKET = "catalogos";
   const IMAGEM_PADRAO = "../img/sem-foto.png";
-  const parametros = new URLSearchParams(window.location.search);
   const comercioId = (parametros.get("id") || parametros.get("comercio_id") || "").trim();
-  const chaveCarrinho = `guia-catalogo-cart:${comercioId}`;
+  const chaveCarrinho = `guia-catalogo-cart:${QA_SANDBOX ? "asaas-sandbox:" : ""}${comercioId}`;
 
   let supabaseClient = null;
   let catalogo = null;
@@ -36,7 +43,7 @@
 
   function clienteSupabase() {
     if (supabaseClient) return supabaseClient;
-    supabaseClient = window.supabaseLoginClient || window.supabase?.createClient(SUPABASE_URL, SUPABASE_KEY);
+    supabaseClient = QA_SANDBOX ? (window.supabaseLoginClient?.supabaseUrl === SUPABASE_URL ? window.supabaseLoginClient : window.supabase?.createClient(SUPABASE_URL, SUPABASE_KEY)) : (window.supabaseLoginClient || window.supabase?.createClient(SUPABASE_URL, SUPABASE_KEY));
     return supabaseClient;
   }
 
@@ -788,6 +795,13 @@
   }
 
   async function gerarPixPedido() {
+    if (QA_SANDBOX) {
+      if ($("whatsappErro")) {
+        $("whatsappErro").textContent = "Pix do pedido está desativado no Sandbox de faturamento. Use pagamento na entrega.";
+        $("whatsappErro").hidden = false;
+      }
+      return;
+    }
     if (!pedidoEmRevisao || pedidoEmRevisao.pixGerado === true || !comercioId || !clienteSupabase()) return;
     const botao = $("pagarPix");
     const box = $("pixPedidoBox");
@@ -1009,6 +1023,13 @@
         $("checkoutErro").hidden = false;
         return;
       }
+      // Homologacao da mensalidade usa vendas OFFLINE legitimas.
+      // Nao permitir iniciar pagamento Pix do pedido de teste.
+      if (QA_SANDBOX && cliente.pagamento === "pix") {
+        $("checkoutErro").textContent = "No Sandbox, use dinheiro ou cartão na entrega para gerar um pedido de teste. Pix do pedido está desativado.";
+        $("checkoutErro").hidden = false;
+        return;
+      }
       pedidoEmRevisao = { itens: itensCarrinho(), cliente, modalidade: cliente.modalidade, pagamento: cliente.pagamento, observacoes: cliente.observacoes, pixGerado: false };
       renderizarResumo(pedidoEmRevisao);
       $("checkoutDialog").close();
@@ -1100,6 +1121,14 @@
   }
 
   document.addEventListener("DOMContentLoaded", () => {
+    if (QA_SANDBOX) {
+      if ($("qaSandboxBanner")) $("qaSandboxBanner").hidden = false;
+      const voltar=$("voltarPerfil");
+      if (voltar) {
+        voltar.href=`catalogo-admin.html?id=${encodeURIComponent(comercioId)}&asaas-sandbox=1`;
+        voltar.textContent="‹ Administração de teste";
+      }
+    }
     configurarEventos();
     carregarCatalogo();
   });

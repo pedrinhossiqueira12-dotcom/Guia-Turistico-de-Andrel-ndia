@@ -1,0 +1,124 @@
+# Etapa #43 — Ensaio inerte de resolução de reservas excepcionais (11/10/2026)
+
+## Objetivo
+
+Modelar os **quatro estados finais ou de investigação** de um saldo excepcional — `revisao`, `contestacao`, `pago_comprovado` e `liberado_sem_pagamento` — sem abrir nenhum caminho executável para pagamento, devolução ou baixa.
+
+O artefato `scripts/validacao-pagamentos/simular-resolucao-escrow-inerte.cjs` é **uma função pura de CI**. Não é uma Edge Function nem uma RPC, não lê o Supabase nem o Asaas, não altera uma reserva, não consulta conta bancária e **não pode comprovar fatos externos**. Os rótulos `pago_comprovado` e `liberado_sem_pagamento` aparecem apenas como **estados futuros modelados**, nunca como resultado de execução. A classificação observada se restringe a `revisao` e `contestacao`.
+
+## Contratos exercitados no laboratório
+
+1. A separação deve estar `congelada` com valor positivo, inteiro e seguro em centavos. A amostra contém `remuneracao_id`, `valor_centavos` e `competencia` em cada linha.
+2. A função **não corta as primeiras 1.000 remunerações**. Soma toda a lista recebida usando `BigInt`, detectando valores inválidos, centavos excedendo precisão segura, IDs duplicados, competência irregular, soma divergente e contagem de amostra diferente da contagem declarada.
+3. A contagem `contagem_creditos_no_livro`, mesmo coincidente, **não prova que todas as páginas do banco foram lidas**. Apenas compara dois números fornecidos ao ensaio; `cobertura_integral_do_livro_comprovada=false` sempre.
+4. Modela saldos abaixo de R$ 100 sem os descartar e carteiras acima de R$ 5.000 sem as limitar. O teto de R$ 5.000 é apenas uma referência por **Pix individual no protótipo**, não um teto da carteira nem uma autorização de saque.
+5. Estados bancários `DONE`, `PENDING`, `FAILED`, `CANCELLED` são observações não confiáveis para quitação. `DONE` com `FAILED/CANCELLED` sinaliza investigação como `contestacao`; `DONE` isolado continua `revisao`. Ausência de GET não comprova ausência de Pix anterior.
+6. Todas as saídas são `HOLD_OBRIGATORIO` com `pagamento_autorizado=false`, `liberacao_autorizada=false`, `baixa_realizada=false`, `movimenta_dinheiro=false`. Inputs alegando aprovações, dados bancários ou beneficiário confirmado são **ignorados**. Saída não inclui ID, CPF nem chave Pix.
+
+## Testes CI
+
+`tests/catalogo-asaas-resolucao-escrow-inerte.test.cjs` é executado automaticamente pelo `npm test` do GitHub Actions. Contém casos de 1.601 e 1.801 remunerações, três competências, carteira abaixo do mínimo, carteira acima de R$ 5.000, soma com `BigInt`, duplicidade, inconsistência de contagem, estados contraditórios, entradas falsas que alegam aprovação, determinismo, imutabilidade e ausência de acesso externo.
+
+## Pendências críticas antes de qualquer movimentação (#43)
+
+- [ ] Realizar **leitura autoritativa de TODOS os créditos** diretamente no PostgreSQL com cursor/locks adequados, não a partir de array enviado pelo browser; validar ausência de duplicidade e lacunas de paginação.
+- [ ] Comprovar **independentemente** pagamento, beneficiário Pix original ou inexistência de Pix pendente (#41). O Asaas Sandbox e um GET paginado não bastam.
+- [ ] Conectar **dois revisores habilitados** com MFA válido, sessões reais e segregação de funções (#42), incluindo renovação/revogação.
+- [ ] Projetar e testar migração de estados e baixa/liberação **atômica por remuneração**, com locks comuns, proteção idempotente contra replay, concorrência, estorno, compensação e recuperação de falha.
+- [ ] Validar totais de remunerações com mais de 1.000 registros, vários meses de retenção e saldo abaixo de R$ 100 **no banco**, não apenas neste ensaio.
+- [ ] Requer autorização contratual e regularização antes de piloto controlado (#45), revisão de segurança de go-live (#44) e aprovação explícita do usuário.
+
+**Estado de entrega:** somente branch do PR #39, mantido DRAFT. `HOLD_OBRIGATORIO`. Sem merge, implantação da Edge financeira, migração de resolução, saque/PIX real, alterações no Supabase de produção ou confirmação de quitação.
+
+## Incremento PostgreSQL real descartável — 11/10/2026
+
+A fixture `supabase/tests/isolated/catalogo-asaas-staged-guards-postgres.sql` passou a definir, **dentro de uma transação de CI**, a função `pg_temp.catalogo_asaas_previsualizar_resolucao_inerte(uuid)`. A função não está numa migração e não é disponibilizada por REST, Edge Function ou SQL de produção. O `ROLLBACK` final desfaz todas as linhas sintéticas; o esquema `pg_temp` não permanece instalado.
+
+O preview consulta exclusivamente tabelas reais do PostgreSQL efêmero, sem usar array de créditos do cliente:
+
+- Busca a titularidade da separação, adquire o advisory lock transacional `asaas-saque:<motoboy UUID>` e trava a linha da separação.
+- Em uma CTE `MATERIALIZED`, lê **todos** os itens da separação e suas remunerações com `FOR UPDATE OF i,r`, sem `LIMIT` nem `OFFSET`.
+- Conta créditos, soma os centavos com `numeric`, reconstrói a fingerprint SHA-256 ordenada por remuneração e verifica titular, valor atual, status, financiamento, repasse e prova de financiamento do pedido.
+- A fixture usa dois créditos sintéticos válidos (R$ 120) e depois revoga o financiamento de um deles: o segundo diagnóstico deve marcar `contestacao` e manter HOLD, sem baixa.
+
+**Limites não resolvidos:** o teste SQL ainda não estressa 1.000+ linhas em uma reserva efetiva; a simulação Node exercita até 1.801 itens, mas não prova comportamento de locks/tempos sob concorrência real. Nem a consulta transacional local equivale a extrato bancário independente. Nenhuma função efetiva de resolução foi publicada. Antes de uma migração de produção será necessário ensaio SQL com alto volume, múltiplas conexões, dados reais anonimizados, revisão de segurança, prova do destinatário original (#41) e autorização dos revisores (#42).
+
+**Tudo permanece `HOLD_OBRIGATORIO`, com `pagamento_autorizado=false`, `liberacao_autorizada=false` e `baixa_realizada=false`. Nenhum Pix é enviado.**
+
+## Ensaio de alto volume e duas sessões — 11/10/2026
+
+- **Volume real no clone PostgreSQL da CI:** a fixture de `supabase/tests/isolated/catalogo-asaas-staged-guards-postgres.sql` insere **1.201 pedidos, 1.201 comissões e 1.201 remunerações** em duas competências (601 + 600), com fechamentos, componentes da fatura, cobranças fictícias pagas e financiamento verificado pelo esquema local. As linhas são sintéticas e todas desaparecem no `ROLLBACK`; não se criam cobranças no Asaas.
+- **Escopo do teste de volume:** a separação de 1.201 itens é montada **diretamente com linhas sintéticas** no PostgreSQL descartável, após conferir contagem, soma e fingerprint. Ela **não** executa 1.201 vezes a RPC de reserva: essa RPC continua testada separadamente com dois créditos reais de CI. O ensaio de 1.201 registros testa especificamente o leitor transacional e suas verificações HOLD, sem produção ou transferência externa.
+- Para manter a CI repetível, os pedidos e componentes são gerados por operações SQL **set-based** (`generate_series` e `INSERT ... SELECT`), e não 1.201 loops de requisições; a conferência final continua lendo cada remuneração da reserva por `FOR UPDATE` numa CTE `MATERIALIZED`, **sem LIMIT/OFFSET**, verificando 1.201 créditos, valor total exato e HOLD.
+- **Concorrência em duas conexões PostgreSQL:** o script já existente `scripts/validacao-pagamentos/test-asaas-advisory-concurrency.py` instala a mesma função `pg_temp` apenas na conexão de ensaio, enquanto outra sessão mantém o mutex `asaas-saque:<motoboy>`. O diagnóstico deve realmente **esperar o advisory lock** e continuar congelado tanto após `COMMIT` quanto após `ROLLBACK` da primeira transação. O teste também verifica a ausência de saque comum criado.
+- Estas verificações **não são uma migração de resolução**, não autenticam revisores reais, não comprovam transferência externa nem habilitam Pix. O laboratório usa banco de CI descartável, não STAGING nem PROD. Nenhum código desta etapa pode mover dinheiro.
+
+**Ainda pendente para finalizar #43:** produção de extratos/conciliação independente (#41); MFA e dupla aprovação de responsáveis reais (#42); projeto e validação da máquina de estados, transações de baixa/liberação idempotentes, compensação e recuperação; revisão de segurança e piloto autorizado. Os limites acima dizem respeito a testes, não a garantias de produção.
+
+## Incremento de idempotência documental com duas sessões — 11/10/2026
+
+O novo `supabase/tests/isolated/catalogo-asaas-resolucao-idempotencia-race-inerte.sql` é **uma fixture, não uma migração**. Existe somente no banco `catalogo_asaas_race_ci` do GitHub Actions e exige uma configuração de laboratório presente na sessão. A criação de schema/tabela/função é rejeitada em qualquer outro banco. O clone é destruído ao final do job. Não há grants para `anon`, `authenticated` nem `service_role`; nenhuma aplicação ou Edge financeira chama essa fixture.
+
+A fixture contém um livro **append-only de decisões puramente documentais** (`revisao` ou `contestacao`). O banco trava primeiro o mesmo mutex `asaas-saque:<titular>`, depois a linha da reserva, confere `situacao='congelada'` e sua fingerprint local e só então olha a tentativa e a versão. Duas restrições únicas impõem:
+
+- **Mesma `tentativa_id`, mesmos dados e versão:** retorno idempotente, sem nova linha; não equivale a segunda revisão, aprovação financeira ou pagamento.
+- **Mesma `tentativa_id` com classificação/escrow diferentes:** conflito, sem escrita.
+- **Outro identificador para a mesma separação+fingerprint:** conflito, sem escrita.
+- **Tentativa em transação que sofreu `ROLLBACK`:** uma segunda sessão que aguardou o mutex pode registrar apenas **uma** linha documental; testes confirmam não haver registro duplicado.
+- **Tentativa de classificar como `pago_comprovado` ou liberar:** entrada inválida e HOLD, já que só `revisao/contestacao` são permitidos.
+- **UPDATE/DELETE:** proibidos por trigger de laboratório.
+
+O cenário `scenario_resolucao_documental_idempotente_concorrente()`, no script de testes com duas sessões PostgreSQL reais, verifica espera pelo mutex, COMMIT, replay, troca de dados, reutilização de identificadores, ROLLBACK e ausência de saques; contrato Node adicional detecta regressões no isolamento da fixture.
+
+**Limite fundamental:** esse livro não prova pagamento, ausência de Pix anterior, identidade bancária, consentimento, MFA nem dupla aprovação. Sua singularidade não demonstra idempotência de uma transferência real no Asaas. A futura resolução transacional de créditos permanece bloqueada por #41, #42 e pelas demais tarefas de #43. Nenhuma tabela de produção, crédito ou saldo é modificado por esta etapa.
+
+**Toda resposta tem `HOLD_OBRIGATORIO`, `pagamento_autorizado=false`, `liberacao_autorizada=false`, `baixa_realizada=false` e `movimenta_dinheiro=false`.**
+
+## Simulação SQL de falha no meio de uma operação — 11/10/2026
+
+Na fixture de PostgreSQL descartável, `supabase/tests/isolated/catalogo-asaas-staged-guards-postgres.sql`, duas tabelas `TEMP` (com `ON COMMIT DROP`) registram **exclusivamente planos documentais de sombra**, vinculando um identificador de tentativa e versão dos créditos à reserva congelada. Elas não atualizam `catalogo_remuneracoes_v2`, não alteram estados da reserva e não chamam o Asaas.
+
+O teste usa a separação previamente criada com **2 remunerações financiadas, total R$ 120**:
+
+1. Dentro de um subbloco transacional, grava o cabeçalho e **apenas o primeiro item de sombra** e injeta uma exceção `P4301`. O savepoint implícito do PL/pgSQL deve reverter **as duas gravações**; são exigidos **zero** cabeçalhos e **zero** itens após a falha.
+2. Repete a preparação com a mesma identificação de tentativa e insere **todos os itens** em `INSERT ... SELECT`, verificando contagem integral e soma de centavos.
+3. Simula um replay idêntico: valida identificador, separação e fingerprint, sem criar novas linhas. Uma tentativa diferente para a mesma reserva encontra `UNIQUE(separacao_id)` e deve ser rejeitada.
+4. Confirma que as remunerações verdadeiras continuam `disponivel`, com `repasse_id IS NULL`. A fixture termina com `ROLLBACK`.
+
+**Limitação essencial:** esta é uma simulação da *atomicidade de preparação documental em tabelas temporárias*. Não há executor de Pix, baixa, liberação ou migração de resolução. Ela não comprova concorrência de uma baixa real nem recuperação após resposta bancária ambígua. O livro de duas sessões mencionado acima cobre concorrência de tentativas documentais, não execução financeira. As dependências #41 e #42 permanecem obrigatórias.
+
+## Conferência por remuneração: dois erros que a soma não detecta (11/10/2026)
+
+A fixture SQL transacional agora define `pg_temp.catalogo_asaas_validar_itens_sombra_inerte(uuid,uuid)`. A comparação usa `FULL OUTER JOIN` entre os **IDs e valores de cada remuneração separada** e os IDs/valores do plano temporário. Ela também compara quantidade, total e fingerprint SHA-256 ordenada por ID. O diagnóstico jamais autoriza dinheiro: `HOLD_OBRIGATORIO`, `pagamento_autorizado=false`, `baixa_realizada=false` e `movimenta_dinheiro=false`.
+
+Foram adicionados cenários reais do PostgreSQL efêmero em que:
+
+- **Adulteração balanceada:** uma das duas comissões recebe +1 centavo na cópia temporária e a outra recebe -1 centavo. A soma ainda é **R$120,00** e o número de itens ainda é **2**, mas o comparador deve encontrar **2 créditos divergentes** e rejeitar a integridade.
+- **Item excluído na sombra:** mesmo sem alterar nenhum crédito original, o comparador deve encontrar **1 crédito ausente** e rejeitar.
+- **Identificador de tentativa desconhecido:** não pode reaproveitar plano ou fingerprint de outra tentativa.
+- **Rollback de cada ataque:** subtransações de teste revertem as alterações temporárias; a comparação posterior deve voltar a indicar integridade sem modificar `catalogo_remuneracoes_v2`.
+
+**Fronteira:** é uma prova negativa de integridade de *plano documental temporário*, não o mecanismo final de transferência ou baixa. A resolução real continua bloqueada por evidência bancária independente (#41), revisores MFA (#42) e projeto transacional idempotente auditado (#43).
+
+## Recuperação de resultado bancário incerto — 11/10/2026
+
+Novo laboratório de **função pura, sem I/O**, `scripts/validacao-pagamentos/simular-envio-pix-incerto-inerte.cjs`, acompanhado de testes Node. Ele modela o problema em que a aplicação iniciou uma tentativa de Pix mas perdeu a resposta, recebeu um erro HTTP ou viu respostas GET que não constituem prova bancária independente.
+
+A tentativa exige identificação de separação, solicitação, tentativa, referência externa determinística (`guia-exc:<tipo>:<solicitacao_id>`), valor inteiro positivo em centavos e fingerprint SHA-256. Cada evento inclui identificador, sequência, tipo, tentativa, referência e centavos. Lacunas na sequência, IDs duplicados, referências diferentes e valores inconsistentes produzem `historico_inconsistente`, nunca autorização.
+
+| Evento/observação de teste | Classificação ou bloqueio |
+|---|---|
+| Intenção registrada, sem marco de envio | Não prova que o Pix nunca existiu; manter HOLD |
+| Envio iniciado + resposta perdida ou HTTP 5xx | **Resultado potencialmente efetivado**; não reenviar POST |
+| Resposta HTTP aceita | Não equivale a liquidação bancária independente |
+| GET com `DONE` | Não comprova sozinho o beneficiário original |
+| GET com `FAILED`/`CANCELLED` | Não prova ausência de execução anterior ou de outro Pix |
+| GET com `DONE` e `FAILED` ou `CANCELLED` | Observações contraditórias; investigação obrigatória |
+| Reenvio solicitado sobre histórico parcial | Sinaliza reenvio bloqueado; não abre novo saque |
+| Mais de 1.600 GETs sintéticos | Percorre a amostra inteira sem impor limite oculto de 1.000 |
+
+A saída do simulador **nunca contém beneficiário, CPF, chave Pix, credencial, valor de autorização ou nova requisição bancária**. Mesmo com observação `DONE`, retorna `HOLD_OBRIGATORIO`, `pode_reenviar_post=false`, `pode_criar_novo_saque=false`, `pagamento_autorizado=false`, `liberacao_autorizada=false`, `baixa_realizada=false` e `movimenta_dinheiro=false`.
+
+**Semântica crítica:** um GET do Asaas não estabelece por si só que *nenhum* outro envio existiu. Uma resposta perdida depois de iniciar um envio deve ser investigada por canal bancário independente, comparando ID bancário, referência, valor, conta de destino originalmente autorizada, liquidação e histórico de transferências anteriores. O simulador não coleta essas provas e, por isso, jamais conclui "pago" ou "não pago".
+
+**Próximo requisito de implementação real:** journal de intenção imutável e idempotente gravado no banco **antes** de qualquer POST; controle transacional por tentativa, lock por motoboy, proibição de segundo POST enquanto houver resultado incerto, conciliação independente e transição de estado com MFA/segregação efetivos. Isso ainda é **projeto**, não código financeiro habilitado. Mantém #41, #42 e #43 abertos.

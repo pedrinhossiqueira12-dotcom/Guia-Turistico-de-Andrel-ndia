@@ -16,9 +16,17 @@ function cryptoModule() {
 }
 function delivery(actor, result={ok:true}, key=KEY) {
   let handler;const calls=[];const c=cryptoModule();
-  const db={auth:{getUser:async()=>({data:{user:{id:actor}},error:null})},rpc:async(name,args)=>{calls.push({name,args});return{data:result,error:null};}};
+  const db={auth:{getUser:async()=>({data:{user:{id:actor}},error:null})},
+    rpc:async(name,args)=>{calls.push({name,args});return{data:result,error:null};},
+    from:(name)=>{
+      const q={select(){return q;},eq(){return q;},
+        then(resolve,reject){return Promise.resolve({data:name==='catalogo_aceites_operacionais'
+          ?[{documento:'termos'},{documento:'privacidade'}]:[],error:null}).then(resolve,reject);}};
+      return q;
+    }};
   const context={...c,Request,Response,createClient:()=>db,console:{error(){}},Deno:{env:{get:name=>name==='MP_OAUTH_ENCRYPTION_KEY'?key:''},serve:fn=>{handler=fn;}}};
-  vm.runInNewContext(stripTypeScriptTypes(fs.readFileSync('supabase/functions/catalogo-entregas/index.ts','utf8').replace(/^import[^;]+;\s*/gm,'')),context);
+  const conflictHelper=stripTypeScriptTypes(fs.readFileSync('supabase/functions/_shared/catalogo-competencia-conflito.ts','utf8')).replace(/^export\s+/gm,'');
+  vm.runInNewContext(conflictHelper+'\n'+stripTypeScriptTypes(fs.readFileSync('supabase/functions/catalogo-entregas/index.ts','utf8').replace(/^import[^;]+;\s*/gm,'')),context);
   return {handler,calls};
 }
 function req(body) { return new Request('https://example.invalid/functions/v1/catalogo-entregas',{method:'POST',headers:{authorization:'Bearer QA-token','content-type':'application/json'},body:JSON.stringify(body)}); }

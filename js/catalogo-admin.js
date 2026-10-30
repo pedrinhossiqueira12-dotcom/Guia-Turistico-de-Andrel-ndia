@@ -1,11 +1,18 @@
 (function () {
   "use strict";
 
-  const SUPABASE_URL = "https://xdmbkflufsfqziixzpxc.supabase.co";
-  const SUPABASE_KEY = "sb_publishable_dvwNkLDf3oZrCqvZ5uAaRA_VsfiuZFy";
+  // Acessar a base de testes somente por opt-in explicito na pagina
+  // de catalogo. Sem a flag, a aplicacao publica nao muda de projeto.
+  const parametros = new URLSearchParams(window.location.search);
+  const QA_SANDBOX = parametros.get("asaas-sandbox") === "1";
+  const SUPABASE_URL = QA_SANDBOX
+    ? "https://jbttwihctuibchhcyqtl.supabase.co"
+    : "https://xdmbkflufsfqziixzpxc.supabase.co";
+  const SUPABASE_KEY = QA_SANDBOX
+    ? "sb_publishable_W80rooaGpHP4voYiLwtz7w_-k32qHsF"
+    : "sb_publishable_dvwNkLDf3oZrCqvZ5uAaRA_VsfiuZFy";
   const BUCKET = "catalogos";
   const IMAGEM_PADRAO = "../img/sem-foto.png";
-  const parametros = new URLSearchParams(window.location.search);
   const comercioId = (parametros.get("id") || parametros.get("comercio_id") || "").trim();
   const $ = (id) => document.getElementById(id);
 
@@ -15,6 +22,8 @@
   let comercio = null;
   let removendoCategoriaId = null;
   let carregando = false;
+  let operacoesSuspensas = false;
+  let paiPedidosOffline = null;
   const ENTREGA_API_URL = `${SUPABASE_URL}/functions/v1/catalogo-entregas`;
   const STALE_SESSION_REQUEST = "STALE_SESSION_REQUEST";
   const entregaState = { motoboys: [], generation: 0, userId: "", sessionToken: "", carregando: false };
@@ -31,7 +40,7 @@
 
   function getClient() {
     if (supabaseClient) return supabaseClient;
-    supabaseClient = window.supabaseLoginClient || window.supabase?.createClient(SUPABASE_URL, SUPABASE_KEY);
+    supabaseClient = QA_SANDBOX ? (window.supabaseLoginClient?.supabaseUrl === SUPABASE_URL ? window.supabaseLoginClient : window.supabase?.createClient(SUPABASE_URL, SUPABASE_KEY)) : (window.supabaseLoginClient || window.supabase?.createClient(SUPABASE_URL, SUPABASE_KEY));
     return supabaseClient;
   }
 
@@ -56,7 +65,7 @@
   }
 
   function linkPerfil() {
-    const url = comercioId ? `local.html?id=${encodeURIComponent(comercioId)}` : "../index.html";
+    const url = QA_SANDBOX ? `catalogo.html?id=${encodeURIComponent(comercioId)}&asaas-sandbox=1` : (comercioId ? `local.html?id=${encodeURIComponent(comercioId)}` : "../index.html");
     $("linkPerfil").href = url;
     $("linkCriarConta").href = url;
     $("linkContratacao").href = `catalogo-venda.html?id=${encodeURIComponent(comercioId)}`;
@@ -82,6 +91,10 @@
   async function entrarPainel() {
     if (carregando) return;
     carregando = true;
+    // O card pode estar dentro da area suspensa de uma sessao anterior.
+    // Nunca reapresenta-lo antes de revalidar a identidade/titularidade.
+    $("pedidosOfflineCard").hidden=true;
+    $("listaPedidosOffline").innerHTML="";
     const supabase = getClient();
     try {
       const { data: { session } = {} } = await supabase.auth.getSession();
@@ -100,16 +113,46 @@
       $("loginCard").hidden = true;
       $("logoutCatalogo").hidden = false;
       const resultado = await validarProprietario();
+      paiPedidosOffline=paiPedidosOffline||$("pedidosOfflineCard")?.parentElement;
+      operacoesSuspensas=resultado.bloqueado===true;
       comercio = await carregarComercio();
       $("nomeComercioAdmin").textContent = comercio?.nome || comercioId;
+      if (resultado.proprietario && !resultado.admin) {
+        const termos=await chamarFaturaPix({acao:"consultar_termos",papel:"comercio"});
+        // Quitar faturas existentes é permitido mesmo sem novo aceite.
+        // O bloqueio da loja permanece: não habilita produtos nem novas vendas.
+        const motivoFinanceiro=["Comissão de pagamentos presenciais vencida.",
+          "Encerramento solicitado pelo proprietário"].includes(resultado.motivo_bloqueio);
+        if (!termos.aceito && !(resultado.bloqueado && motivoFinanceiro)) {
+          $("painelCatalogo").hidden=true;
+          $("catalogoBloqueado").hidden=true;
+          if (!$("catalogoTermsDialog").open) $("catalogoTermsDialog").showModal();
+          setNotice("Aceite dos termos", "Leia e aceite as regras de cobrança mensal antes de utilizar o painel.");
+          return;
+        }
+      }
 
       if (!resultado.ativo && (!resultado.admin || resultado.proprietario)) {
         $("painelCatalogo").hidden = true;
         $("catalogoBloqueado").hidden = false;
         if (resultado.bloqueado) {
           $("lockedTitle").textContent = "Catálogo temporariamente bloqueado";
-          $("lockedText").textContent = "O administrador do Guia bloqueou este catálogo. Entre em contato pelo perfil do comércio para obter orientação.";
+          const inadimplente=resultado.motivo_bloqueio==="Comissão de pagamentos presenciais vencida.";
+          const encerrando=resultado.motivo_bloqueio==="Encerramento solicitado pelo proprietário";
+          $("lockedTitle").textContent=encerrando?"Encerramento solicitado":"Catálogo temporariamente bloqueado";
+          $("lockedText").textContent = encerrando
+            ? "A loja está suspensa para novos pedidos. Quite possíveis faturas anteriores para que a administração finalize o encerramento."
+            : inadimplente
+            ? "Existem faturas vencidas. Novos pedidos estão suspensos, mas você pode consultar e pagar sua fatura abaixo."
+            : "Este catálogo está bloqueado. Solicite orientação à administração do Guia.";
+          if ($("catalogoPagamentoBloqueado"))
+            $("catalogoPagamentoBloqueado").hidden=!(inadimplente||encerrando);
           $("linkContratacao").hidden = true;
+          if(inadimplente||encerrando){
+            $("catalogoBloqueado").appendChild($("pedidosOfflineCard"));
+            $("pedidosOfflineCard").hidden=false;
+            await carregarPedidosOffline();
+          }
         } else {
           $("lockedTitle").textContent = "Catálogo não liberado";
           $("lockedText").textContent = "Conecte a conta Mercado Pago do comércio para liberar gratuitamente a gestão do catálogo.";
@@ -120,7 +163,11 @@
       }
 
       $("catalogoBloqueado").hidden = true;
+      if ($("catalogoPagamentoBloqueado")) $("catalogoPagamentoBloqueado").hidden = true;
       $("painelCatalogo").hidden = false;
+      if(paiPedidosOffline&&$("pedidosOfflineCard").parentElement!==paiPedidosOffline)
+        paiPedidosOffline.insertBefore($("pedidosOfflineCard"),paiPedidosOffline.children[1]||null);
+      $("pedidosOfflineCard").hidden=false;
       setNotice(resultado.admin ? "Acesso administrativo confirmado" : "Acesso confirmado", resultado.admin
         ? "Você está corrigindo o catálogo como administrador do Guia."
         : "Você está gerenciando o catálogo deste comércio.");
@@ -292,9 +339,10 @@
       const pix = pedido.forma_pagamento === "pix" || ["pix", "mercadopago"].includes(pedido.provedor);
       const pixAprovado = ["aprovado", "approved"].includes(String(pedido.status_pagamento || "").toLowerCase());
       const aguardandoPix = pix && !pixAprovado && pedido.status === "aguardando_pagamento";
-      const proxima = ["aguardando_pagamento", "pago"].includes(pedido.status) && (!pix || pixAprovado) ? "Aceitar e preparar" : pedido.status === "em_preparo" && (!pix || pixAprovado) ? "Marcar como pronto" : "";
+      const suspenso=typeof operacoesSuspensas!=="undefined"&&operacoesSuspensas;
+      const proxima = !suspenso && ["aguardando_pagamento", "pago"].includes(pedido.status) && (!pix || pixAprovado) ? "Aceitar e preparar" : pedido.status === "em_preparo" && (!suspenso||Boolean(pedido.aceito_em)) && (!pix || pixAprovado) ? "Marcar como pronto" : "";
       const podeCancelar = ["aguardando_pagamento", "pago", "em_preparo", "pronto"].includes(pedido.status);
-      const podeConfirmar = podeCancelar && (!pix || pixAprovado);
+      const podeConfirmar = podeCancelar && (!pix || pixAprovado) && (!suspenso||Boolean(pedido.aceito_em));
       const aceito = Boolean(pedido.aceito_em) || ["reservado", "coletado", "em_entrega", "entregue", "cancelamento_solicitado"].includes(pedido.entrega_status);
       const endereco = pedido.modalidade === "entrega" && pedido.cliente_endereco ? ` · ${escapar(pedido.cliente_endereco)}${pedido.cliente_numero ? `, ${escapar(pedido.cliente_numero)}` : ""}` : "";
       const versao = Number(pedido.versao_financeira) === 2 ? "Taxa atual" : "Taxa histórica";
@@ -303,7 +351,7 @@
       const totalFee = Number(pedido.taxa_total_centavos ?? plataforma + motoboy);
       const snapshots = pedido.feeSnapshots || pedido.fee_snapshots || pedido.metadata?.feeSnapshots;
       const snapshotText = snapshots ? ` · snapshot ${escapar(typeof snapshots === "string" ? snapshots : "registrado")}` : "";
-      const atribuir = pedido.modalidade === "entrega" && !["entregue", "cancelado"].includes(pedido.status) ? renderizarMotoboysLinha(pedido) : "";
+      const atribuir = pedido.modalidade === "entrega" && (!suspenso||Boolean(pedido.aceito_em)) && !["entregue", "cancelado"].includes(pedido.status) ? renderizarMotoboysLinha(pedido) : "";
       return `<article class="manager-row offline-order-row" data-pedido-id="${escapar(id)}"><div class="offline-order-copy"><strong>${escapar(pedido.cliente_nome || "Cliente")} · ${reais(pedido.total_centavos)}</strong><small>Pedido: ${escapar(pedido.referencia_externa || id)}</small><small>${escapar(pedido.provedor || "offline")} · ${escapar(pedido.forma_pagamento || "Pagamento não informado")} · ${escapar(pedido.modalidade || "")}${endereco}</small>${renderizarItensPedido(pedido)}${renderizarObservacoesPedido(pedido)}${renderizarContatoCliente(pedido)}${renderizarEstadoEntregador(pedido)}<small>Produtos: ${reais(pedido.subtotal_produtos_centavos)} · Taxa do pedido: ${reais(totalFee)}</small><small>${escapar(versao)}${snapshotText} · ${escapar(statusPagamento(pedido.status_pagamento))}</small><span class="offline-status" data-status="${escapar(pedido.entrega_status || pedido.status)}">${escapar(statusOffline(pedido.entrega_status || pedido.status))}</span></div><div class="manager-actions offline-order-actions">${aguardandoPix ? `<p class="form-feedback">Aguardando pagamento Pix. O aceite será liberado após a aprovação.</p>` : ""}${proxima ? `<button class="small-button" type="button" data-offline-next="${escapar(id)}" data-offline-status="${escapar(["aguardando_pagamento", "pago"].includes(pedido.status) ? "em_preparo" : "pronto")}">${proxima}</button>` : ""}${podeConfirmar ? `<button class="small-button" type="button" data-offline-confirm="${escapar(id)}">Confirmar código</button>` : ""}${podeCancelar ? `<button class="small-button danger" type="button" data-offline-cancel="${escapar(id)}">${aceito ? "Solicitar ocorrência" : "Cancelar pedido"}</button>` : ""}${atribuir}</div></article>`;
     }).join("");
   }
@@ -312,7 +360,7 @@
     $("listaPedidosOffline").innerHTML = '<p class="form-feedback">Atualizando pedidos…</p>';
     try {
       renderizarPedidosOffline((await chamarPedidosOffline({ acao: "listar_pedidos" })).pedidos || []);
-      await carregarMotoboys();
+      try{await carregarMotoboys();}catch{setFeedback("pedidosOfflineFeedback","Lista de entregadores indisponível. Os pedidos permanecem visíveis.");}
     }
     catch (error) { $("listaPedidosOffline").innerHTML = `<p class="form-feedback">${escapar(error.message || "Não foi possível carregar os pedidos.")}</p>`; }
   }
@@ -425,6 +473,7 @@
       aberto: "Em aberto",
       faturado: "Fechada, aguardando pagamento",
       pendente: "Pix pendente",
+      emissao_reservada: "Pix em conciliação — nenhuma nova cobrança deve ser gerada",
       pago: "Paga",
       vencido: "Vencida",
       bloqueado: "Bloqueada por inadimplência",
@@ -437,8 +486,20 @@
   }
 
   async function chamarFaturaPix(body) {
-    const { data, error } = await getClient().functions.invoke("catalogo-fatura-pix", { body: { ...body, comercio_id: comercioId } });
+    let endpoint="catalogo-asaas-financeiro";
+    // A rota antiga continua sendo a autoridade das faturas MP. Identificar por
+    // leitura autenticada, nunca por erro textual nem por escolha do navegador.
+    if(body.acao==="consultar_cobranca"){
+      const leitura=await getClient().functions.invoke("catalogo-asaas-financeiro",{
+        body:{acao:"obter_fatura",competencia:body.competencia,comercio_id:comercioId}
+      });
+      if(leitura.error||leitura.data?.success!==true||!["asaas","mercadopago"].includes(leitura.data.provedor))
+        throw new Error("Não foi possível identificar o provedor da fatura. Nenhuma emissão foi solicitada.");
+      if(leitura.data.provedor==="mercadopago")endpoint="catalogo-fatura-pix";
+    }
+    const { data, error } = await getClient().functions.invoke(endpoint, { body: { ...body, comercio_id: comercioId } });
     if (error || !data?.success) throw new Error(data?.mensagem || error?.message || "Não foi possível processar o pagamento da fatura.");
+    if(endpoint==="catalogo-fatura-pix")return {...data,fatura:data.fechamento,provedor:"mercadopago"};
     return data;
   }
 
@@ -448,24 +509,90 @@
     return competencia;
   }
 
-  function renderizarPixFatura(data) {
+  let consultaFaturaSeq = 0;
+  let visualizacaoFaturaSeq = 0;
+  let regularizacaoFaturaSeq = 0;
+  let competenciaAptaParaEmissao = "";
+  let faturaAptaParaEmissao = false;
+  let emissaoFaturaEmAndamento = false;
+  function aplicarElegibilidadeFatura(dado,competencia){
+    const fatura=dado.fatura;
+    const total=Number(fatura?.total_comissao_centavos);
+    faturaAptaParaEmissao=Boolean(fatura&&
+      ["faturado","vencido","bloqueado"].includes(String(fatura.status))&&
+      Number.isSafeInteger(total)&&total>=500&&
+      dado.fatura_abaixo_minimo_asaas!==true&&
+      !dado.cobranca_status&&dado.provedor!=="mercadopago");
+    competenciaAptaParaEmissao=faturaAptaParaEmissao?competencia:"";
+    $("gerarPixFatura").disabled=!faturaAptaParaEmissao||emissaoFaturaEmAndamento;
+  }
+  // Preflight read-only antes de qualquer emissao: nao criar Pix se a
+  // competencia nao possui fatura elegivel ou se existe cobranca/reserva.
+  async function atualizarPreflightFatura(opcoes={}){
+    const preservarResultado=opcoes?.preservarResultado===true;
+    const competencia=$("competenciaOffline")?.value||"";
+    const botao=$("gerarPixFatura");
+    const numero=++consultaFaturaSeq;
+    const visualizacao=preservarResultado?visualizacaoFaturaSeq:++visualizacaoFaturaSeq;
+    faturaAptaParaEmissao=false;
+    competenciaAptaParaEmissao="";
+    if(!preservarResultado)$("faturaPixResultado").textContent="";
+    if(!botao)return;
+    botao.disabled=true;
+    if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(competencia))return;
+    try{
+      const dado=await chamarFaturaPix({acao:"obter_fatura",competencia});
+      if(numero!==consultaFaturaSeq||visualizacao!==visualizacaoFaturaSeq||$("competenciaOffline")?.value!==competencia)return;
+      const fatura=dado.fatura;
+      aplicarElegibilidadeFatura(dado,competencia);
+      if(!preservarResultado&&(dado.fatura_abaixo_minimo_asaas===true||
+         dado.cobranca_status||dado.provedor==="mercadopago"))
+        renderizarPixFatura(dado);
+      else if(!preservarResultado&&!fatura)$("faturaPixResultado").textContent=
+        "Ainda nao ha fatura fechada neste mes.";
+    }catch(erro){
+      if(numero!==consultaFaturaSeq||visualizacao!==visualizacaoFaturaSeq||$("competenciaOffline")?.value!==competencia)return;
+      faturaAptaParaEmissao=false;
+      botao.disabled=true;
+      $("faturaPixResultado").textContent=
+        erro.message||"Nao foi possivel verificar a fatura. Nenhum Pix foi solicitado.";
+    }
+  }
+
+  function renderizarPixFatura(data,containerId="faturaPixResultado") {
+    const container=$(containerId);
+    if (!container) return;
     const fatura = data.fatura || {};
     const pix = data.pix || {};
     const total = Number(data.valor_centavos ?? fatura.total_comissao_centavos ?? 0);
     const situacao = data.cobranca_status || fatura.status || "";
+    // Protecao adicional na interface, inclusive se um backend antigo
+    // devolver indevidamente um Pix de cobranca estornada/contestada/cancelada.
+    const cobrancaNaoPagavel = ["estornado", "contestado", "cancelado", "pago", "emissao_reservada"].includes(situacao);
     const partes = [
       `<p><strong>Total a pagar:</strong> ${reais(total)}</p>`,
       `<p><strong>Situação:</strong> ${escapar(traducaoCobranca(situacao))}${fatura.vencimento_em ? ` · vencimento ${escapar(fatura.vencimento_em)}` : ""}</p>`,
     ];
     if (data.mensagem) partes.push(`<p class="form-feedback">${escapar(data.mensagem)}</p>`);
-    if (pix.code) {
-      if (pix.imageBase64) partes.push(`<img class="pix-qr" alt="QR Code Pix da fatura" src="data:image/png;base64,${pix.imageBase64}">`);
+    if (data.fatura_abaixo_minimo_asaas===true && data.pendencias_pequenas_estimadas){
+      const resumo=data.pendencias_pequenas_estimadas;
+      partes.push(`<p class="form-feedback">Pendências de faturas pequenas ainda sem cobrança individual: ${escapar(reais(resumo.total_centavos))} em ${escapar(resumo.quantidade)} competência(s). Valor estimado, sujeito a conciliação; não é um Pix disponível.</p>`);
+    }
+    if (pix.code && !cobrancaNaoPagavel) {
+      // Somente bytes codificados como Base64 PNG podem compor o src do QR.
+      // Nunca interpolar imagem livre no HTML: aspas/atributos de um retorno
+      // inesperado do provedor poderiam alterar a estrutura do documento.
+      const imagemValida = typeof pix.imageBase64 === "string" &&
+        pix.imageBase64.length > 0 && pix.imageBase64.length <= 160000 &&
+        pix.imageBase64.length % 4 === 0 &&
+        /^[A-Za-z0-9+/]+={0,2}$/.test(pix.imageBase64);
+      if (imagemValida) partes.push(`<img class="pix-qr" alt="QR Code Pix da fatura" src="data:image/png;base64,${pix.imageBase64}">`);
       partes.push(`<label class="pix-copy">Pix copia e cola<textarea readonly rows="3">${escapar(pix.code)}</textarea></label>`);
       partes.push('<button id="copiarPixFatura" class="small-button" type="button">Copiar código Pix</button>');
-      if (/^https:\/\//.test(pix.ticketUrl || "")) partes.push(`<p><a class="button button-secondary" href="${escapar(pix.ticketUrl)}" target="_blank" rel="noopener">Abrir no Mercado Pago</a></p>`);
+      if (/^https:\/\//.test(pix.ticketUrl || "")) partes.push(`<p><a class="button button-secondary" href="${escapar(pix.ticketUrl)}" target="_blank" rel="noopener">Abrir cobrança no provedor</a></p>`);
     }
-    $("faturaPixResultado").innerHTML = partes.join("");
-    const copiar = $("copiarPixFatura");
+    container.innerHTML = partes.join("");
+    const copiar = container.querySelector("#copiarPixFatura");
     if (copiar) copiar.addEventListener("click", async () => {
       try { await navigator.clipboard.writeText(pix.code); copiar.textContent = "Código copiado"; }
       catch { copiar.textContent = "Copie o código manualmente"; }
@@ -473,17 +600,116 @@
   }
 
   async function gerarPixFatura() {
-    $("faturaPixResultado").innerHTML = '<p class="form-feedback">Solicitando o Pix da fatura…</p>';
-    try { renderizarPixFatura(await chamarFaturaPix({ acao: "criar_cobranca", competencia: competenciaDaFatura() })); }
-    catch (error) { $("faturaPixResultado").innerHTML = `<p class="form-feedback">${escapar(error.message || "Não foi possível gerar o Pix da fatura.")}</p>`; }
+    if(emissaoFaturaEmAndamento)return;
+    if(!faturaAptaParaEmissao||competenciaAptaParaEmissao!==$("competenciaOffline")?.value){
+      $("faturaPixResultado").textContent=
+        "Consulte uma fatura fechada e elegivel antes de gerar Pix.";
+      return;
+    }
+    const competencia=competenciaDaFatura();
+    const visualizacao=++visualizacaoFaturaSeq;
+    ++consultaFaturaSeq;
+    const atual=()=>visualizacao===visualizacaoFaturaSeq&&$("competenciaOffline")?.value===competencia;
+    emissaoFaturaEmAndamento=true;
+    faturaAptaParaEmissao=false;
+    competenciaAptaParaEmissao="";
+    $("gerarPixFatura").disabled=true;
+    $("faturaPixResultado").textContent="Solicitando o Pix da fatura…";
+    try {
+      const dados=await chamarFaturaPix({
+        acao:"criar_cobranca",competencia,
+        nome_pagador:$("faturaAsaasNomePagador")?.value||"",
+        documento:$("faturaAsaasDocumento")?.value||""
+      });
+      if(atual())renderizarPixFatura(dados);
+    } catch(error) {
+      if(atual())$("faturaPixResultado").textContent=
+        error.message||"Nao foi possivel gerar o Pix da fatura.";
+    } finally {
+      emissaoFaturaEmAndamento=false;
+      // Exigir nova leitura do banco inclusive apos timeout ou resposta incerta.
+      // A API garante a idempotencia; o painel nunca tenta POST automatico.
+      if(atual())await atualizarPreflightFatura({preservarResultado:true});
+      else $("gerarPixFatura").disabled=!faturaAptaParaEmissao||
+        competenciaAptaParaEmissao!==$("competenciaOffline")?.value;
+    }
   }
 
   async function consultarPixFatura() {
-    $("faturaPixResultado").innerHTML = '<p class="form-feedback">Verificando o pagamento da fatura…</p>';
-    try { renderizarPixFatura(await chamarFaturaPix({ acao: "consultar_cobranca", competencia: competenciaDaFatura() })); }
-    catch (error) { $("faturaPixResultado").innerHTML = `<p class="form-feedback">${escapar(error.message || "Não foi possível verificar o pagamento da fatura.")}</p>`; }
+    const competencia=$("competenciaOffline")?.value||"";
+    const visualizacao=++visualizacaoFaturaSeq;
+    ++consultaFaturaSeq;
+    faturaAptaParaEmissao=false;
+    competenciaAptaParaEmissao="";
+    $("gerarPixFatura").disabled=true;
+    const atual=()=>visualizacao===visualizacaoFaturaSeq&&$("competenciaOffline")?.value===competencia;
+    $("faturaPixResultado").textContent="Verificando o pagamento da fatura…";
+    if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(competencia)){
+      $("faturaPixResultado").textContent="Escolha o mes da fatura antes de consultar.";
+      return;
+    }
+    try {
+      const dados=await chamarFaturaPix({ acao: "consultar_cobranca", competencia });
+      if(atual()){
+        aplicarElegibilidadeFatura(dados,competencia);
+        renderizarPixFatura(dados);
+      }
+    }catch(error){
+      if(atual())$("faturaPixResultado").textContent=error.message||"Não foi possível verificar o pagamento da fatura.";
+    }
   }
 
+  async function aceitarTermosComercio(event) {
+    event.preventDefault();
+    const aceitar=$("catalogoTermsAccepted")?.checked===true;
+    const ciente=$("catalogoPrivacyAcknowledged")?.checked===true;
+    if(!aceitar||!ciente)return;
+    const botao=$("catalogoTermsForm")?.querySelector('button[type="submit"]');
+    if(botao)botao.disabled=true;
+    try{
+      const resposta=await chamarFaturaPix({acao:"aceitar_termos",papel:"comercio",aceito_termos:aceitar,ciente_privacidade:ciente});
+      if(!resposta.aceito)throw new Error("O aceite ainda não foi confirmado.");
+      $("catalogoTermsDialog").close();
+      await entrarPainel();
+    }catch(error){
+      $("catalogoTermsFeedback").textContent=error.message||"Não foi possível registrar seu aceite.";
+    }finally{if(botao)botao.disabled=false;}
+  }
+  async function regularizarFaturaBloqueada(acao){
+    // Um unico POST de emissao por painel, incluindo a tela de loja bloqueada.
+    if(acao==="criar_cobranca"&&emissaoFaturaEmAndamento)return;
+    const visualizacao=++regularizacaoFaturaSeq;
+    const competencia=$("competenciaFaturaBloqueada")?.value||"";
+    const atual=()=>visualizacao===regularizacaoFaturaSeq&&$("competenciaFaturaBloqueada")?.value===competencia;
+    if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(competencia)){
+      $("resultadoFaturaBloqueada").textContent="Escolha o mes da fatura pendente.";
+      return;
+    }
+    const emitir=acao==="criar_cobranca";
+    const botao=$("gerarFaturaBloqueada");
+    if(emitir){
+      emissaoFaturaEmAndamento=true;
+      if(botao)botao.disabled=true;
+    }
+    $("resultadoFaturaBloqueada").textContent="Consultando cobranca…";
+    try{
+      const dados=await chamarFaturaPix({acao,competencia,
+        nome_pagador:$("nomeFaturaBloqueada")?.value||"",
+        documento:$("documentoFaturaBloqueada")?.value||""});
+      if(atual()){
+        renderizarPixFatura(dados,"resultadoFaturaBloqueada");
+        if(dados.cobranca_status==="pago")await entrarPainel();
+      }
+    }catch(erro){
+      if(atual())$("resultadoFaturaBloqueada").textContent=
+        erro.message||"Nao foi possivel consultar a fatura.";
+    }finally{
+      if(emitir){
+        emissaoFaturaEmAndamento=false;
+        if(botao)botao.disabled=false;
+      }
+    }
+  }
   async function carregarDadosPainel() {
     const supabase = getClient();
     const [{ data: cfg, error: erroCfg }, { data: cats, error: erroCats }, { data: prods, error: erroProds }] = await Promise.all([
@@ -504,6 +730,7 @@
     const month = new Date().toISOString().slice(0, 7);
     if (!$("competenciaOffline").value) $("competenciaOffline").value = month;
     await carregarPedidosOffline();
+    await atualizarPreflightFatura();
   }
 
   function renderizarCategorias() {
@@ -847,12 +1074,26 @@
     });
     $("atualizarPedidosOffline").addEventListener("click", carregarPedidosOffline);
     $("consultarExtratoOffline").addEventListener("click", consultarExtratoOffline);
+    $("catalogoTermsForm")?.addEventListener("submit",aceitarTermosComercio);
+    $("catalogoTermsDialog")?.addEventListener("cancel",event=>event.preventDefault());
+    $("gerarFaturaBloqueada")?.addEventListener("click",()=>regularizarFaturaBloqueada("criar_cobranca"));
+    $("consultarFaturaBloqueada")?.addEventListener("click",()=>regularizarFaturaBloqueada("consultar_cobranca"));
+    $("competenciaFaturaBloqueada")?.addEventListener("change",()=>{
+      ++regularizacaoFaturaSeq;
+      $("resultadoFaturaBloqueada").textContent="";
+    });
+    $("competenciaOffline")?.addEventListener("change", atualizarPreflightFatura);
     $("gerarPixFatura").addEventListener("click", gerarPixFatura);
     $("consultarPixFatura").addEventListener("click", consultarPixFatura);
     $("cancelamentoForm").addEventListener("submit", confirmarCancelamento);
     $("cancelarCancelamento").addEventListener("click", () => $("cancelamentoDialog").close());
     $("cancelamentoDialog").addEventListener("close", () => { $("cancelamentoForm").reset(); setFeedback("cancelamentoFeedback", ""); });
     $("logoutCatalogo").addEventListener("click", async () => {
+      $("catalogoBloqueado").hidden=true;
+      $("pedidosOfflineCard").hidden=true;
+      ++consultaFaturaSeq; ++visualizacaoFaturaSeq; ++regularizacaoFaturaSeq;
+      faturaAptaParaEmissao=false; competenciaAptaParaEmissao="";
+      $("faturaPixResultado").textContent=""; $("resultadoFaturaBloqueada").textContent="";
       entregaState.generation += 1; entregaState.userId = ""; entregaState.sessionToken = ""; entregaState.motoboys = []; ultimaListaPedidos = [];
       $("listaPedidosOffline").innerHTML = ""; $("painelCatalogo").hidden = true; $("loginCard").hidden = false; $("logoutCatalogo").hidden = true;
       try { await getClient()?.auth?.signOut({ scope: "local" }); } catch { /* bloqueio visual mesmo se a sessão remota falhar */ }
@@ -871,6 +1112,13 @@
 
   async function iniciar() {
     linkPerfil();
+    if (QA_SANDBOX) {
+      if ($("qaSandboxBanner")) $("qaSandboxBanner").hidden = false;
+      // Fluxos auxiliares que nao usam o projeto de QA ficam indisponiveis,
+      // para evitar navegar sem querer para dados de producao.
+      if ($("linkGerenciarEntregadores")) $("linkGerenciarEntregadores").hidden = true;
+      if ($("linkContratacao")) $("linkContratacao").hidden = true;
+    }
     if (!comercioId) {
       setNotice("Comércio não informado", "Volte ao perfil e abra a gestão do catálogo por lá.", true);
       $("loginCard").hidden = true;

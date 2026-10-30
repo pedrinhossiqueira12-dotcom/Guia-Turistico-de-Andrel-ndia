@@ -1,0 +1,8 @@
+# Capturado via SQL somente leitura no PROD 2026-10-12.
+# Somente hashes de metadados estruturais, sem dados de usuarios ou chaves.
+catalogo_comissoes_offline|43a4f98bd6bcf3e3f4d72dc01ff0912f|21|8|3
+catalogo_fatura_cobrancas|f15f17d271e954558d3dc4f4dd1e454a|20|9|2
+catalogo_fechamentos_offline|ec1d388018d3abeafdef79580407dd7d|11|6|2
+catalogo_pedidos|60c6072ffb9be29ac09045eb1d2531a1|58|32|2
+catalogos|6be1eafdc275e9fc5e83b7d4630f2e4a|9|7|1
+comercios_publicados|4b49f980bf0f353a521e4632250fdca0|7|4|0

@@ -26,3 +26,21 @@ verify_jwt = false
 
 [functions.catalogo-entregas]
 verify_jwt = false # JWT validado explicitamente com auth.getUser na função.
+
+[functions.catalogo-asaas-financeiro]
+verify_jwt = false # Webhook protegido por token; rotas de usuário usam auth.getUser.
+
+# Edge WhatsApp: Meta chama webhook sem JWT Supabase. Confirmado em PROD v90.
+# verify_jwt=false NAO dispensa assinatura HMAC nem verificacao de sessao nas rotas.
+[functions.whatsapp-bot]
+verify_jwt = false
+
+# COB-06: auditoria administrativa exclusivamente com sessao de usuario.
+# Este arquivo nao implanta a funcao; deploy STAGING deve preservar JWT no gateway.
+[functions.catalogo-asaas-cob06-auditoria]
+verify_jwt = true
+
+# COB-06: reserva administrativa de tentativa de QA, sem POST Asaas/Pix.
+# Nao publicar automaticamente: STAGING isolado e flag desligada por padrao.
+[functions.catalogo-cob06-reserva-qa-sem-pix]
+verify_jwt = true

@@ -1,0 +1,2420 @@
+// Cobranças mensais e saques Asaas, isolados dos checkouts de pedidos Mercado Pago.
+// DESLIGADO por padrão. Chaves somente em Supabase Secrets, nunca no navegador.
+import { createClient } from "npm:@supabase/supabase-js@2.117.2";
+import { ambienteAsaasCompativelComProjeto } from "../_shared/catalogo-asaas-ambiente-projeto.ts";
+import { decryptCourierPix } from "../_shared/catalogo-entregas-crypto-v2.ts";
+import { conferirPagamentoAcumuloPorGet } from "../_shared/catalogo-asaas-acumulo-get-verificado-inerte.ts";
+import { consultarPagamentoAcumuloSandboxGet } from "../_shared/catalogo-asaas-acumulo-get-sandbox-inerte.ts";
+import { encontrarIdPagamentoAcumuloSandboxPorReferencia } from "../_shared/catalogo-asaas-acumulo-get-sandbox-inerte.ts";
+import { observarPagamentoAcumuloSomenteGet } from "../_shared/catalogo-asaas-acumulo-get-verificado-inerte.ts";
+import { auditarDuplicidadeAcumuloSomenteGet } from "../_shared/catalogo-asaas-acumulo-auditoria-duplicidade-inerte.ts";
+import { retomarPreparacaoAcumuloInerte } from "../_shared/catalogo-asaas-acumulo-retomada-inerte.ts";
+import { montarAuditoriaBaixaAcumuloInerte } from "../_shared/catalogo-asaas-acumulo-auditoria-baixa-inerte.ts";
+
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
+const BUNDLE = Deno.env.get("SUPABASE_SECRET_KEYS") || "";
+let serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+try { const keys = BUNDLE ? JSON.parse(BUNDLE) : null; serviceKey = keys?.default || keys?.service_role || serviceKey; } catch { /* fallback */ }
+const db = createClient(SUPABASE_URL, serviceKey, {auth:{persistSession:false,autoRefreshToken:false}});
+const ASAAS_TOKEN = Deno.env.get("ASAAS_API_KEY") || "";
+const WEBHOOK_TOKEN = Deno.env.get("ASAAS_WEBHOOK_TOKEN") || "";
+// Credencial isolada do Asaas e dos tokens administrativos; desabilitada ate homologacao.
+const WEBHOOK_WORKER_TOKEN = Deno.env.get("ASAAS_WEBHOOK_WORKER_TOKEN") || "";
+const WEBHOOK_WORKER_ON = Deno.env.get("ASAAS_WEBHOOK_WORKER_ENABLED") === "true";
+// Token e flag próprios; não reutilizar o token do webhook de eventos comuns.
+const WITHDRAWAL_AUTH_TOKEN = Deno.env.get("ASAAS_SAQUE_VALIDACAO_TOKEN") || "";
+const WITHDRAWAL_AUTH_ON = Deno.env.get("ASAAS_SAQUE_VALIDACAO_ENABLED") === "true";
+const ENCRYPTION_KEY = Deno.env.get("CATALOGO_DATA_ENCRYPTION_KEY") || Deno.env.get("MP_OAUTH_ENCRYPTION_KEY") || "";
+const BILLING_ON = Deno.env.get("ASAAS_BILLING_ENABLED") === "true";
+// Emissao nova exige opt-in independente, inclusive no Sandbox. Nao bloqueia conciliacao.
+const ISSUANCE_ON = Deno.env.get("ASAAS_ISSUANCE_ENABLED") === "true";
+// Trava independente: uma chave produtiva e a flag geral NAO ligam cobranças reais.
+const PRODUCTION_BILLING_APPROVED = Deno.env.get("ASAAS_PRODUCTION_BILLING_APPROVED") === "true";
+// Somente auditoria GET no Sandbox; independente das flags de emissão e saque.
+const COB06_GET_ADMIN_READONLY_ON = Deno.env.get("ASAAS_COB06_GET_ADMIN_READONLY_ENABLED") === "true";
+const COB06_OBSERVACAO_ADMIN_ON = Deno.env.get("ASAAS_COB06_OBSERVACAO_ADMIN_ENABLED") === "true";
+// Prepara apenas o livro contabil de um comercio ficticio no Sandbox.
+// Nao autoriza POST /payments, baixa, credito ou transferencias.
+const COB06_PREPARACAO_ADMIN_ON = Deno.env.get("ASAAS_COB06_PREPARACAO_ADMIN_ENABLED") === "true";
+// Auditoria pontual apenas GET, separada da preparacao e de qualquer POST.
+const COB06_DUPLICIDADE_ADMIN_ON = Deno.env.get("ASAAS_COB06_DUPLICIDADE_ADMIN_ENABLED") === "true";
+// Relatorio multi-competencias somente leitura, independente de todas as flags de Pix.
+const COB06_BAIXA_AUDITORIA_ADMIN_ON = Deno.env.get("ASAAS_COB06_BAIXA_AUDITORIA_ADMIN_ENABLED") === "true";
+const PAYOUTS_ON = Deno.env.get("ASAAS_PAYOUTS_ENABLED") === "true";
+const ASAAS_ENVIRONMENT_DECLARADO = Deno.env.get("ASAAS_ENVIRONMENT");
+const ENVIRONMENT = ASAAS_ENVIRONMENT_DECLARADO === "production" ? "production" : "sandbox";
+const API_BASE = ENVIRONMENT === "production" ? "https://api.asaas.com/v3" : "https://api-sandbox.asaas.com/v3";
+const JSON_HEADERS = {"Content-Type":"application/json; charset=utf-8","Access-Control-Allow-Origin":"*",
+  "Access-Control-Allow-Headers":"authorization,apikey,content-type,x-client-info",
+  "Access-Control-Allow-Methods":"POST,OPTIONS","Cache-Control":"no-store"};
+class Failure extends Error {constructor(message:string,public status=400){super(message)}}
+class SandboxTransferRejected extends Failure {}
+const respond=(payload:unknown,status=200)=>new Response(JSON.stringify(payload),{status,headers:JSON_HEADERS});
+const input=(x:unknown)=>x&&typeof x==="object"&&!Array.isArray(x)?x as Record<string,unknown>:{};
+const value=(x:unknown,max=200)=>typeof x==="string"?x.trim().slice(0,max):"";
+// Valores enviados ao provedor sao em CENTAVOS INTEIROS, sem arredondamento.
+// Uma quantia fracionaria ou acima de Number.MAX_SAFE_INTEGER nunca gera POST.
+function money(cents:number):number{
+ if(!Number.isSafeInteger(cents)||cents<=0)
+  throw new Failure("Valor financeiro em centavos inválido. Operação não enviada.",503);
+ return cents/100;
+}
+// Valores retornados pelo banco precisam ter PRECISAO de centavos;
+// Math.round() aqui aceitaria 100.004 como R$ 100,00 na conciliacao.
+// Convertemos a representacao decimal canonica via BigInt para evitar
+// arredondar valores do provedor ou aceitar numeros acima do intervalo seguro.
+function cents(amount:unknown):number{
+ if(typeof amount!=="number"||!Number.isFinite(amount)||amount<0)return NaN;
+ const decimal=amount.toString();
+ if(!/^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/.test(decimal))return NaN;
+ const [inteiro,fracao=""]=decimal.split(".");
+ const total=BigInt(inteiro)*100n+BigInt(fracao.padEnd(2,"0"));
+ const num=Number(total);
+ return Number.isSafeInteger(num)?num:NaN;
+}
+function enabled(kind:"billing"|"payouts"){
+ if(!ASAAS_TOKEN || !(kind==="billing"?BILLING_ON:PAYOUTS_ON))
+   throw new Failure("Integração Asaas ainda não ativada. Nenhum dinheiro foi movimentado.",503);
+ if(ENVIRONMENT==="production" && kind==="billing" && !PRODUCTION_BILLING_APPROVED)
+   throw new Failure("Cobranças reais ainda não autorizadas. Produção permanece bloqueada.",503);
+ // A inbox responde ACK 200 antes de conciliar. Sem token/worker
+ // independente, eventos podem ficar pendentes sem reconciliação posterior.
+ // Nao habilitar Pix produtivo se o caminho de recuperacao nao estiver pronto.
+ if(ENVIRONMENT==="production" && kind==="billing" &&
+    (!WEBHOOK_WORKER_ON || WEBHOOK_WORKER_TOKEN.length<48 ||
+     WEBHOOK_TOKEN.length<32))
+   throw new Failure("Recuperação de webhooks Asaas não configurada em produção. Cobranças bloqueadas.",503);
+}
+function requireIssuance(){
+ if(!ISSUANCE_ON)
+  throw new Failure("Nova emissão Asaas desativada. Consulte cobranças existentes para conciliação.",503);
+ enabled("billing");
+}
+function check(ok:unknown,msg:string,status=409):asserts ok {if(!ok)throw new Failure(msg,status);}
+async function auth(req:Request){
+ const token=req.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1];
+ if(!token)throw new Failure("Entre na sua conta.",401);
+ const {data,error}=await db.auth.getUser(token);
+ if(error||!data.user)throw new Failure("Sessão inválida.",401);
+ return data.user;
+}
+async function rpc(name:string,args:Record<string,unknown>){
+ const {data,error}=await db.rpc(name,args);
+ if(error){console.error("Asaas RPC",name,error.code);throw new Failure("Falha na operação financeira. Tente consultar novamente.",503);}
+ check(data?.ok!==false,data?.mensagem||"Operação recusada.");
+ return data;
+}
+// COB-06: liga preflight, reserva contabil e referencia inerte no backend.
+// Escopo propositalmente limitado ao comercio QA; flag OFF por padrao.
+// Em erro parcial, a reserva SQL e preservada para consulta e reconciliacao;
+// nunca criar outro lote nem tentar POST Pix como recuperacao.
+async function prepararAcumuloSandboxAdmin(uid:string,body:Record<string,unknown>){
+ if(uid!==ADMIN_USER_ID)throw new Failure("Acesso restrito à administração.",403);
+ if(ENVIRONMENT!=="sandbox"||!COB06_PREPARACAO_ADMIN_ON)
+  throw new Failure("Preparação de acúmulo COB-06 desabilitada.",503);
+ if(body.comercio_id!=="asaas-cob02")
+  throw new Failure("Somente o comércio fictício COB-06 é permitido.",400);
+ const corte=body.competencia_corte;
+ if(typeof corte!=="string"||!/^\d{4}-(?:0[1-9]|1[0-2])-01$/.test(corte))
+  throw new Failure("Competência de corte inválida.",400);
+ const prev=await rpc("catalogo_asaas_previsualizar_acumulo",{
+  p_comercio:"asaas-cob02",p_competencia_corte:corte});
+ const total=Number(prev?.total_centavos);
+ if(prev?.pronto_para_preparar!==true||
+    !Number.isSafeInteger(total)||total<500||total>2147483647||
+    !Number.isSafeInteger(Number(prev?.quantidade_faturas))||
+    Number(prev.quantidade_faturas)<2||prev?.snapshots_inconsistentes!==0)
+  throw new Failure("Acúmulo sem competências elegíveis ou snapshot íntegro. HOLD.",409);
+ const reservado=await rpc("catalogo_asaas_reservar_acumulo",{
+  p_comercio:"asaas-cob02",p_competencia_corte:corte});
+ const lote=reservado?.lote_id;
+ if(typeof lote!=="string"||
+    !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(lote)||
+    Number(reservado?.total_centavos)!==total||reservado?.pix_emitido!==false)
+  throw new Failure("Reserva contábil inconclusiva. Consultar antes de tentar novamente.",503);
+ const conferencia=await rpc("catalogo_asaas_conferir_conciliacao_acumulo",{p_lote:lote});
+ if(conferencia?.integridade_contabil_ok!==true||
+    Number(conferencia?.valor_fontes_centavos)!==total||
+    conferencia?.pode_emitir_pix!==false||conferencia?.pode_quitar!==false||
+    conferencia?.pode_liberar_motoboy!==false)
+  throw new Failure("Origens acumuladas divergentes. HOLD.",409);
+ const referencia=await rpc("catalogo_asaas_reservar_referencia_acumulo",{p_lote:lote});
+ if(referencia?.referencia!=="guia-acumulo-"+lote||
+    Number(referencia?.valor_centavos)!==total||
+    referencia?.pode_emitir_pix!==false||referencia?.payment_id!==null)
+  throw new Failure("Referência bancária inerte inconsistente. HOLD.",409);
+ return respond({success:true,lote_id:lote,competencia_corte:corte,
+  total_centavos:total,quantidade_faturas:Number(prev.quantidade_faturas),
+  referencia:referencia.referencia,ja_reservado:reservado.ja_reservado===true,
+  pix_emitido:false,pode_emitir_pix:false,pode_quitar:false,
+  pode_liberar_motoboy:false,hold_obrigatorio:true});
+}
+
+// COB-06: apos timeout ou falha entre reservar lote e reservar referencia,
+// retomar o MESMO lote pelo corte. A previsualizacao inicial exclui fontes
+// reservadas, por isso ela nao serve para recuperacao idempotente.
+async function retomarPreparacaoAcumuloSandboxAdmin(uid:string,body:Record<string,unknown>){
+ if(uid!==ADMIN_USER_ID)throw new Failure("Acesso restrito à administração.",403);
+ if(ENVIRONMENT!=="sandbox"||!COB06_PREPARACAO_ADMIN_ON)
+  throw new Failure("Retomada de acúmulo COB-06 desabilitada.",503);
+ if(body.comercio_id!=="asaas-cob02")
+  throw new Failure("Somente o comércio fictício COB-06 é permitido.",400);
+ const corte=body.competencia_corte;
+ if(typeof corte!=="string"||!/^[0-9]{4}-(?:0[1-9]|1[0-2])-01$/.test(corte))
+  throw new Failure("Competência de corte inválida.",400);
+ const {data:lote,error}=await db.from("catalogo_asaas_acumulo_lotes")
+  .select("id,comercio_id,competencia_corte,total_centavos,estado")
+  .eq("comercio_id","asaas-cob02").eq("competencia_corte",corte).maybeSingle();
+ if(error||!lote)
+  throw new Failure("Nenhum lote reservado para retomar. Não criar outro automaticamente.",409);
+ try {
+  const retomada=await retomarPreparacaoAcumuloInerte(lote,corte,
+   (id)=>rpc("catalogo_asaas_conferir_conciliacao_acumulo",{p_lote:id}),
+   (id)=>rpc("catalogo_asaas_reservar_referencia_acumulo",{p_lote:id}));
+  return respond(retomada);
+ }catch{
+  throw new Failure("Retomada inconclusiva. Consultar o lote; não emitir Pix. HOLD.",409);
+ }
+}
+
+// Verifica a referencia de um lote QA contra o Asaas Sandbox sem mutacoes.
+// Mesmo lista vazia e integra NAO comprova ausencia definitiva nem habilita POST:
+// falta coordenacao duravel entre o GET e o eventual envio bancario.
+async function auditarDuplicidadeAcumuloSandboxAdmin(uid:string,body:Record<string,unknown>){
+ if(uid!==ADMIN_USER_ID)throw new Failure("Acesso restrito à administração.",403);
+ if(ENVIRONMENT!=="sandbox"||!COB06_GET_ADMIN_READONLY_ON||!COB06_DUPLICIDADE_ADMIN_ON)
+  throw new Failure("Auditoria COB-06 de duplicidade desabilitada.",503);
+ if(!ASAAS_TOKEN)throw new Failure("Consulta Sandbox sem credencial.",503);
+ const lote=value(body.lote_id,70);
+ if(!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(lote))
+  throw new Failure("Lote inválido.",400);
+ const [referencia,observacao]=await Promise.all([
+  db.from("catalogo_asaas_acumulo_referencias")
+   .select("lote_id,comercio_id,referencia,valor_centavos,estado,payment_id,pode_emitir_pix")
+   .eq("lote_id",lote).maybeSingle(),
+  db.from("catalogo_asaas_acumulo_observacoes")
+   .select("lote_id").eq("lote_id",lote).maybeSingle(),
+ ]);
+ if(referencia.error||observacao.error||!referencia.data)
+  throw new Failure("Livro COB-06 indisponível. HOLD.",503);
+ const ref=referencia.data,valorCentavos=Number(ref.valor_centavos);
+ if(ref.lote_id!==lote||ref.comercio_id!=="asaas-cob02"||
+    ref.referencia!=="guia-acumulo-"+lote||ref.estado!=="reservado"||
+    ref.payment_id!==null||ref.pode_emitir_pix!==false||
+    !Number.isSafeInteger(valorCentavos)||valorCentavos<500||valorCentavos>2147483647)
+  throw new Failure("Reserva de acumulo inconsistente. HOLD.",409);
+ if(observacao.data)
+  return respond({success:true,lote_id:lote,estado:"observacao_local_existente",
+   pode_emitir_pix:false,pode_quitar:false,pode_liberar_motoboy:false,
+   prova_ausencia_para_emissao:false,hold_obrigatorio:true});
+ const cliente=await db.from("catalogo_asaas_clientes")
+  .select("cliente_id").eq("comercio_id",ref.comercio_id).maybeSingle();
+ if(cliente.error||!cliente.data)
+  throw new Failure("Cliente bancário indisponível. HOLD.",409);
+ const conferencia=await rpc("catalogo_asaas_conferir_conciliacao_acumulo",{p_lote:lote});
+ if(conferencia.integridade_contabil_ok!==true||
+    Number(conferencia.valor_fontes_centavos)!==valorCentavos||
+    conferencia.pode_emitir_pix!==false||conferencia.pode_quitar!==false)
+  throw new Failure("Origens financeiras não conferidas. HOLD.",409);
+ let resultado;
+ try {
+  resultado=await auditarDuplicidadeAcumuloSomenteGet({
+   loteId:lote,referencia:ref.referencia,
+   clienteId:cliente.data.cliente_id,valorCentavos,
+  },ASAAS_TOKEN);
+ }catch{
+  throw new Failure("GET bancário inconclusivo. Verificar manualmente. HOLD.",503);
+ }
+ return respond({success:true,lote_id:lote,estado:resultado.estado,
+  payment_id:resultado.paymentId,status_bancario:resultado.statusBancario,
+  pode_emitir_pix:false,pode_quitar:false,pode_liberar_motoboy:false,
+  prova_ausencia_para_emissao:false,hold_obrigatorio:true});
+}
+
+// COB-06: prova remota somente leitura de um lote JA observado.
+// Nenhum identificador bancario, cliente, referencia ou valor vem do navegador.
+// Candidatos 03-07 ainda nao estao instalados em STAGING/PROD: manter a flag OFF.
+// COB-06: primeira observacao bancária de lote já existente no Asaas.
+// Consulta por referencia interna e valida por GET individual: o navegador
+// NAO informa payment_id, cliente, valor ou referencia, nem aciona POST Pix.
+// Requer SQL candidato 03-06 e flags ADMIN desligadas por padrao.
+async function observarPrimeiroAcumuloSandboxAdmin(uid:string,body:Record<string,unknown>){
+ if(uid!==ADMIN_USER_ID)throw new Failure("Acesso restrito à administração.",403);
+ if(ENVIRONMENT!=="sandbox"||!COB06_GET_ADMIN_READONLY_ON||!COB06_OBSERVACAO_ADMIN_ON)
+  throw new Failure("Observação de acumulo COB-06 desabilitada.",503);
+ if(!ASAAS_TOKEN)throw new Failure("Consulta Sandbox sem credencial.",503);
+ const lote=value(body.lote_id,70);
+ if(!/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(lote))
+  throw new Failure("Lote inválido.",400);
+ const [referencia,anterior]=await Promise.all([
+  db.from("catalogo_asaas_acumulo_referencias")
+   .select("lote_id,comercio_id,referencia,valor_centavos,estado,payment_id,pode_emitir_pix")
+   .eq("lote_id",lote).maybeSingle(),
+  db.from("catalogo_asaas_acumulo_observacoes")
+   .select("lote_id,payment_id").eq("lote_id",lote).maybeSingle(),
+ ]);
+ if(referencia.error||anterior.error||!referencia.data)
+  throw new Failure("Reserva COB-06 indisponível. HOLD.",503);
+ if(anterior.data)throw new Failure("Pagamento já observado; use a conferência de estado.",409);
+ const ref=referencia.data,valorCentavos=Number(ref.valor_centavos);
+ if(ref.lote_id!==lote||ref.referencia!=="guia-acumulo-"+lote||
+    ref.estado!=="reservado"||ref.payment_id!==null||ref.pode_emitir_pix!==false||
+    !Number.isSafeInteger(valorCentavos)||valorCentavos<500||valorCentavos>2147483647)
+  throw new Failure("Reserva de acumulo inconsistente. HOLD.",409);
+ const cliente=await db.from("catalogo_asaas_clientes")
+  .select("cliente_id").eq("comercio_id",ref.comercio_id).maybeSingle();
+ if(cliente.error||!cliente.data)
+  throw new Failure("Cliente do comércio não encontrado. HOLD.",409);
+ const conferencia=await rpc("catalogo_asaas_conferir_conciliacao_acumulo",{p_lote:lote});
+ if(conferencia.integridade_contabil_ok!==true||
+    Number(conferencia.valor_fontes_centavos)!==valorCentavos)
+  throw new Failure("Origens financeiras não conferidas. HOLD.",409);
+ // GET filtrado nao e prova autonoma. Se houver mais de um resultado,
+ // paginação ou erro, falhar fechado. O GET por ID confere a identidade.
+ const paymentId=await encontrarIdPagamentoAcumuloSandboxPorReferencia(
+  ref.referencia,ASAAS_TOKEN);
+ const verificada=await observarPagamentoAcumuloSomenteGet({
+   loteId:lote,referencia:ref.referencia,
+   clienteId:cliente.data.cliente_id,valorCentavos,
+  },paymentId,(id)=>consultarPagamentoAcumuloSandboxGet(id,ASAAS_TOKEN),
+  (params)=>rpc("catalogo_asaas_registrar_observacao_acumulo",{...params}));
+ const ack=verificada.retorno as Record<string,unknown>;
+ if(ack.status_observado!==verificada.observacao.p_status)
+  throw new Failure("Observação bancária sem confirmação integral. HOLD.",503);
+ return respond({success:true,lote_id:lote,payment_id:verificada.observacao.p_payment,
+  status_bancario_observado:verificada.observacao.p_status,
+  registro:{ja_observado:ack.ja_observado===true},
+  pode_emitir_pix:false,pode_quitar:false,pode_estornar:false,
+  pode_liberar_motoboy:false,hold_obrigatorio:true});
+}
+async function conferirAcumuloSandboxAdmin(uid:string,body:Record<string,unknown>,registrar=false){
+ if(uid!==ADMIN_USER_ID)throw new Failure("Acesso restrito à administração.",403);
+ if(ENVIRONMENT!=="sandbox"||!COB06_GET_ADMIN_READONLY_ON)
+  throw new Failure("Conferência COB-06 ainda não habilitada.",503);
+ if(registrar&&!COB06_OBSERVACAO_ADMIN_ON)
+  throw new Failure("Registro de observações COB-06 desabilitado.",503);
+ if(!ASAAS_TOKEN)throw new Failure("Consulta Sandbox sem credencial.",503);
+ const lote=value(body.lote_id,70);
+ if(!/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(lote))
+  throw new Failure("Lote inválido.",400);
+ const [referencia,observacao]=await Promise.all([
+  db.from("catalogo_asaas_acumulo_referencias")
+   .select("lote_id,comercio_id,referencia,valor_centavos,payment_id,pode_emitir_pix")
+   .eq("lote_id",lote).maybeSingle(),
+  db.from("catalogo_asaas_acumulo_observacoes")
+   .select("lote_id,payment_id,customer_id,referencia,valor_centavos,pode_quitar,pode_liberar_motoboy")
+   .eq("lote_id",lote).maybeSingle(),
+ ]);
+ if(referencia.error||observacao.error||!referencia.data||!observacao.data)
+  throw new Failure("Livro COB-06 indisponível ou lote sem prova anterior.",503);
+ const ref=referencia.data, obs=observacao.data;
+ if(ref.lote_id!==lote||obs.lote_id!==lote||ref.referencia!==obs.referencia||
+  ref.valor_centavos!==obs.valor_centavos||ref.payment_id!==null||
+  ref.pode_emitir_pix!==false||obs.pode_quitar!==false||
+  obs.pode_liberar_motoboy!==false)
+  throw new Failure("Vínculo financeiro inconsistente. HOLD.",409);
+ const cliente=await db.from("catalogo_asaas_clientes")
+  .select("cliente_id").eq("comercio_id",ref.comercio_id).maybeSingle();
+ if(cliente.error||!cliente.data||cliente.data.cliente_id!==obs.customer_id)
+  throw new Failure("Cliente bancário não corresponde ao comércio. HOLD.",409);
+ const conferencia=await rpc("catalogo_asaas_conferir_conciliacao_acumulo",{p_lote:lote});
+ const preflightInicialOk=conferencia.integridade_contabil_ok===true&&
+  Number(conferencia.valor_fontes_centavos)===Number(ref.valor_centavos);
+ let reciboLocalPosQuitacao=false;
+ if(!preflightInicialOk){
+  // Apos quitação, o preflight de NOVA emissao falha corretamente. Ainda
+  // precisamos observar REFUNDED/CHARGEBACK sem ressuscitar o recebimento.
+  // Apenas o recibo isolado existente, vinculado ao mesmo lote/pagamento,
+  // permite prosseguir ao GET; a RPC do diario revalida todas as fontes
+  // com travas ANTES de aceitar qualquer evento posterior.
+  const [quitacao,loteAtual]=await Promise.all([
+   db.from("catalogo_asaas_acumulo_quitacoes_isoladas")
+    .select("lote_id,payment_id,valor_centavos,estado")
+    .eq("lote_id",lote).maybeSingle(),
+   db.from("catalogo_asaas_acumulo_lotes")
+    .select("id,comercio_id,total_centavos,estado")
+    .eq("id",lote).maybeSingle(),
+  ]);
+  const q=quitacao.data, atual=loteAtual.data;
+  if(quitacao.error||loteAtual.error||!q||!atual||
+   q.lote_id!==lote||atual.id!==lote||
+   q.payment_id!==obs.payment_id||
+   q.valor_centavos!==obs.valor_centavos||
+   atual.total_centavos!==obs.valor_centavos||
+   atual.comercio_id!==ref.comercio_id||
+   !["pago","estornado","contestado"].includes(String(q.estado))||
+   q.estado!==atual.estado)
+   throw new Failure("Origens de cobrança não conferidas. HOLD.",409);
+  reciboLocalPosQuitacao=true;
+ }
+ const validada=await conferirPagamentoAcumuloPorGet({
+  loteId:lote,referencia:ref.referencia,clienteId:obs.customer_id,
+  valorCentavos:Number(ref.valor_centavos),
+ },obs.payment_id,(id)=>consultarPagamentoAcumuloSandboxGet(id,ASAAS_TOKEN));
+ let registro:Record<string,unknown>|null=null;
+ if(registrar){
+  // Identidade deterministica da observacao GET por pagamento e status:
+  // reconsultar sem mudanca nao multiplica eventos. Nao equivale a ID de webhook.
+  const material=new TextEncoder().encode(validada.p_payment+"|"+validada.p_status);
+  const digest=new Uint8Array(await crypto.subtle.digest("SHA-256",material));
+  const chave="get-"+Array.from(digest,b=>b.toString(16).padStart(2,"0")).join("");
+  const evento=await rpc("catalogo_asaas_registrar_evento_acumulo_inerte",{
+   p_lote:lote,p_payment:validada.p_payment,p_evento:chave,p_estado:validada.p_status,
+  });
+  if(evento.ok!==true||typeof evento.evento_id!=="number"||
+   evento.pode_quitar!==false||evento.pode_estornar!==false||
+   evento.pode_liberar_motoboy!==false)
+   throw new Failure("Registro bancário não confirmou HOLD. Auditoria inconclusiva.",503);
+  registro={evento_id:evento.evento_id,ja_observado:evento.ja_observado===true};
+ }
+ // GET confiavel nao e prova de estado final nem autoriza transicao contábil.
+ return respond({success:true,lote_id:lote,payment_id:validada.p_payment,
+  status_bancario_observado:validada.p_status,
+  integridade_contabil_ok:preflightInicialOk,
+  recibo_local_pos_quitacao:reciboLocalPosQuitacao,
+  pode_emitir_pix:false,pode_quitar:false,pode_estornar:false,
+  pode_liberar_motoboy:false,hold_obrigatorio:true,registro});
+}
+// Diagnostico unico: fontes de cada competencia + diario local + GET bancario
+// autenticado por ID. NAO executa RPC de quitacao/estorno, nao grava evento e
+// nao pode ser usado como autorizacao financeira ou como comprovante autonomo.
+async function auditarBaixaMulticompetenciaSandboxAdmin(uid:string,body:Record<string,unknown>){
+ if(uid!==ADMIN_USER_ID)throw new Failure("Acesso restrito à administração.",403);
+ if(ENVIRONMENT!=="sandbox"||!COB06_GET_ADMIN_READONLY_ON||!COB06_BAIXA_AUDITORIA_ADMIN_ON)
+  throw new Failure("Auditoria de baixa COB-06 desabilitada.",503);
+ if(!ASAAS_TOKEN)throw new Failure("Consulta Sandbox sem credencial.",503);
+ const lote=value(body.lote_id,70);
+ if(!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(lote))
+  throw new Failure("Lote inválido.",400);
+ const [referencia,observacao,loteAtual,cliente]=await Promise.all([
+  db.from("catalogo_asaas_acumulo_referencias")
+   .select("lote_id,comercio_id,referencia,valor_centavos,estado,payment_id,pode_emitir_pix")
+   .eq("lote_id",lote).maybeSingle(),
+  db.from("catalogo_asaas_acumulo_observacoes")
+   .select("lote_id,payment_id,customer_id,referencia,valor_centavos,pode_quitar,pode_liberar_motoboy")
+   .eq("lote_id",lote).maybeSingle(),
+  db.from("catalogo_asaas_acumulo_lotes")
+   .select("id,comercio_id,total_centavos,estado")
+   .eq("id",lote).maybeSingle(),
+  db.from("catalogo_asaas_clientes")
+   .select("cliente_id").eq("comercio_id","asaas-cob02").maybeSingle(),
+ ]);
+ const r=referencia.data,o=observacao.data,l=loteAtual.data,c=cliente.data;
+ const total=Number(r?.valor_centavos);
+ if(referencia.error||observacao.error||loteAtual.error||cliente.error||
+  !r||!o||!l||!c||r.lote_id!==lote||o.lote_id!==lote||l.id!==lote||
+  r.comercio_id!=="asaas-cob02"||l.comercio_id!=="asaas-cob02"||
+  r.estado!=="reservado"||r.referencia!=="guia-acumulo-"+lote||
+  o.referencia!==r.referencia||
+  r.payment_id!==null||r.pode_emitir_pix!==false||
+  o.pode_quitar!==false||o.pode_liberar_motoboy!==false||
+  o.customer_id!==c.cliente_id||
+  Number(o.valor_centavos)!==total||Number(l.total_centavos)!==total||
+  !Number.isSafeInteger(total)||total<500||total>2147483647||
+  !["preparado","emitido","pago","estornado","contestado"].includes(String(l.estado)))
+  throw new Failure("Livro multicompetências inconsistente. HOLD.",409);
+ const [apuracao,projecao]=await Promise.all([
+  rpc("catalogo_asaas_apurar_estados_acumulo_inerte",{p_lote:lote}),
+  rpc("catalogo_asaas_projetar_baixa_acumulo_inerte",{p_lote:lote}),
+ ]);
+ const esperado={loteId:lote,referencia:r.referencia,
+  clienteId:c.cliente_id,valorCentavos:total};
+ const get=await conferirPagamentoAcumuloPorGet(esperado,o.payment_id,
+  (id)=>consultarPagamentoAcumuloSandboxGet(id,ASAAS_TOKEN));
+ try{
+  return respond(montarAuditoriaBaixaAcumuloInerte(esperado,get,apuracao,projecao));
+ }catch{
+  throw new Failure("Relatório de competências divergente. HOLD.",409);
+ }
+}
+// GET paginado traz ate 100 transferencias por requisicao. Nao confiar no
+// Content-Length: validar tambem os bytes efetivamente recebidos. Apenas
+// para auditoria read-only, sem alterar POST ou conciliacao existente.
+const MAX_ASAAS_LISTAGEM_BYTES=2*1024*1024;
+// Timeout nao comprova rejeicao: POST de transferencia incerto permanece em revisao.
+const ASAAS_HTTP_TIMEOUT_MS=15000;
+// A validacao de saida por Webhook exige resposta rapida (limite do Asaas).
+// Mantem budget para leituras do banco antes/depois do GET, sem aprovar por timeout.
+const ASAAS_VALIDACAO_SAQUE_HTTP_TIMEOUT_MS=3500;
+async function lerListagemAsaasLimitada(response:Response):Promise<unknown>{
+ const mime=(response.headers.get("content-type")||"").split(";")[0].trim().toLowerCase();
+ if(mime!=="application/json"&&!(mime.startsWith("application/")&&mime.endsWith("+json")))
+  throw new Failure("Resposta bancária não é JSON confiável. Auditoria inconclusiva. HOLD.",503);
+ const declared=response.headers.get("content-length");
+ if(declared!==null&&(!/^[0-9]+$/.test(declared)||
+   !Number.isSafeInteger(Number(declared))||Number(declared)>MAX_ASAAS_LISTAGEM_BYTES))
+  throw new Failure("Resposta bancária excede limite seguro. Auditoria inconclusiva. HOLD.",503);
+ if(!response.body)
+  throw new Failure("Resposta bancária sem corpo. Auditoria inconclusiva. HOLD.",503);
+ const reader=response.body.getReader();
+ const chunks:Uint8Array[]=[];
+ let size=0,finished=false;
+ try{
+  while(true){
+   const chunk=await reader.read();
+   if(chunk.done){finished=true;break;}
+   size+=chunk.value.byteLength;
+   if(size>MAX_ASAAS_LISTAGEM_BYTES)
+    throw new Failure("Resposta bancária excede limite seguro. Auditoria inconclusiva. HOLD.",503);
+   chunks.push(chunk.value);
+  }
+ }catch(e){
+  if(e instanceof Failure)throw e;
+  throw new Failure("Erro ao ler resposta bancária. Auditoria inconclusiva. HOLD.",503);
+ }finally{
+  if(!finished)await reader.cancel().catch(()=>{});
+  reader.releaseLock();
+ }
+ const bytes=new Uint8Array(size);
+ let offset=0;
+ for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.byteLength;}
+ try{
+  return JSON.parse(new TextDecoder("utf-8",{fatal:true}).decode(bytes));
+ }catch{
+  throw new Failure("JSON bancário inválido. Auditoria inconclusiva. HOLD.",503);
+ }
+}
+async function asaas(path:string,method="GET",body?:unknown,timeoutMs=ASAAS_HTTP_TIMEOUT_MS){
+ // Defesa na saida: nenhum cadastro/cobranca mutante contorna a guarda de emissao.
+ if(method!=="GET" && /^\/(?:payments|customers)(?:\/|\?|$)/.test(path))requireIssuance();
+ if(!Number.isSafeInteger(timeoutMs)||timeoutMs<500||timeoutMs>ASAAS_HTTP_TIMEOUT_MS)
+  throw new Failure("Prazo HTTP do provedor inválido.",503);
+ // Defesa independente, na saída HTTP: esta implementação não envia saques na produção.
+ if(method==="POST" && path==="/transfers"){
+  if(ENVIRONMENT!=="sandbox")
+   throw new Failure("Transferência Pix de produção não está liberada.",503);
+  if(!WITHDRAWAL_AUTH_ON || WITHDRAWAL_AUTH_TOKEN.length<32)
+   throw new Failure("Sem autorização por Webhook, saques não são permitidos.",503);
+ }
+ // Permitir GET de uma transferência antiga mesmo se saques novos estiverem desativados.
+ // POST /transfers continua bloqueado pela flag. A baixa exige status validado do Asaas.
+ if(path.startsWith("/transfers") && method==="GET"){
+  if(!ASAAS_TOKEN)throw new Failure("Consulta Asaas indisponível sem credencial.",503);
+ }else enabled(path.startsWith("/transfers")?"payouts":"billing");
+ const response=await fetch(API_BASE+path,{
+  method,headers:{"access_token":ASAAS_TOKEN,"accept":"application/json",
+    "content-type":"application/json","User-Agent":"GuiaAndrelandia/1.0"},
+  body:body===undefined?undefined:JSON.stringify(body),
+  signal:AbortSignal.timeout(timeoutMs),
+ });
+ const result=method==="GET"&&path.startsWith("/transfers?")
+  ?await lerListagemAsaasLimitada(response)
+  :await response.json().catch(()=>({}));
+ if(!response.ok){
+  const details=input(result);
+  const errors=Array.isArray(details.errors)?details.errors:[];
+  // Registra somente códigos de erro, sem chave Pix, CPF, tokens ou detalhes de destinatário.
+  const codes=errors.map((item:unknown)=>value(input(item).code,70)).filter(Boolean).slice(0,3);
+  console.error("Asaas http error",{path:path.split("?")[0],status:response.status,codes});
+  // Somente resposta estruturada de validação (HTTP 400) do POST Asaas Sandbox
+  // é rejeição definitiva; timeout/5xx/erros não estruturados continuam em revisão.
+  if(ENVIRONMENT==="sandbox" && method==="POST" && path==="/transfers"
+    && response.status===400 && errors.length>0)
+    throw new SandboxTransferRejected(
+      "Asaas Sandbox rejeitou a transferência. Verifique a chave Pix fictícia e o saldo no Asaas; a reserva foi liberada.",422);
+  throw new Failure("O provedor não confirmou a operação. Verifique o status antes de tentar novamente.",502);
+ }
+ return input(result);
+}
+function competence(s:unknown){
+ const t=value(s,10);
+ check(/^20\d{2}-(0[1-9]|1[0-2])$/.test(t),"Competência inválida.",400);
+ return t;
+}
+function commerce(s:unknown){
+ const t=value(s,180);
+ check(/^[a-z0-9-]{1,180}$/.test(t),"Comércio inválido.",400);
+ return t;
+}
+async function owner(uid:string,commerceId:string){
+ const {data,error}=await db.from("catalogos").select("comercio_id,proprietario_id")
+  .eq("comercio_id",commerceId).eq("proprietario_id",uid).maybeSingle();
+ if(error||!data)throw new Failure("Você não administra este comércio.",403);
+}
+
+const TERMOS_VERSAO="2026-10-09";
+// Limite oficial do Asaas para emissao de cobrancas (PF/PJ); nao inflar valores.
+const ASAAS_COBRANCA_MINIMA_CENTAVOS=500;
+const SAQUE_MINIMO_CENTAVOS=10000;
+// Teto por transação conservador para contas Asaas novas; não limita o saldo acumulado.
+const SAQUE_MAXIMO_PIX_CENTAVOS=500000;
+async function roleScope(uid:string,papel:string,store:string,allowInactiveMotoboy=false){
+ check(papel==="comercio"||papel==="motoboy","Perfil de aceite inválido.",400);
+ if(papel==="comercio"){
+  check(/^[a-z0-9-]{1,180}$/.test(store),"Comércio inválido.",400);
+  await owner(uid,store);return store;
+ }
+ let query=db.from("catalogo_motoboys").select("usuario_id").eq("usuario_id",uid);
+ if(!allowInactiveMotoboy)query=query.eq("ativo",true);
+ const {data,error}=await query.limit(1);
+ if(error)throw new Failure("Falha ao verificar autorização.",503);
+ let historicoPermiteLeitura=false;
+ if(!data?.length && allowInactiveMotoboy){
+  // O ultimo vinculo pode ser excluido, mas a remuneracao retida/paga
+  // segue ligada ao auth.users(id). Nao ativa cadastro nem permite saque.
+  const {data:historico,error:historicoError}=await db.from("catalogo_remuneracoes_v2")
+   .select("id").eq("motoboy_id",uid).limit(1);
+  if(historicoError)throw new Failure("Falha ao verificar histórico financeiro.",503);
+  historicoPermiteLeitura=Boolean(historico?.length);
+ }
+ check(Boolean(data?.length)||historicoPermiteLeitura,
+  "Perfil de entregador não autorizado ou sem histórico financeiro.",403);
+ return "";
+}
+async function termsStatus(uid:string,papel:string,store:string,allowInactiveMotoboy=false){
+ const scope=await roleScope(uid,papel,store,allowInactiveMotoboy);
+ const {data,error}=await db.from("catalogo_aceites_operacionais")
+  .select("documento").eq("usuario_id",uid).eq("papel",papel)
+  .eq("comercio_id",scope).eq("versao",TERMOS_VERSAO);
+ if(error)throw new Failure("Falha ao consultar aceite dos termos.",503);
+ const docs=new Set((data||[]).map(r=>r.documento));
+ return {papel,comercio_id:scope,versao:TERMOS_VERSAO,
+  termos_aceitos:docs.has("termos"),privacidade_ciente:docs.has("privacidade"),
+  aceito:docs.has("termos")&&docs.has("privacidade")};
+}
+async function requireTerms(uid:string,papel:string,store:string,allowInactiveMotoboy=false){
+ if(!(await termsStatus(uid,papel,store,allowInactiveMotoboy)).aceito)
+  throw new Failure("Leia e aceite os Termos de Uso e confirme a ciência da Política de Privacidade.",428);
+}
+async function acceptTerms(uid:string,body:Record<string,unknown>){
+ const papel=value(body.papel,15),store=papel==="comercio"?commerce(body.comercio_id):"";
+ // Motoboy inativo pode renovar aceite para solicitar revisao do saldo antigo.
+ // O aceite nao reativa perfil nem autoriza novas entregas/saques regulares.
+ await roleScope(uid,papel,store,papel==="motoboy");
+ check(body.aceito_termos===true&&body.ciente_privacidade===true,
+  "Marque os dois campos para confirmar ciência.",400);
+ const rows=["termos","privacidade"].map(documento=>({
+  usuario_id:uid,papel,comercio_id:store,documento,versao:TERMOS_VERSAO
+ }));
+ const {error}=await db.from("catalogo_aceites_operacionais").upsert(rows,{
+  onConflict:"usuario_id,papel,comercio_id,documento,versao",ignoreDuplicates:true
+ });
+ if(error)throw new Failure("Não foi possível registrar seu aceite.",503);
+ return respond({success:true,...await termsStatus(uid,papel,store,papel==="motoboy")});
+}
+async function requestClosure(uid:string,body:Record<string,unknown>){
+ const store=commerce(body.comercio_id);
+ await owner(uid,store);
+ const result=await rpc("catalogo_solicitar_encerramento_financeiro",{
+  p_comercio:store,p_usuario:uid
+ });
+ return respond({success:true,...result});
+}
+async function invoice(uid:string,body:Record<string,unknown>){
+ const store=commerce(body.comercio_id),month=competence(body.competencia);
+ await owner(uid,store);
+ const {data:f,error}=await db.from("catalogo_fechamentos_offline").select("*")
+  .eq("comercio_id",store).eq("competencia",month+"-01").maybeSingle();
+ if(error)throw new Failure("Não foi possível consultar a fatura.",503);
+ let charge=null,emissao=null;
+ if(f){
+  const {data,error:e}=await db.from("catalogo_fatura_cobrancas").select("*")
+    .eq("fechamento_id",f.id).maybeSingle();
+  if(e)throw new Failure("Falha ao consultar cobrança.",503);
+  charge=data;
+  if(!charge){
+   const {data:reserved,error:r}=await db.from("catalogo_asaas_emissoes")
+    .select("estado").eq("fechamento_id",f.id).maybeSingle();
+   if(r)throw new Failure("Não foi possível conferir reserva de emissão da fatura.",503);
+   emissao=reserved;
+  }
+ }
+ return {store,month,f,charge,emissao};
+}
+function reference(store:string,month:string){return "fatura-"+store+"-"+month;}
+function parsePix(payment:Record<string,unknown>,qr:Record<string,unknown>){
+ return {code:value(qr.payload,4096),imageBase64:value(qr.encodedImage,160000),
+  ticketUrl:value(payment.invoiceUrl,2048)};
+}
+// API Asaas usa limit/offset e hasMore. Buscar SOMENTE a primeira pagina
+// poderia esconder cliente/cobranca ja existente e causar outro POST Pix.
+// Em paginacao inconclusiva, nunca interpretar resposta parcial como ausencia.
+async function listarAsaasPorReferencia(tipo:"payments"|"customers",ref:string){
+ const encontrados:Record<string,unknown>[]=[];
+ const paginaMaxima=5,limite=100;
+ for(let pagina=0;pagina<paginaMaxima;pagina++){
+  const offset=pagina*limite;
+  const list=await asaas("/"+tipo+"?externalReference="+
+    encodeURIComponent(ref)+"&limit="+limite+"&offset="+offset);
+  check(Array.isArray(list.data)&&typeof list.hasMore==="boolean"&&
+    list.data.length<=limite,
+    "Listagem do Asaas incompleta ou inválida. Emissão bloqueada para conciliação.",503);
+  for(const raw of list.data){
+   const obj=input(raw);
+   check(typeof obj.id==="string"&&obj.id.length>0&&
+     obj.externalReference===ref,
+     "Asaas retornou registro incompatível com a referência financeira. Revisão necessária.",409);
+   encontrados.push(obj);
+  }
+  if(list.hasMore===false)return encontrados;
+  check(list.data.length===limite,
+   "Paginação inconsistente no Asaas. Não emitir cobrança sem conciliação.",503);
+ }
+ throw new Failure("A listagem do Asaas ultrapassou o limite seguro. Revisão administrativa obrigatória.",503);
+}
+async function verifyInvoice(paymentId:string,charge:Record<string,unknown>,store:string,month:string){
+ const payment=await asaas("/payments/"+encodeURIComponent(paymentId));
+ const expected=Number(charge.valor_centavos);
+ check(payment.id===paymentId && payment.billingType==="PIX" &&
+  payment.externalReference===reference(store,month) &&
+  cents(payment.value)===expected,"Dados de cobrança divergentes. Revisão necessária.",409);
+ const {data:client}=await db.from("catalogo_asaas_clientes").select("cliente_id").eq("comercio_id",store).maybeSingle();
+ check(Boolean(client?.cliente_id) && client?.cliente_id===payment.customer,"Pagador da cobrança não confere.",409);
+ const status=value(payment.status,50);
+ // O Asaas pode retornar CONFIRMED para Pix ainda sob bloqueio preventivo.
+ // Nunca liberar credito nem expor novo QR nesse estado. Status desconhecido
+ // exige revisao: nao inferir PENDING a partir de evento novo do provedor.
+ check(["PENDING","OVERDUE","CONFIRMED","RECEIVED","REFUNDED",
+  "PARTIALLY_REFUNDED","REFUND_IN_PROGRESS","CHARGEBACK_REQUESTED",
+  "DELETED"].includes(status),
+  "Status da cobrança Asaas não reconhecido. Pagamento em análise.",409);
+ let estado:"pago"|"pendente"|"estornado"|"contestado"|"cancelado"="pendente";
+ if(status==="RECEIVED")estado="pago"; // CONFIRMED não é quitação comprovada.
+ else if(status==="REFUNDED")estado="estornado";
+ else if(["PARTIALLY_REFUNDED","REFUND_IN_PROGRESS","CHARGEBACK_REQUESTED"].includes(status))estado="contestado";
+ else if(status==="DELETED")estado="cancelado";
+ const conciliado=await rpc("catalogo_confirmar_cobranca_fatura",{
+  p_order_id:paymentId,p_estado:estado,p_payment_id:paymentId,
+  p_valor_centavos:expected,p_detalhe:"asaas:"+status
+ });
+ return {payment,conciliado,estado};
+}
+async function loadOrCreateCustomer(
+ store:string,body:Record<string,unknown>,email:string,expectedCustomerId?:string
+){
+ const {data:found,error}=await db.from("catalogo_asaas_clientes")
+  .select("cliente_id").eq("comercio_id",store).maybeSingle();
+ if(error)throw new Failure("Falha ao consultar cadastro Asaas.",503);
+ if(found?.cliente_id){
+  check(!expectedCustomerId||found.cliente_id===expectedCustomerId,
+   "Pagador remoto diferente do cadastro financeiro local. Revisão necessária.",409);
+  return String(found.cliente_id);
+ }
+ const ref="guia-comercio-"+store;
+ const candidates=await listarAsaasPorReferencia("customers",ref);
+ // Nunca criar novo cliente ao recuperar cobranca ja existente: a identidade
+ // do pagador vem da fatura bancária e precisa coincidir com cadastro remoto.
+ let customer=expectedCustomerId
+  ? candidates.find((c:Record<string,unknown>)=>c.id===expectedCustomerId):null;
+ if(expectedCustomerId && !customer)
+  throw new Failure("Cliente da cobrança não localizado no Asaas. Manter revisão, sem cadastrar outro.",409);
+ if(!expectedCustomerId){
+  if(candidates.length>1)
+   throw new Failure("Existem clientes duplicados no Asaas. Conciliação administrativa necessária.",409);
+  customer=candidates[0]||null;
+  if(!customer){
+   const doc=value(body.documento,30).replace(/\D/g,"");
+   const nome=value(body.nome_pagador,120);
+   check([11,14].includes(doc.length)&&nome.length>=3,
+    "Para a primeira fatura, informe nome completo ou razão social e CPF/CNPJ do pagador.",400);
+   customer=await asaas("/customers","POST",{
+    name:nome,cpfCnpj:doc,email,externalReference:ref,notificationDisabled:true,
+   });
+  }
+ }
+ check(customer!==null&&customer!==undefined&&
+  typeof customer.id==="string"&&customer.id.length>0,
+  "Não foi possível confirmar o cadastro do pagador no Asaas.",503);
+ // INSERT, nao UPSERT: jamais sobrescrever cliente bancario ja consolidado
+ // por outra requisicao concorrente (inclusive outra competencia mensal).
+ const customerId=String(customer.id);
+ const {error:saveError}=await db.from("catalogo_asaas_clientes")
+  .insert({comercio_id:store,cliente_id:customerId});
+ if(saveError){
+  if(saveError.code==="23505"){
+   const {data:committed,error:lookupError}=await db.from("catalogo_asaas_clientes")
+    .select("cliente_id").eq("comercio_id",store).maybeSingle();
+   if(!lookupError&&committed?.cliente_id===customerId)return customerId;
+  }
+  throw new Failure("Cadastro bancário concorrente ou inconclusivo. Não emitir Pix antes da conciliação.",503);
+ }
+ return customerId;
+}
+// Consulta apenas fechamentos pequenos SEM cobranca ou reserva individual.
+// E uma estimativa de pendencias, nao uma autorizacao de agrupamento:
+// o lote, os snapshots e a conciliacao ainda exigem homologacao propria.
+async function resumoPendenciasAbaixoMinimo(store:string){
+ const {data:rows,error}=await db.from("catalogo_fechamentos_offline")
+  .select("id,competencia,total_comissao_centavos")
+  .eq("comercio_id",store)
+  .in("status",["faturado","vencido","bloqueado"])
+  .gt("total_comissao_centavos",0)
+  .lt("total_comissao_centavos",ASAAS_COBRANCA_MINIMA_CENTAVOS)
+  .order("competencia",{ascending:true}).limit(121);
+ if(error||!Array.isArray(rows)||rows.length>120)
+  throw new Failure("Nao foi possivel conferir as pendencias pequenas. Nenhum Pix foi gerado.",503);
+ if(rows.length===0)return {quantidade:0,total_centavos:0};
+ const ids=rows.map(x=>x.id);
+ if(ids.some(x=>typeof x!=="string"||!x))
+  throw new Failure("Fechamentos de origem invalidos. Nenhum Pix foi gerado.",503);
+ const [cobrancas,reservas]=await Promise.all([
+  db.from("catalogo_fatura_cobrancas").select("fechamento_id").in("fechamento_id",ids),
+  db.from("catalogo_asaas_emissoes").select("fechamento_id").in("fechamento_id",ids)
+ ]);
+ if(cobrancas.error||reservas.error||!Array.isArray(cobrancas.data)||!Array.isArray(reservas.data))
+  throw new Failure("Nao foi possivel excluir cobrancas e reservas existentes.",503);
+ const ocupados=new Set([...cobrancas.data,...reservas.data].map(x=>x.fechamento_id));
+ let total=0,quantidade=0;
+ for(const row of rows){
+  const centavos=Number(row.total_comissao_centavos);
+  if(!Number.isSafeInteger(centavos)||centavos<=0||
+     centavos>=ASAAS_COBRANCA_MINIMA_CENTAVOS)
+   throw new Failure("Valor financeiro incoerente. Conferencia manual necessaria.",503);
+  if(ocupados.has(row.id))continue;
+  total+=centavos;
+  quantidade++;
+ }
+ return {quantidade,total_centavos:total};
+}
+async function showInvoice(uid:string,body:Record<string,unknown>){
+ const {f,charge,emissao,store}=await invoice(uid,body);
+ const total=Number(f?.total_comissao_centavos||0);
+ const abaixoMinimo=Boolean(f&&!charge&&!emissao &&
+  ["faturado","vencido","bloqueado"].includes(String(f.status))&&
+  Number.isSafeInteger(total)&&total>0&&total<ASAAS_COBRANCA_MINIMA_CENTAVOS);
+ const pequenas=abaixoMinimo?await resumoPendenciasAbaixoMinimo(store):null;
+ return respond({success:true,fatura:f,
+  cobranca_status:charge?.status||(emissao?"emissao_reservada":null),
+  metodo_cobranca:"pix_manual",pix_automatico_disponivel:false,
+  valor_centavos:f?.total_comissao_centavos||0,provedor:charge?.gateway||"asaas",
+  fatura_abaixo_minimo_asaas:abaixoMinimo,
+  pendencias_pequenas_estimadas:pequenas,
+  pix_acumulado_disponivel:false,
+  mensagem:charge?.gateway==="mercadopago"?
+    "Existe uma fatura do Mercado Pago. Ela não será migrada ou cobrada duas vezes.":
+    !charge&&emissao?
+    "A emissão Pix já foi reservada. Aguarde a conciliação ou solicite suporte; não gere uma segunda cobrança.":
+    abaixoMinimo?
+    "Esta fatura abaixo de R$ 5,00 permanece devida. O agrupamento com outros meses ainda aguarda homologacao; nao existe Pix disponivel para este saldo.":undefined});
+}
+async function reconcileInvoice(uid:string,body:Record<string,unknown>){
+ const {f,charge,emissao,store,month}=await invoice(uid,body);
+ if(!charge)return respond({success:true,fatura:f,
+  cobranca_status:emissao?"emissao_reservada":null,
+  mensagem:emissao?
+   "Há uma emissão Pix reservada, mas sem cobrança local confirmada. Consulte a administração para conciliar no Asaas; não pague ou gere outro Pix.":
+   "Ainda não há cobrança nesta fatura."});
+ if(charge.gateway!=="asaas")throw new Failure("Esta fatura pertence ao Mercado Pago. Continue pelo fluxo original.",409);
+ enabled("billing");
+ const proof=await verifyInvoice(String(charge.order_id),charge,store,month);
+ // Nunca exibir QR/copia-e-cola de cobranca cancelada, estornada ou contestada.
+ // Ela nao deve ser reaproveitada como um Pix ainda valido, mesmo se o
+ // endpoint pixQrCode devolver um payload legado.
+ const bloqueadaParaPagamento=["estornado","contestado","cancelado"].includes(proof.estado);
+ const somenteConferencia=value(proof.payment.status,50)==="CONFIRMED";
+ const qr=proof.estado==="pago"||bloqueadaParaPagamento||somenteConferencia?{}:
+   await asaas("/payments/"+encodeURIComponent(String(charge.order_id))+"/pixQrCode");
+ // A observacao bancária negativa prevalece mesmo que o SQL ainda retorne
+ // um estado local antigo ("pago") enquanto a contestacao e conciliada.
+ const statusPublico=bloqueadaParaPagamento||somenteConferencia?proof.estado:
+   proof.conciliado.status||proof.estado;
+ return respond({success:true,fatura:f,cobranca_status:statusPublico,
+  valor_centavos:charge.valor_centavos,pix:parsePix(proof.payment,qr),
+  mensagem:proof.estado==="pago"
+   ?"Pagamento reconhecido e fatura quitada. Créditos são disponibilizados somente quando houver remunerações elegíveis."
+   :bloqueadaParaPagamento
+   ?"Esta cobrança está cancelada, estornada ou contestada. Não utilize o Pix anterior. Solicite regularização à administração."
+   :somenteConferencia
+   ?"Pagamento em confirmação no Asaas. Aguarde a verificação bancária; não faça outro Pix."
+   :"Aguardando liquidação da cobrança."});
+}
+async function createInvoice(uid:string,body:Record<string,unknown>,email:string){
+ // Antes de leitura, reserva, cadastro ou POST; consulta usa sua action propria.
+ requireIssuance();
+ // Regularização de obrigação já constituída não depende da aceitação
+ // de novos termos; aceite continua obrigatório para iniciar novas vendas.
+ // invoice() confirma a propriedade do comércio antes de qualquer preferência.
+ const {store,month,f,charge}=await invoice(uid,body);
+ const {data:method,error:methodError}=await db.from("catalogo_cobranca_preferencias")
+  .select("metodo").eq("comercio_id",commerce(body.comercio_id)).maybeSingle();
+ if(methodError)throw new Failure("Falha ao consultar modalidade de cobrança.",503);
+ if(method?.metodo==="pix_automatico")
+  throw new Failure("Pix Automático ainda não está liberado. Solicite orientação para pagamento da fatura.",503);
+ enabled("billing");
+ check(f&&["faturado","vencido","bloqueado"].includes(String(f.status))&&
+   Number(f.total_comissao_centavos)>0,"A fatura ainda não está fechada ou já foi paga.",409);
+ // Validar ANTES de cadastrar cliente, reservar emissao ou chamar o Asaas.
+ // Jamais usar Math.round() em total informado pelo livro financeiro.
+ const invoiceCents=Number(f.total_comissao_centavos);
+ check(Number.isSafeInteger(invoiceCents)&&invoiceCents>0,
+  "Total da fatura inconsistente. Nenhuma cobrança será criada.",503);
+ if(charge){
+  if(charge.gateway==="asaas")return await reconcileInvoice(uid,body);
+  throw new Failure("Cobrança Mercado Pago existente. Não é seguro emitir outra.",409);
+ }
+ // Nao reservar emissao ou cadastrar cliente para valores abaixo do minimo real.
+ // A divida fica preservada na fatura original; jamais aumentar valor ate R$ 5.
+ check(invoiceCents>=ASAAS_COBRANCA_MINIMA_CENTAVOS,
+  "Fatura inferior ao mínimo de cobrança do Asaas (R$ 5,00). Nenhum Pix foi emitido; consulte a administração.",409);
+ // Primeiro reservar a emissao local; chamadas concorrentes da mesma fatura
+ // nunca devem cadastrar pagadores diferentes antes de ter um claim unico.
+ const {data:claim,error:claimError}=await db.from("catalogo_asaas_emissoes")
+  .insert({fechamento_id:f.id}).select("operacao_id").single();
+ // Claim único impede duas cobranças durante chamadas concorrentes ou timeout.
+ // Se já existe uma reserva, SOMENTE recuperamos via GET; nunca fazemos outro POST.
+ if(claimError&&claimError.code!=="23505")
+  throw new Failure("Não foi possível reservar a fatura para cobrança.",503);
+ const novoClaim=!claimError&&Boolean(claim);
+ const ref=reference(store,month);
+ const candidates=await listarAsaasPorReferencia("payments",ref);
+ if(candidates.length>1)
+  throw new Failure("Há mais de uma cobrança com a mesma referência no Asaas. Revisão manual necessária.",409);
+ let payment=candidates[0]||null;
+ if(!payment&&!novoClaim)
+  throw new Failure("Emissão reservada e ainda não localizada no Asaas. Não é seguro emitir outro Pix automaticamente.",409);
+ const expectedCustomerId=payment
+  ?(typeof payment.customer==="string" && payment.customer.length>=5 &&
+    payment.customer.length<=120 && payment.customer===payment.customer.trim()
+     ?payment.customer:"")
+  :undefined;
+ if(payment)check(Boolean(expectedCustomerId),
+  "Cobrança bancária sem pagador identificável. Não cadastrar novo cliente.",409);
+ const customerId=await loadOrCreateCustomer(store,body,email,expectedCustomerId);
+ if(!payment){
+  payment=await asaas("/payments","POST",{
+   customer:customerId,billingType:"PIX",value:money(invoiceCents),
+   dueDate:value(f.vencimento_em,10)>=new Date().toISOString().slice(0,10)?
+     value(f.vencimento_em,10):new Date().toISOString().slice(0,10),
+   externalReference:ref,description:"Fatura Guia Andrelândia "+month,
+  });
+ }
+ check(Boolean(payment?.id),"Cobrança sem identificador no provedor.",502);
+ // Reconsulta a cobrança para validar identidade/valor antes de salvar.
+ const verified=await asaas("/payments/"+encodeURIComponent(String(payment.id)));
+ check(verified.customer===customerId && verified.externalReference===ref &&
+  verified.billingType==="PIX" && cents(verified.value)===Number(f.total_comissao_centavos),
+  "Cobrança divergente; operação reservada para revisão.",409);
+ // Em recuperação após timeout, somente um status PENDING/OVERDUE
+ // pode receber Pix. Status desconhecido, estornado ou contestado: HOLD.
+ const providerStatus=value(verified.status,50);
+ const pagavel=["PENDING","OVERDUE"].includes(providerStatus);
+ const alreadyPaid=providerStatus==="RECEIVED";
+ const emConferencia=providerStatus==="CONFIRMED";
+ check(pagavel||alreadyPaid||emConferencia,
+  "Cobrança anterior indisponível para Pix. Consulte a administração antes de emitir outra.",409);
+ const qr=pagavel?await asaas("/payments/"+encodeURIComponent(String(payment.id))+"/pixQrCode"):{};
+ const pix=parsePix(verified,qr);
+ if(pagavel)check(Boolean(pix.code),"Pix sem copia e cola. Consulte a cobrança no provedor.",502);
+ const registrada=await rpc("catalogo_asaas_registrar_fatura",{
+  p_fechamento:f.id,p_payment:verified.id,p_valor:f.total_comissao_centavos,
+  p_qr:pix.code,p_imagem:pix.imageBase64,p_url:pix.ticketUrl,
+  p_expira:qr.expirationDate||null
+ });
+ // Um RPC sem erro de transporte nao significa INSERT/UPDATE confirmado.
+ // Exigir ACK e IDs do banco; caso nao existam, a reserva continua no
+ // journal para recuperacao manual sem repetir POST no Asaas.
+ check(registrada?.ok===true && String(registrada.order_id||"")===String(verified.id)
+  && Boolean(registrada.cobranca_id),
+  "Cobrança identificada no Asaas, mas o registro local não foi confirmado. Consulte a administração antes de pagar.",503);
+ if(alreadyPaid)await verifyInvoice(String(verified.id),
+  {order_id:verified.id,valor_centavos:f.total_comissao_centavos},store,month);
+ return respond({success:true,order_id:verified.id,fatura:f,valor_centavos:f.total_comissao_centavos,
+  cobranca_status:alreadyPaid?"pago":"pendente",pix,
+  mensagem:alreadyPaid?"Cobrança recuperada e pagamento conciliado."
+   :emConferencia?"Pagamento em confirmação no Asaas. Não realize outro Pix."
+   :"Pix Asaas emitido. Aguarde a confirmação do recebimento."});
+}
+function pixDestination(key:string){
+ const cleaned=key.trim(),digits=cleaned.replace(/\D/g,"");
+ if(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleaned))return {pixAddressKey:cleaned,pixAddressKeyType:"EMAIL"};
+ if(/^\d{11}$/.test(digits)&&/^\d{11}$/.test(cleaned.replace(/[.\-]/g,"")))
+  return {pixAddressKey:digits,pixAddressKeyType:"CPF"};
+ if(digits.length===14 && /^[\d.\-/]+$/.test(cleaned))
+  return {pixAddressKey:digits,pixAddressKeyType:"CNPJ"};
+ if(/^\+55\d{11}$/.test(cleaned))return {pixAddressKey:cleaned.slice(3),pixAddressKeyType:"PHONE"};
+ if(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleaned))
+  return {pixAddressKey:cleaned,pixAddressKeyType:"EVP"};
+ throw new Failure("Chave Pix inválida. Use CPF, CNPJ, e-mail, telefone com +55 ou chave aleatória.",400);
+}
+async function wallet(uid:string,withReconcile=false){
+ // O mesmo entregador pode integrar varios comercios: um vinculo inativo
+ // nao deve ocultar outro vinculo ativo. Consultas independentes de 1 linha.
+ const [{data:allowed,error:e},{data:active,error:activeError}]=await Promise.all([
+  db.from("catalogo_motoboys").select("usuario_id").eq("usuario_id",uid).limit(1),
+  db.from("catalogo_motoboys").select("usuario_id").eq("usuario_id",uid)
+   .eq("ativo",true).limit(1)
+ ]);
+ if(e||activeError)throw new Failure("Falha ao verificar perfil de entregador.",503);
+ let titularHistorico=false;
+ if(!allowed?.length){
+  // Carteira de ex-entregador sem ultimo vinculo: somente autenticação +
+  // remuneracoes registradas para o proprio usuario permitem acesso.
+  const {data:credits,error:creditsError}=await db.from("catalogo_remuneracoes_v2")
+   .select("id").eq("motoboy_id",uid).limit(1);
+  if(creditsError)throw new Failure("Falha ao conferir histórico do entregador.",503);
+  titularHistorico=Boolean(credits?.length);
+ }
+ if(!allowed?.length&&!titularHistorico)
+  throw new Failure("Perfil de entregador não autorizado ou sem histórico financeiro.",403);
+ const activeCourier=Boolean(active?.length);
+ if(withReconcile){
+  const {data:pending}=await db.from("catalogo_asaas_saques").select("id,transferencia_id")
+   .eq("motoboy_id",uid).in("status",["enviado","revisao"]).not("transferencia_id","is",null).limit(5);
+  for(const row of pending||[]){
+   try {await reconcileTransfer(String(row.id),String(row.transferencia_id));}
+   catch { /* Nunca liberar por erro de rede; o saldo continua reservado. */ }
+  }
+ }
+ const balance=await rpc("catalogo_asaas_saldo_historico",{p_motoboy:uid});
+ const pendencias=await rpc("catalogo_asaas_pendencias_historicas",{p_motoboy:uid});
+ const {data:residual,error:residualError}=await db.from("catalogo_asaas_saldos_residuais")
+   .select("id,status,saldo_snapshot_centavos,motivo,solicitado_em,detalhe_revisao")
+   .eq("motoboy_id",uid).order("solicitado_em",{ascending:false}).limit(1).maybeSingle();
+ if(residualError)throw new Failure("Consulta de saldo residual indisponível.",503);
+ const {data:saida,error:saidaError}=await db.from("catalogo_asaas_regularizacoes_inativos")
+   .select("id,status,saldo_snapshot_centavos,motivo,solicitado_em,justificativa")
+   .eq("motoboy_id",uid).order("solicitado_em",{ascending:false}).limit(1).maybeSingle();
+ if(saidaError)throw new Failure("Consulta de regularização financeira indisponível.",503);
+ const {data:history,error}=await db.from("catalogo_asaas_saques")
+  .select("id,status,valor_centavos,criado_em,concluido_em")
+  .eq("motoboy_id",uid).order("criado_em",{ascending:false}).limit(20);
+ if(error)throw new Failure("Histórico de saques indisponível.",503);
+ const {data:observacoesBancarias,error:evidenceError}=await db
+  .from("catalogo_asaas_transferencias_excepcionais_auditoria")
+  .select("id").eq("motoboy_id",uid).limit(1);
+ if(evidenceError)throw new Failure("Conciliação financeira indisponível. Saques suspensos por segurança.",503);
+ const evidenciaBancariaPendente=Boolean(observacoesBancarias?.length);
+ const {data:separacaoContabil,error:separacaoError}=await db
+  .from("catalogo_asaas_separacoes_excepcionais")
+  .select("id,tipo,valor_centavos,creditos,situacao,criado_em")
+  .eq("motoboy_id",uid).maybeSingle();
+ if(separacaoError)throw new Failure("Falha ao conferir créditos em reserva excepcional. Saques suspensos.",503);
+ // Indicacao de interface: a trava definitiva e transacional no PostgreSQL.
+ const revisaoExcepcionalAberta=Boolean(
+   (residual&&["pendente","em_analise"].includes(residual.status))||
+   (saida&&["pendente","em_analise"].includes(saida.status))
+ );
+ return respond({success:true,
+   entregador_ativo:activeCourier,
+   revisao_excepcional_aberta:revisaoExcepcionalAberta,
+   evidencia_bancaria_pendente:evidenciaBancariaPendente,
+   separacao_contabil_excepcional:separacaoContabil||null,
+   saque_habilitado:activeCourier&&!revisaoExcepcionalAberta&&!evidenciaBancariaPendente&&!separacaoContabil&&ENVIRONMENT==="sandbox"&&PAYOUTS_ON&&WITHDRAWAL_AUTH_ON&&
+     WITHDRAWAL_AUTH_TOKEN.length>=32&&Boolean(ASAAS_TOKEN),
+   saque_minimo_centavos:SAQUE_MINIMO_CENTAVOS,
+   saque_maximo_por_pix_centavos:SAQUE_MAXIMO_PIX_CENTAVOS,
+   total_comissoes_disponiveis:Number(balance.creditos||0),
+   saldo_disponivel_centavos:balance.disponivel_centavos||0,
+   pendencias_por_comercio:Array.isArray(pendencias)?pendencias:[],
+   saldo_residual:residual||null,
+   regularizacao_saida:saida||null,
+   saques:history||[]});
+}
+// Solicitação administrativa de saldo residual: não cria saque nem chama o Asaas.
+async function solicitarAnaliseResidual(uid:string,body:Record<string,unknown>){
+ // Inatividade do entregador nao extingue creditos nem impede sua revisao.
+ await requireTerms(uid,"motoboy","",true);
+ const motivo=value(body.motivo,30);
+ check(motivo==="encerramento"||motivo==="inatividade",
+  "Informe o motivo do pedido de análise.",400);
+ const saldo=await rpc("catalogo_asaas_saldo_historico",{p_motoboy:uid});
+ const amount=Number(saldo.disponivel_centavos||0);
+ check(Number.isSafeInteger(amount)&&amount>0&&amount<SAQUE_MINIMO_CENTAVOS,
+  "A revisão de saldo residual exige valor liberado entre R$ 0,01 e R$ 99,99.",409);
+ const {data:pending,error:pendingError}=await db.from("catalogo_asaas_saldos_residuais")
+   .select("id,status").eq("motoboy_id",uid).in("status",["pendente","em_analise"])
+   .order("solicitado_em",{ascending:false}).limit(1).maybeSingle();
+ if(pendingError)throw new Failure("Falha ao consultar solicitações de revisão.",503);
+ if(pending)return respond({success:true,id:pending.id,status:pending.status,
+   mensagem:"Sua análise de saldo residual já está registrada. Nenhum Pix foi enviado."});
+ const {data,error}=await db.from("catalogo_asaas_saldos_residuais")
+   .insert({motoboy_id:uid,saldo_snapshot_centavos:amount,motivo})
+   .select("id,status").single();
+ if(error?.code==="23505")
+   return respond({success:true,status:"pendente",
+    mensagem:"Já existe uma análise de saldo residual para sua conta. Nenhum Pix foi enviado."});
+ if(error?.code==="23514")
+  throw new Failure("Existe outro pedido financeiro em aberto. Aguarde a revisão ou procure a administração.",409);
+ if(error||!data)throw new Failure("Não foi possível registrar seu pedido de análise.",503);
+ return respond({success:true,id:data.id,status:data.status,
+   mensagem:"Solicitação de análise registrada. Não é uma transferência e não altera seu saldo disponível."});
+}
+// Registra direito de pedir regularização, sem liberar créditos/saques.
+// Só atende motoboy sem NENHUM vínculo ativo e com >=R$100 financiados.
+async function solicitarRegularizacaoSaida(uid:string,body:Record<string,unknown>){
+ await requireTerms(uid,"motoboy","",true);
+ const motivo=value(body.motivo,30);
+ check(["encerramento","inatividade"].includes(motivo),"Selecione o motivo do pedido.",400);
+ const {data:active,error:activeError}=await db.from("catalogo_motoboys")
+  .select("usuario_id").eq("usuario_id",uid).eq("ativo",true).limit(1);
+ if(activeError)throw new Failure("Falha ao verificar situação de entrega.",503);
+ check(!active?.length,"Seu perfil ainda possui vínculo ativo. Use o fluxo de saque regular quando estiver disponível.",409);
+ const saldo=await rpc("catalogo_asaas_saldo_historico",{p_motoboy:uid});
+ const amount=Number(saldo.disponivel_centavos||0);
+ check(Number.isSafeInteger(amount)&&amount>=SAQUE_MINIMO_CENTAVOS,
+  "Regularização de saída exige pelo menos R$ 100 em créditos disponíveis. Para valores menores, utilize análise residual.",409);
+ const {data:pending,error:pendingError}=await db.from("catalogo_asaas_regularizacoes_inativos")
+  .select("id,status").eq("motoboy_id",uid).in("status",["pendente","em_analise"])
+  .limit(1).maybeSingle();
+ if(pendingError)throw new Failure("Não foi possível conferir regularizações anteriores.",503);
+ if(pending)return respond({success:true,id:pending.id,status:pending.status,
+   mensagem:"Sua solicitação de regularização já está registrada. Nenhuma transferência foi iniciada."});
+ const {data,error}=await db.from("catalogo_asaas_regularizacoes_inativos")
+  .insert({motoboy_id:uid,saldo_snapshot_centavos:amount,motivo})
+  .select("id,status").single();
+ if(error?.code==="23505")return respond({success:true,status:"pendente",
+   mensagem:"Já existe uma regularização aberta. Nenhuma transferência foi iniciada."});
+ if(error?.code==="23514")
+  throw new Failure("Existe uma análise residual aberta. Aguarde a revisão antes de pedir a regularização.",409);
+ if(error||!data)throw new Failure("Falha ao registrar regularização financeira.",503);
+ return respond({success:true,id:data.id,status:data.status,
+  mensagem:"Regularização solicitada para conferência administrativa. Não é saque, Pix ou promessa de data de pagamento."});
+}
+// Leitura financeira do pedido de encerramento sem expor valores a terceiros.
+async function consultarEncerramento(uid:string,body:Record<string,unknown>){
+ const store=commerce(body.comercio_id);
+ await owner(uid,store);
+ const {data,error}=await db.from("catalogo_encerramentos_comercio")
+   .select("situacao,divida_apurada_centavos,solicitado_em,atualizado_em")
+   .eq("comercio_id",store).maybeSingle();
+ if(error)throw new Failure("Não foi possível consultar seu encerramento.",503);
+ return respond({success:true,encerramento:data||null});
+}
+async function listarEncerramentosAdmin(uid:string){
+ if(uid!==ADMIN_USER_ID)throw new Failure("Acesso exclusivo do administrador.",403);
+ const data=await rpc("catalogo_listar_encerramentos_admin",{p_admin:uid});
+ if(!Array.isArray(data))throw new Failure("Não foi possível listar encerramentos.",503);
+ return respond({success:true,encerramentos:data||[]});
+}
+async function finalizarEncerramentoAdmin(uid:string,body:Record<string,unknown>){
+ // Segunda trava: nunca arquivar por esta Edge em producao, mesmo que a
+ // allowlist do dispatcher seja alterada no futuro. So whatsapp-bot sincroniza GitHub.
+ if(ENVIRONMENT==="production")throw new Failure("Arquivamento produtivo exige sincronizacao da vitrine GitHub.",503);
+ if(uid!==ADMIN_USER_ID)throw new Failure("Acesso exclusivo do administrador.",403);
+ check(body.confirmacao===true,"Confirme que conferiu as faturas e os pedidos.",400);
+ const store=commerce(body.comercio_id);
+ const result=await rpc("catalogo_finalizar_encerramento_financeiro",{
+  p_comercio:store,p_admin:uid
+ });
+ return respond({success:true,...result});
+}
+async function listarAnalisesResiduais(uid:string){
+ if(uid!==ADMIN_USER_ID)throw new Failure("Acesso exclusivo da administração.",403);
+ const {data,error}=await db.from("catalogo_asaas_saldos_residuais")
+  .select("id,motoboy_id,status,saldo_snapshot_centavos,motivo,solicitado_em")
+  .in("status",["pendente","em_analise"])
+  .order("solicitado_em",{ascending:true}).limit(100);
+ if(error)throw new Failure("Fila de análise indisponível.",503);
+ return respond({success:true,solicitacoes:data||[],
+  mensagem:"Fila apenas de leitura. Nenhum repasse é iniciado por esta consulta."});
+}
+// Decisão administrativa SEM movimentação de créditos, saque ou transferência.
+// Estados possíveis: pendente -> em_analise -> recusada; recusa também pode ser direta.
+// A recusa encerra apenas a solicitação de análise, não a obrigação financeira.
+async function revisarAnaliseResidual(uid:string,body:Record<string,unknown>){
+ if(uid!==ADMIN_USER_ID)throw new Failure("Acesso exclusivo da administração.",403);
+ const id=value(body.solicitacao_id,70);
+ check(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id),
+  "Identificador da solicitação inválido.",400);
+ const esperado=value(body.status_esperado,30);
+ const destino=value(body.novo_status,30);
+ check(["pendente","em_analise"].includes(esperado),"Atualize a fila antes de revisar.",409);
+ check(destino==="recusada"||(destino==="em_analise"&&esperado==="pendente"),
+  "Transição de análise não permitida.",409);
+ const detalhe=typeof body.justificativa==="string"?body.justificativa.trim():"";
+ check(detalhe.length<=1000,"A justificativa deve ter no máximo 1.000 caracteres.",400);
+ if(destino==="recusada")
+  check(detalhe.length>=20,"Explique a recusa com pelo menos 20 caracteres.",400);
+ const agora=new Date().toISOString();
+ const {data,error}=await db.from("catalogo_asaas_saldos_residuais")
+  .update({status:destino,detalhe_revisao:detalhe||null,
+    analisado_por:destino==="recusada"?uid:null,atualizado_em:agora,
+    finalizado_em:destino==="recusada"?agora:null})
+  .eq("id",id).eq("status",esperado)
+  .select("id,status").maybeSingle();
+ if(error)throw new Failure("Não foi possível registrar a revisão.",503);
+ if(!data)throw new Failure("A solicitação mudou de estado. Atualize a fila antes de continuar.",409);
+ return respond({success:true,solicitacao_id:data.id,status:data.status,
+   mensagem:destino==="recusada"
+    ?"Análise encerrada com justificativa. O saldo do entregador permanece intacto; nenhum Pix foi enviado."
+    :"Solicitação marcada para análise. Nenhum crédito foi movimentado."});
+}
+// Revisão administrativa não cria Pix nem representa quitação.
+// A recusa encerra apenas o pedido; as comissões e a dívida são preservadas.
+async function listarRegularizacoesSaidaAdmin(uid:string){
+ if(uid!==ADMIN_USER_ID)throw new Failure("Acesso restrito à administração.",403);
+ const {data,error}=await db.from("catalogo_asaas_regularizacoes_inativos")
+  .select("id,motoboy_id,saldo_snapshot_centavos,motivo,status,solicitado_em")
+  .in("status",["pendente","em_analise"])
+  .order("solicitado_em",{ascending:true}).limit(100);
+ if(error)throw new Failure("Não foi possível listar regularizações financeiras.",503);
+ return respond({success:true,solicitacoes:data||[]});
+}
+// Monitoramento administrativo de separacoes CONTABEIS imutaveis.
+// Nenhum endpoint permite desbloquear, quitar ou enviar Pix.
+async function listarSeparacoesCongeladasAdmin(uid:string){
+ if(uid!==ADMIN_USER_ID)throw new Failure("Acesso restrito à administração.",403);
+ const {data,error,count}=await db.from("catalogo_asaas_separacoes_excepcionais")
+  .select("id,tipo,solicitacao_id,motoboy_id,valor_centavos,creditos,situacao,criado_em",
+    {count:"exact"})
+  .order("criado_em",{ascending:false}).limit(100);
+ if(error)throw new Failure("Não foi possível consultar separações contábeis.",503);
+ return respond({success:true,separacoes:data||[],total:count,
+  ha_mais:count!==null&&count>100,
+  mensagem:"Lista de reservas contábeis sem liquidação; nenhuma ação de desbloqueio disponível."});
+}
+async function diagnosticarSeparacaoCongeladaAdmin(uid:string,body:Record<string,unknown>){
+ if(uid!==ADMIN_USER_ID)throw new Failure("Acesso restrito à administração.",403);
+ const id=value(body.separacao_id,70);
+ check(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id),
+  "Identificador da separação inválido.",400);
+ const diagnostico=await rpc("catalogo_asaas_diagnosticar_separacao_excepcional",
+  {p_separacao:id});
+ check(diagnostico?.ok===true,"Diagnóstico contábil não disponível.",409);
+ // Impossivel transformar um diagnostico em autorizacao de pagamento.
+ check(diagnostico.liberacao_automatica_autorizada===false&&
+   diagnostico.quitacao_automatica_autorizada===false&&
+   diagnostico.pode_reutilizar_creditos===false,
+   "Resposta contábil insegura. Operação bloqueada.",503);
+ return respond({success:true,diagnostico,
+  mensagem:"Diagnóstico somente leitura; não autoriza nenhum Pix, baixa ou desbloqueio."});
+}
+// Etapa #41: matriz somente leitura; GET observado nao comprova destino Pix.
+// O diagnostico nunca autoriza Pix, baixa ou liberacao de escrow.
+async function matrizConciliacaoEscrowAdmin(uid:string,body:Record<string,unknown>){
+ if(uid!==ADMIN_USER_ID)throw new Failure("Acesso restrito à administração.",403);
+ const id=value(body.separacao_id,70);
+ check(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id),
+  "Identificador da separação inválido.",400);
+ const matriz=await rpc("catalogo_asaas_matriz_conciliacao_escrow",
+  {p_separacao:id});
+ check(matriz?.ok===true,"Matriz de conciliação indisponível; manter HOLD.",409);
+ check(matriz.evidencia_suficiente_para_liquidar===false&&
+  matriz.evidencia_suficiente_para_liberar===false&&
+  matriz.pagamento_autorizado===false&&
+  matriz.baixa_realizada===false&&
+  matriz.movimenta_dinheiro===false&&
+  matriz.destino_pix_original_vinculado_com_prova===false,
+  "Matriz retornou autorização financeira insegura; operação bloqueada.",503);
+ const consultas=await rpc("catalogo_asaas_diagnosticar_consultas_get_escrow",
+  {p_separacao:id});
+ check(consultas?.ok===true&&consultas.pagamento_autorizado===false&&
+  consultas.baixa_realizada===false&&consultas.liberacao_autorizada===false&&
+  consultas.titularidade_pix_confirmada===false&&
+  consultas.ausencia_de_pix_anterior_comprovada===false,
+  "Trilha de GETs incompleta ou insegura; manter HOLD.",503);
+ return respond({success:true,matriz:{...matriz,consultas_get:consultas},
+  mensagem:"Matriz e trilha local de GETs somente leitura. Nenhuma observação comprova destinatário; a reserva continua congelada."});
+}
+// Etapa #41 — varredura explicita e LIMITADA do historico Asaas Sandbox.
+// GET /transfers e paginado. Este relatorio encontra referencias repetidas
+// e vinculos locais divergentes, mas NUNCA prova ausencia de Pix anterior,
+// identidade do beneficiario original, nem autoriza liberar/baixar saldo.
+// Nao retorna os objetos brutos do Asaas: eles podem conter dados bancarios e PII.
+async function auditarHistoricoTransferenciasExcepcionaisSandboxAdmin(
+ uid:string,body:Record<string,unknown>
+){
+ if(uid!==ADMIN_USER_ID)throw new Failure("Acesso restrito à administração.",403);
+ if(ENVIRONMENT!=="sandbox")
+  throw new Failure("Varredura de historico excepcional permitida somente no Sandbox.",403);
+ if(!ASAAS_TOKEN)throw new Failure("Asaas Sandbox indisponível sem credencial.",503);
+ const id=value(body.separacao_id,70);
+ check(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id),
+  "Identificador da separação inválido.",400);
+ const {data:reserva,error:reservaError}=await db.from("catalogo_asaas_separacoes_excepcionais")
+  .select("id,tipo,solicitacao_id,motoboy_id,valor_centavos,situacao")
+  .eq("id",id).maybeSingle();
+ if(reservaError||!reserva||reserva.situacao!=="congelada")
+  throw new Failure("Separação congelada não encontrada; não consultar banco.",404);
+ // O retorno local pode estar corrompido ou parcialmente preenchido mesmo
+ // com situacao='congelada'. Nao construir referencia bancária com IDs,
+ // tipo, beneficiario ou centavos inconsistentes.
+ const uuidValido=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+ if(reserva.id!==id||
+  (reserva.tipo!=="residual"&&reserva.tipo!=="saida")||
+  typeof reserva.solicitacao_id!=="string"||
+  !uuidValido.test(reserva.solicitacao_id)||
+  typeof reserva.motoboy_id!=="string"||
+  !uuidValido.test(reserva.motoboy_id)||
+  typeof reserva.valor_centavos!=="number"||
+  !Number.isSafeInteger(reserva.valor_centavos)||
+  reserva.valor_centavos<=0)
+  throw new Failure("Separação financeira inconsistente; auditoria inconclusiva. HOLD.",503);
+ const {data:vinculo,error:vinculoError}=await db.from(
+  "catalogo_asaas_transferencias_excepcionais_auditoria")
+  .select("transferencia_id,referencia_externa,valor_centavos,motoboy_id")
+  .eq("tipo",reserva.tipo).eq("solicitacao_id",reserva.solicitacao_id).maybeSingle();
+ if(vinculoError)throw new Failure("Vínculo bancário local indisponível; manter HOLD.",503);
+ // Uma linha de vinculo existente precisa trazer identificadores e centavos
+ // bem formados; campos nulos/string numerica nao equivalem a "sem vinculo".
+ // Interromper antes do GET externo. Divergencias de conteudo entre dois
+ // vinculos bem formados continuam aparecendo no relatorio administrativo.
+ if(vinculo!==null&&vinculo!==undefined){
+  if(typeof vinculo!=="object"||Array.isArray(vinculo)||
+   typeof vinculo.transferencia_id!=="string"||
+   vinculo.transferencia_id.length<1||vinculo.transferencia_id.length>180||
+   /\s/.test(vinculo.transferencia_id)||
+   typeof vinculo.referencia_externa!=="string"||
+   vinculo.referencia_externa.length<1||vinculo.referencia_externa.length>180||
+   vinculo.referencia_externa.trim()!==vinculo.referencia_externa||
+   typeof vinculo.valor_centavos!=="number"||
+   !Number.isSafeInteger(vinculo.valor_centavos)||vinculo.valor_centavos<=0||
+   typeof vinculo.motoboy_id!=="string"||!uuidValido.test(vinculo.motoboy_id))
+   throw new Failure("Vínculo bancário local inconsistente; auditoria inconclusiva. HOLD.",503);
+ }
+ const referencia="guia-exc:"+reserva.tipo+":"+reserva.solicitacao_id;
+ const idVinculado=typeof vinculo?.transferencia_id==="string"?vinculo.transferencia_id:"";
+ const vinculoLocalDivergente=Boolean(vinculo)&&(
+  vinculo?.referencia_externa!==referencia||
+  vinculo?.valor_centavos!==reserva.valor_centavos||
+  vinculo?.motoboy_id!==reserva.motoboy_id);
+ let mesmoIdSaqueComum=false;
+ if(idVinculado){
+  const {data:saque,error:saqueError}=await db.from("catalogo_asaas_saques")
+   .select("id").eq("transferencia_id",idVinculado).maybeSingle();
+  if(saqueError)throw new Failure("Conflito com saque comum não pôde ser verificado.",503);
+  mesmoIdSaqueComum=Boolean(saque);
+ }
+ const LIMIT=100,MAX_PAGINAS=12;
+ let paginas=0,examinadas=0,referencias=0,refsDeOutroId=0;
+ let valoresDivergentes=0,idsSemReferencia=0,identificadoresInvalidos=0;
+ let listaRepetida=0,estadosDone=0,formatosAmbiguos=0,achouIdVinculado=false;
+ let idsSemIdentificadorGlobais=0;
+ const vistos=new Set<string>();
+ // Captura colisao entre referencias de qualquer pagina, inclusive se o ID
+ // aparecer primeiro numa referencia alheia e so depois na referencia alvo.
+ const primeiraReferenciaPorId=new Map<string,string>();
+ const idsComReferenciaDivergente=new Set<string>();
+ // Paginas com totalCount constante ainda podem se sobrepor por insercoes
+ // e remocoes concorrentes. IDs repetidos fora da referencia do pedido
+ // tambem invalidam a confiabilidade da varredura amostral.
+ const idsRepetidosGlobalmente=new Set<string>();
+ // totalCount deve permanecer estavel ao longo da varredura; paginacao
+ // offset nao representa snapshot transacional do banco externo.
+ let totalInicial:number|null=null;
+ let completa=false;
+ for(let page=0;page<MAX_PAGINAS;page++){
+  const offset=page*LIMIT;
+  const result=await asaas("/transfers?limit="+LIMIT+"&offset="+offset);
+  // O GET /transfers do Asaas devolve limit, offset e totalCount.
+  // Uma pagina parcial com hasMore=true seguida de offset += LIMIT
+  // pularia transferencias na listagem. Nunca usar essa amostra como completa.
+  if(!Array.isArray(result.data)||typeof result.hasMore!=="boolean"||
+   typeof result.limit!=="number"||
+   !Number.isSafeInteger(result.limit)||result.limit!==LIMIT||
+   typeof result.offset!=="number"||
+   !Number.isSafeInteger(result.offset)||result.offset!==offset||
+   typeof result.totalCount!=="number"||
+   !Number.isSafeInteger(result.totalCount)||result.totalCount<0||
+   result.data.length>LIMIT||
+   (result.hasMore===true&&result.data.length!==LIMIT)||
+   // Sinalizacao hasMore e totalCount precisam concordar NAQUELA pagina.
+   (result.hasMore===true&&result.totalCount<=offset+result.data.length)||
+   (result.hasMore===false&&result.totalCount!==offset+result.data.length))
+   throw new Failure("Paginação bancária inválida: histórico inconclusivo. HOLD.",503);
+  if(totalInicial===null)totalInicial=result.totalCount;
+  else if(result.totalCount!==totalInicial)
+   throw new Failure("Histórico Asaas mudou entre páginas: auditoria inconclusiva. HOLD.",503);
+  paginas++;
+  examinadas+=result.data.length;
+  for(const raw of result.data){
+   const t=input(raw);
+   // ID ausente, vazio ou com espaços externos não identifica uma transferência.
+   // Mesmo registros fora da referência-alvo tornam a listagem inconclusiva.
+   const tId=typeof t.id==="string"&&t.id.trim()===t.id?t.id:"";
+   if(!tId)idsSemIdentificadorGlobais++;
+   const tRef=typeof t.externalReference==="string"?t.externalReference:"";
+   if(tId){
+    if(!primeiraReferenciaPorId.has(tId))primeiraReferenciaPorId.set(tId,tRef);
+    else{
+     idsRepetidosGlobalmente.add(tId);
+     if(primeiraReferenciaPorId.get(tId)!==tRef)
+      idsComReferenciaDivergente.add(tId);
+    }
+   }
+   const refCorresponde=tRef===referencia;
+   const idCorresponde=Boolean(idVinculado)&&tId===idVinculado;
+   if(!refCorresponde&&!idCorresponde)continue;
+   if(idCorresponde)achouIdVinculado=true;
+   if(refCorresponde){
+    referencias++;
+    if(!tId)identificadoresInvalidos++;
+    else if(vistos.has(tId))listaRepetida++;
+    else vistos.add(tId);
+    if(idVinculado&&tId!==idVinculado)refsDeOutroId++;
+    if(t.status==="DONE")estadosDone++;
+   }
+   if(idCorresponde&&tRef!==referencia)idsSemReferencia++;
+   // Nao arredondar fracoes de centavo vindas do banco: 120.004
+   // nao pode ser considerado igual a R$ 120,00. A tolerancia abaixo
+   // apenas absorve residuos de ponto flutuante em centavos validos.
+   const valorBanco=typeof t.value==="number"?t.value:NaN;
+   const centsBrutos=valorBanco*100;
+   const centsInteiros=Math.round(centsBrutos);
+   if(!Number.isFinite(valorBanco)||valorBanco<=0||
+    !Number.isSafeInteger(centsInteiros)||
+    Math.abs(centsBrutos-centsInteiros)>1e-7||
+    centsInteiros!==Number(reserva.valor_centavos))
+    valoresDivergentes++;
+   if(typeof t.status!=="string"||
+    !["PENDING","IN_BANK_PROCESSING","BLOCKED","DONE","FAILED","CANCELLED"].includes(t.status))
+    formatosAmbiguos++;
+  }
+  if(result.hasMore===false){completa=true;break;}
+  if(result.data.length===0)
+   throw new Failure("Listagem bancária vazia com hasMore=true: inconclusiva.",503);
+ }
+ const referenciasDistintas=vistos.size;
+ const idsRepetidosGlobais=idsRepetidosGlobalmente.size;
+ const idsDaReferenciaComOutraReferencia=[...vistos]
+  .filter(tId=>idsComReferenciaDivergente.has(tId)).length;
+ // #41: o Asaas pode devolver transferencia com a referencia alvo, MAS
+ // diferente do unico ID ja vinculado no nosso livro (ou sem vinculo).
+ // Conferir TODOS os IDs dessa referencia contra saques comuns, nao apenas
+ // idVinculado. Nenhum ID do banco e retornado ao navegador/log.
+ const MAX_IDS_CONFERENCIA=400,LOTE_IDS_CONFERENCIA=40;
+ if(vistos.size>MAX_IDS_CONFERENCIA)
+  throw new Failure("Muitas transferências com a mesma referência: verificação bancária incompleta. HOLD.",503);
+ const usadosEmSaqueComum=new Set<string>();
+ const idsDaReferencia=[...vistos];
+ for(let i=0;i<idsDaReferencia.length;i+=LOTE_IDS_CONFERENCIA){
+  const lote=idsDaReferencia.slice(i,i+LOTE_IDS_CONFERENCIA);
+  const {data:saques,error:saquesError}=await db.from("catalogo_asaas_saques")
+   .select("transferencia_id").in("transferencia_id",lote);
+  if(saquesError||!Array.isArray(saques))
+   throw new Failure("Verificação de reutilização de transferência indisponível; manter HOLD.",503);
+  const loteConferido=new Set(lote);
+  for(const row of saques){
+   if(typeof row?.transferencia_id!=="string"||!loteConferido.has(row.transferencia_id))
+    throw new Failure("Conflito bancário devolveu dados inconsistentes; manter HOLD.",503);
+   usadosEmSaqueComum.add(row.transferencia_id);
+  }
+ }
+ const idsDaReferenciaTambemEmSaqueComum=usadosEmSaqueComum.size;
+ const vinculoNaoLocalizado=completa&&Boolean(idVinculado)&&!achouIdVinculado;
+ const conflito=refsDeOutroId>0||referenciasDistintas>1||
+  valoresDivergentes>0||idsSemReferencia>0||identificadoresInvalidos>0||
+  listaRepetida>0||idsRepetidosGlobais>0||idsSemIdentificadorGlobais>0||
+  formatosAmbiguos>0||mesmoIdSaqueComum||
+  idsDaReferenciaTambemEmSaqueComum>0||
+  idsDaReferenciaComOutraReferencia>0||
+  vinculoLocalDivergente||vinculoNaoLocalizado;
+ return respond({success:true,relatorio:{
+  paginas_examinadas:paginas,transferencias_examinadas:examinadas,
+  pagina_limite:MAX_PAGINAS,listagem_consultada_ate_o_fim:completa,
+  referencias_iguais_encontradas:referencias,
+  transferencias_distintas_com_mesma_referencia:referenciasDistintas,
+  referencias_com_id_diferente_do_vinculado:refsDeOutroId,
+  transferencias_do_vinculo_sem_referencia:idsSemReferencia,
+  divergencias_de_valor:valoresDivergentes,
+  ids_ausentes:identificadoresInvalidos,
+  ids_repetidos_na_listagem:listaRepetida,
+  ids_repetidos_globais:idsRepetidosGlobais,
+  ids_sem_identificador_globais:idsSemIdentificadorGlobais,
+  estados_done_encontrados:estadosDone,
+  estados_ambiguos:formatosAmbiguos,
+  id_tambem_usado_em_saque_comum:mesmoIdSaqueComum,
+  ids_da_referencia_tambem_em_saques_comuns:idsDaReferenciaTambemEmSaqueComum,
+  ids_da_referencia_com_outra_referencia:idsDaReferenciaComOutraReferencia,
+  vinculo_local_nao_encontrado_na_listagem:vinculoNaoLocalizado,
+  referencia_ja_encontrada_no_banco:referencias>0,
+  vinculo_local_divergente:vinculoLocalDivergente,
+  conflito_identificado:conflito,
+  // Nem listagem completa garante ausencia de transferencia feita por
+  // referencia diferente, outra conta, periodos nao cobertos ou dados externos.
+  historico_bancario_independente_comprovado:false,
+  ausencia_de_pix_anterior_comprovada:false,
+  destinatario_original_confirmado:false,
+  liberacao_autorizada:false,pagamento_autorizado:false,baixa_realizada:false,
+  movimenta_dinheiro:false,
+  alerta:conflito?
+   "Divergência ou duplicidade encontrada; manter HOLD e investigar com o Asaas.":
+   completa?
+   referencias>0?
+   "Há transferência com a referência consultada. Verifique possível Pix anterior; HOLD.":
+   "Referência não localizada nesta consulta. Não comprova ausência de Pix nem destinatário. HOLD.":
+   "Limite de páginas atingido: amostra incompleta. HOLD obrigatório."
+ },mensagem:"Auditoria da listagem bancária somente leitura, sem Pix, baixa ou desbloqueio."});
+}
+// Dossie administrativo append-only. Evidencias sao declaracoes de apuracao,
+// NAO sao prova suficiente para liberar Pix, pagar ou marcar quitacao.
+async function listarDossieEscrowAdmin(uid:string,body:Record<string,unknown>){
+ if(uid!==ADMIN_USER_ID)throw new Failure("Acesso restrito à administração.",403);
+ const id=value(body.separacao_id,70);
+ check(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id),
+   "Identificador da separação inválido.",400);
+ const {data,error,count}=await db.from("catalogo_asaas_escrow_dossie_eventos")
+  .select("id,seq,autor_id,categoria,descricao,documento_sha256,hash_anterior_sha256,evento_sha256,criado_em",
+   {count:"exact"})
+  .eq("separacao_id",id).order("seq",{ascending:false}).limit(100);
+ if(error)throw new Failure("Histórico de conciliação indisponível.",503);
+ const integridade=await rpc("catalogo_asaas_verificar_integridade_dossie_escrow",
+  {p_separacao:id});
+ check(integridade?.ok===true&&
+  integridade?.pagamento_autorizado===false&&
+  integridade?.liberacao_autorizada===false,
+  "A leitura da integridade financeira falhou; manter reserva bloqueada.",503);
+ return respond({success:true,evento_count:count,
+  ha_mais:count!==null&&count>100,eventos:(data||[]).reverse(),
+  integridade,
+  autorizacao_pagamento:false,liberacao_creditos:false,
+  mensagem:integridade.integridade_valida===true?
+   "Dossiê íntegro localmente; não é prova bancária nem autoriza baixa.":
+   "ALERTA: dossiê inconsistente. Manter reserva congelada, investigar histórico."});
+}
+async function registrarDossieEscrowAdmin(uid:string,body:Record<string,unknown>){
+ if(uid!==ADMIN_USER_ID)throw new Failure("Acesso restrito à administração.",403);
+ const separacao=value(body.separacao_id,70);
+ const chave=value(body.chave_idempotencia,70);
+ const categoria=value(body.categoria,40);
+ const descricao=typeof body.descricao==="string"?body.descricao.trim():"";
+ const documento=body.documento_sha256==null||body.documento_sha256===""
+  ?null:value(body.documento_sha256,70);
+ const uuidRx=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+ check(uuidRx.test(separacao)&&uuidRx.test(chave),"Identificadores de auditoria inválidos.",400);
+ check(["verificacao_banco","verificacao_destinatario","comprovante_externo",
+   "contestacao","divergencia","parecer_pendente"].includes(categoria),
+   "Categoria de auditoria desconhecida.",400);
+ check(descricao.length>=30&&descricao.length<=1000&&!/[\\x00-\\x1F\\x7F]/.test(descricao),
+   "Registre uma descrição de 30 a 1000 caracteres, sem caracteres de controle.",400);
+ check(documento===null||/^[a-f0-9]{64}$/.test(documento),
+   "Documento deve ser identificado pelo SHA-256 hexadecimal, sem conteúdo pessoal.",400);
+ check(categoria!=="comprovante_externo"||Boolean(documento),
+   "Informe a impressão digital SHA-256 do comprovante externo.",400);
+ const gravacao=await rpc("catalogo_asaas_registrar_evento_dossie_escrow",{
+  p_separacao:separacao,p_autor:uid,p_chave:chave,p_categoria:categoria,
+  p_descricao:descricao,p_documento_sha256:documento
+ });
+ check(gravacao?.ok===true,gravacao?.mensagem||"Falha ao registrar evento financeiro.",409);
+ check(gravacao.pagamento_autorizado===false&&gravacao.baixa_realizada===false&&
+  gravacao.liberacao_autorizada===false,
+  "Resposta de auditoria inesperada; bloqueado.",503);
+ return respond({success:true,evento:gravacao,
+  mensagem:gravacao.repetido?"Registro idempotente preservado. Nenhum crédito foi liberado.":
+   "Evidência administrativa registrada, sem desbloquear, liquidar ou enviar Pix."});
+}
+// Gera somente manifestos legíveis por ferramentas offline. NUNCA grava
+// comprovante externo ou envia hashes a terceiros automaticamente.
+async function exportarAncoraEscrowAdmin(uid:string,body:Record<string,unknown>){
+ if(uid!==ADMIN_USER_ID)throw new Failure("Acesso restrito à administração.",403);
+ const id=value(body.separacao_id,70);
+ check(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id),
+   "Identificador da separação inválido.",400);
+ const manifesto=await rpc("catalogo_asaas_exportar_ancora_dossie",{p_separacao:id});
+ check(manifesto?.ok===true&&manifesto?.formato==="GAESCROW1"&&
+  manifesto?.cadeia_verificada_localmente===true&&
+  manifesto?.ancora_externa_efetuada===false&&
+  manifesto?.pagamento_autorizado===false&&
+  manifesto?.liberacao_autorizada===false&&
+  manifesto?.baixa_realizada===false,
+  manifesto?.mensagem||"Histórico inválido; exportação bloqueada.",409);
+ return respond({success:true,manifesto,
+  mensagem:"Manifesto somente leitura, sem dados de notas. Arquive uma cópia fora do Supabase para permitir comparação independente; não comprova Pix."});
+}
+// Somente conferencia de valores. NUNCA autoriza ou inicia uma transferencia.
+async function preconferirExcepcionalAdmin(uid:string,body:Record<string,unknown>){
+ if(uid!==ADMIN_USER_ID)throw new Failure("Acesso restrito à administração.",403);
+ const id=value(body.solicitacao_id,70);
+ const tipo=value(body.tipo,15);
+ check(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id),
+  "Identificador da solicitação inválido.",400);
+ check(tipo==="residual"||tipo==="saida","Tipo de solicitação inválido.",400);
+ const resultado=await rpc("catalogo_asaas_preconferir_pagamento_excepcional",{
+  p_tipo:tipo,p_solicitacao:id
+ });
+ // Comparacao exclusivamente forense: foto gravada quando um GET bancario
+ // foi observado, nao necessariamente quando o Pix foi enviado.
+ const {data:foto,error:fotoError}=await db
+  .from("catalogo_asaas_transferencias_excepcionais_auditoria")
+  .select("creditos_fingerprint_observado_sha256,creditos_observados,valor_creditos_observados_centavos,composicao_conferida_na_observacao,fotografia_observada_em")
+  .eq("tipo",tipo).eq("solicitacao_id",id).maybeSingle();
+ if(fotoError)throw new Failure("Não foi possível consultar a fotografia da auditoria bancária.",503);
+ const igual=Boolean(foto?.creditos_fingerprint_observado_sha256&&
+  resultado?.fingerprint_creditos_sha256&&
+  foto.creditos_fingerprint_observado_sha256===resultado.fingerprint_creditos_sha256);
+ return respond({success:true,conferencia:resultado,
+  fotografia_bancaria:foto?{...foto,fingerprint_igual_ao_atual:igual}:null,
+  mensagem:"Pré-conferência somente de leitura. A fotografia bancária não atesta destinatário, pagamento ou autorização de Pix."});
+}
+// Auditoria do Asaas via GET, exclusivamente Sandbox. Não cria transferência,
+// não atesta destinatário, não baixa créditos e não marca a análise como paga.
+// Consulta compartilhada por admin e webhook. Sempre faz novo GET autenticado
+// do Asaas Sandbox; nenhum status do cliente ou webhook é aceito como prova.
+async function consultarERegistrarTransferenciaExcepcionalSandbox(
+ tipo:string,solicitacaoId:string,transferenciaId:string
+){
+ if(ENVIRONMENT!=="sandbox")throw new Failure("Auditoria excepcional disponível somente no Sandbox.",403);
+ if(!ASAAS_TOKEN)throw new Failure("Credencial Asaas Sandbox não configurada.",503);
+ check(["residual","saida"].includes(tipo),"Tipo de solicitação inválido.",400);
+ check(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(solicitacaoId),
+  "Identificador da solicitação inválido.",400);
+ check(/^[A-Za-z0-9_-]{4,130}$/.test(transferenciaId),"Identificador de transferência inválido.",400);
+
+ const tabela=tipo==="residual"?"catalogo_asaas_saldos_residuais":"catalogo_asaas_regularizacoes_inativos";
+ const {data:solicitacao,error}=await db.from(tabela)
+  .select("id,motoboy_id,saldo_snapshot_centavos,status").eq("id",solicitacaoId).maybeSingle();
+ if(error||!solicitacao)throw new Failure("Solicitação financeira não encontrada.",404);
+
+ const t=await asaas("/transfers/"+encodeURIComponent(transferenciaId));
+ const externalReference="guia-exc:"+tipo+":"+solicitacaoId;
+ check(t.id===transferenciaId&&t.externalReference===externalReference,
+  "Referência do provedor não corresponde à solicitação.",409);
+ const valor=cents(t.value);
+ check(valor===Number(solicitacao.saldo_snapshot_centavos),
+  "Valor da transferência diverge da solicitação. Revisão manual necessária.",409);
+ const status=value(t.status,40);
+ check(["PENDING","IN_BANK_PROCESSING","BLOCKED","DONE","FAILED","CANCELLED"].includes(status),
+  "Estado bancário desconhecido. Registro suspenso para revisão.",409);
+ // UUID novo por GET, criado no servidor apos a resposta do banco.
+ // Mesmo estado observado novamente deve originar nova linha append-only.
+ return await rpc("catalogo_asaas_registrar_consulta_get_excepcional",{
+  p_tipo:tipo,p_solicitacao:solicitacaoId,p_transferencia:transferenciaId,
+  p_referencia:externalReference,p_valor_centavos:valor,p_estado:status,
+  p_consulta_id:crypto.randomUUID()
+ });
+}
+async function observarTransferenciaExcepcionalSandboxAdmin(uid:string,body:Record<string,unknown>){
+ if(uid!==ADMIN_USER_ID)throw new Failure("Acesso restrito à administração.",403);
+ const tipo=value(body.tipo,15),solicitacaoId=value(body.solicitacao_id,70);
+ const transferenciaId=value(body.transferencia_id,130);
+ const evidencia=await consultarERegistrarTransferenciaExcepcionalSandbox(tipo,solicitacaoId,transferenciaId);
+ check(evidencia?.ok===true&&evidencia.pagamento_baixado===false&&
+  evidencia.transferencia_gerada===false&&evidencia.requer_validacao_destinatario===true,
+  "Evidência do GET não foi registrada com segurança; manter HOLD.",409);
+ return respond({success:true,observacao:evidencia,
+  mensagem:"Estado consultado no Asaas Sandbox e registrado. Destinatário ainda não validado; nenhum saldo foi baixado nem Pix foi enviado."});
+}
+async function revisarRegularizacaoSaidaAdmin(uid:string,body:Record<string,unknown>){
+ if(uid!==ADMIN_USER_ID)throw new Failure("Acesso restrito à administração.",403);
+ const id=value(body.solicitacao_id,70);
+ check(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id),
+  "Identificador inválido.",400);
+ const esperado=value(body.status_esperado,20);
+ const destino=value(body.novo_status,20);
+ check(["pendente","em_analise"].includes(esperado),"Atualize a fila de solicitações.",409);
+ check(destino==="recusada"||(destino==="em_analise"&&esperado==="pendente"),
+  "Mudança de estado não autorizada.",409);
+ const justificativa=typeof body.justificativa==="string"?body.justificativa.trim():"";
+ check(justificativa.length<=1000,"Justificativa muito longa.",400);
+ if(destino==="recusada")
+  check(justificativa.length>=20,"Explique a recusa em pelo menos 20 caracteres.",400);
+ const agora=new Date().toISOString();
+ const {data,error}=await db.from("catalogo_asaas_regularizacoes_inativos")
+  .update({status:destino,justificativa:justificativa||null,
+    revisado_por:destino==="recusada"?uid:null,
+    finalizado_em:destino==="recusada"?agora:null,
+    atualizado_em:agora})
+  .eq("id",id).eq("status",esperado)
+  .select("id,status").maybeSingle();
+ if(error)throw new Failure("Não foi possível registrar decisão administrativa.",503);
+ if(!data)throw new Failure("A solicitação mudou; atualize a lista.",409);
+ return respond({success:true,id:data.id,status:data.status,
+  mensagem:destino==="recusada"
+   ?"Revisão administrativa encerrada. Os créditos continuam registrados e nenhum pagamento foi realizado."
+   :"Solicitação em análise. Nenhum crédito foi movimentado."});
+}
+async function reconcileTransfer(saqueId:string,transferId:string){
+ const transfer=await asaas("/transfers/"+encodeURIComponent(transferId));
+ check(transfer.id===transferId&&transfer.externalReference===saqueId,"Transferência de outro identificador.",409);
+ const {data:row,error}=await db.from("catalogo_asaas_saques")
+  .select("id,valor_centavos,transferencia_id,status,pix_destino_sha256,pix_destino_registrado_em").eq("id",saqueId).maybeSingle();
+ if(error||!row||row.transferencia_id!==transferId)throw new Failure("Transferência não vinculada.",409);
+ check(cents(transfer.value)===Number(row.valor_centavos),"Valor da transferência divergente. Saque em revisão.",409);
+ const status=value(transfer.status,60);
+ if(status==="DONE"){
+  // A resposta DONE prova o estado bancario, NAO prova por si so o destino.
+  // Mesmo se a chave do perfil mudou, comparar com HMAC do POST original.
+  check(await destinoPixConfirmadoParaBaixa(row,transfer),
+   "Asaas confirmou a transferência, mas o destino Pix não pôde ser validado. Saque permanece em revisão.",409);
+  return await rpc("catalogo_asaas_atualizar_saque",
+   {p_saque:saqueId,p_estado:"concluido",p_transferencia:transferId,p_mensagem:null});
+ }
+ if(["FAILED","CANCELLED"].includes(status))return await rpc("catalogo_asaas_atualizar_saque",
+  {p_saque:saqueId,p_estado:"falhou",p_transferencia:transferId,p_mensagem:"Transferência recusada pelo Asaas"});
+ return {ok:true,status:"enviado"};
+}
+// Consulta somente de leitura para investigar reservas sem ID Asaas.
+// Habilitada exclusivamente no Sandbox e para o titular da reserva.
+async function auditPendingSandboxTransfer(uid:string){
+ if(ENVIRONMENT!=="sandbox")throw new Failure("Auditoria de homologação indisponível em produção.",403);
+ if(!ASAAS_TOKEN)throw new Failure("Credencial Asaas Sandbox não configurada.",503);
+ const {data:row,error}=await db.from("catalogo_asaas_saques")
+  .select("id,motoboy_id,status,valor_centavos,transferencia_id,criado_em")
+  .eq("motoboy_id",uid).eq("status","revisao").is("transferencia_id",null)
+  .order("criado_em",{ascending:false}).limit(1).maybeSingle();
+ if(error)throw new Failure("Não foi possível consultar a reserva.",503);
+ if(!row)return respond({success:true,em_revisao:false,mensagem:"Não há reserva em revisão sem ID de transferência."});
+ const created=new Date(String(row.criado_em));
+ if(!Number.isFinite(created.getTime()))throw new Failure("Data da reserva inválida.",503);
+ const from=new Date(created.getTime()-86400000).toISOString().slice(0,10);
+ const matches:Array<{id:string,status:string,valor_centavos:number}>=[];
+ let checked=0;
+ for(let offset=0;offset<=4900;offset+=100){
+  const path="/transfers?limit=100&offset="+offset+"&dateCreated%5Bge%5D="+from;
+  // Leitura reutiliza validacao de MIME, limite de bytes e timeout.
+  const result=await asaas(path);
+  if(!Array.isArray(result.data))throw new Failure("Lista de transferências inválida: manter reserva para revisão.",503);
+  checked+=result.data.length;
+  for(const entry of result.data){
+   const t=input(entry);
+   if(value(t.externalReference,180)===String(row.id)){
+    matches.push({id:value(t.id,130),status:value(t.status,70),valor_centavos:cents(t.value)});
+   }
+  }
+  if(result.hasMore===false)return respond({success:true,em_revisao:true,saque_id:row.id,
+   valor_centavos:row.valor_centavos,consultadas:checked,listagem_completa:true,
+   transferencias:matches,mensagem:matches.length?
+   "Transferência localizada no Asaas. Não repetir; conciliação necessária.":
+   "Nenhuma transferência correspondente encontrada no histórico consultado do Asaas Sandbox. A reserva permanece bloqueada até a revisão."});
+  if(result.hasMore!==true)throw new Failure("Paginação Asaas inconclusiva. Reserva mantida.",503);
+ }
+ throw new Failure("Histórico Asaas extenso demais para auditoria automática. Reserva mantida.",503);
+}
+async function withdraw(uid:string){
+ await requireTerms(uid,"motoboy","");
+ // Defesa de homologação: nenhuma transferência pode partir desta função em produção,
+ // mesmo se alguém ativar ASAAS_PAYOUTS_ENABLED por engano.
+ if(ENVIRONMENT!=="sandbox")
+  throw new Failure("Saques Asaas ainda não liberados para produção.",503);
+ enabled("payouts");
+ // Falha fechada: token e validação de saques devem estar ativos ANTES de
+ // reservar saldo ou emitir POST /transfers no Asaas.
+ if(!WITHDRAWAL_AUTH_ON || WITHDRAWAL_AUTH_TOKEN.length<32)
+  throw new Failure("Autorização de saída por Webhook desabilitada. Saques suspensos.",503);
+ const {data:profile,error}=await db.from("catalogo_motoboy_perfis")
+  .select("chave_pix_enc,em_analise").eq("usuario_id",uid).maybeSingle();
+ if(error||!profile||profile.em_analise||!profile.chave_pix_enc)throw new Failure("Cadastre sua chave Pix e confirme seu perfil.",409);
+ const pix=pixDestination(await decryptCourierPix(String(profile.chave_pix_enc),ENCRYPTION_KEY,uid));
+ // Criptografia e validação locais ANTES de reservar créditos. Se falharem, nenhum saldo fica bloqueado.
+ const destinationHash=await pixFingerprint(pix.pixAddressKeyType,pix.pixAddressKey);
+ const reserved=await rpc("catalogo_asaas_reservar_saque",{p_motoboy:uid});
+ const saqueId=String(reserved.saque_id),amount=Number(reserved.valor_centavos);
+ check(amount>=SAQUE_MINIMO_CENTAVOS&&amount<=SAQUE_MAXIMO_PIX_CENTAVOS,
+  "Saque fora dos limites configurados: mínimo R$ 100, máximo R$ 5.000 por transferência.",409);
+ // Grava o fingerprint ANTES de qualquer POST /transfers ao Asaas.
+ const {data:snapshot,error:snapshotError}=await db.from("catalogo_asaas_saques")
+  .update({pix_destino_sha256:destinationHash})
+  .eq("id",saqueId).eq("motoboy_id",uid).eq("status","reservado")
+  .is("pix_destino_sha256",null).select("id,pix_destino_registrado_em").maybeSingle();
+ if(snapshotError || !snapshot ||
+  typeof snapshot.pix_destino_registrado_em!=="string" ||
+  !Number.isFinite(Date.parse(snapshot.pix_destino_registrado_em))){
+  // Banco local recusou snapshot; nenhuma chamada externa ainda ocorreu.
+  // Liberar somente esta reserva é seguro porque POST /transfers ainda não foi iniciado.
+  await rpc("catalogo_asaas_atualizar_saque",{p_saque:saqueId,p_estado:"falhou",
+   p_transferencia:null,p_mensagem:"Falha local antes de solicitar transferência Asaas. Nenhuma chamada externa enviada."});
+  throw new Failure("Não foi possível preparar o saque. Saldo preservado para nova tentativa.",503);
+ }
+ let transfer:Record<string,unknown>;
+ try {
+  transfer=await asaas("/transfers","POST",{
+   value:money(amount),pixAddressKey:pix.pixAddressKey,pixAddressKeyType:pix.pixAddressKeyType,
+   description:"Comissões Guia Andrelândia",externalReference:saqueId,
+  });
+ } catch(e) {
+  if(e instanceof SandboxTransferRejected){
+   // O POST foi rejeitado pelo provedor com erro estruturado de validação.
+   // Esta exceção é exclusiva do Sandbox; nenhuma transferência foi aceita.
+   await rpc("catalogo_asaas_atualizar_saque",{p_saque:saqueId,p_estado:"falhou",
+    p_transferencia:null,p_mensagem:"SANDBOX: POST /transfers recusado, HTTP 400 com validação estruturada. Nenhuma transferência criada."});
+   throw e;
+  }
+  // Resultados ambíguos jamais reabrem o saldo sem conciliação.
+  await rpc("catalogo_asaas_atualizar_saque",{p_saque:saqueId,p_estado:"revisao",
+   p_transferencia:null,p_mensagem:"Resposta do provedor inconclusiva. Não reenviar sem conciliar."});
+  throw e;
+ }
+ const tid=value(transfer.id,120);
+ if(!tid||cents(transfer.value)!==amount||transfer.externalReference!==saqueId){
+  await rpc("catalogo_asaas_atualizar_saque",{p_saque:saqueId,p_estado:"revisao",
+   p_transferencia:tid||null,p_mensagem:"Resposta de transferência divergente."});
+  throw new Failure("Transferência em revisão. Não solicite outro saque.",409);
+ }
+ await rpc("catalogo_asaas_atualizar_saque",{p_saque:saqueId,p_estado:"enviado",p_transferencia:tid,p_mensagem:null});
+ // NÃO marcar como pago pela resposta do POST. Somente após GET e status DONE.
+ try {await reconcileTransfer(saqueId,tid);} catch { /* Webhook / consulta futura conciliará. */ }
+ return respond({success:true,saque_id:saqueId,valor_centavos:amount,
+  mensagem:"Solicitação enviada ao Asaas. Consulte a carteira para acompanhar a confirmação."});
+}
+const ADMIN_USER_ID = "4b9a0233-6b72-4573-aebd-d596c5b15e1b";
+// Consulta de titularidade PIX somente no Sandbox (Asaas limita a uma chave
+// ficticia e mascara CPF/CNPJ). Resultado NUNCA aprova identidade ou saque.
+// GET e executado apenas quando a chave cifrada do titular corresponde ao
+// valor da chave de teste suportada pelo sandbox.
+async function consultarTitularidadePixSandboxAdmin(uid:string,body:Record<string,unknown>){
+ if(uid!==ADMIN_USER_ID)throw new Failure("Acesso restrito à administração.",403);
+ if(ENVIRONMENT!=="sandbox")throw new Failure("Consulta de titularidade disponível somente no Sandbox.",403);
+ if(!ASAAS_TOKEN)throw new Failure("Credencial Asaas Sandbox não configurada.",503);
+ const tipo=value(body.tipo,12),requestId=value(body.solicitacao_id,70);
+ check(tipo==="residual"||tipo==="saida","Tipo de solicitação inválido.",400);
+ check(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(requestId),
+  "Identificador de solicitação inválido.",400);
+ const tabela=tipo==="residual"?"catalogo_asaas_saldos_residuais":"catalogo_asaas_regularizacoes_inativos";
+ const {data:solicitacao,error:requestError}=await db.from(tabela)
+  .select("id,motoboy_id,status").eq("id",requestId).maybeSingle();
+ if(requestError||!solicitacao)throw new Failure("Solicitação financeira não encontrada.",404);
+ const {data:profile,error:profileError}=await db.from("catalogo_motoboy_perfis")
+  .select("chave_pix_enc,em_analise").eq("usuario_id",solicitacao.motoboy_id).maybeSingle();
+ if(profileError||!profile?.chave_pix_enc)throw new Failure("Chave Pix ainda não cadastrada.",409);
+ if(profile.em_analise)throw new Failure("Cadastro Pix está em análise.",409);
+ const pix=pixDestination(await decryptCourierPix(String(profile.chave_pix_enc),
+  ENCRYPTION_KEY,String(solicitacao.motoboy_id)));
+ const hash=await pixFingerprint(pix.pixAddressKeyType,pix.pixAddressKey);
+
+ // Nao consultar chave real de terceiro no ambiente de testes.
+ if(pix.pixAddressKeyType!=="PHONE"||pix.pixAddressKey!=="47996515839")
+  return respond({success:true,consulta_realizada:false,
+   chave_pix_fingerprint:hash,titularidade_confirmada:false,
+   pagamento_autorizado:false,
+   mensagem:"Sandbox só consulta a chave fictícia 47996515839. A titularidade deste motoboy não foi verificada."});
+
+ const result=await fetch(API_BASE+
+  "/pix/addressKeys/external?type=PHONE&key=47996515839",{
+   method:"GET",headers:{"access_token":ASAAS_TOKEN,"accept":"application/json",
+    "User-Agent":"GuiaAndrelandia/1.0"},
+   signal:AbortSignal.timeout(ASAAS_HTTP_TIMEOUT_MS),
+  });
+ if(!result.ok)throw new Failure("Consulta Pix não concluída no Asaas Sandbox. Respeite os limites de consulta.",502);
+ const provider=input(await result.json().catch(()=>({})));
+ // Nao divulgar, armazenar nem logar dados pessoais do titular retornados pela API.
+ return respond({success:true,consulta_realizada:true,
+  chave_pix_fingerprint:hash,provedor_retornou_documento:Boolean(value(provider.cpfCnpj,30)),
+  titularidade_confirmada:false,pagamento_autorizado:false,
+  mensagem:"Chave de teste consultada no Asaas Sandbox. CPF/CNPJ mascarado não comprova identidade nem autoriza Pix."});
+}
+// Somente leitura: operações em revisão não podem disparar transferências
+// ou desbloquear créditos através deste endpoint administrativo.
+async function listAdminPayouts(uid:string){
+ if(uid!==ADMIN_USER_ID)throw new Failure("Acesso exclusivo do administrador da plataforma.",403);
+ const [{data:saques,error:saquesError},{data:emissoes,error:emissoesError}] = await Promise.all([
+  db.from("catalogo_asaas_saques")
+   .select("id,motoboy_id,status,valor_centavos,transferencia_id,mensagem,criado_em,atualizado_em,concluido_em")
+   .order("criado_em",{ascending:false}).limit(100),
+  db.from("catalogo_asaas_emissoes")
+   .select("fechamento_id,estado,criado_em,atualizado_em")
+   .neq("estado","registrado").order("criado_em",{ascending:false}).limit(50),
+ ]);
+ if(saquesError||emissoesError)throw new Failure("Consulta da auditoria financeira indisponível.",503);
+ return respond({success:true,saques:saques||[],emissoes_pendentes:emissoes||[]});
+}
+// Diagnóstico administrativo somente leitura para preparar uma cobranca de teste.
+// Nenhum pedido, fechamento, cliente, fatura ou pagamento e criado aqui.
+async function diagnosticarFaturasSandboxAdmin(uid:string){
+ // Usuario de QA definido exclusivamente como segredo de STAGING; NUNCA
+ // permitir acesso generico a usuarios autenticados do ambiente Sandbox.
+ const qaAdmin=Deno.env.get("ASAAS_SANDBOX_ADMIN_USER_ID")||"";
+ if(ENVIRONMENT!=="sandbox"||
+    !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(qaAdmin)||
+    uid!==qaAdmin)
+  throw new Failure("Diagnóstico de homologação restrito ao administrador do Sandbox configurado no servidor.",403);
+ const {data:faturas,error:faturasError}=await db.from("catalogo_fechamentos_offline")
+  .select("id,comercio_id,competencia,status,total_comissao_centavos")
+  .in("status",["faturado","vencido","bloqueado"])
+  .gt("total_comissao_centavos",0)
+  .order("competencia",{ascending:false}).limit(50);
+ if(faturasError)throw new Failure("Não foi possível conferir faturas para homologação.",503);
+ const docs=faturas||[];
+ if(!docs.length)return respond({success:true,ambiente:"sandbox",consultadas:0,
+  lista_limitada:false,aptas:0,faturas:[],
+  mensagem:"Nenhuma fatura aberta para teste. Crie um pedido de teste legítimo no catálogo Sandbox e conclua o fechamento mensal; não altere créditos diretamente no SQL."});
+ const ids=docs.map(x=>x.id),stores=[...new Set(docs.map(x=>x.comercio_id))];
+ const [charges,claims,owners]=await Promise.all([
+  db.from("catalogo_fatura_cobrancas").select("fechamento_id,gateway,status")
+   .in("fechamento_id",ids),
+  db.from("catalogo_asaas_emissoes").select("fechamento_id,estado")
+   .in("fechamento_id",ids),
+  db.from("catalogos").select("comercio_id,proprietario_id")
+   .in("comercio_id",stores)
+ ]);
+ if(charges.error||claims.error||owners.error)
+  throw new Failure("Não foi possível confirmar vínculos e reservas das faturas.",503);
+ const byCharge=new Map((charges.data||[]).map(x=>[x.fechamento_id,x]));
+ const byClaim=new Map((claims.data||[]).map(x=>[x.fechamento_id,x]));
+ const owned=new Set((owners.data||[]).filter(x=>Boolean(x.proprietario_id)).map(x=>x.comercio_id));
+ const lista=docs.map(f=>{
+  const charge=byCharge.get(f.id),claim=byClaim.get(f.id);
+  const motivo=!owned.has(f.comercio_id)?"sem_proprietario_autorizado":
+   charge?"cobranca_existente":
+   claim?"emissao_reservada_para_conciliacao":"pronta_para_emissao";
+  return {comercio_id:f.comercio_id,competencia:String(f.competencia).slice(0,7),
+   valor_centavos:f.total_comissao_centavos,fechamento_id:f.id,
+   motivo,apta:motivo==="pronta_para_emissao",
+   gateway_existente:charge?.gateway||null,status_cobranca:charge?.status||null};
+ });
+ return respond({success:true,ambiente:"sandbox",consultadas:docs.length,
+  lista_limitada:docs.length===50,aptas:lista.filter(x=>x.apta).length,faturas:lista,
+  mensagem:"Pré-condições locais somente leitura. Apto não comprova API Asaas habilitada; teste de pagamento depende de emissão e confirmação no Sandbox."});
+}
+// Simula o recebimento EXCLUSIVAMENTE de uma cobranca Pix existente no
+// Asaas Sandbox. Nunca gera fatura/cliente/saldo por SQL, nem envia saque.
+// Requer flag de homologacao separada, admin de QA e prova bancaria por GET.
+async function confirmarFaturaSandboxAdmin(uid:string,body:Record<string,unknown>){
+ const qaAdmin=Deno.env.get("ASAAS_SANDBOX_ADMIN_USER_ID")||"";
+ if(ENVIRONMENT!=="sandbox"||
+    !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(qaAdmin)||
+    uid!==qaAdmin)
+  throw new Failure("Somente o administrador de homologação pode confirmar pagamentos de teste.",403);
+ if(Deno.env.get("ASAAS_SANDBOX_QA_CONFIRM_ENABLED")!=="true")
+  throw new Failure("Confirmação simulada de pagamentos está desativada no Sandbox.",503);
+ enabled("billing");
+ const fechamentoId=value(body.fechamento_id,36);
+ check(/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(fechamentoId),
+  "Identificador da fatura de teste inválido.",400);
+ const [local,invoiceRow]=await Promise.all([
+  db.from("catalogo_fatura_cobrancas")
+   .select("fechamento_id,comercio_id,competencia,gateway,order_id,status,valor_centavos")
+   .eq("fechamento_id",fechamentoId).maybeSingle(),
+  db.from("catalogo_fechamentos_offline")
+   .select("id,comercio_id,competencia,status,total_comissao_centavos")
+   .eq("id",fechamentoId).maybeSingle()
+ ]);
+ if(local.error||invoiceRow.error)
+  throw new Failure("Falha ao verificar fatura local de homologação.",503);
+ const charge=local.data,f=invoiceRow.data;
+ check(charge!==null&&f!==null,
+  "Fatura inexistente. Nenhuma simulação executada.",409);
+ check(charge.gateway==="asaas"&&
+  charge.comercio_id===f.comercio_id&&charge.competencia===f.competencia&&
+  ["faturado","vencido","bloqueado"].includes(String(f.status))&&
+  ["pendente","vencido"].includes(String(charge.status))&&
+  Number.isSafeInteger(Number(f.total_comissao_centavos))&&
+  Number(f.total_comissao_centavos)>0&&
+  Number(charge.valor_centavos)===Number(f.total_comissao_centavos),
+  "Fatura ausente, quitada ou divergente. Nenhuma simulação executada.",409);
+ const paymentId=value(charge.order_id,130);
+ check(/^pay_[a-z0-9_-]{5,120}$/i.test(paymentId)&&paymentId===charge.order_id,
+  "Pagamento Sandbox sem identificador reconhecido.",409);
+ const remote=await asaas("/payments/"+encodeURIComponent(paymentId));
+ const {data:client,error:clientError}=await db.from("catalogo_asaas_clientes")
+  .select("cliente_id").eq("comercio_id",f.comercio_id).maybeSingle();
+ if(clientError)throw new Failure("Falha na validação do cliente financeiro.",503);
+ check(Boolean(client?.cliente_id)&&remote.id===paymentId&&
+  remote.customer===client?.cliente_id&&remote.billingType==="PIX"&&
+  remote.externalReference===reference(String(f.comercio_id),String(f.competencia).slice(0,7))&&
+  cents(remote.value)===Number(f.total_comissao_centavos),
+  "Dados bancários diferentes da fatura. Nenhuma confirmação simulada executada.",409);
+ const status=value(remote.status,60);
+ // Repetir clique jamais deve repetir o POST de simulacao.
+ if(status==="RECEIVED"||status==="CONFIRMED")
+  return respond({success:true,simulacao_enviada:false,status_bancario:status,
+   mensagem:"Cobrança já confirmada no provedor de teste. Verifique webhook e conciliação; nenhum segundo POST foi enviado."});
+ check(["PENDING","OVERDUE"].includes(status),
+  "Cobrança não está pendente no Sandbox. Não é seguro simular a confirmação.",409);
+ // Endpoint documentado exclusivamente no Sandbox. Nao chamar /payments POST,
+ // nem efetuar credito por SQL: a notificacao deve chegar pelo webhook real.
+ const confirmed=await asaas("/sandbox/payment/"+encodeURIComponent(paymentId)+"/confirm",
+  "POST",{});
+ check(confirmed.id===paymentId&&confirmed.customer===client?.cliente_id&&
+  confirmed.externalReference===remote.externalReference&&
+  cents(confirmed.value)===Number(f.total_comissao_centavos),
+  "Provedor retornou confirmação divergente. Verificar manualmente.",503);
+ return respond({success:true,simulacao_enviada:true,
+  status_bancario:value(confirmed.status,60),
+  mensagem:"Confirmação de teste enviada ao Asaas Sandbox. Conferir entrega do webhook e quitação; nenhum dinheiro real foi movimentado."});
+}
+// Recuperação segura de resposta inconclusiva após POST /transfers.
+// O operador SOMENTE informa um ID para CONSULTA. Não gera novo Pix.
+async function reconcileAdminTransfer(uid:string,body:Record<string,unknown>){
+ if(uid!==ADMIN_USER_ID)throw new Failure("Acesso exclusivo do administrador da plataforma.",403);
+ const saqueId=value(body.saque_id,36),transferId=value(body.transferencia_id,130);
+ check(/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(saqueId)&&/^[A-Za-z0-9_-]{4,130}$/.test(transferId),
+  "Informe os identificadores válidos do saque e da transferência.",400);
+ const {data:row,error}=await db.from("catalogo_asaas_saques")
+  .select("id,valor_centavos,transferencia_id,status,pix_destino_sha256,pix_destino_registrado_em").eq("id",saqueId).maybeSingle();
+ if(error||!row)throw new Failure("Saque não encontrado.",404);
+ if(["concluido","falhou"].includes(row.status))
+  return respond({success:true,status:row.status,mensagem:"Saque já encerrado; nenhuma nova transferência foi criada."});
+ if(row.transferencia_id&&row.transferencia_id!==transferId)
+  throw new Failure("Esta reserva já está vinculada a outra transferência. Revisão manual necessária.",409);
+ const transfer=await asaas("/transfers/"+encodeURIComponent(transferId));
+ check(transfer.id===transferId&&transfer.externalReference===saqueId&&
+  cents(transfer.value)===Number(row.valor_centavos),
+  "Os dados bancários não correspondem à reserva. Operação mantida em revisão.",409);
+ const status=value(transfer.status,60);
+ if(status==="DONE"){
+  check(await destinoPixConfirmadoParaBaixa(row,transfer),
+   "Asaas confirmou a transferência, mas o destino Pix não pôde ser validado. Saque permanece em revisão.",409);
+  if(row.status!=="enviado")
+   await rpc("catalogo_asaas_atualizar_saque",{p_saque:saqueId,p_estado:"revisao",
+     p_transferencia:transferId,p_mensagem:"Recuperado pela administração após conferência Asaas"});
+  const result=await rpc("catalogo_asaas_atualizar_saque",{p_saque:saqueId,
+    p_estado:"concluido",p_transferencia:transferId,p_mensagem:null});
+  return respond({success:true,status:result.status,mensagem:"Transferência confirmada pelo Asaas; baixa registrada."});
+ }
+ if(["FAILED","CANCELLED"].includes(status)){
+  const result=await rpc("catalogo_asaas_atualizar_saque",{p_saque:saqueId,
+   p_estado:"falhou",p_transferencia:transferId,p_mensagem:"Falha da transferência confirmada no Asaas"});
+  return respond({success:true,status:result.status,mensagem:"Falha bancária comprovada. Reserva liberada para nova solicitação."});
+ }
+ await rpc("catalogo_asaas_atualizar_saque",{p_saque:saqueId,
+  p_estado:"revisao",p_transferencia:transferId,p_mensagem:"Transferência em processamento no Asaas"});
+ return respond({success:true,status:"revisao",mensagem:"Transferência identificada, ainda não concluída. Saldo segue reservado."});
+}
+
+// O hash corresponde ao destino usado no POST, mesmo que a chave do perfil mude depois.
+// Não registrar a chave Pix em texto, logs ou auditoria.
+async function sha256Hex(source:string){
+ const bytes=new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(source)));
+ return Array.from(bytes,b=>b.toString(16).padStart(2,"0")).join("");
+}
+function canonicalPix(type:string,key:string){
+ // Nunca normalizar texto alheio removendo caracteres arbitrarios.
+ // A chave vem do Asaas ou do cadastro previamente validado; um sufixo
+ // estranho, espaco ou simbolo invalido deve causar divergencia e HOLD.
+ if(typeof type!=="string"||typeof key!=="string"||
+    key.length===0||key.length>254||key!==key.trim())return "";
+ const t=type.toUpperCase(),raw=key;
+ if(t==="EMAIL"){
+  return /^[^\s@]{1,64}@[^\s@]{1,185}\.[^\s@]{2,}$/.test(raw)
+   ?raw.toLowerCase():"";
+ }
+ if(t==="CPF"){
+  if(!/^(?:\d{11}|\d{3}\.\d{3}\.\d{3}-\d{2})$/.test(raw))return "";
+  return raw.replace(/\D/g,"");
+ }
+ if(t==="CNPJ"){
+  if(!/^(?:\d{14}|\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})$/.test(raw))return "";
+  return raw.replace(/\D/g,"");
+ }
+ if(t==="PHONE"){
+  if(!/^(?:\+55)?\d{10,11}$/.test(raw))return "";
+  return raw.startsWith("+55")?raw.slice(3):raw;
+ }
+ if(t==="EVP"){
+  return /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(raw)
+   ?raw.toLowerCase():"";
+ }
+ return "";
+}
+async function pixFingerprint(type:string,key:string){
+ const canon=canonicalPix(type,key);
+ if(!canon)throw new Failure("Destino Pix inválido.",400);
+ // HMAC impede recuperar CPF, telefone ou e-mail por busca de hashes.
+ // A mesma chave privada de cifragem serve de raiz, separada por domínio de uso.
+ if(!/^[a-f0-9]{64}$/i.test(ENCRYPTION_KEY))
+  throw new Failure("Chave de proteção financeira não configurada.",503);
+ const raw=Uint8Array.from(ENCRYPTION_KEY.match(/.{2}/g)!,x=>parseInt(x,16));
+ const keyBytes=new Uint8Array(await crypto.subtle.digest("SHA-256",new Uint8Array([...raw,...new TextEncoder().encode("saque-asaas-pix-hmac-v1")])));
+ const hmac=await crypto.subtle.importKey("raw",keyBytes,{name:"HMAC",hash:"SHA-256"},false,["sign"]);
+ const signature=new Uint8Array(await crypto.subtle.sign("HMAC",hmac,new TextEncoder().encode("guia-asaas-pix-v1:"+type.toUpperCase()+":"+canon)));
+ return Array.from(signature,b=>b.toString(16).padStart(2,"0")).join("");
+}
+async function pixDestinationsMatch(fingerprint:string,transfers:Record<string,unknown>[]){
+ if(!/^[a-f0-9]{64}$/.test(fingerprint))return false;
+ let checked=0;
+ for(const transfer of transfers){
+  const bank=input(transfer.bankAccount);
+  // value() trunca strings: jamais usar truncamento para conferir a
+  // identidade financeira do destinatario. Ausencia e permitida em uma
+  // das representacoes, mas qualquer chave presente precisa ser integra.
+  const vals=[transfer.pixAddressKey,bank.pixAddressKey]
+   .filter(v=>v!==null&&v!==undefined);
+  if(vals.some(v=>typeof v!=="string"||v.length===0||
+     v.length>254||v!==v.trim()))return false;
+  const unique=[...new Set(vals as string[])];
+  // GET e webhook precisam, ambos, identificar o mesmo destino.
+  // Sem prova independente do destinatário, recusamos a autorização.
+  if(unique.length===0)return false;
+  for(const key of unique){
+   checked++;
+   let match=false;
+   // No payload da Asaas a chave aparece em bankAccount.pixAddressKey
+   // sem informar necessariamente pixAddressKeyType.
+   for(const t of ["CPF","CNPJ","EMAIL","PHONE","EVP"]){
+    // Resposta bancaria com chave malformada nao pode provocar HTTP 400
+    // (nem interromper o Webhook): cada tipo invalido e apenas nao-match.
+    if(!canonicalPix(t,key))continue;
+    if((await pixFingerprint(t,key))===fingerprint){match=true;break;}
+   }
+   if(!match)return false;
+  }
+ }
+ return checked>0;
+}
+// Revalidação obrigatoria antes de baixa, inclusive por webhook/admin.
+// Banco reportar DONE sem revelar chave de destino nao basta. Não confundir
+// correspondencia de chave com verificação de titularidade CPF/CNPJ.
+async function destinoPixConfirmadoParaBaixa(
+ saque:Record<string,unknown>,transfer:Record<string,unknown>
+){
+ const hash=value(saque.pix_destino_sha256,64);
+ // Saques antigos sem carimbo nao tem prova local prospectiva; manter HOLD.
+ const carimbo=saque.pix_destino_registrado_em;
+ if(!/^[a-f0-9]{64}$/.test(hash) ||
+  typeof carimbo!=="string" || !Number.isFinite(Date.parse(carimbo)))return false;
+ if(value(transfer.operationType,12)!=="PIX")return false;
+ return await pixDestinationsMatch(hash,[transfer]);
+}
+async function equalSecret(actual:string,expected:string){
+ if(expected.length<32||actual.length<32||actual.length>255)return false;
+ const [a,b]=await Promise.all([sha256Hex(actual),sha256Hex(expected)]);
+ let diff=0;
+ for(let i=0;i<a.length;i++)diff|=a.charCodeAt(i)^b.charCodeAt(i);
+ return diff===0;
+}
+const WITHDRAWAL_RESPONSE_HEADERS={"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store"};
+const approveResponse=(status:"APPROVED"|"REFUSED",reason?:string)=>new Response(
+ JSON.stringify(status==="APPROVED"?{status}:{status,refuseReason:reason||"Operação não autorizada"}),
+ {status:200,headers:WITHDRAWAL_RESPONSE_HEADERS});
+async function authorizeWithdrawal(request:Request){
+ // PROTEÇÃO: homologação exclusivamente Sandbox, com opt-in e token diferente do webhook de eventos.
+ if(ENVIRONMENT!=="sandbox" || !WITHDRAWAL_AUTH_ON || !ASAAS_TOKEN ||
+    WITHDRAWAL_AUTH_TOKEN.length<32)
+  return approveResponse("REFUSED","Validação de saída indisponível no ambiente.");
+ const actual=request.headers.get("asaas-access-token")||"";
+ if(!(await equalSecret(actual,WITHDRAWAL_AUTH_TOKEN)))
+   return new Response(JSON.stringify({error:"unauthorized"}),{status:401,headers:WITHDRAWAL_RESPONSE_HEADERS});
+ // Permite homologar token e recusa de operações com as transferências desativadas.
+ if(!PAYOUTS_ON)return approveResponse("REFUSED","Saques desativados até concluir a homologação.");
+ const raw=await request.text();
+ if(raw.length>32768)return approveResponse("REFUSED","Payload de validação fora do limite.");
+ let body:Record<string,unknown>;
+ try{body=input(JSON.parse(raw));}
+ catch{return approveResponse("REFUSED","JSON inválido.");}
+ if(body.type!=="TRANSFER")return approveResponse("REFUSED","Apenas transferências Pix do Guia são autorizadas.");
+ const incoming=input(body.transfer);
+ const id=value(incoming.id,120),payloadRef=value(incoming.externalReference,80);
+ // O exemplo do Asaas não obriga externalReference no POST do Webhook.
+ // A referência canônica vem da reserva previamente vinculada ao ID bancário.
+ if(!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id))
+  return approveResponse("REFUSED","Transferência não identificada.");
+ const {data:saque,error:lookupError}=await db.from("catalogo_asaas_saques")
+   .select("id,motoboy_id,status,valor_centavos,transferencia_id,pix_destino_sha256,pix_destino_registrado_em")
+   .eq("transferencia_id",id).maybeSingle();
+ if(lookupError)throw new Failure("Erro ao verificar reserva.",503);
+ if(!saque || saque.transferencia_id!==id ||
+    (payloadRef && payloadRef!==saque.id))return approveResponse("REFUSED","Transferência desconhecida.");
+ const ref=String(saque.id);
+
+ // Nenhuma decisão APPROVED é irrevogável: até o replay do webhook deve
+ // considerar holds posteriores, composição dos créditos e estado do saque.
+ // Se a consulta falha, a autorização falha fechada, sem executar POST/Pix.
+ const {data:revalidacao,error:revalidacaoError}=await db.rpc(
+  "catalogo_asaas_validar_reserva_saque",{p_saque:ref});
+ if(revalidacaoError || revalidacao?.ok!==true)
+  return approveResponse("REFUSED","Não foi possível revalidar a reserva financeira.");
+ if(revalidacao.elegivel!==true)
+  return approveResponse("REFUSED","Reserva suspensa ou créditos não elegíveis para autorização.");
+
+ let decision:"APPROVED"|"REFUSED"="REFUSED",reason="Transferência não elegível.";
+ const localAmount=Number(saque.valor_centavos);
+ if(saque.status==="enviado" && Number.isSafeInteger(localAmount)&&localAmount>0 &&
+    /^[a-f0-9]{64}$/.test(value(saque.pix_destino_sha256,64)) &&
+    typeof saque.pix_destino_registrado_em==="string" &&
+    Number.isFinite(Date.parse(saque.pix_destino_registrado_em)) &&
+    cents(incoming.value)===localAmount && value(incoming.operationType,12)==="PIX"){
+  // Confere por API autenticada para não confiar apenas nos dados do webhook.
+  // Falha ou timeout de consulta recusa o webhook. Nunca aprovar sem prova
+  // bancaria autenticada nem consumir o prazo de 10 segundos do Asaas.
+  let remote:Record<string,unknown>;
+  try {
+   remote=await asaas("/transfers/"+encodeURIComponent(id),"GET",undefined,
+    ASAAS_VALIDACAO_SAQUE_HTTP_TIMEOUT_MS);
+  }catch{
+   return approveResponse("REFUSED","Consulta bancária indisponível; transferência não autorizada.");
+  }
+  if(remote.id===id && remote.externalReference===ref &&
+    cents(remote.value)===localAmount && value(remote.operationType,12)==="PIX" &&
+    // Somente PENDING pode receber autorizacao; status ausente ou futuro e HOLD.
+    remote.status==="PENDING" &&
+    await pixDestinationsMatch(String(saque.pix_destino_sha256),[incoming,remote])){
+   // RPC faz COUNT/SUM/BOOL_AND no PostgreSQL e retorna UM objeto JSON.
+   // Não aplica limite de 1000 linhas do PostgREST, mesmo com vários meses acumulados.
+   const [profile,links,composicao]=await Promise.all([
+    db.from("catalogo_motoboy_perfis").select("apto,em_analise").eq("usuario_id",saque.motoboy_id).maybeSingle(),
+    db.from("catalogo_motoboys").select("usuario_id").eq("usuario_id",saque.motoboy_id).eq("ativo",true).limit(1),
+    db.rpc("catalogo_asaas_validar_reserva_saque",{p_saque:ref})
+   ]);
+   if(profile.error||links.error||composicao.error||composicao.data?.ok!==true)
+    throw new Failure("Falha de validação financeira da reserva.",503);
+   const prova=input(composicao.data);
+   const elegivel=prova.elegivel===true &&
+     Number.isSafeInteger(Number(prova.quantidade)) && Number(prova.quantidade)>0 &&
+     Number(prova.valor_centavos)===localAmount;
+   if(profile.data?.apto===true && profile.data?.em_analise===false &&
+      (links.data||[]).length>0 && elegivel){
+    decision="APPROVED";reason="Saque conciliado com reserva e destino Pix.";
+   }else reason="Conta do motoboy ou créditos não elegíveis.";
+  }else reason="Identidade, valor, estado ou destino Pix divergente.";
+ }else reason="Reserva não habilitada, valor divergente ou operação não Pix.";
+ // Decisao persistida NAO substitui nova prova de valor, destino, status,
+ // titular, elegibilidade e GET bancario. Mesmo replays precisam ser aferidos.
+ const {data:existing,error:existingError}=await db.from("catalogo_asaas_validacoes_saque")
+   .select("decisao,motivo").eq("saque_id",ref).eq("transferencia_id",id).maybeSingle();
+ if(existingError)throw new Failure("Erro ao recuperar autorização.",503);
+ if(existing)return approveResponse(existing.decisao==="APPROVED"&&decision==="APPROVED"?"APPROVED":"REFUSED",
+   decision==="APPROVED"?existing.motivo||undefined:reason);
+ const {error:insertError}=await db.from("catalogo_asaas_validacoes_saque")
+   .insert({saque_id:ref,transferencia_id:id,decisao:decision,motivo:reason});
+ if(insertError && insertError.code!=="23505")throw new Failure("Falha ao registrar auditoria.",503);
+ if(insertError?.code==="23505"){
+  const {data:stored,error:e}=await db.from("catalogo_asaas_validacoes_saque")
+    .select("decisao,motivo").eq("saque_id",ref).eq("transferencia_id",id).maybeSingle();
+  if(e||!stored)throw new Failure("Falha ao conferir decisão duplicada.",503);
+  return approveResponse(stored.decisao==="APPROVED"&&decision==="APPROVED"?"APPROVED":"REFUSED",
+    decision==="APPROVED"?stored.motivo||undefined:reason);
+ }
+ console.info("Asaas saque validado",{saque_id:ref,decision});
+ return approveResponse(decision,reason);
+}
+
+type AsaasWebhookPendente={
+ id:string;evento:string;recurso_id:string;
+ referencia_externa:string|null;tentativa_token:string;
+};
+async function processarEventoAsaasPendente(row:AsaasWebhookPendente){
+ // Dados recebidos no Webhook apenas IDENTIFICAM o recurso; a confirmacao
+ // financeira continua exigindo GET autenticado ao Asaas e RPC no banco.
+ if(row.evento.startsWith("PAYMENT_")){
+  const {data:charge,error}=await db.from("catalogo_fatura_cobrancas")
+   .select("*").eq("gateway","asaas").eq("order_id",row.recurso_id).maybeSingle();
+  if(error)throw new Failure("Falha ao localizar fatura do Webhook.",503);
+  if(!charge){
+   // Webhook pode chegar ANTES do INSERT da fatura local. Nunca marcar
+   // como concluido um evento do Guia sem seu vinculo contabil.
+   const remote=await asaas("/payments/"+encodeURIComponent(row.recurso_id));
+   const ref=value(remote.externalReference,180);
+   if(/^fatura-[a-z0-9-]+-20\d\d-(0[1-9]|1[0-2])$/.test(ref))
+    throw new Failure("Fatura do Guia ainda nao registrada; reprocessar depois.",503);
+   return; // outro pagamento na mesma conta Asaas, fora do modulo Guia
+  }
+  await verifyInvoice(row.recurso_id,charge,String(charge.comercio_id),
+   String(charge.competencia).slice(0,7));
+  return;
+ }
+ if(row.evento.startsWith("TRANSFER_")){
+  if(ENVIRONMENT==="production")
+   throw new Failure("TRANSFER em fila requer conciliacao humana apos habilitacao de saques. HOLD.",503);
+  const {data:saque,error}=await db.from("catalogo_asaas_saques")
+   .select("id").eq("transferencia_id",row.recurso_id).maybeSingle();
+  if(error)throw new Failure("Falha ao localizar saque do Webhook.",503);
+  if(saque){
+   await reconcileTransfer(String(saque.id),row.recurso_id);
+   return;
+  }
+  // Excecoes preservadas SOMENTE para observacao no Sandbox, sem baixar saldo.
+  const ref=row.referencia_externa||"";
+  const match=/^guia-exc:(residual|saida):([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i.exec(ref);
+  if(ENVIRONMENT==="sandbox"&&match)
+   await consultarERegistrarTransferenciaExcepcionalSandbox(match[1],match[2],row.recurso_id);
+ }
+}
+async function processarWebhooksAsaasPendentes(limit=5){
+ const picked=await rpc("catalogo_asaas_webhook_claim",{p_limite:limit});
+ if(!Array.isArray(picked))throw new Failure("Fila de Webhooks inválida.",503);
+ let concluido=0,falhou=0;
+ for(const candidate of picked){
+  const row=input(candidate) as unknown as AsaasWebhookPendente;
+  if(!row.id||!row.tentativa_token){falhou++;continue;}
+  try{
+   await processarEventoAsaasPendente(row);
+   const result=await rpc("catalogo_asaas_webhook_finalizar",{
+    p_id:row.id,p_token:row.tentativa_token,p_sucesso:true
+   });
+   if(result?.ok!==true)throw new Failure("Tentativa de Webhook perdeu o lock.",503);
+   concluido++;
+  }catch(e){
+   falhou++;
+   // Registrar ERRO sem detalhes pessoais; nova tentativa usa backoff no SQL.
+   try{await rpc("catalogo_asaas_webhook_finalizar",{
+     p_id:row.id,p_token:row.tentativa_token,p_sucesso:false
+   });}catch{/* Timeout: lease de 5 min permite nova tentativa posterior. */}
+   console.error("Asaas webhook pendente para nova tentativa",{
+     tipo:(e as Error).name,evento:row.evento
+   });
+  }
+ }
+ return {concluido,falhou};
+}
+async function webhook(request:Request){
+ // No rollout billing-only, nem o webhook deve aceitar eventos antes
+ // da liberacao das cobrancas e da instalacao de seu inbox.
+ if(ENVIRONMENT==="production")enabled("billing");
+ if(!WEBHOOK_TOKEN || WEBHOOK_TOKEN.length<32)
+  throw new Failure("Webhook não configurado.",503);
+ const token=request.headers.get("asaas-access-token")||"";
+ if(!(await equalSecret(token,WEBHOOK_TOKEN)))
+  throw new Failure("Webhook não autorizado.",401);
+ // Limitar BYTES durante a leitura. request.text() leria o corpo inteiro
+ // antes de impor o limite; Unicode e chunked podem superar 64 KiB sem
+ // Content-Length confiavel, causando consumo de memoria desnecessario.
+ const MAX_WEBHOOK_BYTES=65536;
+ const lengthHeader=request.headers.get("content-length");
+ if(lengthHeader!==null&&(!/^[0-9]+$/.test(lengthHeader)||
+   !Number.isSafeInteger(Number(lengthHeader))||
+   Number(lengthHeader)>MAX_WEBHOOK_BYTES))
+  throw new Failure("Evento fora do limite.",413);
+ if(!request.body)throw new Failure("Corpo do Webhook ausente.",400);
+ const reader=request.body.getReader();
+ const chunks:Uint8Array[]=[];
+ let received=0,finished=false;
+ try {
+  while(true){
+   const part=await reader.read();
+   if(part.done){finished=true;break;}
+   received+=part.value.byteLength;
+   if(received>MAX_WEBHOOK_BYTES)
+    throw new Failure("Evento fora do limite.",413);
+   chunks.push(part.value);
+  }
+ }catch(e){
+  if(e instanceof Failure)throw e;
+  throw new Failure("Não foi possível receber o Webhook.",400);
+ }finally{
+  if(!finished)await reader.cancel().catch(()=>{});
+  reader.releaseLock();
+ }
+ // Divergencia entre bytes recebidos e Content-Length torna o evento
+ // ambiguo: nao persistir nem confirmar o recebimento ao Asaas.
+ // Se o header estiver ausente (chunked), o limite de 64 KiB ainda vale.
+ if(lengthHeader!==null && received!==Number(lengthHeader))
+  throw new Failure("Tamanho de Webhook divergente; entrega nao confirmada.",400);
+ const bytes=new Uint8Array(received);
+ let offset=0;
+ for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.byteLength;}
+ let body:Record<string,unknown>;
+ try {
+  const raw=new TextDecoder("utf-8",{fatal:true}).decode(bytes);
+  body=input(JSON.parse(raw||"{}"));
+ }catch {throw new Failure("JSON de Webhook inválido.",400);}
+ const event=value(body.event,80),id=value(body.id,180);
+ const resource=input(body.payment||body.transfer);
+ const resourceId=value(resource.id,150);
+ if(!id||!event||!resourceId)throw new Failure("Evento inválido.",400);
+ if(!event.startsWith("PAYMENT_")&&!event.startsWith("TRANSFER_"))
+  return respond({success:true,ignorado:true});
+ // Saque nao homologado em producao: nao confirmar nem descartar um
+ // TRANSFER_* como evento de fatura; devolve erro para revisao segura.
+ if(ENVIRONMENT==="production"&&event.startsWith("TRANSFER_"))
+  throw new Failure("Evento de transferencia exige homologacao financeira separada. HOLD.",503);
+ // Persistir ANTES de responder 200 (modelo at-least-once da Asaas).
+ const stored=await rpc("catalogo_asaas_webhook_receber",{
+  p_id:id,p_evento:event,p_recurso:resourceId,
+  p_referencia:value(resource.externalReference,180)||null
+ });
+ if(stored?.ok!==true)throw new Failure("Evento duplicado divergente.",409);
+ // ACK rapido: Supabase EdgeRuntime conserva a instancia para completar a
+ // reconciliacao. Se cair, o registro pendente sera reprocessado depois.
+ const task=processarWebhooksAsaasPendentes(5).catch(e=>{
+  console.error("Asaas fila financeira", {tipo:(e as Error).name});
+ });
+ const runtime=(globalThis as typeof globalThis & {
+  EdgeRuntime?:{waitUntil:(p:Promise<unknown>)=>void}
+ }).EdgeRuntime;
+ if(runtime?.waitUntil)runtime.waitUntil(task);
+ else await task; // fallback somente para testes offline sem EdgeRuntime
+ return respond({success:true,recebido:true,duplicado:stored.duplicado===true});
+}
+// Invocacao periodica independente de novas notificacoes. Exige token exclusivo
+// enviado pelo agendador (nunca o token de Asaas nem o service_role no header).
+async function executarWorkerWebhooksAsaas(request:Request){
+ if(!WEBHOOK_WORKER_TOKEN || WEBHOOK_WORKER_TOKEN.length<48)
+  throw new Failure("Token do worker financeiro não configurado.",503);
+ const received=request.headers.get("x-guia-asaas-worker-token")||"";
+ if(!(await equalSecret(received,WEBHOOK_WORKER_TOKEN)))
+  throw new Failure("Rotina não autorizada.",401);
+ if(!WEBHOOK_WORKER_ON)throw new Failure("Rotina financeira periódica desativada.",503);
+ enabled("billing"); // Inclusive a aprovacao explicita de faturamento produtivo.
+ // Nunca emitir fatura, alterar permissoes, autorizar saque ou iniciar POST Pix.
+ const result=await processarWebhooksAsaasPendentes(10);
+ return respond({success:true,processados:result.concluido,em_erro:result.falhou});
+}
+async function reprocessarWebhooksAsaasAdmin(uid:string){
+ if(uid!==ADMIN_USER_ID)throw new Failure("Acesso restrito à administração.",403);
+ // O caminho manual tambem deve respeitar as travas do lancamento produtivo.
+ if(ENVIRONMENT==="production")enabled("billing");
+ const resultado=await processarWebhooksAsaasPendentes(10);
+ return respond({success:true,...resultado,
+  mensagem:"Conferência realizada. Eventos falhos permanecem na fila para retentativa."});
+}
+async function diagnosticarWebhooksAsaasAdmin(uid:string){
+ if(uid!==ADMIN_USER_ID)throw new Failure("Acesso restrito à administração.",403);
+ const {data,error}=await db.from("catalogo_asaas_webhook_eventos")
+  .select("estado,criado_em,proxima_tentativa_em")
+  .neq("estado","concluido")
+  .order("criado_em",{ascending:true}).limit(100);
+ if(error)throw new Failure("Falha ao consultar eventos financeiros.",503);
+ const eventos=data||[];
+ return respond({success:true,pendentes:Math.min(eventos.length,100),
+  amostra_limitada:eventos.length===100,
+  em_erro:eventos.filter(x=>x.estado==="erro").length,
+  em_processamento:eventos.filter(x=>x.estado==="processando").length,
+  aguardando:eventos.filter(x=>x.estado==="pendente").length,
+  mensagem:"Diagnóstico de eventos ainda não conciliados; nenhuma movimentação solicitada."});
+}
+Deno.serve(async (request:Request)=>{
+ if(request.method==="OPTIONS")return new Response("ok",{headers:JSON_HEADERS});
+ if(request.method!=="POST")return respond({success:false,mensagem:"Use POST"},405);
+ try {
+  // Aplica-se inclusive a webhook/worker/saques, ANTES de qualquer RPC/fetch.
+  // Sem ambiente explicitamente coerente, nenhuma operacao financeira ocorre.
+  if(!ambienteAsaasCompativelComProjeto(SUPABASE_URL,ASAAS_ENVIRONMENT_DECLARADO))
+   throw new Failure("Ambiente Asaas incompatível com o projeto Supabase. Operações financeiras em HOLD.",503);
+  const pathname=new URL(request.url).pathname;
+  if(pathname.endsWith("/saque-autorizacao"))return await authorizeWithdrawal(request);
+  if(pathname.endsWith("/webhook"))return await webhook(request);
+  if(pathname.endsWith("/cron-webhooks"))return await executarWorkerWebhooksAsaas(request);
+  const user=await auth(request);
+  const body=input(await request.json().catch(()=>({})));
+  const acaoFinanceira=value(body.acao,60);
+  // COB-06 billing-only: em producao, toda acao nao explicitamente
+  // listada e recusada ANTES de acessar banco ou provedor. Acao nova
+  // fica bloqueada automaticamente; saques e QA exigem release proprio.
+  const acoesPermitidasCobrancaProducao=new Set([
+   "consultar_termos",
+   "aceitar_termos",
+   "solicitar_encerramento",
+   "consultar_encerramento",
+   "listar_encerramentos_admin",
+   // O encerramento administrativo final deve sincronizar o JSON GitHub via
+   // whatsapp-bot; a RPC isolada desta Edge deixaria a vitrine publicada.
+   "diagnosticar_webhooks_asaas_admin",
+   "reprocessar_webhooks_asaas_admin",
+   "obter_fatura",
+   "criar_cobranca",
+   "consultar_cobranca"
+  ]);
+  if(ENVIRONMENT==="production" && !acoesPermitidasCobrancaProducao.has(acaoFinanceira))
+   throw new Failure("Funcao nao habilitada no lancamento de cobrancas. Nenhuma operacao executada.",503);
+  switch(acaoFinanceira){
+   case "consultar_termos":return respond({success:true,...await termsStatus(user.id,value(body.papel,15),
+     value(body.papel,15)==="comercio"?commerce(body.comercio_id):"",
+     value(body.papel,15)==="motoboy")});
+   case "aceitar_termos":return await acceptTerms(user.id,body);
+   case "solicitar_encerramento":return await requestClosure(user.id,body);
+   case "consultar_encerramento":return await consultarEncerramento(user.id,body);
+   case "listar_encerramentos_admin":return await listarEncerramentosAdmin(user.id);
+   case "finalizar_encerramento_admin":return await finalizarEncerramentoAdmin(user.id,body);
+   case "diagnosticar_faturas_sandbox_admin":return await diagnosticarFaturasSandboxAdmin(user.id);
+   case "preparar_acumulo_sandbox_admin":return await prepararAcumuloSandboxAdmin(user.id,body);
+   case "retomar_preparacao_acumulo_sandbox_admin":return await retomarPreparacaoAcumuloSandboxAdmin(user.id,body);
+   case "auditar_duplicidade_acumulo_sandbox_admin":return await auditarDuplicidadeAcumuloSandboxAdmin(user.id,body);
+   case "observar_primeiro_acumulo_sandbox_admin":return await observarPrimeiroAcumuloSandboxAdmin(user.id,body);
+   case "conferir_acumulo_sandbox_admin":return await conferirAcumuloSandboxAdmin(user.id,body);
+   case "registrar_estado_acumulo_sandbox_admin":return await conferirAcumuloSandboxAdmin(user.id,body,true);
+   case "auditar_baixa_multicompetencia_sandbox_admin":return await auditarBaixaMulticompetenciaSandboxAdmin(user.id,body);
+   case "confirmar_fatura_sandbox_admin":return await confirmarFaturaSandboxAdmin(user.id,body);
+   case "diagnosticar_webhooks_asaas_admin":return await diagnosticarWebhooksAsaasAdmin(user.id);
+   case "reprocessar_webhooks_asaas_admin":return await reprocessarWebhooksAsaasAdmin(user.id);
+   case "obter_fatura":return await showInvoice(user.id,body);
+   case "criar_cobranca":return await createInvoice(user.id,body,user.email||"");
+   case "consultar_cobranca":return await reconcileInvoice(user.id,body);
+   case "consultar_carteira":return await wallet(user.id,true);
+   case "solicitar_analise_residual":return await solicitarAnaliseResidual(user.id,body);
+   case "solicitar_regularizacao_saida":return await solicitarRegularizacaoSaida(user.id,body);
+   case "listar_analises_residuais_admin":return await listarAnalisesResiduais(user.id);
+   case "listar_regularizacoes_saida_admin":return await listarRegularizacoesSaidaAdmin(user.id);
+   case "revisar_regularizacao_saida_admin":return await revisarRegularizacaoSaidaAdmin(user.id,body);
+   case "preconferir_pagamento_excepcional_admin":return await preconferirExcepcionalAdmin(user.id,body);
+   case "listar_separacoes_congeladas_admin":return await listarSeparacoesCongeladasAdmin(user.id);
+   case "diagnosticar_separacao_congelada_admin":return await diagnosticarSeparacaoCongeladaAdmin(user.id,body);
+   case "matriz_conciliacao_escrow_admin":return await matrizConciliacaoEscrowAdmin(user.id,body);
+   case "auditar_historico_transferencias_excepcionais_sandbox_admin":return await auditarHistoricoTransferenciasExcepcionaisSandboxAdmin(user.id,body);
+   case "exportar_ancora_dossie_admin":return await exportarAncoraEscrowAdmin(user.id,body);
+   case "listar_dossie_escrow_admin":return await listarDossieEscrowAdmin(user.id,body);
+   case "registrar_dossie_escrow_admin":return await registrarDossieEscrowAdmin(user.id,body);
+   case "consultar_titularidade_pix_sandbox_admin":return await consultarTitularidadePixSandboxAdmin(user.id,body);
+   case "observar_transferencia_excepcional_sandbox_admin":return await observarTransferenciaExcepcionalSandboxAdmin(user.id,body);
+   case "revisar_analise_residual_admin":return await revisarAnaliseResidual(user.id,body);
+   case "solicitar_saque":return await withdraw(user.id);
+   case "auditar_saque_sandbox":return await auditPendingSandboxTransfer(user.id);
+   case "listar_saques_admin":return await listAdminPayouts(user.id);
+   case "conciliar_saque_admin":return await reconcileAdminTransfer(user.id,body);
+   default:throw new Failure("Ação inválida.",400);
+  }
+ }catch(e){
+  if(e instanceof Failure)return respond({success:false,mensagem:e.message},e.status);
+  console.error("Asaas edge",{type:(e as Error).name});
+  return respond({success:false,mensagem:"Falha financeira. Verifique o histórico antes de tentar outra operação."},503);
+ }
+});
