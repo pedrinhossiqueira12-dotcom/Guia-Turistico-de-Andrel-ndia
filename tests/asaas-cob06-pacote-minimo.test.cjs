@@ -89,6 +89,15 @@ test("COB-06: inventário exige clone, gates, ordem seletiva e autorização de 
 });
 
 
+test("COB-06: gate de acumulação nega todos os privilégios diretos de clientes e service_role",()=>{
+ const accumGate=read("scripts/validacao-pagamentos/asaas-cob06-acumulo-homologacao-readonly.sql");
+ const rights="SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER";
+ assert.ok(accumGate.includes(`'anon',t.oid,\n     '${rights}'`));
+ assert.ok(accumGate.includes(`'authenticated',t.oid,\n     '${rights}'`));
+ assert.ok(accumGate.includes("'service_role',t.oid,\n     'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER'"));
+});
+
+
 test("COB-06: Edge mista exige dupla aprovação para cobrar e proíbe POST Pix de saque em produção",()=>{
  const code=read("supabase/functions/catalogo-asaas-financeiro/index.ts");
  const enabledAt=code.indexOf('function enabled(kind:"billing"|"payouts"){');

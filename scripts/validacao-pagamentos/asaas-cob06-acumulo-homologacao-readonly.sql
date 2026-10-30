@@ -48,11 +48,14 @@ SELECT
    JOIN pg_catalog.pg_class c ON c.oid=t.oid
    WHERE NOT c.relrowsecurity) AS rls_ausente,
  (SELECT count(*) FROM tabelas t WHERE t.oid IS NOT NULL AND (
-   pg_catalog.has_table_privilege('anon',t.oid,'SELECT,INSERT,UPDATE,DELETE')
-   OR pg_catalog.has_table_privilege('authenticated',t.oid,'SELECT,INSERT,UPDATE,DELETE')
+   pg_catalog.has_table_privilege('anon',t.oid,
+     'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+   OR pg_catalog.has_table_privilege('authenticated',t.oid,
+     'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
  )) AS tabelas_expostas_clientes,
  (SELECT count(*) FROM tabelas t WHERE t.oid IS NOT NULL
-   AND pg_catalog.has_table_privilege('service_role',t.oid,'INSERT,UPDATE,DELETE')
+   AND pg_catalog.has_table_privilege('service_role',t.oid,
+     'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
  ) AS escritas_diretas_service_role,
  (SELECT count(*) FROM funcoes f WHERE f.oid IS NOT NULL AND (
    pg_catalog.has_function_privilege('anon',f.oid,'EXECUTE')
