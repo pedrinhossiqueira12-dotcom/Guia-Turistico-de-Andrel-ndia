@@ -6,6 +6,7 @@ WITH expected_tables(name) AS (
  ('catalogo_aceites_operacionais'),('catalogo_encerramentos_comercio')
 ), t AS (
  SELECT e.name,c.oid,coalesce(c.relrowsecurity,false) AS rls,
+ coalesce(c.relforcerowsecurity,false) AS force_rls,
  CASE WHEN c.oid IS NOT NULL THEN
    NOT EXISTS (
     SELECT 1
@@ -58,6 +59,18 @@ WITH expected_tables(name) AS (
  JOIN expected_rpc e ON e.name=p.proname
  WHERE n.nspname='public'
   AND NOT EXISTS (SELECT 1 FROM f WHERE f.oid=p.oid)
+), client_policies AS (
+ -- Policies granted to PUBLIC, anon/authenticated, or roles whose privileges
+ -- anon/authenticated can exercise are reported as latent client exposure.
+ SELECT DISTINCT e.name AS tablename,p.polname AS policyname
+ FROM expected_tables e
+ JOIN pg_catalog.pg_class c
+  ON c.oid=pg_catalog.to_regclass(format('public.%I',e.name))
+ JOIN pg_catalog.pg_policy p ON p.polrelid=c.oid
+ CROSS JOIN LATERAL pg_catalog.unnest(p.polroles) AS target(role_oid)
+ WHERE target.role_oid=0::oid
+  OR pg_catalog.pg_has_role('anon'::pg_catalog.regrole::pg_catalog.oid,target.role_oid,'USAGE')
+  OR pg_catalog.pg_has_role('authenticated'::pg_catalog.regrole::pg_catalog.oid,target.role_oid,'USAGE')
 )
 SELECT
  (SELECT count(*) FROM t WHERE oid IS NULL) AS tabelas_ausentes,
@@ -76,4 +89,11 @@ SELECT
    FROM (SELECT name FROM f WHERE oid IS NULL OR NOT restrito
          UNION ALL SELECT name FROM outras_assinaturas) revisar) AS rpcs_revisar,
  (SELECT coalesce(jsonb_agg(assinatura ORDER BY assinatura),'[]'::jsonb)
-   FROM outras_assinaturas) AS assinaturas_inesperadas;
+   FROM outras_assinaturas) AS assinaturas_inesperadas,
+ (SELECT count(*) FROM client_policies) AS client_policy_exposures,
+ (SELECT coalesce(jsonb_agg(tablename||':'||policyname ORDER BY tablename,policyname),'[]'::jsonb)
+   FROM client_policies) AS client_policies_review,
+ -- Informational only: FORCE RLS changes table-owner/SECURITY DEFINER semantics.
+ (SELECT count(*) FROM t WHERE force_rls) AS force_rls_enabled_info,
+ (SELECT coalesce(jsonb_agg(name ORDER BY name),'[]'::jsonb) FROM t
+   WHERE oid IS NOT NULL AND force_rls) AS force_rls_tables_info;

@@ -73,6 +73,19 @@ test("COB-06: gate complementar é somente leitura e monitora privilégios e gua
  assert.match(gate,/outras_assinaturas/);
  assert.doesNotMatch(gate,/ORDER BY p\.oid LIMIT 1/);
 });
+test("COB-06: gate detecta policies aplicáveis a clientes e informa FORCE RLS sem impor mudança",()=>{
+ for(const need of [
+  "pg_catalog.pg_policy","p.polroles","pg_catalog.pg_has_role",
+  "client_policy_exposures","client_policies_review",
+  "force_rls_enabled_info","force_rls_tables_info"
+ ])assert.ok(gate.includes(need),need);
+ assert.match(gate,/target\.role_oid=0::oid/);
+ assert.match(gate,/pg_has_role\('anon'::pg_catalog\.regrole/);
+ assert.match(gate,/pg_has_role\('authenticated'::pg_catalog\.regrole/);
+ assert.match(gate,/Informational only: FORCE RLS/);
+ assert.doesNotMatch(gate,/pg_get_expr|polqual|polwithcheck/,
+  "o gate não deve expor expressões privadas das policies");
+});
 test("COB-06: inventário exige clone, gates, ordem seletiva e autorização de produção",()=>{
  for(const name of [
   "01_asaas_cobrancas_inbox_sem_saques.sql",

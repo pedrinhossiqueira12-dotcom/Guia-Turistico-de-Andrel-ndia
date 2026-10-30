@@ -919,9 +919,30 @@ jobs:
           psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -At -F '|' \
             -f scripts/validacao-pagamentos/asaas-producao-readiness-readonly.sql \
             | grep -E '^0\|0\|t\|'
-          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -At -F '|' \
-            -f scripts/validacao-pagamentos/asaas-cob06-seguranca-readonly.sql \
-            | grep -E '^0\|0\|0\|0\|0\|0\|'
+          security_gate=$(psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -At -F '|' \
+            -f scripts/validacao-pagamentos/asaas-cob06-seguranca-readonly.sql)
+          printf '%s\n' "$security_gate" | awk -F '|' '
+            NF >= 15 && $1 == 0 && $2 == 0 && $3 == 0 && $4 == 0 &&
+            $5 == 0 && $6 == 0 && $7 == 0 && $12 == 0 { ok=1 }
+            END { exit !ok }
+          '
+
+          # Regression fixture: client policy is detected and FORCE RLS is
+          # surfaced for review; both DDL changes are rolled back in this clone.
+          policy_gate_fixture=$(psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -qAt -F '|' <<'SQL'
+          BEGIN;
+          CREATE POLICY cob06_gate_fixture_anon_policy
+            ON public.catalogo_asaas_clientes FOR SELECT TO anon USING (true);
+          ALTER TABLE public.catalogo_asaas_clientes FORCE ROW LEVEL SECURITY;
+          \i scripts/validacao-pagamentos/asaas-cob06-seguranca-readonly.sql
+          ROLLBACK;
+          SQL
+          )
+          printf '%s\n' "$policy_gate_fixture" | awk -F '|' '
+            NF >= 15 && $12 == 1 && $13 ~ /catalogo_asaas_clientes:cob06_gate_fixture_anon_policy/ &&
+            $14 == 1 && $15 ~ /catalogo_asaas_clientes/ { ok=1 }
+            END { exit !ok }
+          '
           # Gate comportamental: a Edge legada tenta deletar/despublicar via UPDATE.
           # As fixture e escrituras deste ensaio sao locais e revertidas.
           psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 \
