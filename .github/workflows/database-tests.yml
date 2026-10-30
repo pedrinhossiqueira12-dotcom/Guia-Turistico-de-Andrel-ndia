@@ -927,6 +927,22 @@ jobs:
             END { exit !ok }
           '
 
+          # Um GRANT direto no ledger deve ser detectado e revertido no clone.
+          ledger_acl_fixture=$(psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -qAt -F '|' <<'SQL'
+          BEGIN;
+          GRANT SELECT ON TABLE public.catalogo_lancamentos_financeiros_v2 TO anon;
+          \i scripts/validacao-pagamentos/asaas-cob06-seguranca-readonly.sql
+          ROLLBACK;
+          SQL
+          )
+          printf '%s\n' "$ledger_acl_fixture" | awk -F '|' '
+            NF >= 15 && $3 == 1 && $8 ~ /catalogo_lancamentos_financeiros_v2/ { ok=1 }
+            END { exit !ok }
+          '
+          psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -Atqc \
+            "SELECT NOT has_table_privilege('anon','public.catalogo_lancamentos_financeiros_v2','SELECT')" \
+            | grep -Fx t
+
           # Regression fixture: client policy is detected and FORCE RLS is
           # surfaced for review; both DDL changes are rolled back in this clone.
           policy_gate_fixture=$(psql -d catalogo_cob06_ci -v ON_ERROR_STOP=1 -qAt -F '|' <<'SQL'

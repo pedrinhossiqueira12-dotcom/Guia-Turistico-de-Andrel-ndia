@@ -86,6 +86,25 @@ test("COB-06: gate detecta policies aplicáveis a clientes e informa FORCE RLS s
  assert.doesNotMatch(gate,/pg_get_expr|polqual|polwithcheck/,
   "o gate não deve expor expressões privadas das policies");
 });
+
+test("COB-06: inventário do gate cobre cobrança e ledger atual, sem payout/acúmulo futuro",()=>{
+ const match=gate.match(/WITH expected_tables\(name\) AS \(\s*VALUES([\s\S]*?)\), t AS/);
+ assert.ok(match,"gate deve declarar inventário explícito de tabelas");
+ const names=[...match[1].matchAll(/\('([^']+)'\)/g)].map(x=>x[1]).sort();
+ const expected=[
+  "catalogo_asaas_clientes","catalogo_asaas_emissoes","catalogo_asaas_webhook_eventos",
+  "catalogo_cobranca_preferencias","catalogo_aceites_operacionais","catalogo_encerramentos_comercio",
+  "catalogo_automacao_config","catalogo_automacao_execucoes","catalogo_comissoes_offline",
+  "catalogo_fechamentos_offline","catalogo_fatura_cobrancas","catalogo_fatura_eventos",
+  "catalogo_fluxo_config","catalogo_remuneracoes_v2","catalogo_lancamentos_financeiros_v2",
+  "catalogo_pagamentos_v2","catalogo_pagamento_eventos_v2","catalogo_repasses_v2",
+  "catalogo_logistica_offline_v2","catalogo_fatura_componentes_v2"
+ ].sort();
+ assert.deepEqual(names,expected);
+ for(const held of ["catalogo_asaas_saques","catalogo_asaas_saque_itens",
+  "catalogo_asaas_acumulo_lotes","catalogo_asaas_acumulo_fontes"])
+  assert.ok(!names.includes(held),"não misturar escopo HOLD/separado: "+held);
+});
 test("COB-06: inventário exige clone, gates, ordem seletiva e autorização de produção",()=>{
  for(const name of [
   "01_asaas_cobrancas_inbox_sem_saques.sql",

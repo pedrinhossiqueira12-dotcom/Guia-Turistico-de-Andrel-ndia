@@ -1,9 +1,20 @@
 -- COB-06: auditoria SOMENTE LEITURA no clone/STAGING/produção, sem segredos.
 -- Checa proteções que o gate estrutural anterior não verificava.
 WITH expected_tables(name) AS (
- VALUES ('catalogo_asaas_clientes'),('catalogo_asaas_emissoes'),
+ VALUES
+ -- Candidate COB-06: cobrança e encerramento, sem payout.
+ ('catalogo_asaas_clientes'),('catalogo_asaas_emissoes'),
  ('catalogo_asaas_webhook_eventos'),('catalogo_cobranca_preferencias'),
- ('catalogo_aceites_operacionais'),('catalogo_encerramentos_comercio')
+ ('catalogo_aceites_operacionais'),('catalogo_encerramentos_comercio'),
+ -- Faturamento/comissões já existentes e automação desligada por padrão.
+ ('catalogo_automacao_config'),('catalogo_automacao_execucoes'),
+ ('catalogo_comissoes_offline'),('catalogo_fechamentos_offline'),
+ ('catalogo_fatura_cobrancas'),('catalogo_fatura_eventos'),
+ -- Ledger V2 e composição da fatura; acesso segue fechado ao Data API.
+ ('catalogo_fluxo_config'),('catalogo_remuneracoes_v2'),
+ ('catalogo_lancamentos_financeiros_v2'),('catalogo_pagamentos_v2'),
+ ('catalogo_pagamento_eventos_v2'),('catalogo_repasses_v2'),
+ ('catalogo_logistica_offline_v2'),('catalogo_fatura_componentes_v2')
 ), t AS (
  SELECT e.name,c.oid,coalesce(c.relrowsecurity,false) AS rls,
  coalesce(c.relforcerowsecurity,false) AS force_rls,
