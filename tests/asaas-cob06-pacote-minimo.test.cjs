@@ -58,6 +58,10 @@ test("COB-06: termos e encerramento sem SQL de saques, com RLS privada",()=>{
 test("COB-06: gate complementar é somente leitura e monitora privilégios e guardas",()=>{
  const noComments=gate.replace(/--[^\n]*/g,"").replace(/'(?:[^']|'')*'/g,"''");
  assert.doesNotMatch(noComments,/\b(?:INSERT|UPDATE|DELETE|DROP|ALTER|TRUNCATE|CREATE)\b/i);
+ for(const privilege of ["SELECT","INSERT","UPDATE","DELETE","TRUNCATE","REFERENCES","TRIGGER"])
+  assert.ok(gate.includes(`('${privilege}'`),"gate deve verificar privilege "+privilege);
+ assert.ok(gate.includes("VALUES ('anon'::text),('authenticated'::text)"),
+  "gate deve avaliar anon e authenticated separadamente");
  for(const need of ["has_table_privilege","has_function_privilege",
   "catalogo_historico_guard_delete","catalogo_publicacao_sem_divida_guard",
   "catalogo_encerramento_sem_reabertura","catalogo_encerramento_sem_republicacao",

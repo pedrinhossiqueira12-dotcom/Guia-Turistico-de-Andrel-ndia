@@ -7,11 +7,14 @@ WITH expected_tables(name) AS (
 ), t AS (
  SELECT e.name,c.oid,coalesce(c.relrowsecurity,false) AS rls,
  CASE WHEN c.oid IS NOT NULL THEN
-   NOT has_table_privilege('anon',c.oid,'SELECT')
-   AND NOT has_table_privilege('authenticated',c.oid,'SELECT')
-   AND NOT has_table_privilege('anon',c.oid,'INSERT')
-   AND NOT has_table_privilege('authenticated',c.oid,'INSERT')
- ELSE false END AS restrito
+   NOT EXISTS (
+    SELECT 1
+    FROM (VALUES ('anon'::text),('authenticated'::text)) AS grantee(role_name)
+    CROSS JOIN (VALUES ('SELECT'::text),('INSERT'),('UPDATE'),('DELETE'),
+      ('TRUNCATE'),('REFERENCES'),('TRIGGER')) AS privilege(privilege_name)
+    WHERE has_table_privilege(grantee.role_name,c.oid,privilege.privilege_name)
+   )
+  ELSE false END AS restrito
  FROM expected_tables e LEFT JOIN pg_class c
  ON c.oid=to_regclass(format('public.%I',e.name))
 ), expected_guards(tablename,triggername) AS (
