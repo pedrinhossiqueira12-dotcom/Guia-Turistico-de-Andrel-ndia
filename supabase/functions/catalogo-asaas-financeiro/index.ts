@@ -823,13 +823,14 @@ async function createInvoice(uid:string,body:Record<string,unknown>,email:string
  requireIssuance();
  // Regularização de obrigação já constituída não depende da aceitação
  // de novos termos; aceite continua obrigatório para iniciar novas vendas.
+ // invoice() confirma a propriedade do comércio antes de qualquer preferência.
+ const {store,month,f,charge}=await invoice(uid,body);
  const {data:method,error:methodError}=await db.from("catalogo_cobranca_preferencias")
   .select("metodo").eq("comercio_id",commerce(body.comercio_id)).maybeSingle();
  if(methodError)throw new Failure("Falha ao consultar modalidade de cobrança.",503);
  if(method?.metodo==="pix_automatico")
   throw new Failure("Pix Automático ainda não está liberado. Solicite orientação para pagamento da fatura.",503);
  enabled("billing");
- const {store,month,f,charge}=await invoice(uid,body);
  check(f&&["faturado","vencido","bloqueado"].includes(String(f.status))&&
    Number(f.total_comissao_centavos)>0,"A fatura ainda não está fechada ou já foi paga.",409);
  // Validar ANTES de cadastrar cliente, reservar emissao ou chamar o Asaas.

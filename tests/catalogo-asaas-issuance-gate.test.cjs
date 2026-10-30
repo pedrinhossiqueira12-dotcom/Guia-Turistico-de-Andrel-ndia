@@ -107,7 +107,11 @@ test("true nao substitui billing, chave, aprovacao produtiva, worker ou ambiente
 });
 test("true nao amplia autenticacao, propriedade, elegibilidade, minimo ou Pix Automatico",async()=>{
  const anonymous=harness({issuance:"true"});assert.equal((await anonymous.request("criar_cobranca","")).status,401);noEffects(anonymous);
- for(const [options,status] of [[{foreignOwner:true},403],[{invoiceStatus:"pago"},409],
+ const foreignOwner=harness({issuance:"true",foreignOwner:true});
+ assert.equal((await foreignOwner.request()).status,403);
+ assert.deepEqual(foreignOwner.calls.reads,["catalogos"]);
+ noEffects(foreignOwner);
+ for(const [options,status] of [[{invoiceStatus:"pago"},409],
   [{total:499},409],[{total:700.5},503],[{automatic:true},503]]){
   const h=harness({issuance:"true",...options});assert.equal((await h.request()).status,status);noEffects(h);
  }
